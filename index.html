@@ -3,113 +3,232 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Avto A1 - Samarkand</title>
+    <title>Avto A1 Shop</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
-        /* Asosiy dizayn */
-        body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; margin: 0; padding: 15px; }
-        .container { max-width: 500px; margin: 0 auto; }
-        .header { text-align: center; padding: 10px; border-bottom: 2px solid #007bff; margin-bottom: 20px; }
+        :root {
+            --primary-blue: #007bff;
+            --glass-bg: rgba(20, 20, 20, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: white;
+            /* ORQA FON UCHUN RASM */
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.9)), 
+                        url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1000&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding-bottom: 90px; /* Pastki tugma uchun joy */
+        }
+
+        .container { padding: 20px; max-width: 500px; margin: 0 auto; }
+
+        /* HEADER QISMI */
+        .header { text-align: center; padding: 20px 0 30px 0; }
+        .header h1 { 
+            font-size: 34px; 
+            font-weight: 800; 
+            margin: 0; 
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        /* Galichka belgisi */
+        .verify-icon { 
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; background: #007bff; border-radius: 50%;
+        }
+        .verify-icon svg { width: 16px; height: 16px; fill: white; }
         
-        /* Menyu tugmalari */
-        .btn-menu { background: #2c2c2c; border: 1px solid #444; color: white; padding: 15px; margin-bottom: 10px; 
-                    width: 100%; border-radius: 12px; font-size: 16px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; }
-        .btn-back { background: #dc3545; color: white; padding: 10px; border: none; border-radius: 8px; margin-bottom: 15px; cursor: pointer; width: 100%; font-weight: bold;}
-        .hidden { display: none; }
+        .header p { font-size: 13px; color: #b3b3b3; margin-top: 8px; font-weight: 500; }
+
+        /* LUXURY KARTALAR (Menyu va Mahsulotlar uchun) */
+        .items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
         
-        /* Mahsulotlar setkasi (Skrinshotingizdagidek) */
-        .items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        
-        .item-card {
-            background: #1e1e1e; border-radius: 12px; padding: 10px; text-align: center;
-            border: 1px solid #333; display: flex; flex-direction: column; justify-content: space-between;
+        .luxury-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 12px;
+            text-align: center;
+            transition: 0.3s;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .luxury-card:active { transform: scale(0.96); border-color: var(--primary-blue); }
+
+        .luxury-card img { 
+            width: 100%; 
+            aspect-ratio: 1/1; 
+            object-fit: cover; 
+            border-radius: 12px; 
+            margin-bottom: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
         
-        .item-card img {
-            width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; margin-bottom: 8px;
-        }
+        .luxury-card h3 { margin: 5px 0; font-size: 15px; font-weight: 700; color: #fff; }
+        .luxury-card h4 { margin: 5px 0; font-size: 14px; font-weight: 700; color: #fff; line-height: 1.3;}
+        .luxury-card p { font-size: 11px; color: #aaa; margin: 4px 0; font-weight: 500; }
+        .luxury-card .price { color: #00ff88; font-weight: 800; font-size: 14px; margin: 8px 0; letter-spacing: 0.5px;}
         
-        .item-card h4 { margin: 5px 0; font-size: 13px; height: 32px; overflow: hidden; color: #fff; }
-        .item-card p { font-size: 11px; color: #888; margin: 2px 0; }
-        .item-card .price { color: #00ff00; font-weight: bold; font-size: 13px; margin: 5px 0; }
-        .btn-buy { width: 100%; padding: 8px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 11px; cursor: pointer; font-weight: bold; }
+        .btn-buy { 
+            background: linear-gradient(135deg, #007bff, #0056b3); 
+            color: white; border: none; width: 100%; padding: 10px; 
+            border-radius: 10px; font-weight: 700; font-size: 12px; cursor: pointer;
+            text-transform: uppercase; box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+        }
+
+        /* AYLANMA ORQAGA TUGMASI */
+        .floating-back {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 25px rgba(0, 123, 255, 0.6);
+            cursor: pointer;
+            z-index: 1000;
+            border: 3px solid rgba(255,255,255,0.2);
+            transition: 0.3s;
+        }
+        .floating-back:active { transform: scale(0.9); background: #0056b3; }
+        .floating-back svg { width: 28px; height: 28px; fill: white; margin-right: 3px; }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h2>Avto A1 Katalog</h2>
-            <p style="font-size: 12px; color: #888;">Sifatli ehtiyot qismlar do'koni</p>
-        </div>
 
-        <div id="cars-menu">
-            <button class="btn-menu" onclick="showSubMenu('gazel-sections')">Gazel <span>&rsaquo;</span></button>
-            <button class="btn-menu" onclick="showSubMenu('volga-sections')">Volga <span>&rsaquo;</span></button>
-            <button class="btn-menu" onclick="showSubMenu('sobel-sections')">Sobel <span>&rsaquo;</span></button>
-        </div>
-
-        <div id="gazel-sections" class="hidden">
-            <button class="btn-back" onclick="backToCars()">← Orqaga</button>
-            <h3 style="text-align:center; font-size: 16px;">Gazel bo'limlari</h3>
-            <button class="btn-menu" onclick="showItems('gazel-motor')">Motor zapchastlari <span>&rsaquo;</span></button>
-            <button class="btn-menu" onclick="showItems('gazel-xadavoy')">Xadavoy zapchastlari <span>&rsaquo;</span></button>
-            <button class="btn-menu" onclick="showItems('gazel-kuzov')">Kuzov zapchastlari <span>&rsaquo;</span></button>
-            <button class="btn-menu" onclick="showItems('gazel-salon')">Salon zapchastlari <span>&rsaquo;</span></button>
-        </div>
-
-        <div id="gazel-motor" class="hidden">
-            <button class="btn-back" onclick="showSubMenu('gazel-sections')">← Orqaga</button>
-            <div class="items-grid">
-                
-                <div class="item-card">
-                    <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Porshen">
-                    <h4>Porshen to'plami</h4>
-                    <p>Rossiya zavod</p>
-                    <div class="price">1,060,000 so'm</div>
-                    <button class="btn-buy">Savatga</button>
-                </div>
-
-                <div class="item-card">
-                    <img src="https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg" alt="Gidro">
-                    <h4>Gidrokompensator</h4>
-                    <p>Gazel 406 mator</p>
-                    <div class="price">20,000 so'm</div>
-                    <button class="btn-buy">Savatga</button>
-                </div>
-
-            </div>
-        </div>
-
-        <div id="gazel-xadavoy" class="hidden">
-            <button class="btn-back" onclick="showSubMenu('gazel-sections')">← Orqaga</button>
-            <p style="text-align:center; color:#888;">Xozircha bu bo'lim bo'sh...</p>
-        </div>
-        
-        <div id="volga-sections" class="hidden">
-            <button class="btn-back" onclick="backToCars()">← Orqaga</button>
-            <p style="text-align:center; color:#888;">Volga bo'limi tez kunda...</p>
-        </div>
-
-        <div id="sobel-sections" class="hidden">
-            <button class="btn-back" onclick="backToCars()">← Orqaga</button>
-            <p style="text-align:center; color:#888;">Sobel bo'limi tez kunda...</p>
-        </div>
-
+<div class="container">
+    <div class="header">
+        <h1>AvtoA1 
+            <span class="verify-icon">
+                <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            </span>
+        </h1>
+        <p>🇷🇺 ROSSIYA VA XITOY 🇨🇳 PREMIUM ZAPCHASTLARI</p>
     </div>
 
-    <script>
-        // Bo'limlarni almashtirish funksiyalari
-        function showSubMenu(id) {
-            document.querySelectorAll('.container > div:not(.header)').forEach(el => el.classList.add('hidden'));
-            document.getElementById(id).classList.remove('hidden');
+    <div id="main-menu" class="items-grid">
+        <div class="luxury-card" onclick="showSection('gazel-types')">
+            <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Gazel">
+            <h3>Gazel 🚛</h3>
+        </div>
+        <div class="luxury-card" onclick="showSection('volga-menu')">
+            <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Volga">
+            <h3>Volga 🏎️</h3>
+        </div>
+        <div class="luxury-card" onclick="showSection('sobol-menu')">
+            <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Sobol">
+            <h3>Sobol 🚐</h3>
+        </div>
+    </div>
+
+    <div id="gazel-types" class="items-grid hidden">
+        <div class="luxury-card" onclick="showSection('gazel-biznes-sections')">
+            <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Biznes">
+            <h3>Gazel Biznes</h3>
+        </div>
+        <div class="luxury-card" onclick="showSection('gazel-next-sections')">
+            <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Next">
+            <h3>Gazel Next</h3>
+        </div>
+    </div>
+
+    <div id="gazel-biznes-sections" class="items-grid hidden">
+        <div class="luxury-card" onclick="showSection('biznes-motor')">
+            <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Motor">
+            <h3>⚙️ Motor Qismlari</h3>
+        </div>
+        <div class="luxury-card">
+            <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Xadavoy">
+            <h3>🛠️ Xadavoy</h3>
+        </div>
+    </div>
+
+    <div id="biznes-motor" class="items-grid hidden">
+        <div class="luxury-card">
+            <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Porshen">
+            <h4>Porshen To'plami 📦</h4>
+            <p>🇷🇺 Rossiya (Original)</p>
+            <div class="price">1,060,000 so'm</div>
+            <button class="btn-buy">🛒 Savatga</button>
+        </div>
+        <div class="luxury-card">
+            <img src="https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg" alt="Gidro">
+            <h4>Gidrokompensator ✨</h4>
+            <p>🇨🇳 Xitoy (Premium)</p>
+            <div class="price">20,000 so'm</div>
+            <button class="btn-buy">🛒 Savatga</button>
+        </div>
+    </div>
+
+    <div id="volga-menu" class="hidden"><p style="text-align:center; color:#888;">Volga bo'limi tez kunda...</p></div>
+    <div id="sobol-menu" class="hidden"><p style="text-align:center; color:#888;">Sobol bo'limi tez kunda...</p></div>
+    <div id="gazel-next-sections" class="hidden"><p style="text-align:center; color:#888;">Gazel Next bo'limi tez kunda...</p></div>
+
+</div>
+
+<div class="floating-back" onclick="goBack()" id="back-btn" style="display: none;">
+    <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+</div>
+
+<script>
+    let historyStack = ['main-menu'];
+
+    function showSection(id) {
+        document.querySelectorAll('.container > div.items-grid, .container > div.hidden').forEach(el => {
+            if(el.id !== 'main-menu') el.classList.add('hidden');
+        });
+        document.getElementById('main-menu').classList.add('hidden');
+        
+        document.getElementById(id).classList.remove('hidden');
+        historyStack.push(id);
+        updateBackButton();
+    }
+
+    function goBack() {
+        if (historyStack.length > 1) {
+            let current = historyStack.pop();
+            let previousId = historyStack[historyStack.length - 1];
+            
+            document.querySelectorAll('.container > div.items-grid, .container > div.hidden').forEach(el => el.classList.add('hidden'));
+            document.getElementById(previousId).classList.remove('hidden');
+            updateBackButton();
         }
-        function showItems(id) {
-            document.querySelectorAll('.container > div:not(.header)').forEach(el => el.classList.add('hidden'));
-            document.getElementById(id).classList.remove('hidden');
+    }
+
+    // Bosh sahifada Orqaga tugmasini yashirish, boshqa joyda ko'rsatish
+    function updateBackButton() {
+        if (historyStack.length > 1) {
+            document.getElementById('back-btn').style.display = 'flex';
+        } else {
+            document.getElementById('back-btn').style.display = 'none';
         }
-        function backToCars() {
-            document.querySelectorAll('.container > div:not(.header)').forEach(el => el.classList.add('hidden'));
-            document.getElementById('cars-menu').classList.remove('hidden');
-        }
-    </script>
+    }
+</script>
+
 </body>
 </html>
