@@ -39,9 +39,9 @@
         <div id="gazel-motor" class="hidden">
             <button class="btn-back" onclick="backToSections('gazel-sections')">&#8592; Orqaga</button>
             <div class="item-card">
-                <h4>Porshen to'plami</h4>
-                <p>Sifati a'lo, Rossiya zavod</p>
-                <p class="price">Narxi: 450,000 so'm</p>
+                <h4>Porshen toplami Expert</h4>
+                <p>Sifati a'lo, Rossiya zavod, Gazga moslashtirilgan,</p>
+                <p class="price">Narxi: 1,060,000 so'm</p>
                 <button style="width:100%; padding:8px; background:#007bff; color:white; border:none; border-radius:5px;">Savatga qo'shish</button>
             </div>
             <div class="item-card">
