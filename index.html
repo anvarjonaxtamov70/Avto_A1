@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Avto A1 Shop</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -38,40 +39,38 @@
         .items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
         .luxury-card { background: var(--glass-bg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--glass-border); border-radius: 18px; padding: 12px; text-align: center; transition: 0.3s; cursor: pointer; box-shadow: 0 8px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; justify-content: space-between; }
         .luxury-card:active { transform: scale(0.96); border-color: var(--primary-blue); }
-        .luxury-card img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .luxury-card img { width: 100%; height: 140px; object-fit: cover; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); background-color: #fff; }
         .luxury-card h3 { margin: 5px 0; font-size: 15px; font-weight: 700; color: #fff; }
         .luxury-card h4 { margin: 5px 0; font-size: 13px; font-weight: 700; color: #fff; line-height: 1.3;}
         .luxury-card p { font-size: 11px; color: #aaa; margin: 4px 0; font-weight: 500; }
         .luxury-card .price { color: #00ff88; font-weight: 800; font-size: 13px; margin: 8px 0; }
         .btn-buy { background: linear-gradient(135deg, #007bff, #0056b3); color: white; border: none; width: 100%; padding: 10px; border-radius: 10px; font-weight: 700; font-size: 12px; cursor: pointer; text-transform: uppercase; box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4); }
 
-        /* QIDIRUV NATIJALARI (Google uslubi - ro'yxat) */
+        /* QIDIRUV NATIJALARI */
         .search-list { display: flex; flex-direction: column; gap: 10px; }
         .search-item { display: flex; align-items: center; gap: 15px; background: var(--glass-bg); padding: 10px; border-radius: 15px; border: 1px solid var(--glass-border); backdrop-filter: blur(10px); text-align: left; }
-        .search-item img { width: 70px; height: 70px; border-radius: 10px; object-fit: cover; }
+        .search-item img { width: 70px; height: 70px; border-radius: 10px; object-fit: cover; background-color: #fff; }
         .search-info { flex: 1; }
         .search-info h4 { margin: 0 0 3px 0; font-size: 14px; }
         .search-info .car-brand { font-size: 11px; color: #ffd700; margin: 0 0 3px 0; }
         .search-info .price { color: #00ff88; font-weight: bold; font-size: 13px; margin: 0;}
         .search-item .btn-buy { width: auto; padding: 8px 12px; font-size: 11px; }
 
-        /* AYLANMA TUGMALAR (Orqaga va Savatcha) */
+        /* AYLANMA TUGMALAR */
         .floating-btn { position: fixed; right: 25px; width: 55px; height: 55px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); transition: 0.3s; }
         .floating-btn:active { transform: scale(0.9); }
         
         #back-btn { bottom: 25px; background: linear-gradient(135deg, #007bff, #0056b3); box-shadow: 0 8px 25px rgba(0, 123, 255, 0.5); }
         #back-btn svg { width: 26px; height: 26px; fill: white; margin-right: 3px; }
 
-        /* Tilla rangli savatcha tugmasi (Orqaga tugmasi ustida) */
         #cart-btn { bottom: 95px; background: var(--luxury-gold); box-shadow: 0 8px 25px rgba(218, 165, 32, 0.6); border-color: rgba(255,215,0,0.5); }
         #cart-btn svg { width: 24px; height: 24px; fill: white; }
         .cart-badge { position: absolute; top: -2px; right: -2px; background: red; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
 
-        /* Savatchaga tushish animatsiyasi */
         .shake-animation { animation: shakeCart 0.5s cubic-bezier(.36,.07,.19,.97) both; }
         @keyframes shakeCart { 10%, 90% { transform: translate3d(-1px, 0, 0) scale(1.1); } 20%, 80% { transform: translate3d(2px, 0, 0) scale(1.1); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0) scale(1.1) rotate(-10deg); } 40%, 60% { transform: translate3d(4px, 0, 0) scale(1.1) rotate(10deg); } }
 
-        /* SAVATCHA OYNASI (MODAL) */
+        /* SAVATCHA OYNASI */
         .cart-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; }
         .cart-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; margin-bottom: 15px; }
         .cart-header h2 { margin: 0; font-size: 20px; color: #ffd700; }
@@ -106,26 +105,42 @@
     <input type="text" id="searchInput" class="search-box" placeholder="🔍 Zapchast nomini qidiring..." onkeyup="searchProducts()">
 
     <div id="content-area">
+        
         <div id="main-menu" class="items-grid">
             <div class="luxury-card" onclick="showSection('gazel-types')">
-                <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Gazel"><h3>Gazel 🚛</h3>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/GAZ-3302_in_Moscow.jpg/640px-GAZ-3302_in_Moscow.jpg" alt="Gazel">
+                <h3>Gazel 🚛</h3>
             </div>
-            <div class="luxury-card"><img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Volga"><h3>Volga 🏎️</h3></div>
-            <div class="luxury-card"><img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Sobol"><h3>Sobol 🚐</h3></div>
+            <div class="luxury-card">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/GAZ-31105_Volga.jpg/640px-GAZ-31105_Volga.jpg" alt="Volga">
+                <h3>Volga 🏎️</h3>
+            </div>
+            <div class="luxury-card">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/UAZ-Hunter_2010.jpg/640px-UAZ-Hunter_2010.jpg" alt="UAZ">
+                <h3>UAZ 🚙</h3>
+            </div>
         </div>
 
         <div id="gazel-types" class="items-grid hidden">
             <div class="luxury-card" onclick="showSection('gazel-biznes-sections')">
-                <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Biznes"><h3>Gazel Biznes</h3>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/GAZ-3302_in_Moscow.jpg/640px-GAZ-3302_in_Moscow.jpg" alt="Biznes">
+                <h3>Gazel Biznes</h3>
             </div>
-            <div class="luxury-card"><img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Next"><h3>Gazel Next</h3></div>
+            <div class="luxury-card">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/GAZelle_NEXT_A21R22-03.jpg/640px-GAZelle_NEXT_A21R22-03.jpg" alt="Next">
+                <h3>Gazel Next</h3>
+            </div>
         </div>
 
         <div id="gazel-biznes-sections" class="items-grid hidden">
             <div class="luxury-card" onclick="showSection('biznes-motor')">
-                <img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Motor"><h3>⚙️ Motor Qismlari</h3>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Engine_zmz-405.jpg/640px-Engine_zmz-405.jpg" alt="Motor">
+                <h3>⚙️ Motor Qismlari</h3>
             </div>
-            <div class="luxury-card"><img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" alt="Xadavoy"><h3>🛠️ Xadavoy</h3></div>
+            <div class="luxury-card">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/Car_suspension_part.jpg/640px-Car_suspension_part.jpg" alt="Xadavoy">
+                <h3>🛠️ Xadavoy</h3>
+            </div>
         </div>
 
         <div id="biznes-motor" class="items-grid hidden"></div>
@@ -161,16 +176,20 @@
 </div>
 
 <script>
-    // --- MA'LUMOTLAR BAZASI (Barcha zapchastlarni shu yerga qo'shasiz) ---
+    // Agar Mini App ichida ochilsa ekranni to'liq yoyish uchun:
+    if(window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.expand();
+    }
+
+    // --- MA'LUMOTLAR BAZASI ---
     const productsDB = [
         { id: 1, name: "Porshen To'plami 📦", car: "Gazel Biznes", brand: "🇷🇺 Rossiya (Original)", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor" },
         { id: 2, name: "Gidrokompensator ✨", car: "Gazel Biznes", brand: "🇨🇳 Xitoy (Premium)", price: 20000, img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", category: "biznes-motor" }
     ];
 
-    let cart = {}; // Savatcha obyekti
+    let cart = {}; 
     let historyStack = ['main-menu'];
 
-    // Dastlab motor bo'limini chizish
     function renderProducts() {
         const motorDiv = document.getElementById('biznes-motor');
         motorDiv.innerHTML = '';
@@ -216,10 +235,8 @@
     }
 
     function updateButtonsVisibility() {
-        // Orqaga tugmasi faqat ichki menyularda
         document.getElementById('back-btn').style.display = historyStack.length > 1 ? 'flex' : 'none';
         
-        // Savatcha tugmasi qachon yonadi: Agar ichida narsa bo'lsa YOKI 2-bo'limda (motor/xadavoy) bo'lsak
         let inDeepSection = ['biznes-motor'].includes(historyStack[historyStack.length - 1]);
         let hasItems = Object.keys(cart).length > 0;
         
@@ -257,7 +274,7 @@
                     </div>
                 `;
             });
-            document.getElementById('cart-btn').style.display = 'flex'; // Qidiruvda savatcha doim tursin
+            document.getElementById('cart-btn').style.display = 'flex'; 
         } else {
             resultsDiv.classList.add('hidden');
             contentArea.classList.remove('hidden');
@@ -269,11 +286,10 @@
     function addToCart(id) {
         if (cart[id]) { cart[id]++; } else { cart[id] = 1; }
         
-        // Animatsiya berish
         const cartBtn = document.getElementById('cart-btn');
         cartBtn.style.display = 'flex';
         cartBtn.classList.remove('shake-animation');
-        void cartBtn.offsetWidth; // trigger reflow
+        void cartBtn.offsetWidth;
         cartBtn.classList.add('shake-animation');
         
         updateCartBadge();
