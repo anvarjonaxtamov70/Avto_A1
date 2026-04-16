@@ -27,9 +27,10 @@
         .luxury-card h3 { margin: 5px 0; font-size: 14px; }
         .price { color: #00ff88; font-weight: 800; font-size: 13px; margin: 5px 0; }
         
-        /* SEVIMLILAR YURAKCHASI */
-        .fav-btn { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 16px; border: none; cursor: pointer; color: white; z-index: 10; }
-        .fav-active { color: red !important; }
+        /* PROFESSIONAL YURAKCHA (SVG) */
+        .fav-btn { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; z-index: 10; padding: 6px; }
+        .fav-btn svg { width: 100%; height: 100%; stroke: white; stroke-width: 2; fill: transparent; transition: 0.3s; stroke-linecap: round; stroke-linejoin: round; }
+        .fav-active svg { stroke: #ff4757; fill: #ff4757; }
 
         .floating-btn { position: fixed; right: 20px; width: 50px; height: 50px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); }
         #back-btn { bottom: 20px; background: var(--primary-blue); }
@@ -37,7 +38,6 @@
         #wish-btn { bottom: 140px; background: #ff4757; }
         .cart-badge { position: absolute; top: -2px; right: -2px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center; }
 
-        /* BATAFSIL OYNA (POP-UP) */
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto;}
         .modal-img { width: 100%; height: 250px; object-fit: cover; border-radius: 15px; margin-top: 20px; background: #fff;}
         .modal-title { font-size: 22px; margin: 15px 0 5px; color: #ffd700; }
@@ -102,10 +102,7 @@
             <div class="luxury-card" onclick="showSection('fara-tiklash-items')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Linza O'rnatish</h3></div>
         </div>
 
-        <div id="gazel-biznes-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('biznes-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('biznes-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
+        <div id="gazel-biznes-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('biznes-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('biznes-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div></div>
         <div id="gazel-next-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('next-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('next-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div></div>
         <div id="gazel-eski-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('eski-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('eski-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div></div>
         <div id="volga-2401-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('volga-2401-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('volga-2401-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div></div>
@@ -158,6 +155,9 @@
     let tg = window.Telegram.WebApp;
     tg.expand();
 
+    // BROWSER VA TELEFON TARIXINI BOSHQARISH
+    window.history.replaceState({ section: 'main-menu' }, "");
+
     let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
     document.getElementById('user-name-display').innerText = userName;
 
@@ -174,6 +174,9 @@
 
     let cart = {}, wishlist = {}, historyStack = ['main-menu'];
 
+    // YURAKCHA SVG KODI
+    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
+
     function renderProducts() {
         ['biznes-motor', 'biznes-xadavoy', 'next-motor', 'next-xadavoy', 'eski-motor', 'eski-xadavoy', 'volga-2401-motor', 'volga-2401-xadavoy', 'volga-2410-motor', 'volga-2410-xadavoy', 'volga-3110-motor', 'volga-3110-xadavoy', 'volga-31105-motor', 'volga-31105-xadavoy', 'volga-31029-motor', 'volga-31029-xadavoy', 'uaz-patriot-motor', 'uaz-patriot-xadavoy', 'uaz-hunter-motor', 'uaz-hunter-xadavoy', 'uaz-452-motor', 'uaz-452-xadavoy', 'fara-tozalash-items', 'fara-tiklash-items'].forEach(cat => {
             let container = document.getElementById(cat);
@@ -187,7 +190,7 @@
     function cardHTML(p) {
         let favClass = wishlist[p.id] ? 'fav-active' : '';
         return `<div class="luxury-card" onclick="openProduct(${p.id})">
-            <button class="fav-btn ${favClass}" onclick="toggleFav(event, ${p.id})">❤️</button>
+            <button class="fav-btn ${favClass}" onclick="toggleFav(event, ${p.id})">${heartSVG}</button>
             <img src="${p.img}"><h4>${p.name}</h4><div class="price">${p.price.toLocaleString()} so'm</div>
         </div>`;
     }
@@ -228,22 +231,90 @@
     function showSection(id) {
         document.querySelectorAll('#content-area > div').forEach(div => div.classList.add('hidden'));
         document.getElementById(id).classList.remove('hidden');
-        if(historyStack[historyStack.length-1] !== id) historyStack.push(id);
+        
+        if (historyStack[historyStack.length - 1] !== id) {
+            historyStack.push(id);
+            window.history.pushState({ section: id }, ""); // Tarmoq tarixiga qo'shish
+        }
+        
         document.querySelector('.slider-container').style.display = id === 'main-menu' ? 'block' : 'none';
         updateBtns();
     }
 
+    // TELEFONNING ORTGA TUGMASINI USHLASH (Android/iOS)
+    window.addEventListener('popstate', function(event) {
+        if (historyStack.length > 1) {
+            historyStack.pop();
+            let previousId = historyStack[historyStack.length - 1];
+            
+            document.querySelectorAll('#content-area > div').forEach(div => div.classList.add('hidden'));
+            document.getElementById(previousId).classList.remove('hidden');
+            
+            document.getElementById('searchInput').value = '';
+            document.getElementById('search-results').classList.add('hidden');
+            document.getElementById('content-area').classList.remove('hidden');
+            
+            document.querySelector('.slider-container').style.display = (previousId === 'main-menu') ? 'block' : 'none';
+            updateBtns();
+        } else {
+            tg.close(); // Agar bosh menyuda bo'lsa, chiqib ketadi
+        }
+    });
+
+    // TELEGRAM TEPASIDAGI ORTGA TUGMASI (NATIVE BACK BUTTON)
+    tg.onEvent('backButtonClicked', function() { goBack(); });
+
     function goBack() {
-        if(historyStack.length > 1) { historyStack.pop(); showSection(historyStack.pop()); }
+        if (historyStack.length > 1) {
+            window.history.back(); // Tizimni orqaga qaytaradi (bu popstate ni ishga tushiradi)
+        }
     }
 
     function updateBtns() {
         let isDeep = historyStack.length > 1;
         document.getElementById('back-btn').style.display = isDeep ? 'flex' : 'none';
+        
+        // Telegramning o'zini native tugmasini ko'rsatish/yashirish
+        if (isDeep) { tg.BackButton.show(); } else { tg.BackButton.hide(); }
+        
         document.getElementById('wish-btn').style.display = 'flex';
         document.getElementById('cart-btn').style.display = Object.keys(cart).length > 0 || isDeep ? 'flex' : 'none';
     }
     updateBtns();
+
+    function searchProducts() {
+        // ... (Qidiruv kodi o'zgarishsiz qoldi) ...
+        let query = document.getElementById('searchInput').value.toLowerCase();
+        let resultsDiv = document.getElementById('search-results');
+        let contentArea = document.getElementById('content-area');
+        let sliderContainer = document.querySelector('.slider-container');
+
+        if (query.length > 0) {
+            contentArea.classList.add('hidden');
+            sliderContainer.style.display = 'none';
+            resultsDiv.classList.remove('hidden');
+            let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)));
+            resultsDiv.innerHTML = '';
+            if(filtered.length === 0) {
+                resultsDiv.innerHTML = '<p style="text-align:center; color:#888;">Hech narsa topilmadi...</p>';
+                return;
+            }
+            filtered.forEach(p => {
+                resultsDiv.innerHTML += `
+                    <div class="search-item" onclick="openProduct(${p.id})">
+                        <img src="${p.img}">
+                        <div class="search-info">
+                            <h4>${p.name}</h4><p class="car-brand">${p.car || ''}</p><p class="price">${p.price.toLocaleString()} so'm</p>
+                        </div>
+                    </div>`;
+            });
+        } else {
+            resultsDiv.classList.add('hidden');
+            contentArea.classList.remove('hidden');
+            sliderContainer.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none';
+            updateBtns();
+        }
+    }
 
     function openCart() {
         let container = document.getElementById('cart-items-container'), total = 0;
