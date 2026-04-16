@@ -9,6 +9,7 @@
     <style>
         :root { --primary-blue: #007bff; --luxury-gold: linear-gradient(135deg, rgba(255, 215, 0, 0.8), rgba(218, 165, 32, 0.9)); --glass-bg: rgba(20, 20, 20, 0.75); --glass-border: rgba(255, 255, 255, 0.15); }
         body { font-family: 'Montserrat', sans-serif; margin: 0; padding: 0; color: white; background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.9)), url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1000&q=80'); background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh; padding-bottom: 110px; overflow-x: hidden; }
+        
         #welcome-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transition: 0.5s; }
         #welcome-screen h1 { font-size: 26px; color: #ffd700; margin-bottom: 10px; }
         .container { padding: 15px; max-width: 500px; margin: 0 auto; }
@@ -17,35 +18,59 @@
         .verify-icon { background: #007bff; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
         .verify-icon svg { width: 12px; height: 12px; fill: white; }
         .search-box { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: white; margin: 15px 0; outline: none; box-sizing: border-box;}
+        
         .slider-container { width: 100%; margin-bottom: 20px; overflow: hidden; border-radius: 15px; }
         .slider { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
         .slider img { flex: 0 0 100%; width: 100%; height: 160px; object-fit: cover; scroll-snap-align: start; border-radius: 15px; }
         
+        /* 1-ANIMATSIYA: Oynalar silliq chiqishi (Slide Up & Fade In) */
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
         .items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        .luxury-card { position: relative; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 15px; padding: 10px; text-align: center; cursor: pointer; transition: 0.3s; }
+        .luxury-card { position: relative; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 15px; padding: 10px; text-align: center; cursor: pointer; transition: transform 0.2s, border-color 0.2s; }
+        .luxury-card:active { transform: scale(0.94); border-color: var(--primary-blue); }
         .luxury-card img { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; background-color: #fff; }
         .luxury-card h3 { margin: 5px 0; font-size: 14px; }
         .price { color: #00ff88; font-weight: 800; font-size: 13px; margin: 5px 0; }
         
-        /* PROFESSIONAL YURAKCHA (SVG) */
+        /* 2-ANIMATSIYA: Yurakchaning urishi (Heartbeat) */
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            30% { transform: scale(1.3); }
+            50% { transform: scale(1); }
+            70% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
         .fav-btn { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; z-index: 10; padding: 6px; }
         .fav-btn svg { width: 100%; height: 100%; stroke: white; stroke-width: 2; fill: transparent; transition: 0.3s; stroke-linecap: round; stroke-linejoin: round; }
-        .fav-active svg { stroke: #ff4757; fill: #ff4757; }
+        .fav-active svg { stroke: #ff4757; fill: #ff4757; animation: heartbeat 0.4s ease-in-out; }
 
-        .floating-btn { position: fixed; right: 20px; width: 50px; height: 50px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); }
+        .floating-btn { position: fixed; right: 20px; width: 50px; height: 50px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); transition: transform 0.2s;}
+        .floating-btn:active { transform: scale(0.9); }
         #back-btn { bottom: 20px; background: var(--primary-blue); }
         #cart-btn { bottom: 80px; background: var(--luxury-gold); }
         #wish-btn { bottom: 140px; background: #ff4757; }
-        .cart-badge { position: absolute; top: -2px; right: -2px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+        .cart-badge { position: absolute; top: -2px; right: -2px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
 
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto;}
+        /* 3-ANIMATSIYA: Modal ochilishi (Zoom In) */
+        @keyframes zoomIn {
+            from { opacity: 0; transform: scale(0.85); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto; }
         .modal-img { width: 100%; height: 250px; object-fit: cover; border-radius: 15px; margin-top: 20px; background: #fff;}
         .modal-title { font-size: 22px; margin: 15px 0 5px; color: #ffd700; }
         .modal-brand { font-size: 14px; color: #aaa; margin-bottom: 15px; }
         .modal-desc { font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
-        .btn-buy { background: var(--primary-blue); color: white; border: none; width: 100%; padding: 15px; border-radius: 12px; font-weight: 800; font-size: 16px; margin-top: auto; cursor: pointer; }
+        .btn-buy { background: var(--primary-blue); color: white; border: none; width: 100%; padding: 15px; border-radius: 12px; font-weight: 800; font-size: 16px; margin-top: auto; cursor: pointer; transition: 0.2s;}
+        .btn-buy:active { transform: scale(0.96); }
         .cart-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 8px; }
-        .cart-controls button { background: #333; border: none; color: white; width: 25px; height: 25px; border-radius: 6px; font-weight: bold; font-size: 14px; }
+        .cart-controls button { background: #333; border: none; color: white; width: 25px; height: 25px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; transition: 0.2s; }
+        .cart-controls button:active { background: var(--primary-blue); }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -73,7 +98,7 @@
     <input type="text" id="searchInput" class="search-box" placeholder="🔍 Qidiruv..." onkeyup="searchProducts()">
 
     <div id="content-area">
-        <div id="main-menu" class="items-grid">
+        <div id="main-menu" class="items-grid animate-slide-up">
             <div class="luxury-card" onclick="showSection('gazel-types')"><img src="https://i.postimg.cc/cJybN99d/gazel.jpg"><h3>Gazel 🚛</h3></div>
             <div class="luxury-card" onclick="showSection('volga-types')"><img src="https://i.postimg.cc/TYTgrbkq/volga-3110.jpg"><h3>Volga 🏎️</h3></div>
             <div class="luxury-card" onclick="showSection('uaz-types')"><img src="https://i.postimg.cc/Tw62bVRP/uaz.jpg"><h3>UAZ 🚙</h3></div>
@@ -154,8 +179,6 @@
 <script>
     let tg = window.Telegram.WebApp;
     tg.expand();
-
-    // BROWSER VA TELEFON TARIXINI BOSHQARISH
     window.history.replaceState({ section: 'main-menu' }, "");
 
     let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
@@ -173,8 +196,6 @@
     ];
 
     let cart = {}, wishlist = {}, historyStack = ['main-menu'];
-
-    // YURAKCHA SVG KODI
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
     function renderProducts() {
@@ -204,7 +225,13 @@
         document.getElementById('pm-desc').innerText = p.desc || "Qo'shimcha ma'lumot yo'q.";
         document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} so'm`;
         document.getElementById('pm-buy-btn').onclick = () => { addToCart(id); closeModal('productModal'); };
-        document.getElementById('productModal').style.display = 'flex';
+        
+        // MODAL ANIMATSIYASI (Zoom in)
+        let modal = document.getElementById('productModal');
+        modal.style.display = 'flex';
+        modal.style.animation = 'none';
+        modal.offsetHeight; // reflow
+        modal.style.animation = 'zoomIn 0.3s forwards';
     }
 
     function toggleFav(e, id) {
@@ -224,111 +251,102 @@
 
     function addToCart(id) {
         cart[id] = (cart[id] || 0) + 1;
-        document.getElementById('cart-badge').innerText = Object.values(cart).reduce((a,b)=>a+b,0);
+        
+        let badge = document.getElementById('cart-badge');
+        badge.innerText = Object.values(cart).reduce((a,b)=>a+b,0);
+        
+        // SAVATCHA SAKRASH ANIMATSIYASI
+        badge.style.transform = 'scale(1.5)';
+        setTimeout(() => badge.style.transform = 'scale(1)', 200);
+        
         updateBtns(); tg.HapticFeedback.impactOccurred('medium');
     }
 
     function showSection(id) {
-        document.querySelectorAll('#content-area > div').forEach(div => div.classList.add('hidden'));
-        document.getElementById(id).classList.remove('hidden');
+        document.querySelectorAll('#content-area > div').forEach(div => {
+            div.classList.add('hidden');
+            div.classList.remove('animate-slide-up'); // animatsiyani tozalash
+        });
+        
+        let target = document.getElementById(id);
+        target.classList.remove('hidden');
+        target.classList.add('animate-slide-up'); // yangi menyuni pastdan tepaga chiqarish
         
         if (historyStack[historyStack.length - 1] !== id) {
-            historyStack.push(id);
-            window.history.pushState({ section: id }, ""); // Tarmoq tarixiga qo'shish
+            historyStack.push(id); window.history.pushState({ section: id }, "");
         }
-        
         document.querySelector('.slider-container').style.display = id === 'main-menu' ? 'block' : 'none';
         updateBtns();
     }
 
-    // TELEFONNING ORTGA TUGMASINI USHLASH (Android/iOS)
     window.addEventListener('popstate', function(event) {
         if (historyStack.length > 1) {
             historyStack.pop();
             let previousId = historyStack[historyStack.length - 1];
             
-            document.querySelectorAll('#content-area > div').forEach(div => div.classList.add('hidden'));
-            document.getElementById(previousId).classList.remove('hidden');
+            document.querySelectorAll('#content-area > div').forEach(div => {
+                div.classList.add('hidden');
+                div.classList.remove('animate-slide-up');
+            });
             
-            document.getElementById('searchInput').value = '';
-            document.getElementById('search-results').classList.add('hidden');
-            document.getElementById('content-area').classList.remove('hidden');
+            let prevTarget = document.getElementById(previousId);
+            prevTarget.classList.remove('hidden');
+            prevTarget.classList.add('animate-slide-up'); // orqaga qaytganda ham silliq chiqadi
             
             document.querySelector('.slider-container').style.display = (previousId === 'main-menu') ? 'block' : 'none';
             updateBtns();
-        } else {
-            tg.close(); // Agar bosh menyuda bo'lsa, chiqib ketadi
-        }
+        } else { tg.close(); }
     });
 
-    // TELEGRAM TEPASIDAGI ORTGA TUGMASI (NATIVE BACK BUTTON)
     tg.onEvent('backButtonClicked', function() { goBack(); });
-
-    function goBack() {
-        if (historyStack.length > 1) {
-            window.history.back(); // Tizimni orqaga qaytaradi (bu popstate ni ishga tushiradi)
-        }
-    }
+    function goBack() { if (historyStack.length > 1) { window.history.back(); } }
 
     function updateBtns() {
         let isDeep = historyStack.length > 1;
         document.getElementById('back-btn').style.display = isDeep ? 'flex' : 'none';
-        
-        // Telegramning o'zini native tugmasini ko'rsatish/yashirish
         if (isDeep) { tg.BackButton.show(); } else { tg.BackButton.hide(); }
-        
         document.getElementById('wish-btn').style.display = 'flex';
         document.getElementById('cart-btn').style.display = Object.keys(cart).length > 0 || isDeep ? 'flex' : 'none';
     }
     updateBtns();
 
     function searchProducts() {
-        // ... (Qidiruv kodi o'zgarishsiz qoldi) ...
         let query = document.getElementById('searchInput').value.toLowerCase();
         let resultsDiv = document.getElementById('search-results');
         let contentArea = document.getElementById('content-area');
         let sliderContainer = document.querySelector('.slider-container');
 
         if (query.length > 0) {
-            contentArea.classList.add('hidden');
-            sliderContainer.style.display = 'none';
-            resultsDiv.classList.remove('hidden');
+            contentArea.classList.add('hidden'); sliderContainer.style.display = 'none'; resultsDiv.classList.remove('hidden');
             let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)));
-            resultsDiv.innerHTML = '';
-            if(filtered.length === 0) {
-                resultsDiv.innerHTML = '<p style="text-align:center; color:#888;">Hech narsa topilmadi...</p>';
-                return;
-            }
+            resultsDiv.innerHTML = filtered.length === 0 ? '<p style="text-align:center; color:#888;">Hech narsa topilmadi...</p>' : '';
             filtered.forEach(p => {
-                resultsDiv.innerHTML += `
-                    <div class="search-item" onclick="openProduct(${p.id})">
-                        <img src="${p.img}">
-                        <div class="search-info">
-                            <h4>${p.name}</h4><p class="car-brand">${p.car || ''}</p><p class="price">${p.price.toLocaleString()} so'm</p>
-                        </div>
-                    </div>`;
+                resultsDiv.innerHTML += `<div class="search-item" onclick="openProduct(${p.id})"><img src="${p.img}"><div class="search-info"><h4>${p.name}</h4><p class="car-brand">${p.car || ''}</p><p class="price">${p.price.toLocaleString()} so'm</p></div></div>`;
             });
         } else {
-            resultsDiv.classList.add('hidden');
-            contentArea.classList.remove('hidden');
-            sliderContainer.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none';
-            updateBtns();
+            resultsDiv.classList.add('hidden'); contentArea.classList.remove('hidden');
+            sliderContainer.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; updateBtns();
         }
     }
 
     function openCart() {
-        let container = document.getElementById('cart-items-container'), total = 0;
-        container.innerHTML = '';
+        let container = document.getElementById('cart-items-container'), total = 0; container.innerHTML = '';
         for(let id in cart) {
             let p = productsDB.find(x => x.id == id); total += p.price * cart[id];
             container.innerHTML += `<div class="cart-row"><div style="flex:1;"><h4>${p.name}</h4><span style="color:#00ff88;">${(p.price * cart[id]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg(${id},-1)">-</button> <span>${cart[id]}</span> <button onclick="chg(${id},1)">+</button></div></div>`;
         }
         document.getElementById('cart-total-sum').innerText = total.toLocaleString();
-        document.getElementById('cartModal').style.display = 'flex';
+        
+        let modal = document.getElementById('cartModal');
+        modal.style.display = 'flex';
+        modal.style.animation = 'none';
+        modal.offsetHeight; 
+        modal.style.animation = 'zoomIn 0.3s forwards';
     }
 
     function chg(id, d) { cart[id] += d; if(cart[id]<=0) delete cart[id]; document.getElementById('cart-badge').innerText = Object.values(cart).reduce((a,b)=>a+b,0); openCart(); updateBtns(); }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    
     function sendOrderToBot() {
         if(Object.keys(cart).length === 0) return tg.showAlert("Savatcha bo'sh!");
         let items = []; let total = 0;
