@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
@@ -30,7 +31,7 @@
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
 
         .items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        .luxury-card { position: relative; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 15px; padding: 10px; text-align: center; cursor: pointer; transition: transform 0.2s, border-color 0.2s; }
+        .luxury-card { position: relative; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 15px; padding: 10px; text-align: center; cursor: pointer; transition: transform 0.2s, border-color 0.2s; display: flex; flex-direction: column; justify-content: space-between; }
         .luxury-card:active { transform: scale(0.94); border-color: var(--primary-blue); }
         .luxury-card img { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; background-color: #fff; }
         .luxury-card h3 { margin: 5px 0; font-size: 14px; }
@@ -62,8 +63,8 @@
         @keyframes zoomIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
         .modal { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(10, 10, 10, 0.45); /* Shaffoflik */
-            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); /* Xira (Frosted) effekt */
+            background: rgba(10, 10, 10, 0.45);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
             z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto; 
         }
         .modal-img { width: 100%; height: 250px; object-fit: cover; border-radius: 15px; margin-top: 20px; background: #fff;}
@@ -76,7 +77,6 @@
         .btn-checkout { background: var(--luxury-gold); color: #000; border: none; width: 100%; padding: 15px; border-radius: 12px; font-weight: 800; font-size: 16px; margin-top: auto; cursor: pointer; }
         .btn-checkout:active { transform: scale(0.96); }
 
-        /* Yangilangan Savatcha Qatorlari */
         .cart-row { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.08); padding: 12px; border-radius: 12px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.1); }
         .cart-row img { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; background: #fff; }
         .cart-info { flex: 1; }
@@ -85,6 +85,7 @@
         .cart-controls button { background: transparent; border: none; color: white; width: 24px; height: 24px; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; }
         
         .hidden { display: none !important; }
+        .quick-add-btn { background: var(--primary-blue); color: white; border: none; width: 100%; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 8px; z-index: 2; position: relative; }
     </style>
 </head>
 <body>
@@ -108,7 +109,7 @@
         </div>
     </div>
 
-    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Qidiruv..." oninput="searchProducts()">
+    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Qidiruv..." oninput="searchProducts()" onfocus="searchProducts()">
 
     <div id="content-area">
         <div id="main-menu" class="items-grid animate-slide-up">
@@ -201,7 +202,6 @@
     let tg = window.Telegram.WebApp;
     tg.expand();
     
-    // TIZIM TARIXI (HISTORY) BOSHQA OYNALAR UCHUN
     window.history.replaceState({ section: 'main-menu' }, "");
 
     let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
@@ -210,7 +210,6 @@
     setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
 
     const slider = document.getElementById('main-slider');
-    // Banner 2 soniyada (2000 ms) aylanishi uchun o'zgartirildi
     setInterval(() => { slider.scrollLeft + slider.clientWidth >= slider.scrollWidth ? slider.scrollTo({ left: 0, behavior: 'smooth' }) : slider.scrollBy({ left: slider.clientWidth, behavior: 'smooth' }); }, 2000); 
 
     const productsDB = [
@@ -221,7 +220,7 @@
 
     let cart = {}, wishlist = {}, historyStack = ['main-menu'];
     let activeModal = null; 
-    let searchActive = false; // Qidiruv holatini saqlash
+    let searchActive = false; 
     
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
@@ -235,11 +234,22 @@
         });
     }
 
+    // Tezkor savatga qo'shish funksiyasi
+    function addToCartQuick(e, id) {
+        e.stopPropagation(); // Ichki oynaga kirishni to'xtatadi
+        addToCart(id);
+    }
+
+    // Kartochka HTML qismiga savat tugmasi qo'shildi
     function cardHTML(p) {
         let favClass = wishlist[p.id] ? 'fav-active' : '';
         return `<div class="luxury-card" onclick="openProduct(${p.id})">
             <button class="fav-btn ${favClass}" onclick="toggleFav(event, ${p.id})">${heartSVG}</button>
-            <img src="${p.img}"><h4>${p.name}</h4><div class="price">${p.price.toLocaleString()} so'm</div>
+            <img src="${p.img}">
+            <div style="flex:1;">
+                <h4>${p.name}</h4><div class="price">${p.price.toLocaleString()} so'm</div>
+            </div>
+            <button class="quick-add-btn" onclick="addToCartQuick(event, ${p.id})">🛒 Savatga qo'shish</button>
         </div>`;
     }
     renderProducts();
@@ -301,7 +311,7 @@
         document.getElementById('searchInput').value = '';
         document.getElementById('search-results').classList.add('hidden');
         document.getElementById('content-area').classList.remove('hidden');
-        searchActive = false; // Bo'lim o'zgarganda qidiruv yopiladi
+        searchActive = false; 
         
         updateBtns();
     }
@@ -328,7 +338,7 @@
         }
     }
 
-    // TELEFONNING "ORTGA" TUGMASI VA QIDIRUV UCHUN
+    // Popstate (Ortga tugmasi) to'liq sozlandi
     window.addEventListener('popstate', function(event) {
         if (activeModal) {
             document.getElementById(activeModal).style.display = 'none';
@@ -337,7 +347,7 @@
             return; 
         }
 
-        // Qidiruvdan orqaga qaytishni ushlash
+        // Qidiruvdan faqat tugma bilan chiqish
         if (searchActive) {
             searchActive = false;
             document.getElementById('searchInput').value = '';
@@ -379,56 +389,49 @@
     function updateBtns() {
         let isDeep = historyStack.length > 1;
         document.getElementById('back-btn').style.display = isDeep ? 'flex' : 'none';
-        // Qidiruv ochiq bo'lsa yoki ichki menyuda bo'lsa ko'k strelka chiqadi
         if (isDeep || activeModal || searchActive) { tg.BackButton.show(); } else { tg.BackButton.hide(); }
         document.getElementById('wish-btn').style.display = 'flex';
         document.getElementById('cart-btn').style.display = Object.keys(cart).length > 0 || isDeep ? 'flex' : 'none';
     }
     updateBtns();
 
-    // QIDIRUV FUNKSIYASI YANGILANDI
+    // Qidiruv tizimi sozlandi (O'chganda chiqib ketmaydi)
     function searchProducts() {
         let query = document.getElementById('searchInput').value.toLowerCase().trim();
         let resultsDiv = document.getElementById('search-results');
         let contentArea = document.getElementById('content-area');
         let sliderContainer = document.querySelector('.slider-container');
 
-        if (query.length > 0) {
-            if (!searchActive) {
-                searchActive = true;
-                window.history.pushState({ search: true }, ""); // Telefon uchun tarixga yozish
-            }
+        if (!searchActive) {
+            searchActive = true;
+            window.history.pushState({ search: true }, ""); 
             contentArea.classList.add('hidden'); 
             sliderContainer.style.display = 'none'; 
             resultsDiv.classList.remove('hidden');
-            
-            tg.BackButton.show(); // Qidiruvda doim ko'k strelka chiqadi
-            document.getElementById('back-btn').style.display = 'flex'; // Float tugma ham
-            
+            tg.BackButton.show(); 
+            document.getElementById('back-btn').style.display = 'flex'; 
+        }
+
+        if (query.length > 0) {
             let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)) || (p.brand && p.brand.toLowerCase().includes(query)));
             
             if (filtered.length === 0) {
                 resultsDiv.innerHTML = '<p style="text-align:center; color:#888; padding: 20px;">Hech narsa topilmadi...</p>';
             } else {
+                // Qidiruv oynasiga ham savatga qo'shish knopkasi qo'shildi
                 resultsDiv.innerHTML = filtered.map(p => `
                     <div class="search-item" onclick="openProduct(${p.id})">
                         <img src="${p.img}">
                         <div class="search-info">
                             <h4>${p.name}</h4><p class="car-brand">${p.car || ''}</p><p class="price">${p.price.toLocaleString()} so'm</p>
                         </div>
+                        <button onclick="addToCartQuick(event, ${p.id})" style="background:var(--primary-blue); color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold; z-index:2; position:relative;">🛒</button>
                     </div>
                 `).join('');
             }
         } else {
-            if (searchActive) {
-                searchActive = false;
-                window.history.back(); // Agar qidiruv so'zini qo'lda o'chirsa, popstate orqali yopiladi
-            } else {
-                resultsDiv.classList.add('hidden'); 
-                contentArea.classList.remove('hidden');
-                sliderContainer.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; 
-                updateBtns();
-            }
+            // Matn o'chirilganda chiqib ketmasligi uchun shunday qoladi
+            resultsDiv.innerHTML = '<p style="text-align:center; color:#888; padding: 20px;">Qidirish uchun so\'z kiriting...</p>';
         }
     }
 
