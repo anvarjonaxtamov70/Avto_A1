@@ -20,7 +20,36 @@
                         url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1000&q=80');
             background-size: cover; background-position: center; background-attachment: fixed;
             min-height: 100vh; padding-bottom: 110px;
+            overflow-x: hidden;
         }
+
+        /* YUKLANISH VA SALOMLASHISH EKRANI */
+        #welcome-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+            transition: opacity 1s ease-in-out, visibility 1s ease-in-out;
+        }
+        #welcome-screen h1 {
+            font-size: 26px;
+            color: #ffd700;
+            margin-bottom: 10px;
+            text-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+        #welcome-screen p {
+            font-size: 14px;
+            color: #ccc;
+            letter-spacing: 1px;
+        }
+
         .container { padding: 15px; max-width: 500px; margin: 0 auto; }
         .header { text-align: center; padding: 10px 0; }
         .header h1 { font-size: 28px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -64,6 +93,11 @@
     </style>
 </head>
 <body>
+
+<div id="welcome-screen">
+    <h1>Assalomu alaykum, <br><span id="user-name-display" style="color: #fff;"></span>!</h1>
+    <p>Avto_A1 do'koniga xush kelibsiz ✨</p>
+</div>
 
 <div class="container">
     <div class="header">
@@ -191,8 +225,24 @@
     let tg = window.Telegram.WebApp;
     tg.expand();
 
+    // FOYDALANUVCHI ISMINI OLISH VA ANIMATSIYA
+    let userName = "Mijoz";
+    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        userName = tg.initDataUnsafe.user.first_name;
+    }
+    document.getElementById('user-name-display').innerText = userName;
+
+    // 2.5 soniyadan so'ng ekranni sekin yo'qotish
+    setTimeout(() => {
+        let welcomeScreen = document.getElementById('welcome-screen');
+        welcomeScreen.style.opacity = '0';
+        setTimeout(() => {
+            welcomeScreen.style.visibility = 'hidden';
+            welcomeScreen.style.display = 'none';
+        }, 1000); // fade effekti tugashini kutish
+    }, 2500);
+
     // BARCHA MAHSULOTLAR BAZASI
-    // Agar boshqa bo'limlarga ham qo'shmoqchi bo'lsangiz, "category" qismini o'zgartirib qo'shaverasiz
     const productsDB = [
         { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor" },
         { id: 2, name: "Gidrokompensator", car: "Gazel Biznes", brand: "Xitoy", price: 20000, img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", category: "biznes-motor" }
@@ -201,7 +251,6 @@
     let cart = {};
     let historyStack = ['main-menu'];
 
-    // Avtomatik ravishda hamma bo'limlarni chizuvchi funksiya
     function renderProducts() {
         const allCategories = [
             'biznes-motor', 'biznes-xadavoy', 'next-motor', 'next-xadavoy', 'eski-motor', 'eski-xadavoy',
@@ -259,7 +308,7 @@
             cart[id] += delta;
             if (cart[id] <= 0) delete cart[id];
             updateCartBadge();
-            openCart(); // Savatchani yangilash uchun
+            openCart(); 
         }
     }
 
@@ -292,8 +341,6 @@
 
     function updateButtonsVisibility() {
         document.getElementById('back-btn').style.display = historyStack.length > 1 ? 'flex' : 'none';
-        
-        // Agar eng oxirgi bo'lim "motor" yoki "xadavoy" so'zi bilan tugasa yoki savatda narsa bo'lsa
         let currentSection = historyStack[historyStack.length - 1];
         let isDeep = currentSection.includes('-motor') || currentSection.includes('-xadavoy');
         let hasItems = Object.keys(cart).length > 0;
