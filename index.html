@@ -23,32 +23,18 @@
             overflow-x: hidden;
         }
 
-        /* YUKLANISH VA SALOMLASHISH EKRANI */
+        /* YUKLANISH EKRANI */
         #welcome-screen {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
             z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 20px;
-            box-sizing: border-box;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; padding: 20px; box-sizing: border-box;
             transition: opacity 1s ease-in-out, visibility 1s ease-in-out;
         }
-        #welcome-screen h1 {
-            font-size: 26px;
-            color: #ffd700;
-            margin-bottom: 10px;
-            text-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
-        }
-        #welcome-screen p {
-            font-size: 14px;
-            color: #ccc;
-            letter-spacing: 1px;
-        }
+        #welcome-screen h1 { font-size: 26px; color: #ffd700; margin-bottom: 10px; text-shadow: 0 4px 15px rgba(255, 215, 0, 0.3); }
+        #welcome-screen p { font-size: 14px; color: #ccc; letter-spacing: 1px; }
 
         .container { padding: 15px; max-width: 500px; margin: 0 auto; }
         .header { text-align: center; padding: 10px 0; }
@@ -57,6 +43,12 @@
         .verify-icon svg { width: 12px; height: 12px; fill: white; }
         
         .search-box { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: white; margin: 15px 0; outline: none; }
+
+        /* SLAYDER BIZNES/AKSIYALAR UCHUN */
+        .slider-container { width: 100%; margin-bottom: 20px; overflow: hidden; border-radius: 15px; }
+        .slider { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; -ms-overflow-style: none; scrollbar-width: none; }
+        .slider::-webkit-scrollbar { display: none; }
+        .slider img { flex: 0 0 100%; width: 100%; height: 160px; object-fit: cover; scroll-snap-align: start; border-radius: 15px; }
 
         .items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
         .luxury-card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 15px; padding: 10px; text-align: center; cursor: pointer; transition: 0.3s; }
@@ -105,6 +97,14 @@
         <p style="font-size: 10px; color: #aaa;">ROSSIYA 🇷🇺 VA XITOY 🇨🇳 PREMIUM ZAPCHASTLARI</p>
     </div>
 
+    <div class="slider-container">
+        <div class="slider" id="main-slider">
+            <img src="https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=800&q=80" alt="Banner 1">
+            <img src="https://images.unsplash.com/photo-1600705722908-bab1e6190b05?auto=format&fit=crop&w=800&q=80" alt="Banner 2">
+            <img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=800&q=80" alt="Fara Aksiya">
+        </div>
+    </div>
+
     <input type="text" id="searchInput" class="search-box" placeholder="🔍 Qidiruv..." onkeyup="searchProducts()">
 
     <div id="content-area">
@@ -113,6 +113,7 @@
             <div class="luxury-card" onclick="showSection('gazel-types')"><img src="https://i.postimg.cc/cJybN99d/gazel.jpg"><h3>Gazel 🚛</h3></div>
             <div class="luxury-card" onclick="showSection('volga-types')"><img src="https://i.postimg.cc/TYTgrbkq/volga-3110.jpg"><h3>Volga 🏎️</h3></div>
             <div class="luxury-card" onclick="showSection('uaz-types')"><img src="https://i.postimg.cc/Tw62bVRP/uaz.jpg"><h3>UAZ 🚙</h3></div>
+            <div class="luxury-card" onclick="showSection('fara-club-sections')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Fara Club Sam 💡</h3></div>
         </div>
 
         <div id="gazel-types" class="items-grid hidden">
@@ -133,6 +134,11 @@
             <div class="luxury-card" onclick="showSection('uaz-patriot-sections')"><img src="https://i.postimg.cc/Kzn156DW/Uaz-patirot.jpg"><h3>Uaz Patriot</h3></div>
             <div class="luxury-card" onclick="showSection('uaz-hunter-sections')"><img src="https://i.postimg.cc/XYMtRtfX/xanter.jpg"><h3>Uaz Hunter</h3></div>
             <div class="luxury-card" onclick="showSection('uaz-452-sections')"><img src="https://i.postimg.cc/HLTMhsjZ/452.jpg"><h3>Uaz 452 (Tabletka)</h3></div>
+        </div>
+
+        <div id="fara-club-sections" class="items-grid hidden">
+            <div class="luxury-card" onclick="showSection('fara-tozalash-items')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Fara Tozalash</h3></div>
+            <div class="luxury-card" onclick="showSection('fara-tiklash-items')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Linza O'rnatish</h3></div>
         </div>
 
         <div id="gazel-biznes-sections" class="items-grid hidden">
@@ -207,6 +213,9 @@
         <div id="uaz-452-motor" class="items-grid hidden"></div>
         <div id="uaz-452-xadavoy" class="items-grid hidden"></div>
 
+        <div id="fara-tozalash-items" class="items-grid hidden"></div>
+        <div id="fara-tiklash-items" class="items-grid hidden"></div>
+
     </div>
     <div id="search-results" class="search-list hidden"></div>
 </div>
@@ -225,27 +234,38 @@
     let tg = window.Telegram.WebApp;
     tg.expand();
 
-    // FOYDALANUVCHI ISMINI OLISH VA ANIMATSIYA
+    // Ismni olish va ekranni tozalash
     let userName = "Mijoz";
     if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
         userName = tg.initDataUnsafe.user.first_name;
     }
     document.getElementById('user-name-display').innerText = userName;
 
-    // 2.5 soniyadan so'ng ekranni sekin yo'qotish
     setTimeout(() => {
         let welcomeScreen = document.getElementById('welcome-screen');
         welcomeScreen.style.opacity = '0';
         setTimeout(() => {
             welcomeScreen.style.visibility = 'hidden';
             welcomeScreen.style.display = 'none';
-        }, 1000); // fade effekti tugashini kutish
+        }, 1000); 
     }, 2500);
 
-    // BARCHA MAHSULOTLAR BAZASI
+    // SLAYDER AVTOMAT AYLANISHI
+    const slider = document.getElementById('main-slider');
+    let scrollAmount = 0;
+    setInterval(() => {
+        if(slider.scrollLeft + slider.clientWidth >= slider.scrollWidth) {
+            slider.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+            slider.scrollBy({ left: slider.clientWidth, behavior: 'smooth' });
+        }
+    }, 3000); // Har 3 soniyada aylanadi
+
+    // MAHSULOTLAR BAZASI
     const productsDB = [
         { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor" },
-        { id: 2, name: "Gidrokompensator", car: "Gazel Biznes", brand: "Xitoy", price: 20000, img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", category: "biznes-motor" }
+        { id: 2, name: "Gidrokompensator", car: "Gazel Biznes", brand: "Xitoy", price: 20000, img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", category: "biznes-motor" },
+        { id: 3, name: "Fara Tozalash xizmati", car: "Barcha", brand: "Fara Club Sam", price: 150000, img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80", category: "fara-tozalash-items" }
     ];
 
     let cart = {};
@@ -258,7 +278,8 @@
             'volga-3110-motor', 'volga-3110-xadavoy', 'volga-31105-motor', 'volga-31105-xadavoy',
             'volga-31029-motor', 'volga-31029-xadavoy',
             'uaz-patriot-motor', 'uaz-patriot-xadavoy', 'uaz-hunter-motor', 'uaz-hunter-xadavoy',
-            'uaz-452-motor', 'uaz-452-xadavoy'
+            'uaz-452-motor', 'uaz-452-xadavoy',
+            'fara-tozalash-items', 'fara-tiklash-items'
         ];
 
         allCategories.forEach(cat => {
@@ -321,6 +342,9 @@
         document.getElementById(id).classList.remove('hidden');
         historyStack.push(id);
         updateButtonsVisibility();
+        
+        // Slayderni faqat asosiy menyuda ko'rsatish
+        document.querySelector('.slider-container').style.display = (id === 'main-menu') ? 'block' : 'none';
     }
 
     function goBack() {
@@ -336,13 +360,14 @@
             document.getElementById('content-area').classList.remove('hidden');
             
             updateButtonsVisibility();
+            document.querySelector('.slider-container').style.display = (previousId === 'main-menu') ? 'block' : 'none';
         }
     }
 
     function updateButtonsVisibility() {
         document.getElementById('back-btn').style.display = historyStack.length > 1 ? 'flex' : 'none';
         let currentSection = historyStack[historyStack.length - 1];
-        let isDeep = currentSection.includes('-motor') || currentSection.includes('-xadavoy');
+        let isDeep = currentSection.includes('-motor') || currentSection.includes('-xadavoy') || currentSection.includes('-items');
         let hasItems = Object.keys(cart).length > 0;
         
         document.getElementById('cart-btn').style.display = (isDeep || hasItems) ? 'flex' : 'none';
@@ -352,9 +377,11 @@
         let query = document.getElementById('searchInput').value.toLowerCase();
         let resultsDiv = document.getElementById('search-results');
         let contentArea = document.getElementById('content-area');
+        let sliderContainer = document.querySelector('.slider-container');
 
         if (query.length > 0) {
             contentArea.classList.add('hidden');
+            sliderContainer.style.display = 'none';
             resultsDiv.classList.remove('hidden');
             
             let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)));
@@ -382,6 +409,7 @@
         } else {
             resultsDiv.classList.add('hidden');
             contentArea.classList.remove('hidden');
+            sliderContainer.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none';
             updateButtonsVisibility();
         }
     }
