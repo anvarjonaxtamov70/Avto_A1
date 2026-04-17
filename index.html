@@ -544,32 +544,24 @@
     
     // =================================================================
     // SIZ SO'RAGAN TUGMALAR VA BEXATO SMS JO'NATUVCHI YANGI KOD
-    // =================================================================
-function sendOrderToBot() {
-    // 1-USUL: Telegram WebApp dan olish
+   async function sendOrderToBot() {
+    // 1. ID ni qidirish (Hamma usullar bilan)
     let user = tg.initDataUnsafe?.user;
     let userId = user?.id;
     let firstName = user?.first_name || "Mijoz";
 
-    // 2-USUL (Zaxira): Agar birinchi usul o'xshamasa, initData dan qidirish
-    if (!userId && tg.initData) {
-        const params = new URLSearchParams(tg.initData);
-        const userParam = params.get('user');
-        if (userParam) {
-            try {
-                const parsedUser = JSON.parse(userParam);
-                userId = parsedUser.id;
-                firstName = parsedUser.first_name;
-            } catch (e) {
-                console.error("User parsing error", e);
-            }
-        }
-    }
-
-    // AGAR ID BARIBAR TOPILMASA (Interaktiv menyu xatosi uchun)
+    // Agar baribir ID topilmasa (Interaktiv menyu xatosi bo'lsa)
     if (!userId) {
-        tg.showAlert("⚠️ Telegram sizning ID raqamingizni tasdiqlay olmadi. Iltimos, do'konni qayta oching yoki chap tomondagi 'Open' tugmasidan foydalaning.");
-        return;
+        // Mijozdan telefon raqamini so'raymiz (bu eng ishonchli usul)
+        let phone = prompt("⚠️ Telegram ID aniqlanmadi. Buyurtmani rasmiylashtirish uchun telefon raqamingizni kiriting:", "+998");
+        
+        if (!phone || phone === "+998" || phone.length < 9) {
+            tg.showAlert("Telefon raqami kiritilmadi. Buyurtma berish uchun raqamingizni yozishingiz shart.");
+            return;
+        }
+        // ID o'rniga telefon raqamini ishlatamiz
+        userId = phone; 
+        firstName = "Mijoz (Tel: " + phone + ")";
     }
 
     if (Object.keys(cart).length === 0) {
@@ -579,7 +571,7 @@ function sendOrderToBot() {
 
     let text = "🆕 <b>YANGI BUYURTMA</b>\n\n";
     text += "👤 <b>Mijoz:</b> " + firstName + "\n";
-    text += "🆔 <b>ID:</b> <code>" + userId + "</code>\n\n";
+    text += "🆔 <b>ID/Tel:</b> <code>" + userId + "</code>\n\n";
     text += "🛒 <b>Mahsulotlar:</b>\n";
 
     let total = 0;
@@ -593,34 +585,45 @@ function sendOrderToBot() {
     }
     text += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
 
-    const BOT_TOKEN = "SIZNING_BOT_TOKENINGIZ"; // <-- O'z tokeningizni qo'ying
+    const BOT_TOKEN = "SIZNING_BOT_TOKENINGIZ"; // <-- O'z tokeningizni yozing
 
-    let inlineKeyboard = {
-        inline_keyboard: [
-            [{ text: "✅ Qabul qildik", callback_data: "qabul_" + userId }],
-            [{ text: "🚚 Yetkazilyapti", callback_data: "yetkaz_" + userId }],
-            [{ text: "🏁 Yetkazib berildi", callback_data: "tugadi_" + userId }]
-        ]
-    };
+    // Tugmalarni faqat userId raqam bo'lsagina chiqaramiz (bloklanmaslik uchun)
+    let replyMarkup = {};
+    if (!isNaN(userId)) {
+        replyMarkup = {
+            inline_keyboard: [
+                [{ text: "✅ Qabul qildik", callback_data: "qabul_" + userId }],
+                [{ text: "🚚 Yetkazilyapti", callback_data: "yetkaz_" + userId }],
+                [{ text: "🏁 Yetkazib berildi", callback_data: "tugadi_" + userId }]
+            ]
+        };
+    }
 
-    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            chat_id: ADMIN_ID,
-            text: text,
-            parse_mode: "HTML",
-            reply_markup: inlineKeyboard
-        })
-    }).then(() => {
-        tg.showAlert("✅ Zakaz qabul qilindi!");
-        cart = {};
-        document.getElementById('cart-badge').innerText = '0';
-        tg.close();
-    }).catch(err => {
-        tg.showAlert("Sms jo'natishda xatolik yuz berdi.");
-    });
-}
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: 5105291033, // SIZNING ID-INGIZ (Anvar)
+                text: text,
+                parse_mode: "HTML",
+                reply_markup: userId.toString().startsWith('+') ? undefined : replyMarkup
+            })
+        });
+
+        if (response.ok) {
+            tg.showAlert("✅ Zakaz qabul qilindi! Tez orada bog'lanamiz.");
+            cart = {};
+            document.getElementById('cart-badge').innerText = '0';
+            tg.close();
+        } else {
+            throw new Error("Xato");
+        }
+    } catch (err) {
+        tg.showAlert("Sms jo'natishda xatolik. Iltimos, qaytadan urinib ko'ring.");
+    }
+} // =================================================================
+
 </script>
 </body>
 </html>
