@@ -545,56 +545,63 @@
     // =================================================================
     // SIZ SO'RAGAN TUGMALAR VA BEXATO SMS JO'NATUVCHI YANGI KOD
     // =================================================================
-    function sendOrderToBot() {
-        if(Object.keys(cart).length === 0) {
-            tg.showAlert("Oldin savatga zapchast qo'shing!");
-            return;
-        }
-        
-        let text = "🆕 <b>YANGI BUYURTMA</b>\n\n";
-        text += "👤 <b>Mijoz:</b> " + userName + "\n";
-        text += "🛒 <b>Mahsulotlar:</b>\n";
-        
-        let total = 0;
-        for(let id in cart) { 
-            let p = productsDB.find(x => x.id == id); 
-            let sum = p.price * cart[id];
-            text += `▪️ ${p.name} (${p.car})\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
-            total += sum; 
-        }
-        
-        text += `\n💰 <b>Jami summa:</b> ${total.toLocaleString()} so'm`;
-        
-        // ⚠️ DIQQAT: SHU YERGA O'ZINGIZNING BOT TOKENINGIZNI YOZING!
-        const BOT_TOKEN = "8503892855:AAGMzE6Xr8-g4AnmMhptk9un9gJy8OM0J-I"; 
-        
-        // SIZ SO'RAGAN QABUL QILDIK / YETKAZILYAPTI KNOPKALARI
-        let inlineKeyboard = {
-            inline_keyboard: [
-                [{text: "✅ Qabul qildik", callback_data: "qabul_qildik"}],
-                [{text: "🚚 Yetkazilyapti", callback_data: "yetkazilyapti"}],
-                [{text: "🏁 Yetkazib berildi", callback_data: "yetkazib_berildi"}]
-            ]
-        };
+function sendOrderToBot() {
+    // Mijoz ID sini qaytadan aniq tekshirib olamiz
+    let userId = tg.initDataUnsafe?.user?.id;
 
-        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                chat_id: ADMIN_ID,
-                text: text,
-                parse_mode: "HTML",
-                reply_markup: inlineKeyboard
-            })
-        }).then(res => {
-            tg.showAlert("✅ Zakazingiz muvaffaqiyatli qabul qilindi!");
-            cart = {}; // Savat tozalanadi, boshqalar ham zakaz bera oladi
-            document.getElementById('cart-badge').innerText = '0';
-            tg.close();
-        }).catch(err => {
-            tg.showAlert("Xatolik yuz berdi. Internetni tekshirib, qayta urinib ko'ring.");
-        });
+    if (!userId) {
+        tg.showAlert("Xatolik: Telegram ID aniqlanmadi. Iltimos, do'konni qayta oching.");
+        return;
     }
+
+    if (Object.keys(cart).length === 0) {
+        tg.showAlert("Savatchangiz bo'sh!");
+        return;
+    }
+
+    let text = "🆕 <b>YANGI BUYURTMA</b>\n\n";
+    text += "👤 <b>Mijoz:</b> " + userName + "\n";
+    text += "🆔 <b>ID:</b> <code>" + userId + "</code>\n\n";
+    text += "🛒 <b>Mahsulotlar:</b>\n";
+
+    let total = 0;
+    for (let id in cart) {
+        let p = productsDB.find(x => x.id == id);
+        let sum = p.price * cart[id];
+        text += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`;
+        total += sum;
+    }
+    text += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
+
+    const BOT_TOKEN = "SIZNING_BOT_TOKENINGIZ"; // <-- TOKEnni yozishni unutmang!
+
+    // Tugmalarga ID ni aniq matn qilib qo'shamiz
+    let inlineKeyboard = {
+        inline_keyboard: [
+            [{ text: "✅ Qabul qildik", callback_data: "qabul_" + userId }],
+            [{ text: "🚚 Yetkazilyapti", callback_data: "yetkaz_" + userId }],
+            [{ text: "🏁 Yetkazib berildi", callback_data: "tugadi_" + userId }]
+        ]
+    };
+
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            chat_id: ADMIN_ID,
+            text: text,
+            parse_mode: "HTML",
+            reply_markup: inlineKeyboard
+        })
+    }).then(() => {
+        tg.showAlert("✅ Zakaz qabul qilindi!");
+        cart = {};
+        document.getElementById('cart-badge').innerText = '0';
+        tg.close();
+    }).catch(err => {
+        tg.showAlert("Sms jo'natishda xatolik yuz berdi.");
+    });
+}
 </script>
 </body>
 </html>
