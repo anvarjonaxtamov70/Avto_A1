@@ -375,7 +375,7 @@
         addToCart(id);
     }
 
-    // ORIGINAL KARTA DIZAYNI (Yurakcha olib tashlangan holda)
+    // YURAKCHA OLIB TASHLANGAN ORIGINAL KARTA DIZAYNI
     function cardHTML(p) {
         return `<div class="luxury-card" onclick="openProduct(${p.id})">
             <img src="${p.img}">
@@ -567,7 +567,7 @@
     }
     
     // ==========================================
-    // 4. ORIGINAL ZAKAZ JO'NATISH FUNKSIYASI QAYTARILDI
+    // 4. ZAKAZ JO'NATISH FUNKSIYASI (To'g'rilandi)
     // ==========================================
     function sendOrderToBot() {
         if(Object.keys(cart).length === 0) {
@@ -575,19 +575,39 @@
             return;
         }
         
-        let items = []; let total = 0;
+        let text = "🆕 <b>YANGI BUYURTMA</b>\n\n";
+        text += "👤 <b>Mijoz:</b> " + userName + "\n";
+        text += "🛒 <b>Mahsulotlar:</b>\n";
+        
+        let total = 0;
         for(let id in cart) { 
             let p = productsDB.find(x => x.id == id); 
-            items.push({name: p.name, car: p.car, qty: cart[id], price: p.price*cart[id]}); 
-            total += p.price*cart[id]; 
+            let sum = p.price * cart[id];
+            text += `▪️ ${p.name} (${p.car})\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
+            total += sum; 
         }
         
-        try {
-            tg.sendData(JSON.stringify({items, total}));
-            tg.close(); // Jo'natgandan keyin dasturni yopadi
-        } catch (error) {
-            tg.showAlert("Xatolik yuz berdi. Iltimos qayta urinib ko'ring.");
-        }
+        text += `\n💰 <b>Jami summa:</b> ${total.toLocaleString()} so'm`;
+        
+        // ⚠️ DIQQAT: O'ZINGIZNING BOT TOKENINGIZNI SHU YERGA QO'YING
+        const BOT_TOKEN = "8503892855:AAGMzE6Xr8-g4AnmMhptk9un9gJy8OM0J-I"; 
+        
+        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: ADMIN_ID,
+                text: text,
+                parse_mode: "HTML"
+            })
+        }).then(res => {
+            tg.showAlert("✅ Zakazingiz muvaffaqiyatli qabul qilindi!");
+            cart = {}; // Savatni tozalaymiz, mijoz yana xarid qila olishi uchun
+            document.getElementById('cart-badge').innerText = '0';
+            tg.close();
+        }).catch(err => {
+            tg.showAlert("Xatolik yuz berdi. Internetni tekshirib, qayta urinib ko'ring.");
+        });
     }
 </script>
 </body>
