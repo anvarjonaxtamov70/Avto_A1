@@ -546,11 +546,29 @@
     // SIZ SO'RAGAN TUGMALAR VA BEXATO SMS JO'NATUVCHI YANGI KOD
     // =================================================================
 function sendOrderToBot() {
-    // Mijoz ID sini qaytadan aniq tekshirib olamiz
-    let userId = tg.initDataUnsafe?.user?.id;
+    // 1-USUL: Telegram WebApp dan olish
+    let user = tg.initDataUnsafe?.user;
+    let userId = user?.id;
+    let firstName = user?.first_name || "Mijoz";
 
+    // 2-USUL (Zaxira): Agar birinchi usul o'xshamasa, initData dan qidirish
+    if (!userId && tg.initData) {
+        const params = new URLSearchParams(tg.initData);
+        const userParam = params.get('user');
+        if (userParam) {
+            try {
+                const parsedUser = JSON.parse(userParam);
+                userId = parsedUser.id;
+                firstName = parsedUser.first_name;
+            } catch (e) {
+                console.error("User parsing error", e);
+            }
+        }
+    }
+
+    // AGAR ID BARIBAR TOPILMASA (Interaktiv menyu xatosi uchun)
     if (!userId) {
-        tg.showAlert("Xatolik: Telegram ID aniqlanmadi. Iltimos, do'konni qayta oching.");
+        tg.showAlert("⚠️ Telegram sizning ID raqamingizni tasdiqlay olmadi. Iltimos, do'konni qayta oching yoki chap tomondagi 'Open' tugmasidan foydalaning.");
         return;
     }
 
@@ -560,22 +578,23 @@ function sendOrderToBot() {
     }
 
     let text = "🆕 <b>YANGI BUYURTMA</b>\n\n";
-    text += "👤 <b>Mijoz:</b> " + userName + "\n";
+    text += "👤 <b>Mijoz:</b> " + firstName + "\n";
     text += "🆔 <b>ID:</b> <code>" + userId + "</code>\n\n";
     text += "🛒 <b>Mahsulotlar:</b>\n";
 
     let total = 0;
     for (let id in cart) {
         let p = productsDB.find(x => x.id == id);
-        let sum = p.price * cart[id];
-        text += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`;
-        total += sum;
+        if (p) {
+            let sum = p.price * cart[id];
+            text += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`;
+            total += sum;
+        }
     }
     text += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
 
-    const BOT_TOKEN = "8503892855:AAGMzE6Xr8-g4AnmMhptk9un9gJy8OM0J-I"; // <-- TOKEnni yozishni unutmang!
+    const BOT_TOKEN = "SIZNING_BOT_TOKENINGIZ"; // <-- O'z tokeningizni qo'ying
 
-    // Tugmalarga ID ni aniq matn qilib qo'shamiz
     let inlineKeyboard = {
         inline_keyboard: [
             [{ text: "✅ Qabul qildik", callback_data: "qabul_" + userId }],
