@@ -10,19 +10,20 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
-        :root { --primary-blue: #007bff; --luxury-gold: linear-gradient(135deg, rgba(255, 215, 0, 0.8), rgba(218, 165, 32, 0.9)); --glass-bg: rgba(20, 20, 20, 0.75); --glass-border: rgba(255, 255, 255, 0.15); }
+        :root { --primary-blue: #007bff; --luxury-gold: linear-gradient(135deg, rgba(255, 215, 0, 0.8), rgba(218, 165, 32, 0.9)); --glass-bg: rgba(20, 20, 20, 0.85); --glass-border: rgba(255, 255, 255, 0.2); }
         body { font-family: 'Montserrat', sans-serif; margin: 0; padding: 0; color: white; background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.9)), url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1000&q=80'); background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh; padding-bottom: 110px; overflow-x: hidden; }
         
-        #welcome-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transition: 0.5s; }
+        #welcome-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #111; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transition: 0.5s; }
         #welcome-screen h1 { font-size: 26px; color: #ffd700; margin-bottom: 10px; }
+        
         .container { padding: 15px; max-width: 500px; margin: 0 auto; }
         .header { text-align: center; padding: 10px 0; }
         .header h1 { font-size: 28px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .verify-icon { background: #007bff; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
         .verify-icon svg { width: 12px; height: 12px; fill: white; }
         
-        .search-box { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: white; margin: 15px 0; outline: none; box-sizing: border-box; transition: 0.3s; }
-        .search-box:focus { border-color: var(--primary-blue); box-shadow: 0 0 10px rgba(0, 123, 255, 0.5); }
+        .search-box { width: 100%; padding: 15px; border-radius: 12px; border: 2px solid var(--glass-border); background: var(--glass-bg); color: white; margin: 15px 0; outline: none; box-sizing: border-box; transition: 0.3s; font-size: 16px;}
+        .search-box:focus { border-color: var(--primary-blue); }
         
         .slider-container { width: 100%; margin-bottom: 20px; overflow: hidden; border-radius: 15px; }
         .slider { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
@@ -33,76 +34,63 @@
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
 
         .items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        .luxury-card { position: relative; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 15px; padding: 10px; text-align: center; cursor: pointer; transition: transform 0.2s, border-color 0.2s; display: flex; flex-direction: column; justify-content: space-between; }
-        .luxury-card:active { transform: scale(0.94); border-color: var(--primary-blue); }
+        .luxury-card { position: relative; background: var(--glass-bg); border: 2px solid var(--glass-border); border-radius: 15px; padding: 10px; text-align: center; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; justify-content: space-between; }
+        .luxury-card:active { transform: scale(0.96); border-color: var(--primary-blue); }
         .luxury-card img { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; background-color: #fff; }
-        .luxury-card h3 { margin: 5px 0; font-size: 14px; }
-        .price { color: #00ff88; font-weight: 800; font-size: 13px; margin: 5px 0; }
+        .luxury-card h3 { margin: 5px 0; font-size: 15px; }
+        .price { color: #00ff88; font-weight: 800; font-size: 14px; margin: 5px 0; }
         
-        @keyframes heartbeat { 0% { transform: scale(1); } 30% { transform: scale(1.3); } 50% { transform: scale(1); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
-        .fav-btn { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; z-index: 10; padding: 6px; }
-        .fav-btn svg { width: 100%; height: 100%; stroke: white; stroke-width: 2; fill: transparent; transition: 0.3s; stroke-linecap: round; stroke-linejoin: round; }
-        .fav-active svg { stroke: #ff4757; fill: #ff4757; animation: heartbeat 0.4s ease-in-out; }
+        /* SODDALASHTIRILGAN TUGMALAR */
+        .quick-add-btn { background: #28a745; color: white; border: none; width: 100%; padding: 10px; border-radius: 8px; font-weight: 800; font-size: 14px; cursor: pointer; margin-top: 8px; z-index: 2; position: relative; }
+        .quick-add-btn:active { background: #218838; }
 
-        .floating-btn { position: fixed; width: 50px; height: 50px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); transition: transform 0.2s;}
+        .floating-btn { position: fixed; width: 55px; height: 55px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); transition: 0.2s;}
         .floating-btn:active { transform: scale(0.9); }
-        #back-btn { right: 20px; bottom: 20px; background: var(--primary-blue); }
-        #cart-btn { right: 20px; bottom: 80px; background: var(--luxury-gold); }
-        #wish-btn { right: 20px; bottom: 140px; background: #ff4757; }
-        #admin-btn { left: 20px; bottom: 20px; background: #28a745; }
+        #back-btn { right: 20px; bottom: 20px; background: #555; }
+        #cart-btn { right: 20px; bottom: 90px; background: var(--primary-blue); }
+        #admin-btn { left: 20px; bottom: 20px; background: #ff4757; }
         
-        .cart-badge { position: absolute; top: -2px; right: -2px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+        .cart-badge { position: absolute; top: -5px; right: -5px; background: red; color: white; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: center; border: 2px solid white; }
 
         .search-list { display: flex; flex-direction: column; gap: 10px; }
-        .search-item { display: flex; align-items: center; gap: 15px; background: var(--glass-bg); padding: 10px; border-radius: 15px; border: 1px solid var(--glass-border); text-align: left; cursor: pointer; transition: 0.2s; }
-        .search-item:active { transform: scale(0.96); }
+        .search-item { display: flex; align-items: center; gap: 15px; background: var(--glass-bg); padding: 10px; border-radius: 15px; border: 1px solid var(--glass-border); text-align: left; cursor: pointer; }
         .search-item img { width: 60px; height: 60px; border-radius: 10px; object-fit: cover; background-color: #fff; }
         .search-info { flex: 1; }
         .search-info h4 { margin: 0 0 3px 0; font-size: 14px; }
-        .search-info .car-brand { font-size: 11px; color: #ffd700; margin: 0 0 3px 0; }
-        .search-info .price { color: #00ff88; font-weight: bold; font-size: 13px; margin: 0;}
+        .search-info .price { color: #00ff88; font-weight: bold; font-size: 14px; margin: 0;}
 
         @keyframes zoomIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
-        .modal { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(10, 10, 10, 0.45);
-            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto; 
-        }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto; }
         .modal-img { width: 100%; height: 250px; object-fit: cover; border-radius: 15px; margin-top: 20px; background: #fff;}
         .modal-title { font-size: 22px; margin: 15px 0 5px; color: #ffd700; }
-        .modal-brand { font-size: 14px; color: #aaa; margin-bottom: 15px; }
-        .modal-desc { font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
+        .modal-desc { font-size: 15px; line-height: 1.5; margin-bottom: 20px; color: #ddd; }
         
-        .btn-buy { background: var(--primary-blue); color: white; border: none; width: 100%; padding: 15px; border-radius: 12px; font-weight: 800; font-size: 16px; margin-top: auto; cursor: pointer; transition: 0.2s;}
-        .btn-buy:active { transform: scale(0.96); }
-        .btn-checkout { background: var(--luxury-gold); color: #000; border: none; width: 100%; padding: 15px; border-radius: 12px; font-weight: 800; font-size: 16px; margin-top: auto; cursor: pointer; }
-        .btn-checkout:active { transform: scale(0.96); }
+        .btn-buy { background: #28a745; color: white; border: none; width: 100%; padding: 15px; border-radius: 12px; font-weight: 800; font-size: 18px; margin-top: auto; cursor: pointer; }
+        .btn-checkout { background: #ffc107; color: #000; border: none; width: 100%; padding: 18px; border-radius: 12px; font-weight: 800; font-size: 18px; margin-top: auto; cursor: pointer; }
 
-        .cart-row { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.08); padding: 12px; border-radius: 12px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.1); }
+        .cart-row { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.1); padding: 12px; border-radius: 12px; margin-bottom: 10px; }
         .cart-row img { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; background: #fff; }
         .cart-info { flex: 1; }
-        .cart-info h4 { margin: 0 0 5px 0; font-size: 13px; color: #fff; }
-        .cart-controls { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.4); padding: 4px; border-radius: 8px; }
-        .cart-controls button { background: transparent; border: none; color: white; width: 24px; height: 24px; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        .cart-info h4 { margin: 0 0 5px 0; font-size: 14px; }
+        .cart-controls { display: flex; align-items: center; gap: 10px; background: #000; padding: 5px; border-radius: 8px; }
+        .cart-controls button { background: #333; border: none; color: white; width: 30px; height: 30px; border-radius: 6px; font-weight: bold; font-size: 18px; cursor: pointer; }
         
         .hidden { display: none !important; }
-        .quick-add-btn { background: var(--primary-blue); color: white; border: none; width: 100%; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 8px; z-index: 2; position: relative; }
-        
-        #loading-text { text-align: center; color: #ffd700; margin-top: 20px; font-weight: bold; display: none; }
+        #loading-text { text-align: center; color: #00ff88; margin-top: 20px; font-weight: bold; display: none; font-size: 18px; }
+        .section-title { width: 100%; text-align: center; margin: 10px 0; grid-column: span 2; color: #aaa; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;}
     </style>
 </head>
 <body>
 
 <div id="welcome-screen">
     <h1>Assalomu alaykum, <br><span id="user-name-display"></span>!</h1>
-    <p>Avto_A1 do'koniga xush kelibsiz ✨</p>
+    <p>Do'konga xush kelibsiz 🛠</p>
 </div>
 
 <div class="container">
     <div class="header">
         <h1>Avto_A1 <span class="verify-icon"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></span></h1>
-        <p style="font-size: 10px; color: #aaa;">ROSSIYA 🇷🇺 VA XITOY 🇨🇳 PREMIUM ZAPCHASTLARI</p>
+        <p style="font-size: 12px; color: #bbb;">ZAPCHASTLAR DO'KONI</p>
     </div>
 
     <div class="slider-container">
@@ -113,24 +101,27 @@
         </div>
     </div>
 
-    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Qidiruv..." oninput="searchProducts()" onfocus="searchProducts()">
+    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Zapchast qidirish (masalan: Porshen)..." oninput="searchProducts()" onfocus="searchProducts()">
 
-    <div id="loading-text">Baza yuklanmoqda... 🔄</div>
+    <div id="loading-text">Kuting, yuklanmoqda... ⏳</div>
 
     <div id="content-area">
         <div id="main-menu" class="items-grid animate-slide-up">
+            <div class="section-title">- MASHINANI TANLANG -</div>
             <div class="luxury-card" onclick="showSection('gazel-types')"><img src="https://i.postimg.cc/cJybN99d/gazel.jpg"><h3>Gazel 🚛</h3></div>
             <div class="luxury-card" onclick="showSection('volga-types')"><img src="https://i.postimg.cc/TYTgrbkq/volga-3110.jpg"><h3>Volga 🏎️</h3></div>
             <div class="luxury-card" onclick="showSection('uaz-types')"><img src="https://i.postimg.cc/Tw62bVRP/uaz.jpg"><h3>UAZ 🚙</h3></div>
-            <div class="luxury-card" onclick="showSection('fara-club-sections')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Fara Club Sam 💡</h3></div>
+            <div class="luxury-card" onclick="showSection('fara-club-sections')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Faralar 💡</h3></div>
         </div>
 
         <div id="gazel-types" class="items-grid hidden">
+            <div class="section-title">- MODELNI TANLANG -</div>
             <div class="luxury-card" onclick="showSection('gazel-biznes-sections')"><img src="https://i.postimg.cc/cJybN99d/gazel.jpg"><h3>Gazel Biznes</h3></div>
             <div class="luxury-card" onclick="showSection('gazel-next-sections')"><img src="https://i.postimg.cc/nzYf7NzT/Gazel-next.jpg"><h3>Gazel Next</h3></div>
             <div class="luxury-card" onclick="showSection('gazel-eski-sections')"><img src="https://i.postimg.cc/tRh3rPmP/gazel-2008.jpg"><h3>Gazel Eski</h3></div>
         </div>
         <div id="volga-types" class="items-grid hidden">
+            <div class="section-title">- MODELNI TANLANG -</div>
             <div class="luxury-card" onclick="showSection('volga-2401-sections')"><img src="https://i.postimg.cc/153KfXJb/2401.jpg"><h3>Gaz 2401</h3></div>
             <div class="luxury-card" onclick="showSection('volga-2410-sections')"><img src="https://i.postimg.cc/zBLVsmjt/2410-jpg.png"><h3>Gaz 2410</h3></div>
             <div class="luxury-card" onclick="showSection('volga-3110-sections')"><img src="https://i.postimg.cc/t4TyS3Dn/volga-3110.jpg"><h3>Gaz 3110</h3></div>
@@ -138,59 +129,40 @@
             <div class="luxury-card" onclick="showSection('volga-31029-sections')"><img src="https://i.postimg.cc/636hnQBx/3102.jpg"><h3>Gaz 31029</h3></div>
         </div>
         <div id="uaz-types" class="items-grid hidden">
+            <div class="section-title">- MODELNI TANLANG -</div>
             <div class="luxury-card" onclick="showSection('uaz-patriot-sections')"><img src="https://i.postimg.cc/Kzn156DW/Uaz-patirot.jpg"><h3>Uaz Patriot</h3></div>
             <div class="luxury-card" onclick="showSection('uaz-hunter-sections')"><img src="https://i.postimg.cc/XYMtRtfX/xanter.jpg"><h3>Uaz Hunter</h3></div>
             <div class="luxury-card" onclick="showSection('uaz-452-sections')"><img src="https://i.postimg.cc/HLTMhsjZ/452.jpg"><h3>Uaz 452</h3></div>
         </div>
         <div id="fara-club-sections" class="items-grid hidden">
+            <div class="section-title">- XIZMATNI TANLANG -</div>
             <div class="luxury-card" onclick="showSection('fara-tozalash-items')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Tozalash</h3></div>
             <div class="luxury-card" onclick="showSection('fara-tiklash-items')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Bi Led o'rnatish</h3></div> 
         </div>
 
         <div id="gazel-biznes-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('biznes-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('biznes-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
+            <div class="section-title">- QAYSI QISMI KERAK? -</div>
+            <div class="luxury-card" onclick="showSection('biznes-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor zapchastlari</h3></div>
+            <div class="luxury-card" onclick="showSection('biznes-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy zapchastlari</h3></div>
         </div>
         <div id="gazel-next-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('next-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('next-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
+            <div class="section-title">- QAYSI QISMI KERAK? -</div>
+            <div class="luxury-card" onclick="showSection('next-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor zapchastlari</h3></div>
+            <div class="luxury-card" onclick="showSection('next-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy zapchastlari</h3></div>
         </div>
         <div id="gazel-eski-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('eski-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('eski-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
+            <div class="section-title">- QAYSI QISMI KERAK? -</div>
+            <div class="luxury-card" onclick="showSection('eski-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor zapchastlari</h3></div>
+            <div class="luxury-card" onclick="showSection('eski-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy zapchastlari</h3></div>
         </div>
-        <div id="volga-2401-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('volga-2401-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('volga-2401-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
-        <div id="volga-2410-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('volga-2410-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('volga-2410-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
-        <div id="volga-3110-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('volga-3110-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('volga-3110-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
-        <div id="volga-31105-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('volga-31105-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('volga-31105-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
-        <div id="volga-31029-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('volga-31029-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('volga-31029-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
-        <div id="uaz-patriot-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('uaz-patriot-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('uaz-patriot-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
-        <div id="uaz-hunter-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('uaz-hunter-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('uaz-hunter-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
-        <div id="uaz-452-sections" class="items-grid hidden">
-            <div class="luxury-card" onclick="showSection('uaz-452-motor')"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg"><h3>⚙️ Motor</h3></div>
-            <div class="luxury-card" onclick="showSection('uaz-452-xadavoy')"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg"><h3>🛠️ Xadavoy</h3></div>
-        </div>
+        <div id="volga-2401-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('volga-2401-motor')"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('volga-2401-xadavoy')"><h3>🛠️ Xadavoy</h3></div></div>
+        <div id="volga-2410-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('volga-2410-motor')"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('volga-2410-xadavoy')"><h3>🛠️ Xadavoy</h3></div></div>
+        <div id="volga-3110-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('volga-3110-motor')"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('volga-3110-xadavoy')"><h3>🛠️ Xadavoy</h3></div></div>
+        <div id="volga-31105-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('volga-31105-motor')"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('volga-31105-xadavoy')"><h3>🛠️ Xadavoy</h3></div></div>
+        <div id="volga-31029-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('volga-31029-motor')"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('volga-31029-xadavoy')"><h3>🛠️ Xadavoy</h3></div></div>
+        <div id="uaz-patriot-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('uaz-patriot-motor')"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('uaz-patriot-xadavoy')"><h3>🛠️ Xadavoy</h3></div></div>
+        <div id="uaz-hunter-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('uaz-hunter-motor')"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('uaz-hunter-xadavoy')"><h3>🛠️ Xadavoy</h3></div></div>
+        <div id="uaz-452-sections" class="items-grid hidden"><div class="luxury-card" onclick="showSection('uaz-452-motor')"><h3>⚙️ Motor</h3></div><div class="luxury-card" onclick="showSection('uaz-452-xadavoy')"><h3>🛠️ Xadavoy</h3></div></div>
 
         <div id="biznes-motor" class="items-grid hidden"></div> <div id="biznes-xadavoy" class="items-grid hidden"></div>
         <div id="next-motor" class="items-grid hidden"></div> <div id="next-xadavoy" class="items-grid hidden"></div>
@@ -204,50 +176,47 @@
         <div id="uaz-hunter-motor" class="items-grid hidden"></div> <div id="uaz-hunter-xadavoy" class="items-grid hidden"></div>
         <div id="uaz-452-motor" class="items-grid hidden"></div> <div id="uaz-452-xadavoy" class="items-grid hidden"></div>
         <div id="fara-tozalash-items" class="items-grid hidden"></div> <div id="fara-tiklash-items" class="items-grid hidden"></div>
-        <div id="wishlist-area" class="items-grid hidden"></div>
     </div>
     <div id="search-results" class="search-list hidden"></div>
 </div>
 
 <div class="floating-btn" id="admin-btn" onclick="openModal('adminModal')"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg></div>
-<div class="floating-btn" id="wish-btn" onclick="showWishlist()"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
 <div class="floating-btn" id="cart-btn" onclick="openModal('cartModal')"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg><div class="cart-badge" id="cart-badge">0</div></div>
 <div class="floating-btn" id="back-btn" onclick="goBack()"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
 
 <div class="modal" id="productModal">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2>🏷️ Ma'lumot</h2>
-        <button onclick="closeModal()" style="background:none; border:none; color:white; font-size:35px; cursor:pointer;">×</button>
+        <h2>Batafsil</h2>
+        <button onclick="closeModal()" style="background:none; border:none; color:white; font-size:40px; cursor:pointer;">×</button>
     </div>
     <img id="pm-img" class="modal-img" src="">
     <h2 id="pm-title" class="modal-title"></h2>
-    <div id="pm-brand" class="modal-brand"></div>
     <div id="pm-desc" class="modal-desc"></div>
-    <h2 id="pm-price" style="color:#00ff88;"></h2>
-    <button class="btn-buy" id="pm-buy-btn" style="margin-bottom: 20px;">🛒 Savatga qo'shish</button>
+    <h2 id="pm-price" style="color:#00ff88; margin-bottom: 20px;"></h2>
+    <button class="btn-buy" id="pm-buy-btn">🛒 OLISH</button>
 </div>
 
 <div class="modal" id="cartModal">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2>🛒 Savatcha</h2>
-        <button onclick="closeModal()" style="background:none; border:none; color:white; font-size:35px; cursor:pointer;">×</button>
+        <h2>🛒 Sizning Savatingiz</h2>
+        <button onclick="closeModal()" style="background:none; border:none; color:white; font-size:40px; cursor:pointer;">×</button>
     </div>
     <div id="cart-items-container" style="flex:1; overflow-y:auto; margin-top:20px;"></div>
-    <div style="padding:15px 0; border-top:1px solid rgba(255,255,255,0.2); font-size: 18px;">
+    <div style="padding:15px 0; border-top:1px solid rgba(255,255,255,0.2); font-size: 20px;">
         <b>Jami: <span id="cart-total-sum" style="color:#00ff88;">0</span> so'm</b>
     </div>
-    <button class="btn-checkout" onclick="sendOrderToBot()">💳 Xaridni rasmiylashtirish</button>
+    <button class="btn-checkout" onclick="sendOrderToBot()">✅ ZAKAZ QILISH</button>
 </div>
 
 <div class="modal" id="adminModal">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="color: #28a745;">⚙️ Yangi Tovarlar Qo'shish</h2>
-        <button onclick="closeModal()" style="background:none; border:none; color:white; font-size:35px; cursor:pointer;">×</button>
+        <h2 style="color: #ff4757;">⚙️ Tovar Qo'shish</h2>
+        <button onclick="closeModal()" style="background:none; border:none; color:white; font-size:40px; cursor:pointer;">×</button>
     </div>
     <div style="margin-top: 20px;">
-        <input type="text" id="add-name" placeholder="Zapchast nomi (Masalan: Giliza)" class="search-box">
-        <input type="number" id="add-price" placeholder="Narxi so'mda (Masalan: 150000)" class="search-box">
-        <input type="text" id="add-img" placeholder="Rasm linki (https://postimg.cc/...)" class="search-box">
+        <input type="text" id="add-name" placeholder="Zapchast nomi" class="search-box">
+        <input type="number" id="add-price" placeholder="Narxi so'mda" class="search-box">
+        <input type="text" id="add-img" placeholder="Rasm linki (postimg.cc)" class="search-box">
         <select id="add-cat" class="search-box" style="background:#222; color:white;">
             <option value="biznes-motor">Gazel Biznes - Motor</option>
             <option value="biznes-xadavoy">Gazel Biznes - Xadavoy</option>
@@ -255,26 +224,8 @@
             <option value="next-xadavoy">Gazel Next - Xadavoy</option>
             <option value="eski-motor">Gazel Eski - Motor</option>
             <option value="eski-xadavoy">Gazel Eski - Xadavoy</option>
-            <option value="volga-2401-motor">Gaz 2401 - Motor</option>
-            <option value="volga-2401-xadavoy">Gaz 2401 - Xadavoy</option>
-            <option value="volga-2410-motor">Gaz 2410 - Motor</option>
-            <option value="volga-2410-xadavoy">Gaz 2410 - Xadavoy</option>
-            <option value="volga-3110-motor">Gaz 3110 - Motor</option>
-            <option value="volga-3110-xadavoy">Gaz 3110 - Xadavoy</option>
-            <option value="volga-31105-motor">Gaz 31105 - Motor</option>
-            <option value="volga-31105-xadavoy">Gaz 31105 - Xadavoy</option>
-            <option value="volga-31029-motor">Gaz 31029 - Motor</option>
-            <option value="volga-31029-xadavoy">Gaz 31029 - Xadavoy</option>
-            <option value="uaz-patriot-motor">Uaz Patriot - Motor</option>
-            <option value="uaz-patriot-xadavoy">Uaz Patriot - Xadavoy</option>
-            <option value="uaz-hunter-motor">Uaz Hunter - Motor</option>
-            <option value="uaz-hunter-xadavoy">Uaz Hunter - Xadavoy</option>
-            <option value="uaz-452-motor">Uaz 452 - Motor</option>
-            <option value="uaz-452-xadavoy">Uaz 452 - Xadavoy</option>
-            <option value="fara-tozalash-items">Fara tozalash</option>
-            <option value="fara-tiklash-items">Bi Led o'rnatish</option>
-        </select>
-        <button class="btn-buy" style="background: #28a745; margin-top: 20px;" onclick="saveNewProduct()">✅ BAZAGA QO'SHISH</button>
+            </select>
+        <button class="btn-buy" style="background: #ff4757; margin-top: 20px;" onclick="saveNewProduct()">✅ BAZAGA SAQLASH</button>
     </div>
 </div>
 
@@ -285,15 +236,14 @@
     // ==========================================
     // 1. O'ZINGIZNING TELEGRAM ID RAQAMINGIZ
     // ==========================================
-    const ADMIN_ID = 5105291033; // Sizning shaxsiy Telegram ID raqamingiz
+    const ADMIN_ID = 5105291033; 
     
     let currentUser = tg.initDataUnsafe?.user?.id;
     let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
-    
     document.getElementById('user-name-display').innerText = userName;
 
     // ==========================================
-    // 2. FIREBASE SOZLAMALARI VA BAZAGA ULANISH
+    // 2. FIREBASE BAZAGA ULANISH
     // ==========================================
     const firebaseConfig = {
         databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/"
@@ -302,18 +252,17 @@
     const db = firebase.database();
 
     let productsDB = []; 
-    let cart = {}, wishlist = {}, historyStack = ['main-menu'];
+    let cart = {}, historyStack = ['main-menu'];
     let activeModal = null; 
     let searchActive = false; 
 
     const initialProducts = [
         { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya Original", desc: "100% original Rossiya zavod porshenlari.", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor" },
         { id: 2, name: "Gidrokompensator", car: "Gazel Biznes", brand: "Xitoy Premium", desc: "Sifatli va hamyonbop variant.", price: 20000, img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", category: "biznes-motor" },
-        { id: 3, name: "Fara Tozalash", car: "Barcha Mashinalar", brand: "Fara Club Sam", desc: "Sarg'aygan faralarni yangidek xolatga keltiramiz.", price: 150000, img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80", category: "fara-tozalash-items" },
         { id: 4, name: "Giliza", car: "Gazel Biznes", brand: "Original", desc: "Dvigatel uchun yuqori sifatli giliza.", price: 150000, img: "https://i.postimg.cc/ydDM5cDf/1704954008428-bulletin.jpg", category: "biznes-motor" },
         { id: 5, name: "Val", car: "Gazel Biznes", brand: "Original", desc: "Mustahkam dvigatel vali.", price: 850000, img: "https://i.postimg.cc/rwbCj4LX/val.jpg", category: "biznes-motor" },
         { id: 6, name: "Kolsa (Porshen halqalari)", car: "Gazel Biznes", brand: "Original", desc: "Porshen halqalari to'plami.", price: 220000, img: "https://i.postimg.cc/htqKdyXP/kolsa.jpg", category: "biznes-motor" },
-        { id: 7, name: "Pales (Porshen barmog‘i)", car: "Gazel Biznes", brand: "Original", desc: "Porshen barmog'i.", price: 45000, img: "https://i.postimg.cc/W3QGVF7B/pales.jpg", category: "biznes-motor" },
+        { id: 7, name: "Pales", car: "Gazel Biznes", brand: "Original", desc: "Porshen barmog'i.", price: 45000, img: "https://i.postimg.cc/W3QGVF7B/pales.jpg", category: "biznes-motor" },
         { id: 8, name: "Shatun", car: "Gazel Biznes", brand: "Original", desc: "Dvigatel shatuni.", price: 180000, img: "https://i.postimg.cc/J0MhjR72/shatun.jpg", category: "biznes-motor" },
         { id: 9, name: "Korennoy vkladish", car: "Gazel Biznes", brand: "Original", desc: "Korennoy vkladish to'plami.", price: 120000, img: "https://i.postimg.cc/vTZsQTZ8/karennoyfkladish.jpg", category: "biznes-motor" },
         { id: 10, name: "Shatunniy vkladish", car: "Gazel Biznes", brand: "Original", desc: "Shatunniy vkladish to'plami.", price: 110000, img: "https://i.postimg.cc/59QcShQr/shatunniny.webp", category: "biznes-motor" },
@@ -322,12 +271,12 @@
         { id: 13, name: "Tekstolit shesternya", car: "Gazel Biznes", brand: "Original", desc: "Raspredval tishli g‘ildiragi.", price: 85000, img: "https://i.postimg.cc/wMq0ZsTB/orig.jpg", category: "biznes-motor" },
         { id: 14, name: "Shtangalar", car: "Gazel Biznes", brand: "Original", desc: "Shtangalar to'plami.", price: 65000, img: "https://i.postimg.cc/B6k2cLP3/7122351239.jpg", category: "biznes-motor" },
         { id: 15, name: "Maxovik", car: "Gazel Biznes", brand: "Original", desc: "Dvigatel maxovigi.", price: 450000, img: "https://i.postimg.cc/NfwHsw1J/7029048009.jpg", category: "biznes-motor" },
-        { id: 16, name: "Galovka (O‘zi)", car: "Gazel Biznes", brand: "Original", desc: "Silindrlar bloki galovkasi.", price: 2100000, img: "https://i.postimg.cc/rwsFchYr/7104266256.jpg", category: "biznes-motor" },
+        { id: 16, name: "Galovka", car: "Gazel Biznes", brand: "Original", desc: "Silindrlar bloki galovkasi.", price: 2100000, img: "https://i.postimg.cc/rwsFchYr/7104266256.jpg", category: "biznes-motor" },
         { id: 17, name: "Klapanlar kattasi", car: "Gazel Biznes", brand: "Original", desc: "Katta klapanlar to'plami.", price: 150000, img: "https://i.postimg.cc/nL1dkknZ/031078-3.jpg", category: "biznes-motor" },
         { id: 18, name: "Klapanlar kichkinasi", car: "Gazel Biznes", brand: "Original", desc: "Kichkina klapanlar to'plami.", price: 150000, img: "https://i.postimg.cc/Pf1Mzyy7/40221007015-0221032.jpg", category: "biznes-motor" },
-        { id: 19, name: "Napravlyayushiy (Vtulkalar)", car: "Gazel Biznes", brand: "Original", desc: "Klapan napravlyayushiy vtulkalar.", price: 90000, img: "https://i.postimg.cc/C1SKyFyG/orig-(1).jpg", category: "biznes-motor" },
+        { id: 19, name: "Napravlyayushiy (Vtulkalar)", car: "Gazel Biznes", brand: "Original", desc: "Klapan vtulkalar.", price: 90000, img: "https://i.postimg.cc/C1SKyFyG/orig-(1).jpg", category: "biznes-motor" },
         { id: 20, name: "Salnik klapan", car: "Gazel Biznes", brand: "Original", desc: "Maslosyomniy kalpakchalar to'plami.", price: 55000, img: "https://i.postimg.cc/tCKpQXW6/orig-(2).jpg", category: "biznes-motor" },
-        { id: 21, name: "Koromislo (Fleytasi bilan)", car: "Gazel Biznes", brand: "Original", desc: "Koromislo yig'ilgan holatda.", price: 280000, img: "https://i.postimg.cc/s2Q3tv0D/9-(1).jpg", category: "biznes-motor" },
+        { id: 21, name: "Koromislo", car: "Gazel Biznes", brand: "Original", desc: "Koromislo yig'ilgan holatda.", price: 280000, img: "https://i.postimg.cc/s2Q3tv0D/9-(1).jpg", category: "biznes-motor" },
         { id: 22, name: "Klapan krishkasi", car: "Gazel Biznes", brand: "Original", desc: "Klapan krishkasi.", price: 220000, img: "https://i.postimg.cc/T1RMYwQK/orig-(3).jpg", category: "biznes-motor" },
         { id: 23, name: "Galovka prakladkasi", car: "Gazel Biznes", brand: "Original", desc: "Galovka prakladkasi.", price: 95000, img: "https://i.postimg.cc/xqDmbwJR/7275659425.jpg", category: "biznes-motor" },
         { id: 24, name: "Paddon prakladkasi", car: "Gazel Biznes", brand: "Original", desc: "Karter qistirmasi.", price: 45000, img: "https://i.postimg.cc/tT8k2mnF/8110331128-(1).jpg", category: "biznes-motor" },
@@ -338,7 +287,6 @@
 
     db.ref('products').on('value', (snapshot) => {
         document.getElementById('loading-text').style.display = 'none';
-        
         if (snapshot.exists()) {
             productsDB = snapshot.val().filter(p => p !== null);
         } else {
@@ -349,7 +297,7 @@
     });
 
     // ==========================================
-    // 3. YANGI TOVAR QO'SHISH FUNKSIYASI (ADMIN)
+    // 3. YANGI TOVAR QO'SHISH (ADMIN)
     // ==========================================
     function saveNewProduct() {
         let name = document.getElementById('add-name').value;
@@ -358,20 +306,17 @@
         let cat = document.getElementById('add-cat').value;
 
         if(!name || !price || !img) {
-            tg.showAlert("Iltimos, barcha maydonlarni to'ldiring!");
-            return;
+            tg.showAlert("Barcha maydonlarni to'ldiring!"); return;
         }
 
         let newId = productsDB.length > 0 ? Math.max(...productsDB.map(p => p.id)) + 1 : 1;
-        
-        // Avtomat qilib mashina nomini kategoriya selectoridan aniqlaymiz
         let carName = document.getElementById('add-cat').options[document.getElementById('add-cat').selectedIndex].text.split(' - ')[0];
 
-        let newProd = { id: newId, name: name, car: carName, brand: "Original", desc: "Yangi qo'shilgan zapchast", price: price, img: img, category: cat };
+        let newProd = { id: newId, name: name, car: carName, brand: "", desc: "Sifatli zapchast", price: price, img: img, category: cat };
         
         productsDB.push(newProd);
         db.ref('products').set(productsDB).then(() => {
-            tg.showAlert("Mahsulot muvaffaqiyatli bazaga qo'shildi!");
+            tg.showAlert("Baza yangilandi!");
             closeModal();
             document.getElementById('add-name').value = '';
             document.getElementById('add-price').value = '';
@@ -383,20 +328,17 @@
     // ASOSIY FUNKSIYALAR
     // ==========================================
     window.history.replaceState({ section: 'main-menu' }, "");
-
     setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
 
     const slider = document.getElementById('main-slider');
     setInterval(() => { slider.scrollLeft + slider.clientWidth >= slider.scrollWidth ? slider.scrollTo({ left: 0, behavior: 'smooth' }) : slider.scrollBy({ left: slider.clientWidth, behavior: 'smooth' }); }, 2000); 
-
-    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
     function renderProducts() {
         ['biznes-motor', 'biznes-xadavoy', 'next-motor', 'next-xadavoy', 'eski-motor', 'eski-xadavoy', 'volga-2401-motor', 'volga-2401-xadavoy', 'volga-2410-motor', 'volga-2410-xadavoy', 'volga-3110-motor', 'volga-3110-xadavoy', 'volga-31105-motor', 'volga-31105-xadavoy', 'volga-31029-motor', 'volga-31029-xadavoy', 'uaz-patriot-motor', 'uaz-patriot-xadavoy', 'uaz-hunter-motor', 'uaz-hunter-xadavoy', 'uaz-452-motor', 'uaz-452-xadavoy', 'fara-tozalash-items', 'fara-tiklash-items'].forEach(cat => {
             let container = document.getElementById(cat);
             if(container) {
                 let items = productsDB.filter(p => p.category === cat);
-                container.innerHTML = items.length === 0 ? '<p style="text-align:center; color:#888; grid-column: span 2;">Hozircha bo\'sh.</p>' : items.map(p => cardHTML(p)).join('');
+                container.innerHTML = items.length === 0 ? '<p style="text-align:center; color:#888; grid-column: span 2;">Hozircha tovar yo\'q</p>' : items.map(p => cardHTML(p)).join('');
             }
         });
     }
@@ -406,14 +348,13 @@
         addToCart(id);
     }
 
+    // YURAKCHA OLIB TASHLANDI. SODDALASHTIRILGAN KARTA.
     function cardHTML(p) {
-        let favClass = wishlist[p.id] ? 'fav-active' : '';
         return `<div class="luxury-card" onclick="openProduct(${p.id})">
-            <button class="fav-btn ${favClass}" onclick="toggleFav(event, ${p.id})">${heartSVG}</button>
             <img src="${p.img}">
             <h4>${p.name}</h4>
             <div class="price">${p.price.toLocaleString()} so'm</div>
-            <button class="quick-add-btn" onclick="addToCartQuick(event, ${p.id})">🛒 Savatga qo'shish</button>
+            <button class="quick-add-btn" onclick="addToCartQuick(event, ${p.id})">🛒 OLISH</button>
         </div>`;
     }
 
@@ -421,26 +362,10 @@
         let p = productsDB.find(x => x.id == id);
         document.getElementById('pm-img').src = p.img;
         document.getElementById('pm-title').innerText = p.name;
-        document.getElementById('pm-brand').innerText = `${p.car} • ${p.brand}`;
-        document.getElementById('pm-desc').innerText = p.desc || "Qo'shimcha ma'lumot yo'q.";
+        document.getElementById('pm-desc').innerText = p.desc || "";
         document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} so'm`;
         document.getElementById('pm-buy-btn').onclick = () => { addToCart(id); closeModal(); };
         openModal('productModal');
-    }
-
-    function toggleFav(e, id) {
-        e.stopPropagation();
-        wishlist[id] ? delete wishlist[id] : wishlist[id] = true;
-        renderProducts();
-        if(historyStack[historyStack.length-1] === 'wishlist-area') showWishlist();
-        tg.HapticFeedback.impactOccurred('light');
-    }
-
-    function showWishlist() {
-        let container = document.getElementById('wishlist-area');
-        let items = productsDB.filter(p => wishlist[p.id]);
-        container.innerHTML = items.length === 0 ? '<p style="text-align:center; color:#888; grid-column: span 2;">Sevimlilar bo\'sh.</p>' : items.map(p => cardHTML(p)).join('');
-        showSection('wishlist-area');
     }
 
     function addToCart(id) {
@@ -467,7 +392,6 @@
         }
         
         document.querySelector('.slider-container').style.display = id === 'main-menu' ? 'block' : 'none';
-        
         document.getElementById('searchInput').value = '';
         document.getElementById('search-results').classList.add('hidden');
         document.getElementById('content-area').classList.remove('hidden');
@@ -479,9 +403,6 @@
         if(id === 'cartModal') renderCartItems();
         let modal = document.getElementById(id);
         modal.style.display = 'flex';
-        modal.style.animation = 'none';
-        modal.offsetHeight; 
-        modal.style.animation = 'zoomIn 0.3s forwards';
         activeModal = id;
         window.history.pushState({ modal: id }, "");
         tg.BackButton.show();
@@ -524,7 +445,6 @@
             prevTarget.classList.add('animate-slide-up');
             
             document.querySelector('.slider-container').style.display = (previousId === 'main-menu') ? 'block' : 'none';
-            
             document.getElementById('searchInput').value = '';
             document.getElementById('search-results').classList.add('hidden');
             document.getElementById('content-area').classList.remove('hidden');
@@ -541,10 +461,11 @@
         let isDeep = historyStack.length > 1;
         document.getElementById('back-btn').style.display = isDeep ? 'flex' : 'none';
         if (isDeep || activeModal || searchActive) { tg.BackButton.show(); } else { tg.BackButton.hide(); }
-        document.getElementById('wish-btn').style.display = activeModal ? 'none' : 'flex';
+        
+        // Cart ko'rsatish
         document.getElementById('cart-btn').style.display = activeModal ? 'none' : (Object.keys(cart).length > 0 || isDeep ? 'flex' : 'none');
         
-        // ADMIN TUGMASINI KO'RSATISH (Faqat sizning kodingiz uchun)
+        // Adminni ko'rsatish
         if (currentUser === ADMIN_ID) {
             document.getElementById('admin-btn').style.display = activeModal ? 'none' : 'flex';
         }
@@ -568,7 +489,7 @@
         }
 
         if (query.length > 0) {
-            let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)) || (p.brand && p.brand.toLowerCase().includes(query)));
+            let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)));
             if (filtered.length === 0) {
                 resultsDiv.innerHTML = '<p style="text-align:center; color:#888; padding: 20px;">Hech narsa topilmadi...</p>';
             } else {
@@ -576,14 +497,14 @@
                     <div class="search-item" onclick="openProduct(${p.id})">
                         <img src="${p.img}">
                         <div class="search-info">
-                            <h4>${p.name}</h4><p class="car-brand">${p.car || ''}</p><p class="price">${p.price.toLocaleString()} so'm</p>
+                            <h4>${p.name}</h4><p class="price">${p.price.toLocaleString()} so'm</p>
                         </div>
-                        <button onclick="addToCartQuick(event, ${p.id})" style="background:var(--primary-blue); color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold; z-index:2; position:relative;">🛒</button>
+                        <button onclick="addToCartQuick(event, ${p.id})" style="background:#28a745; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer; font-weight:bold; z-index:2; position:relative;">🛒</button>
                     </div>
                 `).join('');
             }
         } else {
-            resultsDiv.innerHTML = '<p style="text-align:center; color:#888; padding: 20px;">Qidirish uchun so\'z kiriting...</p>';
+            resultsDiv.innerHTML = '<p style="text-align:center; color:#888; padding: 20px;">Qidirish uchun zapchast nomini yozing...</p>';
         }
     }
 
@@ -592,7 +513,7 @@
         let total = 0; 
         container.innerHTML = '';
         if(Object.keys(cart).length === 0) {
-            container.innerHTML = '<p style="text-align:center; color:#888; margin-top:50px;">Savatchangiz bo\'sh.</p>';
+            container.innerHTML = '<p style="text-align:center; color:#888; margin-top:50px;">Savat bo\'sh. Dasturdan zapchast tanlang.</p>';
         } else {
             for(let id in cart) {
                 let p = productsDB.find(x => x.id == id); 
@@ -602,11 +523,11 @@
                         <img src="${p.img}">
                         <div class="cart-info">
                             <h4>${p.name}</h4>
-                            <span style="color:#00ff88; font-weight:bold; font-size:12px;">${(p.price * cart[id]).toLocaleString()} so'm</span>
+                            <span style="color:#00ff88; font-weight:bold; font-size:14px;">${(p.price * cart[id]).toLocaleString()} so'm</span>
                         </div>
                         <div class="cart-controls">
                             <button onclick="chg(${id},-1)">-</button> 
-                            <span style="width:20px; text-align:center; font-size:14px;">${cart[id]}</span> 
+                            <span style="width:20px; text-align:center; font-size:16px;">${cart[id]}</span> 
                             <button onclick="chg(${id},1)">+</button>
                         </div>
                     </div>`;
@@ -624,7 +545,7 @@
     
     function sendOrderToBot() {
         if(Object.keys(cart).length === 0) {
-            tg.showAlert("Savatchangiz bo'sh! Iltimos, mahsulot qo'shing.");
+            tg.showAlert("Oldin savatga zapchast qo'shing!");
             return;
         }
         let items = []; let total = 0;
