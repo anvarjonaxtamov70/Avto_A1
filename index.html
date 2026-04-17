@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Avto A1 Shop</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
         :root { --primary-blue: #007bff; --luxury-gold: linear-gradient(135deg, rgba(255, 215, 0, 0.8), rgba(218, 165, 32, 0.9)); --glass-bg: rgba(20, 20, 20, 0.75); --glass-border: rgba(255, 255, 255, 0.15); }
@@ -41,11 +44,13 @@
         .fav-btn svg { width: 100%; height: 100%; stroke: white; stroke-width: 2; fill: transparent; transition: 0.3s; stroke-linecap: round; stroke-linejoin: round; }
         .fav-active svg { stroke: #ff4757; fill: #ff4757; animation: heartbeat 0.4s ease-in-out; }
 
-        .floating-btn { position: fixed; right: 20px; width: 50px; height: 50px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); transition: transform 0.2s;}
+        .floating-btn { position: fixed; width: 50px; height: 50px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; border: 2px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); transition: transform 0.2s;}
         .floating-btn:active { transform: scale(0.9); }
-        #back-btn { bottom: 20px; background: var(--primary-blue); }
-        #cart-btn { bottom: 80px; background: var(--luxury-gold); }
-        #wish-btn { bottom: 140px; background: #ff4757; }
+        #back-btn { right: 20px; bottom: 20px; background: var(--primary-blue); }
+        #cart-btn { right: 20px; bottom: 80px; background: var(--luxury-gold); }
+        #wish-btn { right: 20px; bottom: 140px; background: #ff4757; }
+        #admin-btn { left: 20px; bottom: 20px; background: #28a745; }
+        
         .cart-badge { position: absolute; top: -2px; right: -2px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
 
         .search-list { display: flex; flex-direction: column; gap: 10px; }
@@ -83,6 +88,8 @@
         
         .hidden { display: none !important; }
         .quick-add-btn { background: var(--primary-blue); color: white; border: none; width: 100%; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 8px; z-index: 2; position: relative; }
+        
+        #loading-text { text-align: center; color: #ffd700; margin-top: 20px; font-weight: bold; display: none; }
     </style>
 </head>
 <body>
@@ -107,6 +114,8 @@
     </div>
 
     <input type="text" id="searchInput" class="search-box" placeholder="🔍 Qidiruv..." oninput="searchProducts()" onfocus="searchProducts()">
+
+    <div id="loading-text">Baza yuklanmoqda... 🔄</div>
 
     <div id="content-area">
         <div id="main-menu" class="items-grid animate-slide-up">
@@ -200,6 +209,7 @@
     <div id="search-results" class="search-list hidden"></div>
 </div>
 
+<div class="floating-btn" id="admin-btn" onclick="openModal('adminModal')"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg></div>
 <div class="floating-btn" id="wish-btn" onclick="showWishlist()"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
 <div class="floating-btn" id="cart-btn" onclick="openModal('cartModal')"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg><div class="cart-badge" id="cart-badge">0</div></div>
 <div class="floating-btn" id="back-btn" onclick="goBack()"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
@@ -229,25 +239,77 @@
     <button class="btn-checkout" onclick="sendOrderToBot()">💳 Xaridni rasmiylashtirish</button>
 </div>
 
+<div class="modal" id="adminModal">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="color: #28a745;">⚙️ Yangi Tovarlar Qo'shish</h2>
+        <button onclick="closeModal()" style="background:none; border:none; color:white; font-size:35px; cursor:pointer;">×</button>
+    </div>
+    <div style="margin-top: 20px;">
+        <input type="text" id="add-name" placeholder="Zapchast nomi (Masalan: Giliza)" class="search-box">
+        <input type="number" id="add-price" placeholder="Narxi so'mda (Masalan: 150000)" class="search-box">
+        <input type="text" id="add-img" placeholder="Rasm linki (https://postimg.cc/...)" class="search-box">
+        <select id="add-cat" class="search-box" style="background:#222; color:white;">
+            <option value="biznes-motor">Gazel Biznes - Motor</option>
+            <option value="biznes-xadavoy">Gazel Biznes - Xadavoy</option>
+            <option value="next-motor">Gazel Next - Motor</option>
+            <option value="next-xadavoy">Gazel Next - Xadavoy</option>
+            <option value="eski-motor">Gazel Eski - Motor</option>
+            <option value="eski-xadavoy">Gazel Eski - Xadavoy</option>
+            <option value="volga-2401-motor">Gaz 2401 - Motor</option>
+            <option value="volga-2401-xadavoy">Gaz 2401 - Xadavoy</option>
+            <option value="volga-2410-motor">Gaz 2410 - Motor</option>
+            <option value="volga-2410-xadavoy">Gaz 2410 - Xadavoy</option>
+            <option value="volga-3110-motor">Gaz 3110 - Motor</option>
+            <option value="volga-3110-xadavoy">Gaz 3110 - Xadavoy</option>
+            <option value="volga-31105-motor">Gaz 31105 - Motor</option>
+            <option value="volga-31105-xadavoy">Gaz 31105 - Xadavoy</option>
+            <option value="volga-31029-motor">Gaz 31029 - Motor</option>
+            <option value="volga-31029-xadavoy">Gaz 31029 - Xadavoy</option>
+            <option value="uaz-patriot-motor">Uaz Patriot - Motor</option>
+            <option value="uaz-patriot-xadavoy">Uaz Patriot - Xadavoy</option>
+            <option value="uaz-hunter-motor">Uaz Hunter - Motor</option>
+            <option value="uaz-hunter-xadavoy">Uaz Hunter - Xadavoy</option>
+            <option value="uaz-452-motor">Uaz 452 - Motor</option>
+            <option value="uaz-452-xadavoy">Uaz 452 - Xadavoy</option>
+            <option value="fara-tozalash-items">Fara tozalash</option>
+            <option value="fara-tiklash-items">Bi Led o'rnatish</option>
+        </select>
+        <button class="btn-buy" style="background: #28a745; margin-top: 20px;" onclick="saveNewProduct()">✅ BAZAGA QO'SHISH</button>
+    </div>
+</div>
+
 <script>
     let tg = window.Telegram.WebApp;
     tg.expand();
     
-    window.history.replaceState({ section: 'main-menu' }, "");
-
+    // ==========================================
+    // 1. O'ZINGIZNING TELEGRAM ID RAQAMINGIZ
+    // ==========================================
+    const ADMIN_ID = 5105291033; // Sizning shaxsiy Telegram ID raqamingiz
+    
+    let currentUser = tg.initDataUnsafe?.user?.id;
     let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
+    
     document.getElementById('user-name-display').innerText = userName;
 
-    setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
+    // ==========================================
+    // 2. FIREBASE SOZLAMALARI VA BAZAGA ULANISH
+    // ==========================================
+    const firebaseConfig = {
+        databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-    const slider = document.getElementById('main-slider');
-    setInterval(() => { slider.scrollLeft + slider.clientWidth >= slider.scrollWidth ? slider.scrollTo({ left: 0, behavior: 'smooth' }) : slider.scrollBy({ left: slider.clientWidth, behavior: 'smooth' }); }, 2000); 
+    let productsDB = []; 
+    let cart = {}, wishlist = {}, historyStack = ['main-menu'];
+    let activeModal = null; 
+    let searchActive = false; 
 
-    const productsDB = [
-        { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya Original", desc: "100% original Rossiya zavod porshenlari. 1 yil kafolat.", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor" },
+    const initialProducts = [
+        { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya Original", desc: "100% original Rossiya zavod porshenlari.", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor" },
         { id: 2, name: "Gidrokompensator", car: "Gazel Biznes", brand: "Xitoy Premium", desc: "Sifatli va hamyonbop variant.", price: 20000, img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", category: "biznes-motor" },
         { id: 3, name: "Fara Tozalash", car: "Barcha Mashinalar", brand: "Fara Club Sam", desc: "Sarg'aygan faralarni yangidek xolatga keltiramiz.", price: 150000, img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80", category: "fara-tozalash-items" },
-        
         { id: 4, name: "Giliza", car: "Gazel Biznes", brand: "Original", desc: "Dvigatel uchun yuqori sifatli giliza.", price: 150000, img: "https://i.postimg.cc/ydDM5cDf/1704954008428-bulletin.jpg", category: "biznes-motor" },
         { id: 5, name: "Val", car: "Gazel Biznes", brand: "Original", desc: "Mustahkam dvigatel vali.", price: 850000, img: "https://i.postimg.cc/rwbCj4LX/val.jpg", category: "biznes-motor" },
         { id: 6, name: "Kolsa (Porshen halqalari)", car: "Gazel Biznes", brand: "Original", desc: "Porshen halqalari to'plami.", price: 220000, img: "https://i.postimg.cc/htqKdyXP/kolsa.jpg", category: "biznes-motor" },
@@ -267,15 +329,66 @@
         { id: 20, name: "Salnik klapan", car: "Gazel Biznes", brand: "Original", desc: "Maslosyomniy kalpakchalar to'plami.", price: 55000, img: "https://i.postimg.cc/tCKpQXW6/orig-(2).jpg", category: "biznes-motor" },
         { id: 21, name: "Koromislo (Fleytasi bilan)", car: "Gazel Biznes", brand: "Original", desc: "Koromislo yig'ilgan holatda.", price: 280000, img: "https://i.postimg.cc/s2Q3tv0D/9-(1).jpg", category: "biznes-motor" },
         { id: 22, name: "Klapan krishkasi", car: "Gazel Biznes", brand: "Original", desc: "Klapan krishkasi.", price: 220000, img: "https://i.postimg.cc/T1RMYwQK/orig-(3).jpg", category: "biznes-motor" },
-        { id: 23, name: "Galovka prakladkasi", car: "Gazel Biznes", brand: "Original", desc: "Galovka prakladkasi (qistirmasi).", price: 95000, img: "https://i.postimg.cc/xqDmbwJR/7275659425.jpg", category: "biznes-motor" },
-        { id: 24, name: "Paddon prakladkasi", car: "Gazel Biznes", brand: "Original", desc: "Karter qistirmasi (Paddon prakladkasi).", price: 45000, img: "https://i.postimg.cc/tT8k2mnF/8110331128-(1).jpg", category: "biznes-motor" },
+        { id: 23, name: "Galovka prakladkasi", car: "Gazel Biznes", brand: "Original", desc: "Galovka prakladkasi.", price: 95000, img: "https://i.postimg.cc/xqDmbwJR/7275659425.jpg", category: "biznes-motor" },
+        { id: 24, name: "Paddon prakladkasi", car: "Gazel Biznes", brand: "Original", desc: "Karter qistirmasi.", price: 45000, img: "https://i.postimg.cc/tT8k2mnF/8110331128-(1).jpg", category: "biznes-motor" },
         { id: 25, name: "Kollektor prakladkalari", car: "Gazel Biznes", brand: "Original", desc: "Kollektor qistirmalari.", price: 40000, img: "https://i.postimg.cc/8khM2Cqb/293130-9a240d52-deca-11ef-8925-f02f74dc3e64-original.jpg", category: "biznes-motor" }
     ];
 
-    let cart = {}, wishlist = {}, historyStack = ['main-menu'];
-    let activeModal = null; 
-    let searchActive = false; 
-    
+    document.getElementById('loading-text').style.display = 'block';
+
+    db.ref('products').on('value', (snapshot) => {
+        document.getElementById('loading-text').style.display = 'none';
+        
+        if (snapshot.exists()) {
+            productsDB = snapshot.val().filter(p => p !== null);
+        } else {
+            productsDB = initialProducts;
+            db.ref('products').set(productsDB);
+        }
+        renderProducts();
+    });
+
+    // ==========================================
+    // 3. YANGI TOVAR QO'SHISH FUNKSIYASI (ADMIN)
+    // ==========================================
+    function saveNewProduct() {
+        let name = document.getElementById('add-name').value;
+        let price = parseInt(document.getElementById('add-price').value);
+        let img = document.getElementById('add-img').value;
+        let cat = document.getElementById('add-cat').value;
+
+        if(!name || !price || !img) {
+            tg.showAlert("Iltimos, barcha maydonlarni to'ldiring!");
+            return;
+        }
+
+        let newId = productsDB.length > 0 ? Math.max(...productsDB.map(p => p.id)) + 1 : 1;
+        
+        // Avtomat qilib mashina nomini kategoriya selectoridan aniqlaymiz
+        let carName = document.getElementById('add-cat').options[document.getElementById('add-cat').selectedIndex].text.split(' - ')[0];
+
+        let newProd = { id: newId, name: name, car: carName, brand: "Original", desc: "Yangi qo'shilgan zapchast", price: price, img: img, category: cat };
+        
+        productsDB.push(newProd);
+        db.ref('products').set(productsDB).then(() => {
+            tg.showAlert("Mahsulot muvaffaqiyatli bazaga qo'shildi!");
+            closeModal();
+            document.getElementById('add-name').value = '';
+            document.getElementById('add-price').value = '';
+            document.getElementById('add-img').value = '';
+        });
+    }
+
+    // ==========================================
+    // ASOSIY FUNKSIYALAR
+    // ==========================================
+    window.history.replaceState({ section: 'main-menu' }, "");
+
+    setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
+
+    const slider = document.getElementById('main-slider');
+    setInterval(() => { slider.scrollLeft + slider.clientWidth >= slider.scrollWidth ? slider.scrollTo({ left: 0, behavior: 'smooth' }) : slider.scrollBy({ left: slider.clientWidth, behavior: 'smooth' }); }, 2000); 
+
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
 
     function renderProducts() {
@@ -298,13 +411,11 @@
         return `<div class="luxury-card" onclick="openProduct(${p.id})">
             <button class="fav-btn ${favClass}" onclick="toggleFav(event, ${p.id})">${heartSVG}</button>
             <img src="${p.img}">
-            <div style="flex:1;">
-                <h4>${p.name}</h4><div class="price">${p.price.toLocaleString()} so'm</div>
-            </div>
+            <h4>${p.name}</h4>
+            <div class="price">${p.price.toLocaleString()} so'm</div>
             <button class="quick-add-btn" onclick="addToCartQuick(event, ${p.id})">🛒 Savatga qo'shish</button>
         </div>`;
     }
-    renderProducts();
 
     function openProduct(id) {
         let p = productsDB.find(x => x.id == id);
@@ -314,7 +425,6 @@
         document.getElementById('pm-desc').innerText = p.desc || "Qo'shimcha ma'lumot yo'q.";
         document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} so'm`;
         document.getElementById('pm-buy-btn').onclick = () => { addToCart(id); closeModal(); };
-        
         openModal('productModal');
     }
 
@@ -337,10 +447,8 @@
         cart[id] = (cart[id] || 0) + 1;
         let badge = document.getElementById('cart-badge');
         badge.innerText = Object.values(cart).reduce((a,b)=>a+b,0);
-        
         badge.style.transform = 'scale(1.5)';
         setTimeout(() => badge.style.transform = 'scale(1)', 200);
-        
         updateBtns(); tg.HapticFeedback.impactOccurred('medium');
     }
 
@@ -364,30 +472,24 @@
         document.getElementById('search-results').classList.add('hidden');
         document.getElementById('content-area').classList.remove('hidden');
         searchActive = false; 
-        
         updateBtns();
     }
 
     function openModal(id) {
-        if(id === 'cartModal') {
-            renderCartItems();
-        }
-        
+        if(id === 'cartModal') renderCartItems();
         let modal = document.getElementById(id);
         modal.style.display = 'flex';
         modal.style.animation = 'none';
         modal.offsetHeight; 
         modal.style.animation = 'zoomIn 0.3s forwards';
-        
         activeModal = id;
         window.history.pushState({ modal: id }, "");
         tg.BackButton.show();
+        updateBtns();
     }
 
     function closeModal() {
-        if(activeModal) {
-            window.history.back(); 
-        }
+        if(activeModal) window.history.back(); 
     }
 
     window.addEventListener('popstate', function(event) {
@@ -426,7 +528,6 @@
             document.getElementById('searchInput').value = '';
             document.getElementById('search-results').classList.add('hidden');
             document.getElementById('content-area').classList.remove('hidden');
-            
             updateBtns();
         } else { 
             tg.close(); 
@@ -440,8 +541,13 @@
         let isDeep = historyStack.length > 1;
         document.getElementById('back-btn').style.display = isDeep ? 'flex' : 'none';
         if (isDeep || activeModal || searchActive) { tg.BackButton.show(); } else { tg.BackButton.hide(); }
-        document.getElementById('wish-btn').style.display = 'flex';
-        document.getElementById('cart-btn').style.display = Object.keys(cart).length > 0 || isDeep ? 'flex' : 'none';
+        document.getElementById('wish-btn').style.display = activeModal ? 'none' : 'flex';
+        document.getElementById('cart-btn').style.display = activeModal ? 'none' : (Object.keys(cart).length > 0 || isDeep ? 'flex' : 'none');
+        
+        // ADMIN TUGMASINI KO'RSATISH (Faqat sizning kodingiz uchun)
+        if (currentUser === ADMIN_ID) {
+            document.getElementById('admin-btn').style.display = activeModal ? 'none' : 'flex';
+        }
     }
     updateBtns();
 
@@ -463,7 +569,6 @@
 
         if (query.length > 0) {
             let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)) || (p.brand && p.brand.toLowerCase().includes(query)));
-            
             if (filtered.length === 0) {
                 resultsDiv.innerHTML = '<p style="text-align:center; color:#888; padding: 20px;">Hech narsa topilmadi...</p>';
             } else {
@@ -486,7 +591,6 @@
         let container = document.getElementById('cart-items-container');
         let total = 0; 
         container.innerHTML = '';
-        
         if(Object.keys(cart).length === 0) {
             container.innerHTML = '<p style="text-align:center; color:#888; margin-top:50px;">Savatchangiz bo\'sh.</p>';
         } else {
@@ -515,8 +619,7 @@
         cart[id] += d; 
         if(cart[id]<=0) delete cart[id]; 
         document.getElementById('cart-badge').innerText = Object.values(cart).reduce((a,b)=>a+b,0); 
-        renderCartItems(); 
-        updateBtns(); 
+        renderCartItems(); updateBtns(); 
     }
     
     function sendOrderToBot() {
@@ -524,14 +627,12 @@
             tg.showAlert("Savatchangiz bo'sh! Iltimos, mahsulot qo'shing.");
             return;
         }
-        
         let items = []; let total = 0;
         for(let id in cart) { 
             let p = productsDB.find(x => x.id == id); 
             items.push({name: p.name, car: p.car, qty: cart[id], price: p.price*cart[id]}); 
             total += p.price*cart[id]; 
         }
-        
         try {
             tg.sendData(JSON.stringify({items, total}));
             tg.close(); 
