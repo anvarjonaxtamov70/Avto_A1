@@ -8,6 +8,10 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
@@ -550,14 +554,14 @@
             left: 0; 
             width: 100%; 
             height: 100%; 
-            background: rgba(5, 5, 5, 0.8); 
+            background: rgba(5, 5, 5, 0.85); 
             z-index: 2000; 
             display: none; 
             flex-direction: column; 
             padding: 20px; 
             box-sizing: border-box; 
             overflow-y: auto; 
-            backdrop-filter: blur(12px); 
+            backdrop-filter: blur(15px); 
             padding-bottom: 100px;
         }
         
@@ -1141,6 +1145,17 @@
         .review-textarea:focus {
             border-color: var(--luxury-gold);
         }
+
+        /* ========================================= */
+        /* CROPPER JS UCHUN MAXSUS STILLAR           */
+        /* ========================================= */
+        .cropper-view-box,
+        .cropper-face {
+            border-radius: 12px; /* Kvadrat burchaklarini sal yumshatamiz */
+        }
+        .cropper-line, .cropper-point {
+            background-color: var(--luxury-gold); /* Chiziqlar tillarang */
+        }
     </style>
 </head>
 <body>
@@ -1381,28 +1396,6 @@
     <button class="btn-edit" id="pm-edit-btn">✏️ TAHRIRLASH</button>
 </div>
 
-<div class="modal" id="editModal">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="color: #28a745; margin:0;">✏️ Zapchastni tahrirlash</h2>
-        <button onclick="closeModal()" style="background:rgba(255,255,255,0.1); border:none; color:white; width: 36px; height: 36px; border-radius: 50%; font-size:20px; cursor:pointer;">×</button>
-    </div>
-    <div style="margin-top: 25px;">
-        <input type="hidden" id="edit-id"> 
-        <p style="color: var(--text-muted); margin-bottom: 5px;">Zapchast nomi:</p>
-        <input type="text" id="edit-name" class="search-box" style="margin-top:0;">
-        <p style="color: var(--text-muted); margin-bottom: 5px;">Narxi (so'm):</p>
-        <input type="number" id="edit-price" class="search-box" style="margin-top:0;">
-        <p style="color: var(--text-muted); margin-bottom: 5px;">Tavsifi:</p>
-        <textarea id="edit-desc" class="search-box" style="margin-top:0; height: 80px; resize: none;"></textarea>
-        <p style="color: var(--text-muted); margin-bottom: 5px;">Rasm linki:</p>
-        <input type="text" id="edit-img" class="search-box" style="margin-top:0;">
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button class="btn-buy" style="background: #dc3545; border:none; width: 30%; font-size: 14px;" onclick="deleteProduct()">🗑 O'CHIRISH</button>
-            <button class="btn-buy" style="background: #28a745; border:none; width: 70%; font-size: 14px; color: white;" onclick="saveEditProduct()">✅ SAQLASH</button>
-        </div>
-    </div>
-</div>
-
 <div class="modal" id="contactModal">
     <div class="contact-card" style="margin: auto;">
         <button class="close-btn" onclick="closeModal()">×</button>
@@ -1494,6 +1487,17 @@
     <button class="btn-checkout" onclick="saveOrderReview()">Saqlash</button>
 </div>
 
+<div class="modal" id="cropModal" style="z-index: 3000; padding: 15px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+        <h2 style="margin:0;">✂️ Rasmni kesish</h2>
+        <button onclick="closeCropModal()" style="background:rgba(255,255,255,0.1); border:none; color:white; width: 36px; height: 36px; border-radius: 50%; font-size:20px; cursor:pointer;">×</button>
+    </div>
+    <div style="width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 20px;">
+        <img id="cropper-image" src="" style="max-width: 100%; display: block;">
+    </div>
+    <button class="btn-checkout" id="crop-save-btn" onclick="uploadCroppedImage()">✅ Saqlash va Yuklash</button>
+</div>
+
 <div class="modal" id="adminModal">
     <div style="display:flex; justify-content:space-between; align-items:center;">
         <h2 style="color: #ff4757; margin:0;">⚙️ Tovar Qo'shish</h2>
@@ -1502,7 +1506,16 @@
     <div style="margin-top: 25px;">
         <input type="text" id="add-name" placeholder="Zapchast nomi" class="search-box">
         <input type="number" id="add-price" placeholder="Narxi so'mda" class="search-box">
-        <input type="text" id="add-img" placeholder="Rasm linki (postimg.cc)" class="search-box">
+        
+        <input type="file" id="add-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'add')">
+        
+        <button type="button" class="btn-buy" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); margin-bottom: 15px;" onclick="document.getElementById('add-img-file').click()">
+            📸 Rasm tanlash (Galereya)
+        </button>
+        <img id="add-img-preview" src="" style="width: 120px; height: 120px; object-fit: cover; border-radius: 16px; display: none; margin: 0 auto 15px; border: 2px solid var(--primary-blue);">
+        
+        <input type="hidden" id="add-img-url" class="search-box">
+
         <select id="add-cat" class="search-box" style="background:rgba(0,0,0,0.5); color:white;">
             <option value="biznes-motor">Gazel Biznes - Motor</option>
             <option value="biznes-xadavoy">Gazel Biznes - Xadavoy</option>
@@ -1511,7 +1524,40 @@
             <option value="eski-motor">Gazel Eski - Motor</option>
             <option value="eski-xadavoy">Gazel Eski - Xadavoy</option>
         </select>
-        <button class="btn-buy" style="background: linear-gradient(135deg, #ff4757, #c0392b); border:none; margin-top: 20px;" onclick="saveNewProduct()">BAZAGA SAQLASH</button>
+        <button class="btn-buy" style="background: linear-gradient(135deg, #ff4757, #c0392b); border:none; margin-top: 10px;" onclick="saveNewProduct()">BAZAGA SAQLASH</button>
+    </div>
+</div>
+
+<div class="modal" id="editModal">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="color: #28a745; margin:0;">✏️ Tahrirlash</h2>
+        <button onclick="closeModal()" style="background:rgba(255,255,255,0.1); border:none; color:white; width: 36px; height: 36px; border-radius: 50%; font-size:20px; cursor:pointer;">×</button>
+    </div>
+    <div style="margin-top: 25px;">
+        <input type="hidden" id="edit-id"> 
+        <p style="color: var(--text-muted); margin-bottom: 5px;">Zapchast nomi:</p>
+        <input type="text" id="edit-name" class="search-box" style="margin-top:0;">
+        <p style="color: var(--text-muted); margin-bottom: 5px;">Narxi (so'm):</p>
+        <input type="number" id="edit-price" class="search-box" style="margin-top:0;">
+        <p style="color: var(--text-muted); margin-bottom: 5px;">Tavsifi:</p>
+        <textarea id="edit-desc" class="search-box" style="margin-top:0; height: 80px; resize: none;"></textarea>
+        
+        <input type="file" id="edit-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'edit')">
+        
+        <p style="color: var(--text-muted); margin-bottom: 5px;">Rasm:</p>
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+            <img id="edit-img-preview" src="" style="width: 60px; height: 60px; object-fit: cover; border-radius: 10px; border: 1px solid var(--glass-border);">
+            <button type="button" class="btn-buy" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); margin: 0; padding: 10px; flex: 1; font-size: 13px;" onclick="document.getElementById('edit-img-file').click()">
+                📸 Rasmni o'zgartirish
+            </button>
+        </div>
+        
+        <input type="hidden" id="edit-img-url">
+
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button class="btn-buy" style="background: #dc3545; border:none; width: 30%; font-size: 14px;" onclick="deleteProduct()">🗑 O'CHIR</button>
+            <button class="btn-buy" style="background: #28a745; border:none; width: 70%; font-size: 14px; color: white;" onclick="saveEditProduct()">✅ SAQLASH</button>
+        </div>
     </div>
 </div>
 
@@ -1522,6 +1568,11 @@
     const ADMIN_ID = 5105291033; 
     const BOT_TOKEN = "8503892855:AAGMzE6Xr8-g4AnmMhptk9un9gJy8OM0J-I"; 
     
+    // YANGI: IMGBB API KALITI
+    const IMGBB_API_KEY = "ce514c623c419c594bde769bad36c8bc";
+    let currentCropper = null;
+    let currentTargetInput = ""; // 'add' yoki 'edit' ni bildiradi
+
     let currentUser = tg.initDataUnsafe?.user?.id;
     let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
     document.getElementById('user-name-display').innerText = userName;
@@ -1537,7 +1588,6 @@
     let activeModal = null; 
     let searchActive = false; 
 
-    // Savat va Buyurtmalar xotirasi (LocalStorage)
     let cart = JSON.parse(localStorage.getItem('avtoa1_cart')) || {};
     let myOrders = JSON.parse(localStorage.getItem('avtoa1_orders')) || [];
 
@@ -1564,251 +1614,32 @@
         setTimeout(() => { toast.remove(); }, 3000);
     }
 
-    // Baza tovarlari
+    // Baza tovarlari (Eskilar saqlangan)
     const initialProducts = [
-        { 
-            id: 1, 
-            name: "Porshen To'plami", 
-            car: "Gazel Biznes", 
-            brand: "Rossiya Original", 
-            desc: "100% original Rossiya zavod porshenlari.", 
-            price: 1060000, 
-            img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", 
-            category: "biznes-motor", 
-            badge: "hot" 
-        },
-        { 
-            id: 2, 
-            name: "Gidrokompensator", 
-            car: "Gazel Biznes", 
-            brand: "Xitoy Premium", 
-            desc: "Sifatli va hamyonbop variant.", 
-            price: 20000, 
-            img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 4, 
-            name: "Giliza", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Dvigatel uchun yuqori sifatli giliza.", 
-            price: 150000, 
-            img: "https://i.postimg.cc/ydDM5cDf/1704954008428-bulletin.jpg", 
-            category: "biznes-motor", 
-            badge: "new" 
-        },
-        { 
-            id: 5, 
-            name: "Val", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Mustahkam dvigatel vali.", 
-            price: 850000, 
-            img: "https://i.postimg.cc/rwbCj4LX/val.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 6, 
-            name: "Kolsa (Porshen halqalari)", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Porshen halqalari to'plami.", 
-            price: 220000, 
-            img: "https://i.postimg.cc/htqKdyXP/kolsa.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 7, 
-            name: "Pales", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Porshen barmog'i.", 
-            price: 45000, 
-            img: "https://i.postimg.cc/W3QGVF7B/pales.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 8, 
-            name: "Shatun", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Dvigatel shatuni.", 
-            price: 180000, 
-            img: "https://i.postimg.cc/J0MhjR72/shatun.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 9, 
-            name: "Korennoy vkladish", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Korennoy vkladish to'plami.", 
-            price: 120000, 
-            img: "https://i.postimg.cc/vTZsQTZ8/karennoyfkladish.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 10, 
-            name: "Shatunniy vkladish", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Shatunniy vkladish to'plami.", 
-            price: 110000, 
-            img: "https://i.postimg.cc/59QcShQr/shatunniny.webp", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 11, 
-            name: "Polukolsa (Yarim oy)", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Polukolsa yarim oylari.", 
-            price: 40000, 
-            img: "https://i.postimg.cc/yYw8ThNS/pol.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 12, 
-            name: "Raspredval", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Raspredelitelniy val.", 
-            price: 350000, 
-            img: "https://i.postimg.cc/W3kvzCMz/val-raspredelitelnyj-zmz-4062-4052-409-vpuskvypusk-252-550x550.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 13, 
-            name: "Tekstolit shesternya", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Raspredval tishli g‘ildiragi.", 
-            price: 85000, 
-            img: "https://i.postimg.cc/wMq0ZsTB/orig.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 14, 
-            name: "Shtangalar", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Shtangalar to'plami.", 
-            price: 65000, 
-            img: "https://i.postimg.cc/B6k2cLP3/7122351239.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 15, 
-            name: "Maxovik", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Dvigatel maxovigi.", 
-            price: 450000, 
-            img: "https://i.postimg.cc/NfwHsw1J/7029048009.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 16, 
-            name: "Galovka", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Silindrlar bloki galovkasi.", 
-            price: 2100000, 
-            img: "https://i.postimg.cc/rwsFchYr/7104266256.jpg", 
-            category: "biznes-motor", 
-            badge: "hot" 
-        },
-        { 
-            id: 17, 
-            name: "Klapanlar kattasi", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Katta klapanlar to'plami.", 
-            price: 150000, 
-            img: "https://i.postimg.cc/nL1dkknZ/031078-3.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 18, 
-            name: "Klapanlar kichkinasi", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Kichkina klapanlar to'plami.", 
-            price: 150000, 
-            img: "https://i.postimg.cc/Pf1Mzyy7/40221007015-0221032.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 19, 
-            name: "Napravlyayushiy (Vtulkalar)", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Klapan vtulkalar.", 
-            price: 90000, 
-            img: "https://i.postimg.cc/C1SKyFyG/orig-(1).jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 20, 
-            name: "Salnik klapan", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Maslosyomniy kalpakchalar to'plami.", 
-            price: 55000, 
-            img: "https://i.postimg.cc/tCKpQXW6/orig-(2).jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 21, 
-            name: "Koromislo", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Koromislo yig'ilgan holatda.", 
-            price: 280000, 
-            img: "https://i.postimg.cc/s2Q3tv0D/9-(1).jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 22, 
-            name: "Klapan krishkasi", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Klapan krishkasi.", 
-            price: 220000, 
-            img: "https://i.postimg.cc/T1RMYwQK/orig-(3).jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 23, 
-            name: "Galovka prakladkasi", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Galovka prakladkasi.", 
-            price: 95000, 
-            img: "https://i.postimg.cc/xqDmbwJR/7275659425.jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 24, 
-            name: "Paddon prakladkasi", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Karter qistirmasi.", 
-            price: 45000, 
-            img: "https://i.postimg.cc/tT8k2mnF/8110331128-(1).jpg", 
-            category: "biznes-motor" 
-        },
-        { 
-            id: 25, 
-            name: "Kollektor prakladkalari", 
-            car: "Gazel Biznes", 
-            brand: "Original", 
-            desc: "Kollektor qistirmalari.", 
-            price: 40000, 
-            img: "https://i.postimg.cc/8khM2Cqb/293130-9a240d52-deca-11ef-8925-f02f74dc3e64-original.jpg", 
-            category: "biznes-motor" 
-        }
+        { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya Original", desc: "100% original Rossiya zavod porshenlari.", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor", badge: "hot" },
+        { id: 2, name: "Gidrokompensator", car: "Gazel Biznes", brand: "Xitoy Premium", desc: "Sifatli va hamyonbop variant.", price: 20000, img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", category: "biznes-motor" },
+        { id: 4, name: "Giliza", car: "Gazel Biznes", brand: "Original", desc: "Dvigatel uchun yuqori sifatli giliza.", price: 150000, img: "https://i.postimg.cc/ydDM5cDf/1704954008428-bulletin.jpg", category: "biznes-motor", badge: "new" },
+        { id: 5, name: "Val", car: "Gazel Biznes", brand: "Original", desc: "Mustahkam dvigatel vali.", price: 850000, img: "https://i.postimg.cc/rwbCj4LX/val.jpg", category: "biznes-motor" },
+        { id: 6, name: "Kolsa (Porshen halqalari)", car: "Gazel Biznes", brand: "Original", desc: "Porshen halqalari to'plami.", price: 220000, img: "https://i.postimg.cc/htqKdyXP/kolsa.jpg", category: "biznes-motor" },
+        { id: 7, name: "Pales", car: "Gazel Biznes", brand: "Original", desc: "Porshen barmog'i.", price: 45000, img: "https://i.postimg.cc/W3QGVF7B/pales.jpg", category: "biznes-motor" },
+        { id: 8, name: "Shatun", car: "Gazel Biznes", brand: "Original", desc: "Dvigatel shatuni.", price: 180000, img: "https://i.postimg.cc/J0MhjR72/shatun.jpg", category: "biznes-motor" },
+        { id: 9, name: "Korennoy vkladish", car: "Gazel Biznes", brand: "Original", desc: "Korennoy vkladish to'plami.", price: 120000, img: "https://i.postimg.cc/vTZsQTZ8/karennoyfkladish.jpg", category: "biznes-motor" },
+        { id: 10, name: "Shatunniy vkladish", car: "Gazel Biznes", brand: "Original", desc: "Shatunniy vkladish to'plami.", price: 110000, img: "https://i.postimg.cc/59QcShQr/shatunniny.webp", category: "biznes-motor" },
+        { id: 11, name: "Polukolsa (Yarim oy)", car: "Gazel Biznes", brand: "Original", desc: "Polukolsa yarim oylari.", price: 40000, img: "https://i.postimg.cc/yYw8ThNS/pol.jpg", category: "biznes-motor" },
+        { id: 12, name: "Raspredval", car: "Gazel Biznes", brand: "Original", desc: "Raspredelitelniy val.", price: 350000, img: "https://i.postimg.cc/W3kvzCMz/val-raspredelitelnyj-zmz-4062-4052-409-vpuskvypusk-252-550x550.jpg", category: "biznes-motor" },
+        { id: 13, name: "Tekstolit shesternya", car: "Gazel Biznes", brand: "Original", desc: "Raspredval tishli g‘ildiragi.", price: 85000, img: "https://i.postimg.cc/wMq0ZsTB/orig.jpg", category: "biznes-motor" },
+        { id: 14, name: "Shtangalar", car: "Gazel Biznes", brand: "Original", desc: "Shtangalar to'plami.", price: 65000, img: "https://i.postimg.cc/B6k2cLP3/7122351239.jpg", category: "biznes-motor" },
+        { id: 15, name: "Maxovik", car: "Gazel Biznes", brand: "Original", desc: "Dvigatel maxovigi.", price: 450000, img: "https://i.postimg.cc/NfwHsw1J/7029048009.jpg", category: "biznes-motor" },
+        { id: 16, name: "Galovka", car: "Gazel Biznes", brand: "Original", desc: "Silindrlar bloki galovkasi.", price: 2100000, img: "https://i.postimg.cc/rwsFchYr/7104266256.jpg", category: "biznes-motor", badge: "hot" },
+        { id: 17, name: "Klapanlar kattasi", car: "Gazel Biznes", brand: "Original", desc: "Katta klapanlar to'plami.", price: 150000, img: "https://i.postimg.cc/nL1dkknZ/031078-3.jpg", category: "biznes-motor" },
+        { id: 18, name: "Klapanlar kichkinasi", car: "Gazel Biznes", brand: "Original", desc: "Kichkina klapanlar to'plami.", price: 150000, img: "https://i.postimg.cc/Pf1Mzyy7/40221007015-0221032.jpg", category: "biznes-motor" },
+        { id: 19, name: "Napravlyayushiy (Vtulkalar)", car: "Gazel Biznes", brand: "Original", desc: "Klapan vtulkalar.", price: 90000, img: "https://i.postimg.cc/C1SKyFyG/orig-(1).jpg", category: "biznes-motor" },
+        { id: 20, name: "Salnik klapan", car: "Gazel Biznes", brand: "Original", desc: "Maslosyomniy kalpakchalar to'plami.", price: 55000, img: "https://i.postimg.cc/tCKpQXW6/orig-(2).jpg", category: "biznes-motor" },
+        { id: 21, name: "Koromislo", car: "Gazel Biznes", brand: "Original", desc: "Koromislo yig'ilgan holatda.", price: 280000, img: "https://i.postimg.cc/s2Q3tv0D/9-(1).jpg", category: "biznes-motor" },
+        { id: 22, name: "Klapan krishkasi", car: "Gazel Biznes", brand: "Original", desc: "Klapan krishkasi.", price: 220000, img: "https://i.postimg.cc/T1RMYwQK/orig-(3).jpg", category: "biznes-motor" },
+        { id: 23, name: "Galovka prakladkasi", car: "Gazel Biznes", brand: "Original", desc: "Galovka prakladkasi.", price: 95000, img: "https://i.postimg.cc/xqDmbwJR/7275659425.jpg", category: "biznes-motor" },
+        { id: 24, name: "Paddon prakladkasi", car: "Gazel Biznes", brand: "Original", desc: "Karter qistirmasi.", price: 45000, img: "https://i.postimg.cc/tT8k2mnF/8110331128-(1).jpg", category: "biznes-motor" },
+        { id: 25, name: "Kollektor prakladkalari", car: "Gazel Biznes", brand: "Original", desc: "Kollektor qistirmalari.", price: 40000, img: "https://i.postimg.cc/8khM2Cqb/293130-9a240d52-deca-11ef-8925-f02f74dc3e64-original.jpg", category: "biznes-motor" }
     ];
 
     document.getElementById('loading-text').style.display = 'block';
@@ -1826,14 +1657,124 @@
         updateCartBadge();
     });
 
+    // ===============================================
+    // YANGI: RASM KESISH VA YUKLASH FUNKSIYALARI
+    // ===============================================
+    
+    // Fayl tanlanganda ishga tushadi
+    function handleFileSelect(event, target) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        currentTargetInput = target; // Qaysi panel uchun ekanini eslab qolamiz (add yoki edit)
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('cropper-image').src = e.target.result;
+            
+            // Crop oyna ochiladi
+            document.getElementById('cropModal').style.display = 'flex';
+            
+            if(currentCropper) {
+                currentCropper.destroy(); // Eski cropperni o'chirish
+            }
+            
+            // Cropper.js ni kvadrat (1:1) rejimda ishga tushirish
+            currentCropper = new Cropper(document.getElementById('cropper-image'), {
+                aspectRatio: 1,
+                viewMode: 1,
+                dragMode: 'move',
+                autoCropArea: 0.9,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
+            });
+        };
+        reader.readAsDataURL(file);
+        event.target.value = ''; // Inputni tozalab qo'yamiz
+    }
+
+    // Kesish va ImgBB ga yuklash
+    async function uploadCroppedImage() {
+        if(!currentCropper) return;
+        
+        let btn = document.getElementById('crop-save-btn');
+        let oldText = btn.innerText;
+        btn.innerText = "⏳ Yuklanmoqda... (Kuting)";
+        btn.disabled = true;
+
+        try {
+            // Kesilgan rasmni Base64 formatda olish (sifatni tushirmaslik uchun o'lcham kattaroq)
+            const canvas = currentCropper.getCroppedCanvas({
+                width: 600,
+                height: 600,
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high',
+            });
+            
+            // verguldan keyingi sof kodni olamiz
+            const base64Image = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+            
+            const formData = new FormData();
+            formData.append("image", base64Image);
+            
+            // ImgBB API orqali yuklash
+            const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+                method: "POST",
+                body: formData
+            });
+            const result = await response.json();
+            
+            if(result.success) {
+                const imageUrl = result.data.url; // Tayyor toza link
+                
+                // Qaysi oyna orqali kelgan bo'lsa, o'shanga joylaymiz
+                if(currentTargetInput === 'add') {
+                    document.getElementById('add-img-url').value = imageUrl;
+                    document.getElementById('add-img-preview').src = imageUrl;
+                    document.getElementById('add-img-preview').style.display = 'block';
+                } else if(currentTargetInput === 'edit') {
+                    document.getElementById('edit-img-url').value = imageUrl;
+                    document.getElementById('edit-img-preview').src = imageUrl;
+                    document.getElementById('edit-img-preview').style.display = 'block';
+                }
+                
+                showToast("Rasm muvaffaqiyatli yuklandi!");
+                closeCropModal();
+            } else {
+                showToast("Rasm yuklashda xatolik yuz berdi!", "warning");
+            }
+        } catch (err) {
+            showToast("Internet ulanishini tekshiring!", "warning");
+        } finally {
+            btn.innerText = oldText;
+            btn.disabled = false;
+        }
+    }
+    
+    function closeCropModal() {
+        document.getElementById('cropModal').style.display = 'none';
+        if(currentCropper) {
+            currentCropper.destroy();
+            currentCropper = null;
+        }
+    }
+
+    // ===============================================
+    // ASOSIY FUNKSIYALAR (O'ZGARMADI, FAQAT URL INPUTLAR YANGILANDI)
+    // ===============================================
     function saveNewProduct() {
         let name = document.getElementById('add-name').value;
         let price = parseInt(document.getElementById('add-price').value);
-        let img = document.getElementById('add-img').value;
+        let img = document.getElementById('add-img-url').value; // Yangilandi
         let cat = document.getElementById('add-cat').value;
 
         if(!name || !price || !img) {
-            showToast("Barcha maydonlarni to'ldiring!", "warning"); 
+            showToast("Barcha maydonlarni to'ldiring (Rasmni ham yuklang)!", "warning"); 
             return;
         }
 
@@ -1857,7 +1798,8 @@
             closeModal();
             document.getElementById('add-name').value = '';
             document.getElementById('add-price').value = '';
-            document.getElementById('add-img').value = '';
+            document.getElementById('add-img-url').value = '';
+            document.getElementById('add-img-preview').style.display = 'none';
         });
     }
 
@@ -1872,7 +1814,11 @@
         document.getElementById('edit-name').value = p.name;
         document.getElementById('edit-price').value = p.price;
         document.getElementById('edit-desc').value = p.desc || "Sifatli zapchast";
-        document.getElementById('edit-img').value = p.img;
+        
+        // Rasm uchun o'zgarish
+        document.getElementById('edit-img-url').value = p.img;
+        document.getElementById('edit-img-preview').src = p.img;
+        document.getElementById('edit-img-preview').style.display = 'block';
         
         setTimeout(() => { openModal('editModal'); }, 100); 
     }
@@ -1882,7 +1828,7 @@
         let name = document.getElementById('edit-name').value;
         let price = parseInt(document.getElementById('edit-price').value);
         let desc = document.getElementById('edit-desc').value;
-        let img = document.getElementById('edit-img').value;
+        let img = document.getElementById('edit-img-url').value; // Yangilandi
 
         if(!name || !price || !img) {
             showToast("Maydonlarni bo'sh qoldirmang!", "warning"); 
@@ -2378,9 +2324,6 @@
         renderCartItems(); 
     }
 
-    // ===============================================
-    // YANGI: TO'LOV USULINI TANLASH VA KARTA NUSXALASH
-    // ===============================================
     function openPaymentModal() {
         if (Object.keys(cart).length === 0) {
             showToast("Savatchangiz bo'sh!", "warning");
@@ -2405,9 +2348,6 @@
         showToast("Karta raqami nusxalandi!");
     }
 
-    // ===============================================
-    // ZAKAZ YUBORISH (TO'LOV TURI BILAN BIRGA)
-    // ===============================================
     async function confirmOrder(paymentMethod) {
         const pageUrlParams = new URLSearchParams(window.location.search);
         let phone = pageUrlParams.get('phone') ? decodeURIComponent(pageUrlParams.get('phone')) : "Noma'lum";
@@ -2503,7 +2443,6 @@
                     })
                 });
 
-                // TARIxGA SAQLASH
                 let newOrder = {
                     id: Date.now(),
                     date: new Date().toLocaleDateString('uz-UZ'),
