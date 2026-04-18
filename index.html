@@ -43,9 +43,7 @@
         .verify-icon svg { width: 10px; height: 10px; fill: white; }
         .header p { font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; }
         
-        /* ========================================= */
-        /* YANGI: MUKAMMAL QIDIRUV TIZIMI STILLARI   */
-        /* ========================================= */
+        /* QIDIRUV TIZIMI */
         .search-input-container { position: relative; width: 100%; margin: 10px 0 15px; }
         .search-box { width: 100%; padding: 16px 45px 16px 20px; border-radius: 25px; border: 1px solid var(--glass-border); background: rgba(255, 255, 255, 0.03); color: var(--text-main); outline: none; box-sizing: border-box; transition: all 0.3s ease; font-size: 15px; backdrop-filter: blur(10px); margin: 0; }
         .search-box:focus { border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
@@ -63,7 +61,6 @@
         .empty-search { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px 20px; text-align: center; color: var(--text-muted); animation: slideUp 0.3s ease; }
         .empty-search svg { width: 60px; height: 60px; fill: rgba(255,255,255,0.1); margin-bottom: 15px; }
         .empty-search p { font-size: 14px; line-height: 1.5; }
-        /* ========================================= */
         
         .slider-container { width: 100%; margin-bottom: 25px; overflow: hidden; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.03); }
         .slider { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
@@ -72,6 +69,16 @@
         
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+        /* ========================================= */
+        /* YANGI: KATEGORIYALAR SLIDERI (YANDEX USULI) */
+        /* ========================================= */
+        .category-slider { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; margin-bottom: 15px; }
+        .category-slider::-webkit-scrollbar { display: none; }
+        .category-card { flex: 0 0 95px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); border-radius: 20px; padding: 12px 8px; text-align: center; cursor: pointer; transition: 0.2s; backdrop-filter: blur(10px); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .category-card:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.1); }
+        .category-card img { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; margin-bottom: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); background: #fff; border: 2px solid var(--glass-border); }
+        .category-card span { font-size: 12px; font-weight: 600; color: var(--text-main); }
 
         .items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
         
@@ -158,62 +165,13 @@
         @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
-        /* ========================================= */
-        /* YANGI: ZAKAZ YUBORISH YUKLANISH HOLATI    */
-        /* ========================================= */
-        .order-loading-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(5, 5, 5, 0.85);
-            backdrop-filter: blur(10px);
-            z-index: 99999; /* Hamma narsani ustida */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
-        .order-loading-overlay.active {
-            opacity: 1;
-            pointer-events: auto; /* Ekranni butunlay qulflaydi */
-        }
-        .hourglass {
-            display: inline-block;
-            position: relative;
-            width: 80px;
-            height: 80px;
-        }
-        .hourglass:after {
-            content: " ";
-            display: block;
-            border-radius: 50%;
-            width: 0;
-            height: 0;
-            margin: 8px;
-            box-sizing: border-box;
-            border: 32px solid var(--luxury-gold);
-            border-color: var(--luxury-gold) transparent var(--luxury-gold) transparent;
-            animation: hourglass-anim 1.2s infinite;
-        }
-        @keyframes hourglass-anim {
-            0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19); }
-            50% { transform: rotate(900deg); animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1); }
-            100% { transform: rotate(1800deg); }
-        }
-        .order-loading-text {
-            margin-top: 20px;
-            color: var(--luxury-gold);
-            font-size: 16px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            animation: pulse-text 1.5s infinite;
-        }
-        @keyframes pulse-text {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
+        .order-loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(10px); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .order-loading-overlay.active { opacity: 1; pointer-events: auto; }
+        .hourglass { display: inline-block; position: relative; width: 80px; height: 80px; }
+        .hourglass:after { content: " "; display: block; border-radius: 50%; width: 0; height: 0; margin: 8px; box-sizing: border-box; border: 32px solid var(--luxury-gold); border-color: var(--luxury-gold) transparent var(--luxury-gold) transparent; animation: hourglass-anim 1.2s infinite; }
+        @keyframes hourglass-anim { 0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19); } 50% { transform: rotate(900deg); animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1); } 100% { transform: rotate(1800deg); } }
+        .order-loading-text { margin-top: 20px; color: var(--luxury-gold); font-size: 16px; font-weight: 600; letter-spacing: 1px; animation: pulse-text 1.5s infinite; }
+        @keyframes pulse-text { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
@@ -273,12 +231,24 @@
     </div>
 
     <div id="content-area" class="hidden"> 
-        <div id="main-menu" class="items-grid animate-slide-up">
-            <div class="section-title">Katalog</div>
-            <div class="luxury-card" onclick="showSection('gazel-types')"><img src="https://i.postimg.cc/cJybN99d/gazel.jpg"><h3>Gazel 🚛</h3></div>
-            <div class="luxury-card" onclick="showSection('volga-types')"><img src="https://i.postimg.cc/TYTgrbkq/volga-3110.jpg"><h3>Volga 🏎️</h3></div>
-            <div class="luxury-card" onclick="showSection('uaz-types')"><img src="https://i.postimg.cc/Tw62bVRP/uaz.jpg"><h3>UAZ 🚙</h3></div>
-            <div class="luxury-card" onclick="showSection('fara-club-sections')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><h3>Faralar 💡</h3></div>
+        <div id="main-menu" class="animate-slide-up">
+            <div class="section-title" style="margin-top: 0;">Katalog</div>
+            <div class="category-slider">
+                <div class="category-card" onclick="showSection('gazel-types')"><img src="https://i.postimg.cc/cJybN99d/gazel.jpg"><span>Gazel</span></div>
+                <div class="category-card" onclick="showSection('volga-types')"><img src="https://i.postimg.cc/TYTgrbkq/volga-3110.jpg"><span>Volga</span></div>
+                <div class="category-card" onclick="showSection('uaz-types')"><img src="https://i.postimg.cc/Tw62bVRP/uaz.jpg"><span>UAZ</span></div>
+                <div class="category-card" onclick="showSection('fara-club-sections')"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80"><span>Faralar</span></div>
+            </div>
+
+            <div class="luxury-card" onclick="openModal('contactModal')" style="border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); margin-bottom: 20px; align-items: center; padding: 16px;">
+                <h3 style="font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; color: var(--text-main);">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
+                    Biz bilan bog'lanish
+                </h3>
+            </div>
+
+            <div class="section-title">🔥 Ommabop tovarlar</div>
+            <div id="home-products" class="items-grid"></div>
         </div>
 
         <div id="gazel-types" class="items-grid hidden">
@@ -611,6 +581,13 @@
     setInterval(() => { slider.scrollLeft + slider.clientWidth >= slider.scrollWidth ? slider.scrollTo({ left: 0, behavior: 'smooth' }) : slider.scrollBy({ left: slider.clientWidth, behavior: 'smooth' }); }, 3500); 
 
     function renderProducts() {
+        // YANGI: Asosiy ekrandagi ommabop tovarlarni chiqarish (16 ta tovar)
+        let homeContainer = document.getElementById('home-products');
+        if(homeContainer) {
+            let homeItems = productsDB.slice(0, 16);
+            homeContainer.innerHTML = homeItems.length === 0 ? '<p style="text-align:center; color:var(--text-muted); grid-column: span 2; padding:20px;">Hozircha tovar yo\'q</p>' : homeItems.map(p => cardHTML(p)).join('');
+        }
+
         ['biznes-motor', 'biznes-xadavoy', 'next-motor', 'next-xadavoy', 'eski-motor', 'eski-xadavoy', 'volga-2401-motor', 'volga-2401-xadavoy', 'volga-2410-motor', 'volga-2410-xadavoy', 'volga-3110-motor', 'volga-3110-xadavoy', 'volga-31105-motor', 'volga-31105-xadavoy', 'volga-31029-motor', 'volga-31029-xadavoy', 'uaz-patriot-motor', 'uaz-patriot-xadavoy', 'uaz-hunter-motor', 'uaz-hunter-xadavoy', 'uaz-452-motor', 'uaz-452-xadavoy', 'fara-tozalash-items', 'fara-tiklash-items'].forEach(cat => {
             let container = document.getElementById(cat);
             if(container) {
@@ -935,9 +912,6 @@
             return;
         }
 
-        // ===============================================
-        // YANGI: EKRANNI QULFLASH VA QUMSOATNI YOQISH
-        // ===============================================
         const loadingOverlay = document.getElementById('order-loading-overlay');
         loadingOverlay.classList.add('active');
 
@@ -996,7 +970,6 @@
                 cart = {};
                 document.getElementById('nav-badge').classList.remove('show');
                 
-                // QUMSOATNI O'CHIRISH VA MUVAFFAQIYAT XABARINI BERISH
                 loadingOverlay.classList.remove('active');
                 showToast("Zakaz qabul qilindi!");
                 
