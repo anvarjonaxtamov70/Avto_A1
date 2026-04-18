@@ -157,11 +157,73 @@
         .toast { background: rgba(40, 40, 45, 0.95); border-left: 4px solid var(--accent-green); color: white; padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.4); backdrop-filter: blur(10px); display: flex; align-items: center; gap: 10px; animation: slideDown 0.3s ease forwards, fadeOut 0.3s ease 2.5s forwards; opacity: 0; }
         @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        /* ========================================= */
+        /* YANGI: ZAKAZ YUBORISH YUKLANISH HOLATI    */
+        /* ========================================= */
+        .order-loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 5, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 99999; /* Hamma narsani ustida */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .order-loading-overlay.active {
+            opacity: 1;
+            pointer-events: auto; /* Ekranni butunlay qulflaydi */
+        }
+        .hourglass {
+            display: inline-block;
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+        .hourglass:after {
+            content: " ";
+            display: block;
+            border-radius: 50%;
+            width: 0;
+            height: 0;
+            margin: 8px;
+            box-sizing: border-box;
+            border: 32px solid var(--luxury-gold);
+            border-color: var(--luxury-gold) transparent var(--luxury-gold) transparent;
+            animation: hourglass-anim 1.2s infinite;
+        }
+        @keyframes hourglass-anim {
+            0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19); }
+            50% { transform: rotate(900deg); animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1); }
+            100% { transform: rotate(1800deg); }
+        }
+        .order-loading-text {
+            margin-top: 20px;
+            color: var(--luxury-gold);
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            animation: pulse-text 1.5s infinite;
+        }
+        @keyframes pulse-text {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
     </style>
 </head>
 <body>
 
 <div class="toast-container" id="toast-container"></div>
+
+<div class="order-loading-overlay" id="order-loading-overlay">
+    <div class="hourglass"></div>
+    <div class="order-loading-text">Buyurtma yuborilmoqda...</div>
+</div>
 
 <div id="welcome-screen">
     <h1>Assalomu alaykum, <br><span id="user-name-display"></span>!</h1>
@@ -725,9 +787,6 @@
     }
     updateBtns();
 
-    // ===============================================
-    // YANGI: MUKAMMAL QIDIRUV FUNKSIYALARI
-    // ===============================================
     function clearSearch() {
         document.getElementById('searchInput').value = '';
         searchProducts();
@@ -747,7 +806,6 @@
         let clearBtn = document.getElementById('clearSearchBtn');
         let quickChips = document.getElementById('quick-chips');
 
-        // X tugmasini ko'rsatish/yashirish
         if (query.length > 0) {
             clearBtn.classList.add('show');
         } else {
@@ -760,17 +818,16 @@
             contentArea.classList.add('hidden'); 
             sliderContainer.style.display = 'none'; 
             resultsDiv.classList.remove('hidden');
-            quickChips.classList.remove('hidden'); // Chips ni ko'rsatamiz
+            quickChips.classList.remove('hidden'); 
             tg.BackButton.show(); 
             document.getElementById('back-btn').style.display = 'flex'; 
         }
 
         if (query.length > 0) {
-            quickChips.style.display = 'none'; // Yozganda chips yashirinadi
+            quickChips.style.display = 'none'; 
             let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)));
             
             if (filtered.length === 0) {
-                // Zamonaviy bo'sh holat (Not found)
                 resultsDiv.innerHTML = `
                     <div class="empty-search">
                         <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
@@ -791,7 +848,7 @@
                 `).join('');
             }
         } else {
-            quickChips.style.display = 'flex'; // Qidiruv bo'sh bo'lsa chips qaytadi
+            quickChips.style.display = 'flex'; 
             resultsDiv.innerHTML = `
                 <div class="empty-search">
                     <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
@@ -878,6 +935,12 @@
             return;
         }
 
+        // ===============================================
+        // YANGI: EKRANNI QULFLASH VA QUMSOATNI YOQISH
+        // ===============================================
+        const loadingOverlay = document.getElementById('order-loading-overlay');
+        loadingOverlay.classList.add('active');
+
         let adminText = "🆕 <b>YANGI BUYURTMA</b>\n\n";
         adminText += "👤 <b>Ism:</b> " + firstName + "\n";
         adminText += "💬 <b>Username:</b> " + username + "\n";
@@ -932,12 +995,18 @@
 
                 cart = {};
                 document.getElementById('nav-badge').classList.remove('show');
+                
+                // QUMSOATNI O'CHIRISH VA MUVAFFAQIYAT XABARINI BERISH
+                loadingOverlay.classList.remove('active');
                 showToast("Zakaz qabul qilindi!");
+                
                 setTimeout(() => { tg.close(); }, 2000);
             } else {
+                loadingOverlay.classList.remove('active');
                 showToast("Xatolik yuz berdi. SMS jo'natilmadi.", "warning");
             }
         } catch (err) {
+            loadingOverlay.classList.remove('active');
             showToast("Internet ulanishini tekshiring.", "warning");
         }
     }
