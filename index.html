@@ -34,7 +34,7 @@
             background: radial-gradient(circle at top right, #1a1a24, #0a0a0c 70%);
             background-attachment: fixed; 
             min-height: 100vh; 
-            padding-bottom: 120px; /* Pastki menyu uchun joy */
+            padding-bottom: 120px; 
             overflow-x: hidden; 
         }
         
@@ -804,7 +804,7 @@
             color: var(--text-muted); 
             cursor: pointer; 
             transition: 0.2s; 
-            width: 20%; /* 5 ta tugma bo'lgani uchun 20% ga o'zgartirildi */
+            width: 20%; 
             position: relative; 
         }
         
@@ -1028,7 +1028,7 @@
         }
 
         /* ========================================= */
-        /* YANGI: BUYURTMALAR TARIXI VA BAHOLASH     */
+        /* BUYURTMALAR TARIXI VA BAHOLASH            */
         /* ========================================= */
         .order-history-card {
             background: var(--card-bg);
@@ -1414,7 +1414,7 @@
         <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 25px; line-height: 1.5;">
             Savol va takliflar uchun biz doim tayyormiz! Quyidagi raqam yoki Telegram orqali murojaat qiling.
         </p>
-        <a href="tel:+998982893030" class="contact-link-btn btn-phone">📱 +998 98 289 30 30</a>
+        <a href="tel:+998882893030" class="contact-link-btn btn-phone">📱 +998 88 289 30 30</a>
         <a href="https://t.me/anvaraxtamov2004" target="_blank" class="contact-link-btn btn-tg">💬 Telegram orqali yozish</a>
     </div>
 </div>
@@ -1428,7 +1428,42 @@
     <div style="padding:20px 0; font-size: 18px; margin-bottom: 5px; text-align: left; font-weight: 500;">
         Umumiy hisob: <span id="cart-total-sum" style="color:var(--text-main); font-weight: 800; float: right; font-size: 20px;">0 so'm</span>
     </div>
-    <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="sendOrderToBot()">Buyurtma berish</button>
+    <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openPaymentModal()">Buyurtma berish</button>
+</div>
+
+<div class="modal" id="paymentModal">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+        <h2 style="margin:0;">💳 To'lov turi</h2>
+        <button onclick="closeModal()" style="background:rgba(255,255,255,0.1); border:none; color:white; width: 36px; height: 36px; border-radius: 50%; font-size:20px; cursor:pointer;">×</button>
+    </div>
+    
+    <div id="payment-options">
+        <div class="luxury-card" onclick="selectPayment('card')" style="margin-bottom: 15px; align-items: center; flex-direction: row; gap: 15px;">
+            <span style="font-size: 24px;">💳</span>
+            <div style="flex:1;">
+                <h4 style="margin:0; font-size: 16px;">Karta orqali (P2P)</h4>
+                <p style="margin: 5px 0 0; font-size: 12px; color: var(--text-muted);">Uzcard / Humo</p>
+            </div>
+        </div>
+        
+        <div class="luxury-card" onclick="selectPayment('cash')" style="align-items: center; flex-direction: row; gap: 15px;">
+            <span style="font-size: 24px;">💵</span>
+            <div style="flex:1;">
+                <h4 style="margin:0; font-size: 16px;">Naqd pul</h4>
+                <p style="margin: 5px 0 0; font-size: 12px; color: var(--text-muted);">Qabul qilib olganda to'lash</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="card-details" class="hidden" style="text-align: center;">
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 15px; line-height: 1.5;">Iltimos, quyidagi hisobga to'lov qiling va pastdagi tasdiqlash tugmasini bosing:</p>
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px; border: 1px dashed var(--luxury-gold); margin-bottom: 20px;">
+            <div style="font-size: 18px; font-weight: 800; letter-spacing: 2px; color: var(--text-main); margin-bottom: 5px;" id="cardNumber">5614 6818 7479 6349</div>
+            <div style="font-size: 12px; color: var(--luxury-gold);">Axtamov Anvarjon A'lamovich</div>
+        </div>
+        <button class="btn-buy" style="margin-bottom: 10px;" onclick="copyCard()">📋 Kartani nusxalash</button>
+        <button class="btn-checkout" onclick="confirmOrder('Karta')">✅ To'lov qildim (Tasdiqlash)</button>
+    </div>
 </div>
 
 <div class="modal" id="orderDetailModal">
@@ -1788,7 +1823,7 @@
             db.ref('products').set(productsDB);
         }
         renderProducts();
-        updateCartBadge(); // Xotiradan o'qib savatni yangilaydi
+        updateCartBadge();
     });
 
     function saveNewProduct() {
@@ -1986,7 +2021,6 @@
         showToast('Savatga qo\'shildi!');
     }
 
-    // YON PANEL (NAV) UCHUN AKTIV KLASSNI ALMASHTIRISH
     function updateNav(id) {
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         if(id) {
@@ -2021,9 +2055,6 @@
         updateBtns();
     }
 
-    // ===============================================
-    // YANGI: KATALOG VA BUYURTMALAR MENU FUNKSIYALARI
-    // ===============================================
     function showCatalog() {
         if(activeModal) closeModal();
         updateNav('nav-catalog');
@@ -2346,13 +2377,38 @@
         updateCartBadge();
         renderCartItems(); 
     }
-    
-    async function sendOrderToBot() {
+
+    // ===============================================
+    // YANGI: TO'LOV USULINI TANLASH VA KARTA NUSXALASH
+    // ===============================================
+    function openPaymentModal() {
         if (Object.keys(cart).length === 0) {
             showToast("Savatchangiz bo'sh!", "warning");
             return;
         }
+        document.getElementById('payment-options').classList.remove('hidden');
+        document.getElementById('card-details').classList.add('hidden');
+        openModal('paymentModal');
+    }
 
+    function selectPayment(type) {
+        if(type === 'cash') {
+            confirmOrder('Naqd pul');
+        } else if(type === 'card') {
+            document.getElementById('payment-options').classList.add('hidden');
+            document.getElementById('card-details').classList.remove('hidden');
+        }
+    }
+
+    function copyCard() {
+        navigator.clipboard.writeText("5614681874796349");
+        showToast("Karta raqami nusxalandi!");
+    }
+
+    // ===============================================
+    // ZAKAZ YUBORISH (TO'LOV TURI BILAN BIRGA)
+    // ===============================================
+    async function confirmOrder(paymentMethod) {
         const pageUrlParams = new URLSearchParams(window.location.search);
         let phone = pageUrlParams.get('phone') ? decodeURIComponent(pageUrlParams.get('phone')) : "Noma'lum";
         let region = pageUrlParams.get('region') ? decodeURIComponent(pageUrlParams.get('region')) : "Noma'lum";
@@ -2388,7 +2444,8 @@
         adminText += "💬 <b>Username:</b> " + username + "\n";
         adminText += "📞 <b>Telefon:</b> " + phone + "\n";
         adminText += "📍 <b>Viloyat:</b> " + region + "\n";
-        adminText += "🆔 <b>ID:</b> <code>" + userId + "</code>\n\n";
+        adminText += "🆔 <b>ID:</b> <code>" + userId + "</code>\n";
+        adminText += "💳 <b>To'lov turi:</b> " + paymentMethod + "\n\n";
         adminText += "🛒 <b>Mahsulotlar:</b>\n";
 
         let total = 0;
@@ -2426,7 +2483,15 @@
             });
 
             if (responseAdmin.ok) {
-                let clientMsg = `✅ <b>Hurmatli ${firstName}!</b>\n\nSizning buyurtmangiz muvaffaqiyatli qabul qilindi.\nTez orada operatorlarimiz siz bilan bog'lanadi.\n\nXaridingiz uchun rahmat! 🛠`;
+                let clientMsg = `✅ <b>Hurmatli ${firstName}!</b>\n\nSizning buyurtmangiz muvaffaqiyatli qabul qilindi.\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n`;
+                
+                if (paymentMethod === 'Karta') {
+                    clientMsg += `⚠️ Iltimos, to'lov chekini operatorga yuboring: @anvaraxtamov2004\n\n`;
+                } else {
+                    clientMsg += `Tez orada operatorlarimiz siz bilan bog'lanadi.\n\n`;
+                }
+                
+                clientMsg += `Xaridingiz uchun rahmat! 🛠`;
                 
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     method: "POST",
@@ -2438,7 +2503,7 @@
                     })
                 });
 
-                // TARIxGA SAQLASH (LocalStorage)
+                // TARIxGA SAQLASH
                 let newOrder = {
                     id: Date.now(),
                     date: new Date().toLocaleDateString('uz-UZ'),
@@ -2451,7 +2516,6 @@
                 myOrders.unshift(newOrder);
                 saveLocalOrders();
 
-                // Savatni tozalash
                 cart = {};
                 saveLocalCart();
                 updateCartBadge();
@@ -2459,7 +2523,12 @@
                 loadingOverlay.classList.remove('active');
                 showToast("Zakaz qabul qilindi!");
                 
-                setTimeout(() => { tg.close(); }, 2000);
+                setTimeout(() => { 
+                    if(paymentMethod === 'Karta') {
+                        tg.openTelegramLink("https://t.me/anvaraxtamov2004");
+                    }
+                    tg.close(); 
+                }, 2000);
             } else {
                 loadingOverlay.classList.remove('active');
                 showToast("Xatolik yuz berdi. SMS jo'natilmadi.", "warning");
