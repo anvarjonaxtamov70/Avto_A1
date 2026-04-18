@@ -1349,15 +1349,34 @@
     }, 3500); 
 
     // YANGILANGAN TOVARLARNI RENDER QILISH (Ko'p kategoriyani taniydigan tizim)
+     // 1. Ekranda boshida nechta tovar chiqishini belgilaymiz (12 ta optimal)
+    let limitCount = 12; 
+
+    // 2. YANGI: Avtomatik yuklash (Infinite Scroll) tizimi
+    window.addEventListener('scroll', () => {
+        // Agar mijoz ekranning eng pastiga 150 piksel qolganda...
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 150) {
+            // Va tovarlar hali tugab qolmagan bo'lsa...
+            if (limitCount < productsDB.length) {
+                limitCount += 12; // Yana 12 ta qo'shamiz
+                renderProducts(); // Ekranga chizamiz (Tugma bosish shart emas!)
+            }
+        }
+    });
+
+    // 3. Tovarlarni ekranga chiqaruvchi asosiy funksiya
     function renderProducts() {
         let homeContainer = document.getElementById('home-products');
         if(homeContainer) {
-            let homeItems = productsDB.slice(0, 16);
+            // Faqat limitCount gacha bo'lgan tovarlarni kesib olamiz
+            let homeItems = productsDB.slice(0, limitCount);
+            
             homeContainer.innerHTML = homeItems.length === 0 
                 ? '<p style="text-align:center; color:var(--text-muted); grid-column: span 2; padding:20px;">Hozircha tovar yo\'q</p>' 
                 : homeItems.map(p => cardHTML(p)).join('');
         }
 
+        // QOLGAN KATEGORIYALAR (O'zgarishsiz qoladi)
         [
             'biznes-motor', 'biznes-xadavoy', 'next-motor', 'next-xadavoy', 'eski-motor', 'eski-xadavoy', 
             'volga-2401-motor', 'volga-2401-xadavoy', 'volga-2410-motor', 'volga-2410-xadavoy', 'volga-3110-motor', 
@@ -1367,7 +1386,6 @@
         ].forEach(cat => {
             let container = document.getElementById(cat);
             if(container) {
-                // Shu yerda tovarni bir nechta joyga taqsimlaymiz
                 let items = productsDB.filter(p => p.category === cat || (p.categories && p.categories.includes(cat)));
                 container.innerHTML = items.length === 0 
                     ? '<p style="text-align:center; color:var(--text-muted); grid-column: span 2; padding:20px;">Hozircha tovar yo\'q</p>' 
