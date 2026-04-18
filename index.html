@@ -727,20 +727,28 @@
             return;
         }
 
-        const urlParams = new URLSearchParams(tg.initData);
-        const userString = urlParams.get('user');
-        let userId, firstName;
+        // --- YANGILIK: Telefon va viloyatni URL'dan o'qish ---
+        const pageUrlParams = new URLSearchParams(window.location.search);
+        let phone = pageUrlParams.get('phone') ? decodeURIComponent(pageUrlParams.get('phone')) : "Noma'lum";
+        let region = pageUrlParams.get('region') ? decodeURIComponent(pageUrlParams.get('region')) : "Noma'lum";
 
-        if (userString) {
-            try { 
-                const userObj = JSON.parse(userString);
-                userId = userObj.id; 
-                firstName = userObj.first_name || "Mijoz";
-            } catch (e) {}
-        }
+        // --- YANGILIK: Username va Ismni to'g'ri o'qish ---
+        let tgUser = tg.initDataUnsafe?.user;
+        let userId = tgUser?.id;
+        let firstName = tgUser?.first_name || "Mijoz";
+        let username = tgUser?.username ? "@" + tgUser.username : "Mavjud emas";
+
         if (!userId) {
-            userId = tg.initDataUnsafe?.user?.id;
-            firstName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
+            const urlParams = new URLSearchParams(tg.initData);
+            const userString = urlParams.get('user');
+            if (userString) {
+                try { 
+                    const userObj = JSON.parse(userString);
+                    userId = userObj.id; 
+                    firstName = userObj.first_name || "Mijoz";
+                    if (userObj.username) username = "@" + userObj.username;
+                } catch (e) {}
+            }
         }
 
         if (!userId) {
@@ -749,7 +757,10 @@
         }
 
         let adminText = "🆕 <b>YANGI BUYURTMA</b>\n\n";
-        adminText += "👤 <b>Mijoz (TG profil):</b> " + firstName + "\n";
+        adminText += "👤 <b>Ism:</b> " + firstName + "\n";
+        adminText += "💬 <b>Username:</b> " + username + "\n";
+        adminText += "📞 <b>Telefon:</b> " + phone + "\n";
+        adminText += "📍 <b>Viloyat:</b> " + region + "\n";
         adminText += "🆔 <b>ID:</b> <code>" + userId + "</code>\n\n";
         adminText += "🛒 <b>Mahsulotlar:</b>\n";
 
