@@ -1166,7 +1166,7 @@
             border-color: var(--luxury-gold); 
         }
 
-        /* YANGILANGAN PREMIUM GORIZONTAL DIZAYN (iOS uslubi) */
+        /* PREMIUM GORIZONTAL DIZAYN (iOS uslubi) */
         .premium-cat-card {
             display: flex; align-items: center; justify-content: space-between;
             background: linear-gradient(135deg, rgba(40,40,45,0.9), rgba(20,20,25,0.95));
@@ -1183,7 +1183,7 @@
         }
         .premium-cat-info { flex: 1; z-index: 2; }
         .premium-cat-info h3 { color: white; font-size: 20px; font-weight: 800; margin: 0 0 6px 0; }
-        .premium-cat-info p { color: var(--luxury-gold); font-size: 11px; font-weight: 600; margin: 0; letter-spacing: 1px; }
+        .premium-cat-info p { color: var(--luxury-gold); font-size: 11px; font-weight: 600; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
         .premium-cat-img { width: 110px; height: 80px; position: relative; z-index: 2; }
         .premium-cat-img img {
             width: 100%; height: 100%; object-fit: contain; 
@@ -1338,7 +1338,7 @@
             </div>
             <div class="premium-cat-card" onclick="showSection('volga-31029-sections')">
                 <div class="premium-cat-info"><h3>Gaz 31029</h3><p>KLASSIK DIZAYN</p></div>
-                <div class="premium-cat-img"><img src="https://i.postimg.cc/G2QpJGY3/gaz-3110-volga-211234-800x800.jpg" onload="this.style.opacity=1"></div>
+                <div class="premium-cat-img"><img src="https://i.postimg.cc/XvqQ9SPL/gaz-3110-volga-211234-800x800.png" onload="this.style.opacity=1"></div>
             </div>
         </div>
         
@@ -1350,7 +1350,7 @@
                 <div class="premium-cat-img"><img src="https://i.postimg.cc/Kzn156DW/Uaz-patirot.jpg" onload="this.style.opacity=1"></div>
             </div>
             <div class="premium-cat-card" onclick="showSection('uaz-hunter-sections')">
-                <div class="premium-cat-info"><h3>Uaz Hunter</h3><p>HAKIKIY YO'LTANLAMAS</p></div>
+                <div class="premium-cat-info"><h3>Uaz Hunter</h3><p>HAQIQIY YO'LTANLAMAS</p></div>
                 <div class="premium-cat-img"><img src="https://i.postimg.cc/XYMtRtfX/xanter.jpg" onload="this.style.opacity=1"></div>
             </div>
         </div>
@@ -1793,7 +1793,7 @@
 
     function getStatusHTML(status) {
         if(status === 'qabul') return '<span class="status-badge st-qabul">📦 Qabul qilindi</span>';
-        if(status === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>';
+        if(status === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo'lga chiqdi</span>';
         if(status === 'yetkazildi') return '<span class="status-badge st-yetkazildi">✅ Yetkazildi</span>';
         return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>';
     }
@@ -2417,7 +2417,16 @@
         
         let newOrderCode = generateOrderCode(); 
         
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n📞 <b>Telefon:</b> ${myProfile.phone}\n📍 <b>Viloyat:</b> ${botRegion}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
+        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>
+
+👤 <b>Ism:</b> ${myProfile.name}
+📞 <b>Telefon:</b> ${myProfile.phone}
+📍 <b>Viloyat:</b> ${botRegion}
+🆔 <b>ID:</b> <code>${currentUser || 'Noma'lum'}</code>
+💳 <b>To'lov turi:</b> ${paymentMethod}
+
+🛒 <b>Mahsulotlar:</b>
+`;
         let total = 0; 
         let savedItems = {};
         
@@ -2425,12 +2434,15 @@
             let p = productsDB.find(x => x.id == id); 
             if (p) { 
                 let sum = p.price * cart[id]; 
-                adminText += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
+                adminText += `▪️ ${p.name}
+   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm
+`; 
                 total += sum; 
                 savedItems[id] = cart[id]; 
             } 
         }
-        adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
+        adminText += `
+💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
 
         try {
             const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
@@ -2457,7 +2469,8 @@
                         headers: { "Content-Type": "application/json" }, 
                         body: JSON.stringify({ 
                             chat_id: currentUser, 
-                            text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\nTo'lov turi: ${paymentMethod}` 
+                            text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!
+To'lov turi: ${paymentMethod}` 
                         }) 
                     }); 
                 }
