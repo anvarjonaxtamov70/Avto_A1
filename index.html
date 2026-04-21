@@ -48,7 +48,7 @@
             display: none !important; 
         }
 
-        /* YUMSHOQ ANIMATSIYA QO'SHILDI */
+        /* YUMSHOQ ANIMATSIYA */
         .animate-slide-up {
             animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
@@ -550,7 +550,7 @@
             transition: opacity 0.5s ease; 
         }
 
-        /* QISMLAR UCHUN KARTALAR (Mator, Xadavoy...) */
+        /* QISMLAR UCHUN KARTALAR */
         .part-card { 
             background: rgba(30,30,35,0.6); 
             border: 1px solid var(--glass-border); 
@@ -1320,7 +1320,7 @@
                 </div>
                 <div class="profile-menu-item" onclick="showMyOrders()">
                     <div class="left">
-                        <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> 
+                        <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-1-1-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> 
                         Mening Buyurtmalarim
                     </div>
                     <div style="color:var(--text-muted); font-size:20px;">›</div>
@@ -1397,7 +1397,7 @@
     </div>
 </div>
 
-<!-- MUKAMMAL YAGONA ADMIN PANEL (MODAL) -->
+<!-- ADMIN PANEL -->
 <div class="modal-standard" id="adminModal" style="padding-bottom: 20px;">
     <div class="modal-header">
         <h2 style="color: #ff453a;">⚙️ Admin Panel</h2>
@@ -1478,7 +1478,7 @@
     </div>
 </div>
 
-<!-- BOSHQA MODALLAR (Tahrirlash, Order detail, etc) -->
+<!-- BOSHQA MODALLAR -->
 <div class="modal-standard" id="profileEditModal">
     <div class="modal-header">
         <h2>👤 Shaxsiy Ma'lumotlar</h2>
@@ -1600,23 +1600,9 @@
 </div>
 
 <!-- ========================================= -->
-<!-- JAVASCRIPT (DINAMIK MANTIQ)               -->
+<!-- JAVASCRIPT (ORIGINAL ES6)                 -->
 <!-- ========================================= -->
 <script>
-    // 1-QADAM: ASSALOMU ALAYKUMNI ENG BIRINCHI YOPISH
-    // Boshqa xatolar bo'lsa ham, bu oyna aniq yopiladi!
-    window.onload = function() {
-        let ws = document.getElementById('welcome-screen');
-        if (ws) {
-            setTimeout(function() {
-                ws.style.opacity = '0';
-                setTimeout(function() {
-                    ws.style.display = 'none';
-                }, 400); // 400ms da yopiladi
-            }, 1000); // 1 soniyadan keyin boshlaydi
-        }
-    };
-
     let tg = window.Telegram.WebApp;
     tg.expand();
     
@@ -1627,39 +1613,23 @@
     let currentCropper = null; 
     let currentTargetInput = ""; 
 
-    let currentUser = null;
-    let userName = "Mijoz";
-    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-        currentUser = tg.initDataUnsafe.user.id;
-        userName = tg.initDataUnsafe.user.first_name || "Mijoz";
-    }
+    // ORIGINAL USER CODE RESTORED
+    let currentUser = tg.initDataUnsafe?.user?.id;
+    let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
 
     const urlParams = new URLSearchParams(window.location.search);
     let botPhone = urlParams.get('phone') ? decodeURIComponent(urlParams.get('phone')) : "";
     let botName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : userName;
     let botRegion = urlParams.get('region') ? decodeURIComponent(urlParams.get('region')) : "Noma'lum";
 
-    // XAVFSIZLIK ZIRHI
-    function safeArray(data) {
-        if (!data) return [];
-        if (Array.isArray(data)) {
-            return data.filter(function(x) { return x; });
-        }
-        if (typeof data === 'object') {
-            let arr = [];
-            for (let key in data) {
-                if (data[key]) arr.push(data[key]);
-            }
-            return arr;
-        }
-        return [];
+    let initNameDisplay = document.getElementById('user-name-display');
+    if (initNameDisplay) {
+        initNameDisplay.innerText = botName;
     }
 
     if (currentUser === ADMIN_ID) { 
         let adminBtn = document.getElementById('nav-admin');
-        if(adminBtn) {
-            adminBtn.classList.remove('hidden');
-        }
+        if(adminBtn) adminBtn.classList.remove('hidden');
     }
 
     const firebaseConfig = { 
@@ -1678,6 +1648,14 @@
     let searchActive = false; 
     let isDataLoaded = false;
     
+    // SAFE ARRAY ES6
+    const safeArray = (data) => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data.filter(Boolean);
+        if (typeof data === 'object') return Object.values(data).filter(Boolean);
+        return [];
+    };
+
     const defaultCategories = [
         {
             id: 'gazel', name: 'Gazel', desc: 'YUK MASHINALARI', img: 'https://i.postimg.cc/cJybN99d/gazel.jpg',
@@ -1713,7 +1691,7 @@
         }
     ];
 
-    db.ref('categories').on('value', function(snapshot) {
+    db.ref('categories').on('value', (snapshot) => {
         if (snapshot.exists()) { 
             categoriesDB = safeArray(snapshot.val());
         } else { 
@@ -1727,7 +1705,7 @@
         { id: 1, name: "Porshen To'plami", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor", badge: "hot" }
     ];
 
-    db.ref('products').on('value', function(snapshot) {
+    db.ref('products').on('value', (snapshot) => {
         let loadingText = document.getElementById('loading-text');
         if(loadingText) loadingText.style.display = 'none'; 
         
@@ -1745,36 +1723,46 @@
     });
 
     if (currentUser) {
-        db.ref('users/' + currentUser).on('value', function(snapshot) {
+        db.ref('users/' + currentUser).on('value', (snapshot) => {
             if (snapshot.exists()) {
                 let data = snapshot.val(); 
                 cart = data.cart || {}; 
-                
                 myOrders = safeArray(data.orders);
                 
                 if(data.profile) { 
                     myProfile = data.profile; 
-                    updateProfileUI(); 
                 }
+                
+                let dispName = myProfile.name;
+                if(!dispName || dispName === "null" || dispName === "undefined" || dispName.trim() === "") {
+                    dispName = botName || "Mijoz";
+                }
+                let nameDisplay = document.getElementById('user-name-display');
+                if(nameDisplay) nameDisplay.innerText = dispName;
+                
+                updateProfileUI(); 
                 
                 if(!isDataLoaded) { 
                     updateCartBadge(); 
-                    if(activeModal === 'cartModal') {
-                        renderCartItems(); 
-                    }
-                    if(activeModal === 'my-orders-section') {
-                        renderMyOrders(); 
-                    }
+                    if(activeModal === 'cartModal') renderCartItems(); 
+                    if(activeModal === 'my-orders-section') renderMyOrders(); 
                     isDataLoaded = true; 
                 }
+            } else {
+                let dispName = botName || "Mijoz";
+                let nameDisplay = document.getElementById('user-name-display');
+                if(nameDisplay) nameDisplay.innerText = dispName;
             }
         });
+    } else {
+        let nameDisplay = document.getElementById('user-name-display');
+        if(nameDisplay) nameDisplay.innerText = "Mijoz";
     }
 
-    function renderDynamicCatalog() {
+    window.renderDynamicCatalog = () => {
         let catHtml = '<div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">Mashina rusumini tanlang</div>';
         
-        categoriesDB.forEach(function(brand) {
+        categoriesDB.forEach(brand => {
             catHtml += `
             <div class="premium-cat-card" onclick="openBrand('${brand.id}')">
                 <div class="premium-cat-info">
@@ -1795,14 +1783,14 @@
         populateAdminDropdowns('cat');
     }
 
-    function openBrand(brandId) {
-        let brand = categoriesDB.find(function(b) { return b.id === brandId; }); 
+    window.openBrand = (brandId) => {
+        let brand = categoriesDB.find(b => b.id === brandId); 
         if(!brand) return;
         
         let modHtml = `<div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">${brand.name} modellari</div>`;
-        
         let modelsArr = safeArray(brand.models);
-        modelsArr.forEach(function(model) {
+        
+        modelsArr.forEach(model => {
             modHtml += `
             <div class="premium-cat-card" onclick="openModel('${brand.id}', '${model.id}')">
                 <div class="premium-cat-info">
@@ -1820,18 +1808,18 @@
         showSection('models-menu');
     }
 
-    function openModel(brandId, modelId) {
-        let brand = categoriesDB.find(function(b) { return b.id === brandId; }); 
+    window.openModel = (brandId, modelId) => {
+        let brand = categoriesDB.find(b => b.id === brandId); 
         if(!brand) return;
         
         let modelsArr = safeArray(brand.models);
-        let model = modelsArr.find(function(m) { return m.id === modelId; }); 
+        let model = modelsArr.find(m => m.id === modelId); 
         if(!model) return;
         
         let partHtml = `<div class="section-title" style="grid-column:span 2; margin-top: 0;">${model.name} qismlari</div>`;
-        
         let partsArr = safeArray(model.parts);
-        partsArr.forEach(function(part) {
+        
+        partsArr.forEach(part => {
             partHtml += `
             <div class="part-card" onclick="openPart('${part.id}', '${part.name}')">
                 <div class="icon">${part.icon}</div>
@@ -1844,39 +1832,33 @@
         showSection('parts-menu');
     }
 
-    function openPart(partId, partName) {
+    window.openPart = (partId, partName) => {
         let pt = document.getElementById('products-menu-title');
         if(pt) pt.innerText = partName;
         
-        let items = productsDB.filter(function(p) {
-            return p.category === partId || (p.categories && p.categories.indexOf(partId) !== -1);
-        });
-        
+        let items = productsDB.filter(p => p.category === partId || (p.categories && p.categories.includes(partId)));
         let pg = document.getElementById('products-grid');
+        
         if(pg) {
             if (items.length) {
-                pg.innerHTML = items.map(function(p) { return cardHTML(p); }).join('');
+                pg.innerHTML = items.map(p => cardHTML(p)).join('');
             } else {
                 pg.innerHTML = '<p style="grid-column:span 2; text-align:center; color:gray;">Hozircha tovar yo'q</p>';
             }
         }
-        
         showSection('products-menu');
     }
 
-    function renderProducts() {
+    window.renderProducts = () => {
         let homeContainer = document.getElementById('home-products');
         if(homeContainer) {
-            homeContainer.innerHTML = productsDB.slice(0, 12).map(function(p) { return cardHTML(p); }).join('');
+            homeContainer.innerHTML = productsDB.slice(0, 12).map(p => cardHTML(p)).join('');
         }
     }
 
-    function switchAdminTab(tabId) {
-        let tabs = document.querySelectorAll('.admin-tab');
-        for(let i=0; i<tabs.length; i++) tabs[i].classList.remove('active');
-        
-        let panels = document.querySelectorAll('.admin-panel-content');
-        for(let i=0; i<panels.length; i++) panels[i].classList.remove('active');
+    window.switchAdminTab = (tabId) => {
+        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.admin-panel-content').forEach(p => p.classList.remove('active'));
         
         let tab = document.getElementById('tab-' + tabId);
         if(tab) tab.classList.add('active');
@@ -1884,22 +1866,20 @@
         let panel = document.getElementById('panel-' + tabId);
         if(panel) panel.classList.add('active');
         
-        if(tabId === 'orders') {
-            openAdminOrders();
-        }
+        if(tabId === 'orders') openAdminOrders();
     }
 
-    function populateAdminDropdowns(prefix) {
+    window.populateAdminDropdowns = (prefix) => {
         let brandSel = document.getElementById(prefix + (prefix === 'cat' ? '-parent-brand' : '-brand-sel'));
         if(!brandSel) return;
         
         brandSel.innerHTML = '<option value="">Markani tanlang</option>';
-        categoriesDB.forEach(function(b) {
+        categoriesDB.forEach(b => {
             brandSel.innerHTML += `<option value="${b.id}">${b.name}</option>`;
         });
     }
 
-    function updateAddModelsSel(prefix) {
+    window.updateAddModelsSel = (prefix) => {
         let brandId = document.getElementById(prefix + '-brand-sel').value;
         let modelSel = document.getElementById(prefix + '-model-sel'); 
         let partSel = document.getElementById(prefix + '-part-sel');
@@ -1915,23 +1895,21 @@
             return; 
         }
         
-        let brand = categoriesDB.find(function(b) { return b.id === brandId; });
+        let brand = categoriesDB.find(b => b.id === brandId);
         if(brand) {
-            let modelsArr = safeArray(brand.models);
-            modelsArr.forEach(function(m) {
+            safeArray(brand.models).forEach(m => {
                 modelSel.innerHTML += `<option value="${m.id}">${m.name}</option>`;
             });
             modelSel.style.display = 'block';
         }
     }
 
-    function updateAddPartsSel(prefix) {
+    window.updateAddPartsSel = (prefix) => {
         let brandId = document.getElementById(prefix + '-brand-sel').value;
         let modelId = document.getElementById(prefix + '-model-sel').value;
         let partSel = document.getElementById(prefix + '-part-sel');
         
         if(!partSel) return;
-        
         partSel.innerHTML = '<option value="">Qismni tanlang</option>';
         
         if(!modelId) { 
@@ -1939,13 +1917,11 @@
             return; 
         }
         
-        let brand = categoriesDB.find(function(b) { return b.id === brandId; }); 
+        let brand = categoriesDB.find(b => b.id === brandId); 
         if(brand) {
-            let modelsArr = safeArray(brand.models);
-            let model = modelsArr.find(function(m) { return m.id === modelId; });
+            let model = safeArray(brand.models).find(m => m.id === modelId);
             if(model) {
-                let partsArr = safeArray(model.parts);
-                partsArr.forEach(function(p) {
+                safeArray(model.parts).forEach(p => {
                     partSel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
                 });
                 partSel.style.display = 'block';
@@ -1953,7 +1929,7 @@
         }
     }
 
-    function updateCatActionUI() {
+    window.updateCatActionUI = () => {
         let action = document.getElementById('cat-action-sel').value;
         document.getElementById('cat-parent-brand-wrapper').style.display = (action === 'model' || action === 'part') ? 'block' : 'none';
         document.getElementById('cat-parent-model-wrapper').style.display = (action === 'part') ? 'block' : 'none';
@@ -1961,7 +1937,7 @@
         document.getElementById('cat-icon-wrapper').style.display = (action === 'part') ? 'block' : 'none';
     }
 
-    function updateCatParentModels() {
+    window.updateCatParentModels = () => {
         let brandId = document.getElementById('cat-parent-brand').value;
         let modelSel = document.getElementById('cat-parent-model'); 
         if(!modelSel) return;
@@ -1969,25 +1945,20 @@
         modelSel.innerHTML = '<option value="">Modelni tanlang</option>';
         
         if(brandId) { 
-            let brand = categoriesDB.find(function(b) { return b.id === brandId; }); 
+            let brand = categoriesDB.find(b => b.id === brandId); 
             if(brand) {
-                let modelsArr = safeArray(brand.models);
-                modelsArr.forEach(function(m) {
+                safeArray(brand.models).forEach(m => {
                     modelSel.innerHTML += `<option value="${m.id}">${m.name}</option>`;
                 }); 
             }
         }
     }
 
-    function saveNewCategory() {
+    window.saveNewCategory = () => {
         let action = document.getElementById('cat-action-sel').value;
         let name = document.getElementById('cat-add-name').value.trim();
         
-        if(!name) { 
-            showToast("Nomini kiriting!", "warning"); 
-            return; 
-        }
-        
+        if(!name) { showToast("Nomini kiriting!", "warning"); return; }
         let newId = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
         
         if (action === 'brand') {
@@ -1998,7 +1969,7 @@
             if(!brandId) { showToast("Markani tanlang!", "warning"); return; }
             let img = document.getElementById('cat-add-img-url').value || 'https://via.placeholder.com/150';
             
-            let brand = categoriesDB.find(function(b) { return b.id === brandId; }); 
+            let brand = categoriesDB.find(b => b.id === brandId); 
             if(brand) {
                 brand.models = safeArray(brand.models);
                 brand.models.push({ id: newId, name: name, desc: "YANGI MODEL", img: img, parts: [] });
@@ -2009,12 +1980,10 @@
             if(!brandId || !modelId) { showToast("Marka va Modelni tanlang!", "warning"); return; }
             
             let icon = document.getElementById('cat-add-icon').value || '🔧';
-            let brand = categoriesDB.find(function(b) { return b.id === brandId; }); 
+            let brand = categoriesDB.find(b => b.id === brandId); 
             
             if(brand) {
-                let modelsArr = safeArray(brand.models);
-                let model = modelsArr.find(function(m) { return m.id === modelId; }); 
-                
+                let model = safeArray(brand.models).find(m => m.id === modelId); 
                 if(model) {
                     model.parts = safeArray(model.parts);
                     let partFullId = newId + '-' + Date.now(); 
@@ -2023,7 +1992,7 @@
             }
         }
         
-        db.ref('categories').set(categoriesDB).then(function() {
+        db.ref('categories').set(categoriesDB).then(() => {
             showToast("Muvaffaqiyatli qo'shildi!");
             document.getElementById('cat-add-name').value = ''; 
             let pImg = document.getElementById('cat-add-img-preview');
@@ -2031,30 +2000,28 @@
         });
     }
 
-    function saveNewProduct() {
+    window.saveNewProduct = () => {
         let name = document.getElementById('add-name').value; 
         let price = parseInt(document.getElementById('add-price').value); 
         let img = document.getElementById('add-img-url').value; 
         let partId = document.getElementById('add-part-sel').value;
         
         if(!name || !price || !img || !partId) { 
-            showToast("Barcha maydonlarni to'ldiring!", "warning"); 
-            return; 
+            showToast("Barcha maydonlarni to'ldiring!", "warning"); return; 
         }
         
-        let newId = productsDB.length > 0 ? Math.max.apply(null, productsDB.map(function(p){ return p.id; })) + 1 : 1;
+        let newId = productsDB.length > 0 ? Math.max(...productsDB.map(p => p.id)) + 1 : 1;
         productsDB.push({ id: newId, name: name, desc: "Sifatli zapchast", price: price, img: img, category: partId, categories: [partId] });
         
-        db.ref('products').set(productsDB).then(function() { 
-            showToast("Saqlandi!"); 
-            closeModal(); 
+        db.ref('products').set(productsDB).then(() => { 
+            showToast("Saqlandi!"); closeModal(); 
         });
     }
 
-    function openEditModal(e) {
+    window.openEditModal = (e) => {
         if(e) e.stopPropagation(); 
         let id = document.getElementById('pm-buy-btn').getAttribute('data-id'); 
-        let p = productsDB.find(function(x) { return x.id == id; }); 
+        let p = productsDB.find(x => x.id == id); 
         if(!p) return;
         
         document.getElementById('edit-id').value = p.id; 
@@ -2071,7 +2038,7 @@
         updateBtns();
     }
 
-    function saveEditProduct() {
+    window.saveEditProduct = () => {
         let id = parseInt(document.getElementById('edit-id').value); 
         let name = document.getElementById('edit-name').value; 
         let price = parseInt(document.getElementById('edit-price').value); 
@@ -2079,7 +2046,7 @@
         let img = document.getElementById('edit-img-url').value; 
         let partId = document.getElementById('edit-part-sel').value;
         
-        let index = productsDB.findIndex(function(p) { return p.id === id; });
+        let index = productsDB.findIndex(p => p.id === id);
         if(index !== -1) { 
             productsDB[index].name = name; 
             productsDB[index].price = price; 
@@ -2089,116 +2056,101 @@
                 productsDB[index].category = partId; 
                 productsDB[index].categories = [partId]; 
             }
-            db.ref('products').set(productsDB).then(function() { 
-                showToast("Yangilandi!"); 
-                closeModal(); 
+            db.ref('products').set(productsDB).then(() => { 
+                showToast("Yangilandi!"); closeModal(); 
             }); 
         }
     }
 
-    function deleteProduct() { 
+    window.deleteProduct = () => {
         let id = parseInt(document.getElementById('edit-id').value); 
-        tg.showConfirm("O'chirasizmi?", function(ok) { 
+        tg.showConfirm("O'chirasizmi?", (ok) => { 
             if(ok) { 
-                productsDB = productsDB.filter(function(p) { return p.id !== id; }); 
-                db.ref('products').set(productsDB).then(function() { 
-                    showToast("O'chirildi!"); 
-                    closeModal(); 
+                productsDB = productsDB.filter(p => p.id !== id); 
+                db.ref('products').set(productsDB).then(() => { 
+                    showToast("O'chirildi!"); closeModal(); 
                 }); 
             } 
         }); 
     }
 
-    // XAVFSIZ VA YENGIL RASM KESISH (80% sifat)
-    function handleFileSelect(event, target) {
+    window.handleFileSelect = (event, target) => {
         const file = event.target.files[0]; 
         if (!file) return; 
         currentTargetInput = target; 
         const reader = new FileReader();
         
-        reader.onload = function(e) { 
+        reader.onload = (e) => { 
             document.getElementById('cropper-image').src = e.target.result; 
             document.getElementById('cropModal').style.display = 'flex'; 
             activeModal = 'cropModal'; 
             if(currentCropper) currentCropper.destroy(); 
             currentCropper = new Cropper(document.getElementById('cropper-image'), { 
-                aspectRatio: 1, 
-                viewMode: 1, 
-                dragMode: 'move', 
-                autoCropArea: 0.9 
+                aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 0.9 
             }); 
         };
         reader.readAsDataURL(file); 
         event.target.value = ''; 
     }
 
-    function uploadCroppedImage() {
+    window.uploadCroppedImage = async () => {
         if(!currentCropper) return; 
         let btn = document.getElementById('crop-save-btn'); 
         let oldText = btn.innerText; 
-        btn.innerText = "Kuting..."; 
-        btn.disabled = true;
+        btn.innerText = "Kuting..."; btn.disabled = true;
         
         try {
             const canvas = currentCropper.getCroppedCanvas({ width: 600, height: 600 }); 
             const formData = new FormData(); 
             formData.append("image", canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
             
-            fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData })
-            .then(function(res) { return res.json(); })
-            .then(function(result) {
-                if(result.success) {
-                    if(currentTargetInput === 'add') { 
-                        document.getElementById('add-img-url').value = result.data.url; 
-                        document.getElementById('add-img-preview').src = result.data.url; 
-                        document.getElementById('add-img-preview').style.display = 'block'; 
-                    } else if(currentTargetInput === 'edit') { 
-                        document.getElementById('edit-img-url').value = result.data.url; 
-                        document.getElementById('edit-img-preview').src = result.data.url; 
-                        document.getElementById('edit-img-preview').style.display = 'block'; 
-                    } else if(currentTargetInput === 'cat') { 
-                        document.getElementById('cat-add-img-url').value = result.data.url; 
-                        document.getElementById('cat-add-img-preview').src = result.data.url; 
-                        document.getElementById('cat-add-img-preview').style.display = 'block'; 
-                    }
-                    showToast("Rasm yuklandi!"); 
-                    closeModal();
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData });
+            const result = await res.json();
+            
+            if(result.success) {
+                if(currentTargetInput === 'add') { 
+                    document.getElementById('add-img-url').value = result.data.url; 
+                    document.getElementById('add-img-preview').src = result.data.url; 
+                    document.getElementById('add-img-preview').style.display = 'block'; 
+                } else if(currentTargetInput === 'edit') { 
+                    document.getElementById('edit-img-url').value = result.data.url; 
+                    document.getElementById('edit-img-preview').src = result.data.url; 
+                    document.getElementById('edit-img-preview').style.display = 'block'; 
+                } else if(currentTargetInput === 'cat') { 
+                    document.getElementById('cat-add-img-url').value = result.data.url; 
+                    document.getElementById('cat-add-img-preview').src = result.data.url; 
+                    document.getElementById('cat-add-img-preview').style.display = 'block'; 
                 }
-            })
-            .catch(function(err) { console.log(err); })
-            .finally(function() { 
-                btn.innerText = oldText; 
-                btn.disabled = false; 
-            });
+                showToast("Rasm yuklandi!"); closeModal();
+            }
         } catch (err) {
-            btn.innerText = oldText; 
-            btn.disabled = false; 
+            console.log(err);
+        } finally { 
+            btn.innerText = oldText; btn.disabled = false; 
         }
     }
 
-    function closeCropModal() { 
-        closeModal(); 
-        if(currentCropper) currentCropper.destroy(); 
-    }
+    window.closeCropModal = () => { closeModal(); if(currentCropper) currentCropper.destroy(); }
 
-    function generateOrderCode() { 
+    window.generateOrderCode = () => { 
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; 
         let result = 'A1-'; 
         for(let i=0; i<5; i++) result += chars.charAt(Math.floor(Math.random() * chars.length)); 
         return result; 
     }
 
-    function getStatusHTML(status) { 
+    window.getStatusHTML = (status) => { 
         if(status === 'qabul') return '<span class="status-badge st-qabul">📦 Qabul qilindi</span>'; 
         if(status === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo'lga chiqdi</span>'; 
         if(status === 'yetkazildi') return '<span class="status-badge st-yetkazildi">✅ Yetkazildi</span>'; 
         return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; 
     }
 
-    function updateProfileUI() { 
-        let displayN = myProfile.name || "Mijoz"; 
-        let userDisplay = document.getElementById('user-name-display');
-        if(userDisplay) userDisplay.innerText = displayN; 
+    window.updateProfileUI = () => { 
+        let displayN = myProfile.name; 
+        if(!displayN || displayN === "null" || displayN === "undefined" || displayN.trim() === "") {
+            displayN = botName || "Mijoz";
+        }
         
         let pfName = document.getElementById('pf-name');
         if(pfName) pfName.innerText = displayN; 
@@ -2216,50 +2168,76 @@
         if(userEditPhone) userEditPhone.value = myProfile.phone || ""; 
     }
 
-    function saveLocalCart() { 
-        if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); 
-    }
+    window.saveLocalCart = () => { if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
+    window.saveLocalOrders = () => { if (currentUser) db.ref('users/' + currentUser + '/orders').set(myOrders); }
 
-    function saveLocalOrders() { 
-        if (currentUser) db.ref('users/' + currentUser + '/orders').set(myOrders); 
-    }
-
-    function saveProfile() { 
+    window.saveProfile = () => { 
         let newName = document.getElementById('user-edit-name').value.trim(); 
         let newPhone = document.getElementById('user-edit-phone').value.trim(); 
-        if(!newName || !newPhone) { 
-            showToast("Kiritilishi shart!", "warning"); 
-            return; 
-        } 
-        myProfile.name = newName; 
-        myProfile.phone = newPhone; 
+        if(!newName || !newPhone) { showToast("Kiritilishi shart!", "warning"); return; } 
+        myProfile.name = newName; myProfile.phone = newPhone; 
         updateProfileUI(); 
         
         if (currentUser) { 
-            db.ref('users/' + currentUser + '/profile').set(myProfile).then(function() { 
-                showToast("Saqlandi!"); 
-                closeModal(); 
+            db.ref('users/' + currentUser + '/profile').set(myProfile).then(() => { 
+                showToast("Saqlandi!"); closeModal(); 
             }); 
-        } else { 
-            showToast("Saqlandi!"); 
-            closeModal(); 
-        } 
+        } else { showToast("Saqlandi!"); closeModal(); } 
     }
 
-    function addToCartQuick(e, id) { 
-        e.stopPropagation(); 
-        addToCart(id); 
-    }
+    window.addToCartQuick = (e, id) => { e.stopPropagation(); addToCart(id); }
 
-    function cardHTML(p) { 
+    window.cardHTML = (p) => { 
         let badgeHtml = ''; 
         if(p.badge === 'hot') badgeHtml = '<div class="badge hot">🔥 Top</div>'; 
         if(p.badge === 'new') badgeHtml = '<div class="badge new">✨ Yangi</div>'; 
+        let priceStr = (typeof p.price === 'number') ? p.price.toLocaleString() : (p.price || "0");
         
-        return `<div class="luxury-card" onclick="openProduct(${p.id})">${badgeHtml}<div class="img-wrap"><img src="${p.img}" onload="this.style.opacity=1"></div><div class="info"><h4>${p.name}</h4><div class="price-row"><div class="price">${p.price.toLocaleString()} so'm</div><button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div></div></div>`; 
+        return `<div class="luxury-card" onclick="openProduct(${p.id})">${badgeHtml}<div class="img-wrap"><img src="${p.img}" onload="this.style.opacity=1"></div><div class="info"><h4>${p.name}</h4><div class="price-row"><div class="price">${priceStr} so'm</div><button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div></div></div>`; 
     }
 
-    function searchProducts() {
+    window.openProduct = (id) => {
+        let p = productsDB.find(x => x.id == id); 
+        if(!p) return;
+        
+        document.getElementById('pm-img').src = p.img; 
+        document.getElementById('pm-title').innerText = p.name; 
+        document.getElementById('pm-desc').innerText = p.desc || "Sifatli zapchast"; 
+        document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} so'm`;
+        
+        let buyBtn = document.getElementById('pm-buy-btn'); 
+        buyBtn.onclick = () => { addToCart(id); closeModal(); }; 
+        buyBtn.setAttribute('data-id', id); 
+        
+        let editBtn = document.getElementById('pm-edit-btn'); 
+        if (currentUser === ADMIN_ID) { 
+            editBtn.style.display = 'flex'; editBtn.onclick = (e) => openEditModal(e); 
+        } else { editBtn.style.display = 'none'; }
+        
+        let similarContainer = document.getElementById('pm-similar-items'); 
+        let primaryCategory = p.categories ? p.categories[0] : p.category; 
+        let similarProducts = productsDB.filter(item => item.id !== p.id && (item.category === primaryCategory || (item.categories && item.categories.includes(primaryCategory))) ).slice(0, 6); 
+        
+        if(similarProducts.length > 0) { 
+            document.getElementById('similar-title').style.display = 'block'; 
+            similarContainer.innerHTML = similarProducts.map(sp => `
+                <div class="similar-card" onclick="openProduct(${sp.id})">
+                    <div class="img-wrap"><img src="${sp.img}" onload="this.style.opacity=1"></div>
+                    <h4>${sp.name}</h4>
+                    <div class="price">${sp.price.toLocaleString()} s</div>
+                </div>
+            `).join(''); 
+        } else { 
+            document.getElementById('similar-title').style.display = 'none'; similarContainer.innerHTML = ''; 
+        }
+        
+        let modal = document.getElementById('productModal'); 
+        modal.style.display = 'flex'; document.body.style.overflow = 'hidden'; 
+        activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); 
+        tg.BackButton.show(); updateBtns();
+    }
+
+    window.searchProducts = () => {
         let query = document.getElementById('searchInput').value.toLowerCase().trim(); 
         let resultsDiv = document.getElementById('search-results'); 
         let contentArea = document.getElementById('content-area'); 
@@ -2268,218 +2246,101 @@
         let sliderContainer = document.querySelector('.slider-container');
         let bottomNav = document.querySelector('.bottom-nav');
         
-        if (query.length > 0) clearBtn.classList.add('show'); 
-        else clearBtn.classList.remove('show');
+        if (query.length > 0) clearBtn.classList.add('show'); else clearBtn.classList.remove('show');
         
         if (!searchActive) { 
-            searchActive = true; 
-            window.history.pushState({ search: true }, ""); 
+            searchActive = true; window.history.pushState({ search: true }, ""); 
             contentArea.classList.add('hidden'); 
             if(sliderContainer) sliderContainer.style.display = 'none'; 
-            resultsDiv.classList.remove('hidden'); 
-            quickChips.classList.remove('hidden'); 
-            if(bottomNav) { 
-                bottomNav.style.pointerEvents = 'none'; 
-                bottomNav.style.opacity = '0.4'; 
-            } 
-            tg.BackButton.show(); 
-            document.getElementById('back-btn').style.display = 'flex'; 
+            resultsDiv.classList.remove('hidden'); quickChips.classList.remove('hidden'); 
+            if(bottomNav) { bottomNav.style.pointerEvents = 'none'; bottomNav.style.opacity = '0.4'; } 
+            tg.BackButton.show(); document.getElementById('back-btn').style.display = 'flex'; 
         }
         
         if (query.length > 0) {
             quickChips.style.display = 'none'; 
-            let filtered = productsDB.filter(function(p) { return p.name.toLowerCase().indexOf(query) !== -1; });
-            
+            let filtered = productsDB.filter(p => p.name.toLowerCase().includes(query) || (p.car && p.car.toLowerCase().includes(query)));
             if (filtered.length === 0) { 
-                resultsDiv.innerHTML = `<div class="empty-search"><p>Topilmadi.</p></div>`; 
+                resultsDiv.innerHTML = `<div class="empty-search"><p>Kechirasiz, hech narsa topilmadi.</p></div>`; 
             } else { 
-                resultsDiv.innerHTML = filtered.map(function(p) { return `
-                <div class="search-item" onclick="openProduct(${p.id})">
-                    <img src="${p.img}" onload="this.style.opacity=1">
-                    <div class="search-info">
-                        <h4>${p.name}</h4>
-                        <p class="price">${p.price.toLocaleString()} so'm</p>
-                    </div>
-                </div>`; }).join(''); 
+                resultsDiv.innerHTML = filtered.map(p => `
+                    <div class="search-item" onclick="openProduct(${p.id})">
+                        <img src="${p.img}" onload="this.style.opacity=1">
+                        <div class="search-info"><h4>${p.name}</h4><p class="price">${p.price.toLocaleString()} so'm</p></div>
+                        <button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})" style="position:relative; right:0; bottom:0; width:40px; height:40px; border-radius:12px;"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
+                    </div>`).join(''); 
             }
         } else { 
-            quickChips.style.display = 'flex'; 
-            resultsDiv.innerHTML = `<div class="empty-search"><p>Yozing.</p></div>`; 
+            quickChips.style.display = 'flex'; resultsDiv.innerHTML = `<div class="empty-search"><p>Qidirish uchun zapchast nomini yozing.</p></div>`; 
         }
     }
 
-    function clearSearch() { 
-        document.getElementById('searchInput').value = ''; 
-        searchProducts(); 
-        document.getElementById('searchInput').focus(); 
-    }
+    window.clearSearch = () => { document.getElementById('searchInput').value = ''; searchProducts(); document.getElementById('searchInput').focus(); }
+    window.applyQuickSearch = (term) => { document.getElementById('searchInput').value = term; searchProducts(); }
 
-    function applyQuickSearch(term) { 
-        document.getElementById('searchInput').value = term; 
-        searchProducts(); 
-    }
-
-    function exitSearch() { 
-        searchActive = false; 
-        document.getElementById('searchInput').value = ''; 
-        document.getElementById('search-results').classList.add('hidden'); 
-        document.getElementById('quick-chips').classList.add('hidden'); 
-        document.getElementById('clearSearchBtn').classList.remove('show'); 
-        document.getElementById('content-area').classList.remove('hidden'); 
-        
+    window.exitSearch = () => { 
+        searchActive = false; document.getElementById('searchInput').value = ''; 
+        document.getElementById('search-results').classList.add('hidden'); document.getElementById('quick-chips').classList.add('hidden'); 
+        document.getElementById('clearSearchBtn').classList.remove('show'); document.getElementById('content-area').classList.remove('hidden'); 
         let sliderContainer = document.querySelector('.slider-container'); 
-        if(sliderContainer) {
-            sliderContainer.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; 
-        }
-        
+        if(sliderContainer) sliderContainer.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; 
         let bottomNav = document.querySelector('.bottom-nav'); 
-        if(bottomNav) { 
-            bottomNav.style.pointerEvents = 'auto'; 
-            bottomNav.style.opacity = '1'; 
-        } 
+        if(bottomNav) { bottomNav.style.pointerEvents = 'auto'; bottomNav.style.opacity = '1'; } 
         updateBtns(); 
     }
 
-    function updateCartBadge() { 
-        let totalCount = 0;
-        for(let k in cart) totalCount += cart[k];
+    window.updateCartBadge = () => { 
+        let totalCount = Object.values(cart).reduce((a,b)=>a+b,0); 
         let badge = document.getElementById('nav-badge'); 
+        if(!badge) return;
         badge.innerText = totalCount; 
-        
-        if(totalCount > 0) { 
-            badge.classList.add('show'); 
-            badge.classList.remove('pulse'); 
-            void badge.offsetWidth; 
-            badge.classList.add('pulse'); 
-        } else { 
-            badge.classList.remove('show'); 
-        } 
+        if(totalCount > 0) { badge.classList.add('show'); badge.classList.remove('pulse'); void badge.offsetWidth; badge.classList.add('pulse'); } else { badge.classList.remove('show'); } 
     }
 
-    function addToCart(id) { 
-        cart[id] = (cart[id] || 0) + 1; 
-        saveLocalCart(); 
-        updateCartBadge(); 
-        tg.HapticFeedback.impactOccurred('medium'); 
-        showToast('Savatga solindi!'); 
-    }
+    window.addToCart = (id) => { cart[id] = (cart[id] || 0) + 1; saveLocalCart(); updateCartBadge(); tg.HapticFeedback.impactOccurred('medium'); showToast('Savatga solindi!'); }
+    window.updateNav = (id) => { document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active')); if(id) { let item = document.getElementById(id); if(item) item.classList.add('active'); } }
 
-    function updateNav(id) { 
-        let items = document.querySelectorAll('.nav-item');
-        for(let i=0; i<items.length; i++) items[i].classList.remove('active'); 
-        
-        if(id) { 
-            let item = document.getElementById(id); 
-            if(item) item.classList.add('active'); 
-        } 
-    }
-    
-    function showSection(id) { 
-        let divs = document.querySelectorAll('#content-area > div');
-        for(let i=0; i<divs.length; i++) {
-            divs[i].classList.add('hidden'); 
-            divs[i].classList.remove('animate-slide-up');
-        }
-        
+    window.showSection = (id) => { 
+        document.querySelectorAll('#content-area > div').forEach(div => { div.classList.add('hidden'); div.classList.remove('animate-slide-up'); }); 
         let target = document.getElementById(id); 
-        if(target) {
-            target.classList.remove('hidden'); 
-            target.classList.add('animate-slide-up');
-        }
-        
-        if (historyStack[historyStack.length - 1] !== id) { 
-            historyStack.push(id); 
-            window.history.pushState({ section: id }, ""); 
-        } 
-        
+        if(target) { target.classList.remove('hidden'); target.classList.add('animate-slide-up'); }
+        if (historyStack[historyStack.length - 1] !== id) { historyStack.push(id); window.history.pushState({ section: id }, ""); } 
         let sliderContainer = document.querySelector('.slider-container'); 
-        if(sliderContainer) {
-            sliderContainer.style.display = (id === 'main-menu') ? 'block' : 'none';
-        }
-        
-        if(searchActive) exitSearch(); 
-        updateBtns(); 
+        if(sliderContainer) sliderContainer.style.display = (id === 'main-menu') ? 'block' : 'none';
+        if(searchActive) exitSearch(); updateBtns(); 
     }
 
-    function showCatalog() { if(activeModal) closeModal(); updateNav('nav-catalog'); showSection('katalog-menu'); }
-    function showProfile() { if(activeModal) closeModal(); updateNav('nav-profile'); showSection('profile-section'); }
-    function showMyOrders() { closeModal(); renderMyOrders(); showSection('my-orders-section'); }
+    window.showCatalog = () => { if(activeModal) closeModal(); updateNav('nav-catalog'); showSection('katalog-menu'); }
+    window.showProfile = () => { if(activeModal) closeModal(); updateNav('nav-profile'); showSection('profile-section'); }
+    window.showMyOrders = () => { closeModal(); renderMyOrders(); showSection('my-orders-section'); }
 
-    function renderCartItems() {
+    window.renderCartItems = () => {
         let container = document.getElementById('cart-items-container'); 
         let checkoutBtn = document.getElementById('main-checkout-btn'); 
-        let total = 0; 
-        container.innerHTML = '';
+        let total = 0; container.innerHTML = '';
         
         if(Object.keys(cart).length === 0) { 
-            container.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; 
-            checkoutBtn.style.display = 'none'; 
+            container.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; checkoutBtn.style.display = 'none'; 
         } else {
             for(let id in cart) { 
-                let p = productsDB.find(function(x) { return x.id == id; }); 
+                let p = productsDB.find(x => x.id == id); 
                 if(!p) continue; 
                 total += p.price * cart[id]; 
-                
-                container.innerHTML += `
-                    <div class="cart-row">
-                        <img src="${p.img}" onload="this.style.opacity=1">
-                        <div class="cart-info">
-                            <h4>${p.name}</h4>
-                            <span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[id]).toLocaleString()} so'm</span>
-                        </div>
-                        <div class="cart-controls">
-                            <button onclick="chg(${id},-1)">-</button> 
-                            <span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[id]}</span> 
-                            <button onclick="chg(${id},1)">+</button>
-                        </div>
-                    </div>`; 
+                container.innerHTML += `<div class="cart-row"><img src="${p.img}" onload="this.style.opacity=1"><div class="cart-info"><h4>${p.name}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[id]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg(${id},-1)">-</button> <span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[id]}</span> <button onclick="chg(${id},1)">+</button></div></div>`; 
             }
             checkoutBtn.style.display = 'block';
         }
         document.getElementById('cart-total-sum').innerText = total.toLocaleString();
     }
 
-    function chg(id, d) { 
-        cart[id] += d; 
-        if(cart[id] <= 0) delete cart[id]; 
-        saveLocalCart(); 
-        updateCartBadge(); 
-        renderCartItems(); 
-    }
+    window.chg = (id, d) => { cart[id] += d; if(cart[id] <= 0) delete cart[id]; saveLocalCart(); updateCartBadge(); renderCartItems(); }
+    window.openPaymentModal = () => { if (Object.keys(cart).length === 0) return; if (!myProfile.phone) { showToast("Iltimos, aloqa uchun telefon raqam kiriting!", "warning"); setTimeout(() => { closeModal(); showProfile(); setTimeout(() => openModal('profileEditModal'), 300); }, 1500); return; } document.getElementById('payment-options').classList.remove('hidden'); document.getElementById('card-details').classList.add('hidden'); openModal('paymentModal'); }
+    window.selectPayment = (type) => { if(type === 'cash') { confirmOrder('Naqd pul'); } else if(type === 'card') { document.getElementById('payment-options').classList.add('hidden'); document.getElementById('card-details').classList.remove('hidden'); } }
+    window.copyCard = () => { navigator.clipboard.writeText("5614681874796349"); showToast("Nusxalandi!"); }
 
-    function openPaymentModal() { 
-        if (Object.keys(cart).length === 0) return; 
-        if (!myProfile.phone) { 
-            showToast("Raqam kiriting!", "warning"); 
-            setTimeout(function() { 
-                closeModal(); 
-                showProfile(); 
-                setTimeout(function() { openModal('profileEditModal'); }, 300); 
-            }, 1500); 
-            return; 
-        } 
-        document.getElementById('payment-options').classList.remove('hidden'); 
-        document.getElementById('card-details').classList.add('hidden'); 
-        openModal('paymentModal'); 
-    }
-
-    function selectPayment(type) { 
-        if(type === 'cash') confirmOrder('Naqd pul'); 
-        else if(type === 'card') { 
-            document.getElementById('payment-options').classList.add('hidden'); 
-            document.getElementById('card-details').classList.remove('hidden'); 
-        } 
-    }
-
-    function copyCard() { 
-        navigator.clipboard.writeText("5614681874796349"); 
-        showToast("Nusxalandi!"); 
-    }
-
-    // TELEGRAMGA XABAR YUBORISH (QOTIB QOLISHIDAN HIMOYALANGAN)
-    function confirmOrder(paymentMethod) {
+    window.confirmOrder = async (paymentMethod) => {
         const loadingOverlay = document.getElementById('order-loading-overlay'); 
-        loadingOverlay.classList.add('active');
+        if(loadingOverlay) loadingOverlay.classList.add('active');
         
         let newOrderCode = generateOrderCode(); 
         let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>
@@ -2492,209 +2353,97 @@
 
 🛒 <b>Mahsulotlar:</b>
 `;
-        let total = 0; 
-        let savedItems = {};
+        let total = 0; let savedItems = {};
         
         for (let id in cart) { 
-            let p = productsDB.find(function(x) { return x.id == id; }); 
-            if (p) { 
-                let sum = p.price * cart[id]; 
-                adminText += `▪️ ${p.name}
+            let p = productsDB.find(x => x.id == id); 
+            if (p) { let sum = p.price * cart[id]; adminText += `▪️ ${p.name}
    ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm
-`; 
-                total += sum; 
-                savedItems[id] = cart[id]; 
-            } 
+`; total += sum; savedItems[id] = cart[id]; } 
         }
         adminText += `
 💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
 
-        // Zaxira: Internet uzilsa ham sayt ishlashda davom etishi kerak
-        myOrders.unshift({ 
-            id: Date.now(), 
-            code: newOrderCode, 
-            date: new Date().toLocaleDateString('uz-UZ'), 
-            time: new Date().toLocaleTimeString('uz-UZ'), 
-            items: savedItems, 
-            total: total, 
-            status: 'kutilmoqda' 
-        }); 
-        
-        saveLocalOrders(); 
-        cart = {}; 
-        saveLocalCart(); 
-        updateCartBadge(); 
+        myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
+        saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge(); 
 
-        // TIMEOUT bilan so'rov yuborish (Qotib qolmasligi uchun)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(function() { controller.abort(); }, 5000);
+        let controller = new AbortController();
+        let timeoutId = setTimeout(() => { controller.abort(); }, 5000);
 
-        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
-            method: "POST", 
-            headers: { "Content-Type": "application/json" }, 
-            body: JSON.stringify({ 
-                chat_id: ADMIN_ID, 
-                text: adminText, 
-                parse_mode: "HTML", 
-                reply_markup: { 
-                    inline_keyboard: [ 
-                        [{ text: "✅ Qabul qildik", callback_data: "qabul_" + currentUser }], 
-                        [{ text: "🚚 Yo'lga chiqdi", callback_data: "yolda_" + currentUser }], 
-                        [{ text: "🏁 Yetkazib berildi", callback_data: "yetkazildi_" + currentUser }] 
-                    ] 
-                } 
-            }),
-            signal: controller.signal
-        })
-        .then(function(res) {
+        try {
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
+                method: "POST", headers: { "Content-Type": "application/json" }, 
+                body: JSON.stringify({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML", reply_markup: { inline_keyboard: [ [{ text: "✅ Qabul qildik", callback_data: "qabul_" + currentUser }], [{ text: "🚚 Yo'lga chiqdi", callback_data: "yolda_" + currentUser }], [{ text: "🏁 Yetkazib berildi", callback_data: "yetkazildi_" + currentUser }] ] } }), signal: controller.signal
+            });
             clearTimeout(timeoutId);
             if(currentUser) {
                 fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
-                    method: "POST", 
-                    headers: { "Content-Type": "application/json" }, 
-                    body: JSON.stringify({ 
-                        chat_id: currentUser, 
-                        text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!
-To'lov turi: ${paymentMethod}` 
-                    }) 
-                }).catch(function(e){});
+                    method: "POST", headers: { "Content-Type": "application/json" }, 
+                    body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!
+To'lov turi: ${paymentMethod}` }) 
+                }).catch(e=>{});
             }
-        })
-        .catch(function(e) {
+        } catch (err) {
             clearTimeout(timeoutId);
-            console.log("Telegram xatosi", e);
-        })
-        .finally(function() {
-            loadingOverlay.classList.remove('active'); 
+        } finally {
+            if(loadingOverlay) loadingOverlay.classList.remove('active'); 
             showToast("Qabul qilindi!");
-            setTimeout(function() {
-                if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
-                tg.close(); 
-            }, 1500);
-        });
+            setTimeout(() => { if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); tg.close(); }, 1500);
+        }
     }
 
-    function renderMyOrders() {
+    window.renderMyOrders = () => {
         let container = document.getElementById('orders-list-container'); 
-        if (myOrders.length === 0) { 
-            container.innerHTML = `<p style="text-align:center; color:gray; padding-top:40px;">Buyurtmalar yo'q.</p>`; 
-            return; 
-        }
-        
-        container.innerHTML = myOrders.map(function(o) { 
+        if (myOrders.length === 0) { container.innerHTML = `<p style="text-align:center; color:gray; padding-top:40px;">Buyurtmalar yo'q.</p>`; return; }
+        container.innerHTML = myOrders.map(o => { 
             let itemCount = o.items ? Object.keys(o.items).length : 0; 
-            return `
-            <div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
-                    <span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>
-                    ${getStatusHTML(o.status || 'kutilmoqda')}
-                </div>
-                <div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div>
-                <div style="font-size:14px; font-weight:600; margin-bottom:5px;">${itemCount} turdagi tovar</div>
-                <div style="color:var(--text-main); font-size:16px; font-weight:800;">${o.total.toLocaleString()} so'm</div>
-            </div>`; 
+            return `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="font-size:14px; font-weight:600; margin-bottom:5px;">${itemCount} turdagi tovar</div><div style="color:var(--text-main); font-size:16px; font-weight:800;">${o.total.toLocaleString()} so'm</div></div>`; 
         }).join('');
     }
 
-    let currentReviewOrderId = null; 
-    let selectedRating = 0;
+    let currentReviewOrderId = null; let selectedRating = 0;
 
-    function openOrderDetails(id) {
-        let o = myOrders.find(function(x) { return x.id === id; }); 
-        if(!o) return;
-        
-        document.getElementById('od-code').innerText = "Buyurtma: #" + (o.code || o.id); 
-        document.getElementById('od-date').innerText = o.date + " " + o.time; 
-        document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda');
-        
+    window.openOrderDetails = (id) => {
+        let o = myOrders.find(x => x.id === id); if(!o) return;
+        document.getElementById('od-code').innerText = "Buyurtma: #" + (o.code || o.id); document.getElementById('od-date').innerText = o.date + " " + o.time; document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda');
         let itemsHtml = ''; 
         if (o.items) {
             for(let pid in o.items) { 
-                let p = productsDB.find(function(x) { return x.id == pid; }); 
-                if(p) {
-                    itemsHtml += `
-                    <div style="margin-bottom:8px; display:flex; justify-content:space-between; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;">
-                        <span>${p.name} (x${o.items[pid]})</span> 
-                        <span style="color:var(--luxury-gold);">${(p.price * o.items[pid]).toLocaleString()} so'm</span>
-                    </div>`; 
-                }
+                let p = productsDB.find(x => x.id == pid); 
+                if(p) { itemsHtml += `<div style="margin-bottom:8px; display:flex; justify-content:space-between; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${p.name} (x${o.items[pid]})</span> <span style="color:var(--luxury-gold);">${(p.price * o.items[pid]).toLocaleString()} so'm</span></div>`; }
             }
         }
-        
-        document.getElementById('od-items').innerHTML = itemsHtml; 
-        document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm";
-        
+        document.getElementById('od-items').innerHTML = itemsHtml; document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm";
         let reviewSection = document.getElementById('od-review-section');
         if(o.status === 'yetkazildi') {
             if(o.review) { 
-                let starsHTML = ''; 
-                for(let i=1; i<=5; i++) {
-                    starsHTML += `<span style="color:${i <= o.review.rating ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)'}">★</span>`; 
-                }
-                reviewSection.innerHTML = `
-                <h4 style="text-align:center; margin-top:0;">Sizning bahoingiz</h4>
-                <div style="text-align:center; font-size:30px; margin-bottom:10px;">${starsHTML}</div>
-                <div style="background:rgba(0,0,0,0.3); padding:12px; border-radius:12px; font-size:14px; color:var(--text-muted);">${o.review.text || 'Izoh yozilmagan'}</div>`; 
+                let starsHTML = ''; for(let i=1; i<=5; i++) { starsHTML += `<span style="color:${i <= o.review.rating ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)'}">★</span>`; }
+                reviewSection.innerHTML = `<h4 style="text-align:center; margin-top:0;">Sizning bahoingiz</h4><div style="text-align:center; font-size:30px; margin-bottom:10px;">${starsHTML}</div><div style="background:rgba(0,0,0,0.3); padding:12px; border-radius:12px; font-size:14px; color:var(--text-muted);">${o.review.text || 'Izoh yozilmagan'}</div>`; 
             } else { 
-                currentReviewOrderId = o.id; 
-                selectedRating = 0; 
-                reviewSection.innerHTML = `
-                <h4 style="text-align:center; margin-top:0; color:var(--text-main);">Xarid qanday o'tdi? Baholang</h4>
-                <div class="rating-stars" id="rating-stars-container">
-                    <span onclick="setStarRating(1)">★</span>
-                    <span onclick="setStarRating(2)">★</span>
-                    <span onclick="setStarRating(3)">★</span>
-                    <span onclick="setStarRating(4)">★</span>
-                    <span onclick="setStarRating(5)">★</span>
-                </div>
-                <textarea id="review-textarea-input" class="review-textarea" placeholder="Fikringizni yozib qoldiring..."></textarea>
-                <button class="btn-checkout" onclick="saveOrderReview()">Yuborish</button>`; 
+                currentReviewOrderId = o.id; selectedRating = 0; 
+                reviewSection.innerHTML = `<h4 style="text-align:center; margin-top:0; color:var(--text-main);">Xarid qanday o'tdi? Baholang</h4><div class="rating-stars" id="rating-stars-container"><span onclick="setStarRating(1)">★</span><span onclick="setStarRating(2)">★</span><span onclick="setStarRating(3)">★</span><span onclick="setStarRating(4)">★</span><span onclick="setStarRating(5)">★</span></div><textarea id="review-textarea-input" class="review-textarea" placeholder="Fikringizni yozib qoldiring..."></textarea><button class="btn-checkout" onclick="saveOrderReview()">Yuborish</button>`; 
             }
-        } else { 
-            reviewSection.innerHTML = ''; 
-        } 
-        
+        } else { reviewSection.innerHTML = ''; } 
         openModal('orderDetailModal');
     }
 
-    function setStarRating(rating) { 
-        selectedRating = rating; 
-        let stars = document.getElementById('rating-stars-container').children; 
-        for(let i=0; i<stars.length; i++) { 
-            if(i < rating) stars[i].classList.add('active'); 
-            else stars[i].classList.remove('active'); 
-        } 
+    window.setStarRating = (rating) => { 
+        selectedRating = rating; let stars = document.getElementById('rating-stars-container').children; 
+        for(let i=0; i<stars.length; i++) { if(i < rating) stars[i].classList.add('active'); else stars[i].classList.remove('active'); } 
     }
 
-    function saveOrderReview() { 
-        if(selectedRating === 0) { 
-            showToast("Baholang!", "warning"); 
-            return; 
-        } 
-        
+    window.saveOrderReview = () => { 
+        if(selectedRating === 0) { showToast("Baholang!", "warning"); return; } 
         let text = document.getElementById('review-textarea-input').value.trim(); 
-        let oIdx = myOrders.findIndex(function(x) { return x.id === currentReviewOrderId; }); 
-        
-        if(oIdx !== -1) { 
-            myOrders[oIdx].review = { rating: selectedRating, text: text }; 
-            saveLocalOrders(); 
-            showToast("Rahmat!"); 
-            closeModal(); 
-            setTimeout(function() { openOrderDetails(currentReviewOrderId); }, 300); 
-        } 
+        let oIdx = myOrders.findIndex(x => x.id === currentReviewOrderId); 
+        if(oIdx !== -1) { myOrders[oIdx].review = { rating: selectedRating, text: text }; saveLocalOrders(); showToast("Rahmat!"); closeModal(); setTimeout(() => { openOrderDetails(currentReviewOrderId); }, 300); } 
     }
 
-    function openAdminOrders() {
+    window.openAdminOrders = () => {
         document.getElementById('adminModal').style.display = 'none';
-        let aModal = document.getElementById('adminOrdersModal');
-        aModal.style.display = 'flex';
-        activeModal = 'adminOrdersModal';
-        window.history.replaceState({ modal: 'adminOrdersModal' }, "");
-
-        let container = document.getElementById('admin-orders-list'); 
-        container.innerHTML = '<p style="text-align:center; color:var(--luxury-gold);">Yuklanmoqda...</p>';
-        
-        db.ref('users').once('value', function(snapshot) {
+        let aModal = document.getElementById('adminOrdersModal'); aModal.style.display = 'flex'; activeModal = 'adminOrdersModal'; window.history.replaceState({ modal: 'adminOrdersModal' }, "");
+        let container = document.getElementById('admin-orders-list'); container.innerHTML = '<p style="text-align:center; color:var(--luxury-gold);">Yuklanmoqda...</p>';
+        db.ref('users').once('value', (snapshot) => {
             let allOrders = [];
             if(snapshot.exists()) { 
                 let users = snapshot.val(); 
@@ -2703,169 +2452,90 @@ To'lov turi: ${paymentMethod}`
                         let ordersArr = safeArray(users[uid].orders);
                         let phone = users[uid].profile ? users[uid].profile.phone : "Noma'lum"; 
                         let name = users[uid].profile ? users[uid].profile.name : "Mijoz"; 
-                        ordersArr.forEach(function(o) { 
-                            allOrders.push({ userId: uid, userName: name, userPhone: phone, id: o.id, code: o.code, date: o.date, time: o.time, items: o.items, total: o.total, status: o.status, review: o.review }); 
-                        }); 
+                        ordersArr.forEach(o => { allOrders.push({ userId: uid, userName: name, userPhone: phone, ...o }); }); 
                     } 
                 } 
             }
-            
-            allOrders.sort(function(a,b) { return b.id - a.id; }); 
-            
-            if(allOrders.length === 0) { 
-                container.innerHTML = '<p style="text-align:center; color:gray;">Buyurtma yo'q.</p>'; 
-                return; 
-            }
-            
-            container.innerHTML = allOrders.map(function(o) { 
+            allOrders.sort((a,b) => b.id - a.id); 
+            if(allOrders.length === 0) { container.innerHTML = '<p style="text-align:center; color:gray;">Buyurtma yo'q.</p>'; return; }
+            container.innerHTML = allOrders.map(o => { 
                 let reviewHTML = ''; 
-                if(o.review) {
-                    reviewHTML = `
-                    <div style="margin-top:10px; padding:10px; background:rgba(212,175,55,0.1); border-radius:8px; font-size:12px;">
-                        <b>Baho:</b> ${o.review.rating} ⭐<br>
-                        <b>Izoh:</b> ${o.review.text}
-                    </div>`; 
-                }
-                return `
-                <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
-                        <span style="font-size:12px; color:var(--text-muted); font-weight:bold;">#${o.code || o.id}</span>
-                        ${getStatusHTML(o.status || 'kutilmoqda')}
-                    </div>
-                    <div style="font-size:14px; margin-bottom:5px;"><b>👤:</b> ${o.userName}</div>
-                    <div style="font-size:14px; margin-bottom:10px;"><b>📞:</b> ${o.userPhone}</div>
-                    <div style="font-size:16px; color:var(--luxury-gold); font-weight:bold; margin-bottom:15px;">💰: ${o.total.toLocaleString()} so'm</div>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <button style="padding:10px; border-radius:10px; border:none; background:#007aff; color:#fff; font-weight:bold; flex:1;" onclick="changeOrderStatus('${o.userId}', ${o.id}, 'qabul')">Qabul</button>
-                        <button style="padding:10px; border-radius:10px; border:none; background:#ff9500; color:#fff; font-weight:bold; flex:1;" onclick="changeOrderStatus('${o.userId}', ${o.id}, 'yolda')">Yo'lga</button>
-                        <button style="padding:10px; border-radius:10px; border:none; background:#34c759; color:#fff; font-weight:bold; flex:1;" onclick="changeOrderStatus('${o.userId}', ${o.id}, 'yetkazildi')">Yakun</button>
-                    </div>
-                    ${reviewHTML}
-                </div>`; 
+                if(o.review) { reviewHTML = `<div style="margin-top:10px; padding:10px; background:rgba(212,175,55,0.1); border-radius:8px; font-size:12px;"><b>Baho:</b> ${o.review.rating} ⭐<br><b>Izoh:</b> ${o.review.text}</div>`; }
+                return `<div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block;"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted); font-weight:bold;">#${o.code || o.id}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-size:14px; margin-bottom:5px;"><b>👤:</b> ${o.userName}</div><div style="font-size:14px; margin-bottom:10px;"><b>📞:</b> ${o.userPhone}</div><div style="font-size:16px; color:var(--luxury-gold); font-weight:bold; margin-bottom:15px;">💰: ${o.total.toLocaleString()} so'm</div><div style="display:flex; gap:8px; flex-wrap:wrap;"><button style="padding:10px; border-radius:10px; border:none; background:#007aff; color:#fff; font-weight:bold; flex:1;" onclick="changeOrderStatus('${o.userId}', ${o.id}, 'qabul')">Qabul</button><button style="padding:10px; border-radius:10px; border:none; background:#ff9500; color:#fff; font-weight:bold; flex:1;" onclick="changeOrderStatus('${o.userId}', ${o.id}, 'yolda')">Yo'lga</button><button style="padding:10px; border-radius:10px; border:none; background:#34c759; color:#fff; font-weight:bold; flex:1;" onclick="changeOrderStatus('${o.userId}', ${o.id}, 'yetkazildi')">Yakun</button></div>${reviewHTML}</div>`; 
             }).join('');
         });
     }
 
-    function changeOrderStatus(uid, orderId, newStatus) { 
-        db.ref('users/' + uid + '/orders').once('value', function(snapshot) { 
+    window.changeOrderStatus = (uid, orderId, newStatus) => { 
+        db.ref('users/' + uid + '/orders').once('value', snapshot => { 
             if(snapshot.exists()) { 
                 let userOrders = snapshot.val(); 
                 let ordersArr = safeArray(userOrders);
-                let idx = ordersArr.findIndex(function(o) { return o.id === orderId; }); 
+                let idx = ordersArr.findIndex(o => o.id === orderId); 
                 if(idx !== -1) { 
                     ordersArr[idx].status = newStatus; 
-                    db.ref('users/' + uid + '/orders').set(ordersArr).then(function() { 
-                        showToast("O'zgardi!"); 
-                        openAdminOrders(); 
-                    }); 
+                    db.ref('users/' + uid + '/orders').set(ordersArr).then(() => { showToast("O'zgardi!"); openAdminOrders(); }); 
                 } 
             } 
         }); 
     }
 
-    function openModal(id) { 
+    window.openModal = (id) => { 
         if (activeModal === id) return; 
         if(id === 'cartModal') renderCartItems(); 
         if(id === 'adminModal') switchAdminTab('orders'); 
-        
-        let modal = document.getElementById(id); 
-        modal.style.display = 'flex'; 
-        document.body.style.overflow = 'hidden'; 
-        activeModal = id; 
-        window.history.pushState({ modal: id }, ""); 
-        tg.BackButton.show(); 
-        updateBtns(); 
+        let modal = document.getElementById(id); modal.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = id; window.history.pushState({ modal: id }, ""); tg.BackButton.show(); updateBtns(); 
     }
 
-    function closeModal() { 
-        if(activeModal) window.history.back(); 
-    }
+    window.closeModal = () => { if(activeModal) window.history.back(); }
 
-    function goHome() { 
+    window.goHome = () => { 
         if(activeModal) closeModal(); 
         if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { 
-            historyStack = ['main-menu']; 
-            window.history.pushState({ section: 'main-menu' }, ""); 
-            showSection('main-menu'); 
+            historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); 
         } 
         updateNav('nav-home'); 
     }
 
-    window.addEventListener('popstate', function(event) {
+    window.addEventListener('popstate', (event) => {
         if (activeModal) { 
-            let modal = document.getElementById(activeModal); 
-            modal.style.display = 'none'; 
-            document.body.style.overflow = ''; 
-            activeModal = null; 
-            updateBtns(); 
+            let modal = document.getElementById(activeModal); modal.style.display = 'none'; document.body.style.overflow = ''; activeModal = null; updateBtns(); 
             let currentSection = historyStack[historyStack.length - 1]; 
-            if(currentSection === 'profile-section') updateNav('nav-profile'); 
-            else if(currentSection === 'katalog-menu') updateNav('nav-catalog'); 
-            else updateNav('nav-home'); 
-            return; 
+            if(currentSection === 'profile-section') updateNav('nav-profile'); else if(currentSection === 'katalog-menu') updateNav('nav-catalog'); else updateNav('nav-home'); return; 
         }
-        
-        if (searchActive) { 
-            exitSearch(); 
-            return; 
-        }
-        
+        if (searchActive) { exitSearch(); return; }
         if (historyStack.length > 1) { 
-            historyStack.pop(); 
-            let previousId = historyStack[historyStack.length - 1]; 
-            
-            let divs = document.querySelectorAll('#content-area > div');
-            for(let i=0; i<divs.length; i++) divs[i].classList.add('hidden'); 
-            
-            let prevEl = document.getElementById(previousId);
-            if(prevEl) prevEl.classList.remove('hidden'); 
-            
-            let sliderContainer = document.querySelector('.slider-container'); 
-            if(sliderContainer) {
-                sliderContainer.style.display = (previousId === 'main-menu') ? 'block' : 'none'; 
-            }
-            
-            if(previousId === 'profile-section') updateNav('nav-profile'); 
-            else if(previousId === 'katalog-menu') updateNav('nav-catalog'); 
-            else updateNav('nav-home'); 
-            
-            updateBtns(); 
-        } else { 
-            tg.close(); 
-        }
+            historyStack.pop(); let previousId = historyStack[historyStack.length - 1]; 
+            document.querySelectorAll('#content-area > div').forEach(div => { div.classList.add('hidden'); }); 
+            let prevEl = document.getElementById(previousId); if(prevEl) prevEl.classList.remove('hidden'); 
+            let sliderContainer = document.querySelector('.slider-container'); if(sliderContainer) { sliderContainer.style.display = (previousId === 'main-menu') ? 'block' : 'none'; }
+            if(previousId === 'profile-section') updateNav('nav-profile'); else if(previousId === 'katalog-menu') updateNav('nav-catalog'); else updateNav('nav-home'); updateBtns(); 
+        } else { tg.close(); }
     });
 
-    tg.onEvent('backButtonClicked', function() { 
-        window.history.back(); 
-    });
-
-    function goBack() { 
-        window.history.back(); 
-    }
+    tg.onEvent('backButtonClicked', () => { window.history.back(); });
+    window.goBack = () => { window.history.back(); }
 
     function updateBtns() { 
         let isDeep = historyStack.length > 1; 
-        let backBtn = document.getElementById('back-btn'); 
-        if(backBtn) backBtn.style.display = isDeep ? 'flex' : 'none'; 
-        if (isDeep || activeModal || searchActive) { 
-            tg.BackButton.show(); 
-        } else { 
-            tg.BackButton.hide(); 
-        } 
+        let backBtn = document.getElementById('back-btn'); if(backBtn) backBtn.style.display = isDeep ? 'flex' : 'none'; 
+        if (isDeep || activeModal || searchActive) { tg.BackButton.show(); } else { tg.BackButton.hide(); } 
     }
-    
     updateBtns();
 
     let autoSlider = document.getElementById('main-slider');
-    if (autoSlider) { 
-        setInterval(function() { 
-            if (autoSlider.scrollWidth - autoSlider.clientWidth <= autoSlider.scrollLeft + 5) {
-                autoSlider.scrollTo({ left: 0, behavior: 'smooth' }); 
-            } else {
-                autoSlider.scrollBy({ left: autoSlider.clientWidth, behavior: 'smooth' }); 
-            }
-        }, 3500); 
-    }
+    if (autoSlider) { setInterval(() => { if (autoSlider.scrollWidth - autoSlider.clientWidth <= autoSlider.scrollLeft + 5) { autoSlider.scrollTo({ left: 0, behavior: 'smooth' }); } else { autoSlider.scrollBy({ left: autoSlider.clientWidth, behavior: 'smooth' }); } }, 3500); }
+
+    // OYNA YOPILISHI VA ANIMATSIYA (Eng ishonchli usul)
+    setTimeout(() => { 
+        let ws = document.getElementById('welcome-screen');
+        if (ws) {
+            ws.style.opacity = '0'; 
+            setTimeout(() => { 
+                ws.style.display = 'none'; 
+            }, 500);
+        }
+    }, 1500);
 
 </script>
 </body>
