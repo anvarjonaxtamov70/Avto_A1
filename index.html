@@ -48,7 +48,6 @@
  display: none !important; 
  }
 
- /* YUMSHOQ ANIMATSIYA QO'SHILDI */
  .animate-slide-up {
  animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
  }
@@ -58,7 +57,7 @@
  to { opacity: 1; transform: translateY(0); }
  }
 
- /* YUKLANISH EKRANI */
+ /* QOTMASLIGI UCHUN CSS ORQALI MAJBURIY YOPISH */
  #welcome-screen { 
  position: fixed; 
  top: 0; 
@@ -72,7 +71,13 @@
  align-items: center; 
  justify-content: center; 
  text-align: center; 
- transition: opacity 0.5s; 
+ pointer-events: none; /* Ekranni bosishga umuman xalaqit bermaydi */
+ animation: forceHide 0.5s ease 1.5s forwards; /* 1.5 soniyadan keyin majburiy o'chadi */
+ }
+ 
+ @keyframes forceHide {
+ 0% { opacity: 1; visibility: visible; }
+ 100% { opacity: 0; visibility: hidden; z-index: -9999; display: none; }
  }
 
  #welcome-screen h1 { 
@@ -1255,6 +1260,7 @@
  <div class="order-loading-text">Kuting...</div>
 </div>
 
+<!-- MAJBURIY YOPILADIGAN OYNA -->
 <div id="welcome-screen">
  <h1>Assalomu alaykum, <br><span id="user-name-display"></span>!</h1>
  <p>Avto_A1 ga xush kelibsiz</p>
@@ -1478,7 +1484,7 @@
  </div>
 </div>
 
-<!-- BOSHQA MODALLAR (Tahrirlash, Order detail, etc) -->
+<!-- BOSHQA MODALLAR -->
 <div class="modal-standard" id="profileEditModal">
  <div class="modal-header">
  <h2>👤 Shaxsiy Ma'lumotlar</h2>
@@ -1603,20 +1609,6 @@
 <!-- JAVASCRIPT (DINAMIK MANTIQ) -->
 <!-- ========================================= -->
 <script>
- // 1-QADAM: ASSALOMU ALAYKUMNI ENG BIRINCHI YOPISH
- // Boshqa xatolar bo'lsa ham, bu oyna aniq yopiladi!
- window.onload = function() {
- let ws = document.getElementById('welcome-screen');
- if (ws) {
- setTimeout(function() {
- ws.style.opacity = '0';
- setTimeout(function() {
- ws.style.display = 'none';
- }, 400); // 400ms da yopiladi
- }, 1000); // 1 soniyadan keyin boshlaydi
- }
- };
-
  let tg = window.Telegram.WebApp;
  tg.expand();
  
@@ -1639,16 +1631,16 @@
  let botName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : userName;
  let botRegion = urlParams.get('region') ? decodeURIComponent(urlParams.get('region')) : "Noma'lum";
 
- // XAVFSIZLIK ZIRHI
+ // QOTIB QOLISHGA QARSHI HIMOYA
  function safeArray(data) {
  if (!data) return [];
  if (Array.isArray(data)) {
- return data.filter(function(x) { return x; });
+ return data.filter(function(x) { return x !== null && x !== undefined; });
  }
  if (typeof data === 'object') {
  let arr = [];
  for (let key in data) {
- if (data[key]) arr.push(data[key]);
+ if (data[key] !== null && data[key] !== undefined) arr.push(data[key]);
  }
  return arr;
  }
@@ -1678,6 +1670,7 @@
  let searchActive = false; 
  let isDataLoaded = false;
  
+ // DEFAULT KATEGORIYALAR (Agar baza bo'sh bo'lsa)
  const defaultCategories = [
  {
  id: 'gazel', name: 'Gazel', desc: 'YUK MASHINALARI', img: 'https://i.postimg.cc/cJybN99d/gazel.jpg',
@@ -1754,8 +1747,17 @@
  
  if(data.profile) { 
  myProfile = data.profile; 
- updateProfileUI(); 
  }
+ 
+ // ISMI BO'SH QOLIB KETMASLIGI UCHUN HIMOYA
+ let dispName = myProfile.name;
+ if(!dispName || dispName === "null" || dispName === "undefined" || dispName.trim() === "") {
+ dispName = botName || "Mijoz";
+ }
+ let nameDisplay = document.getElementById('user-name-display');
+ if(nameDisplay) nameDisplay.innerText = dispName;
+ 
+ updateProfileUI(); 
  
  if(!isDataLoaded) { 
  updateCartBadge(); 
@@ -1767,8 +1769,15 @@
  }
  isDataLoaded = true; 
  }
+ } else {
+ let dispName = botName || "Mijoz";
+ let nameDisplay = document.getElementById('user-name-display');
+ if(nameDisplay) nameDisplay.innerText = dispName;
  }
  });
+ } else {
+ let nameDisplay = document.getElementById('user-name-display');
+ if(nameDisplay) nameDisplay.innerText = "Mijoz";
  }
 
  function renderDynamicCatalog() {
@@ -1804,7 +1813,7 @@
  let modelsArr = safeArray(brand.models);
  modelsArr.forEach(function(model) {
  modHtml += `
-  <div class="premium-cat-card" onclick="openModel('${brand.id}', '${model.id}')">
+ <div class="premium-cat-card" onclick="openModel('${brand.id}', '${model.id}')">
  <div class="premium-cat-info">
  <h3>${model.name}</h3>
  <p>${model.desc}</p>
@@ -2109,7 +2118,7 @@
  }); 
  }
 
- // XAVFSIZ VA YENGIL RASM KESISH (80% sifat)
+ // TELEFON QOTMASLIGI VA 3-XATO (RASM SIQISH) HIMOYASI
  function handleFileSelect(event, target) {
  const file = event.target.files[0]; 
  if (!file) return; 
@@ -2140,6 +2149,7 @@
  btn.disabled = true;
  
  try {
+ // Telefon qotmasligi uchun 600x600 px va 80% sifat
  const canvas = currentCropper.getCroppedCanvas({ width: 600, height: 600 }); 
  const formData = new FormData(); 
  formData.append("image", canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
@@ -2196,9 +2206,10 @@
  }
 
  function updateProfileUI() { 
- let displayN = myProfile.name || "Mijoz"; 
- let userDisplay = document.getElementById('user-name-display');
- if(userDisplay) userDisplay.innerText = displayN; 
+ let displayN = myProfile.name; 
+ if(!displayN || displayN === "null" || displayN === "undefined" || displayN.trim() === "") {
+ displayN = botName || "Mijoz";
+ }
  
  let pfName = document.getElementById('pf-name');
  if(pfName) pfName.innerText = displayN; 
@@ -2464,8 +2475,9 @@
  }
 
  function selectPayment(type) { 
- if(type === 'cash') confirmOrder('Naqd pul'); 
- else if(type === 'card') { 
+ if(type === 'cash') {
+ confirmOrder('Naqd pul'); 
+ } else if(type === 'card') { 
  document.getElementById('payment-options').classList.add('hidden'); 
  document.getElementById('card-details').classList.remove('hidden'); 
  } 
@@ -2476,7 +2488,7 @@
  showToast("Nusxalandi!"); 
  }
 
- // TELEGRAMGA XABAR YUBORISH (QOTIB QOLISHIDAN HIMOYALANGAN)
+ // 1-XATO HIMOYASI: TELEGRAMGA XABAR YUBORISH (QOTIB QOLISHIDAN SAQLANDI)
  function confirmOrder(paymentMethod) {
  const loadingOverlay = document.getElementById('order-loading-overlay'); 
  loadingOverlay.classList.add('active');
@@ -2509,7 +2521,7 @@
  adminText += `
 💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
 
- // Zaxira: Internet uzilsa ham sayt ishlashda davom etishi kerak
+ // Zaxira: Internet qotsa ham zakaz yo'qolmaydi
  myOrders.unshift({ 
  id: Date.now(), 
  code: newOrderCode, 
@@ -2525,9 +2537,9 @@
  saveLocalCart(); 
  updateCartBadge(); 
 
- // TIMEOUT bilan so'rov yuborish (Qotib qolmasligi uchun)
- const controller = new AbortController();
- const timeoutId = setTimeout(function() { controller.abort(); }, 5000);
+ // TIMEOUT bilan so'rov yuboramiz
+ let controller = new AbortController();
+ let timeoutId = setTimeout(function() { controller.abort(); }, 5000); // Max 5 soniya kutadi
 
  fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
  method: "POST", 
@@ -2546,7 +2558,7 @@
  }),
  signal: controller.signal
  })
- .then(function(res) {
+ .then(function() {
  clearTimeout(timeoutId);
  if(currentUser) {
  fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
@@ -2560,9 +2572,8 @@ To'lov turi: ${paymentMethod}`
  }).catch(function(e){});
  }
  })
- .catch(function(e) {
+ .catch(function() {
  clearTimeout(timeoutId);
- console.log("Telegram xatosi", e);
  })
  .finally(function() {
  loadingOverlay.classList.remove('active'); 
