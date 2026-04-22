@@ -81,7 +81,8 @@
         .pm-close-btn { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.5); border: none; color: white; width: 44px; height: 44px; border-radius: 50%; font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(5px); z-index: 10; }
         .pm-edit-icon { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2); width: 44px; height: 44px; border-radius: 50%; font-size: 18px; display: none; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(5px); z-index: 10; }
         .pm-info-section { padding: 20px 20px 100px; }
-        .pm-title { font-size: 22px; font-weight: 700; margin: 0 0 12px; color: var(--text-main); line-height: 1.3; }
+        .pm-title { font-size: 22px; font-weight: 700; margin: 0 0 5px; color: var(--text-main); line-height: 1.3; }
+        .pm-stock-info { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
         .pm-desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 25px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; }
         .pm-similar-wrapper { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 15px; scrollbar-width: none; }
         .similar-card { flex: 0 0 130px; background: var(--card-bg); border-radius: 12px; overflow: hidden; text-align: left; cursor: pointer; border: 1px solid var(--glass-border); }
@@ -93,8 +94,9 @@
         .pm-sticky-price-wrap { display: flex; flex-direction: column; }
         .pm-sticky-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
         .pm-sticky-price { font-size: 22px; font-weight: 800; color: var(--luxury-gold); }
-        .pm-sticky-btn { position: relative; overflow: hidden; background: linear-gradient(135deg, #e5c07b, #c5a028); color: #000; border: none; padding: 14px 28px; border-radius: 14px; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 4px 15px rgba(229, 192, 123, 0.4); }
+        .pm-sticky-btn { position: relative; overflow: hidden; background: linear-gradient(135deg, #e5c07b, #c5a028); color: #000; border: none; padding: 14px 28px; border-radius: 14px; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 4px 15px rgba(229, 192, 123, 0.4); transition: 0.3s; }
         .pm-sticky-btn:active { transform: scale(0.95); }
+        .pm-sticky-btn:disabled { background: #333; color: #888; box-shadow: none; cursor: not-allowed; }
         .modal-standard { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto; padding-bottom: 100px; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .modal-header h2 { margin: 0; font-size: 22px; }
@@ -155,6 +157,12 @@
         .luxury-model-item:active { background: rgba(212, 175, 55, 0.1); transform: scale(0.98); }
         .luxury-model-item h3 { margin: 0; font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
         .luxury-model-arrow { color: var(--luxury-gold); font-size: 20px; font-weight: bold; }
+        .inventory-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px; margin-bottom: 8px; }
+        .inv-info h4 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
+        .inv-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
+        .inv-controls { display: flex; align-items: center; gap: 8px; }
+        .inv-input { width: 50px; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--luxury-gold); color: white; border-radius: 8px; text-align: center; font-weight: bold; outline: none; }
+        .inv-btn { background: var(--luxury-gold); border: none; padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -255,8 +263,7 @@
             <div class="luxury-model-item" onclick="showSection('uaz-patriot-parts')"><h3>Patriot</h3><div class="luxury-model-arrow">➔</div></div>
             <div class="luxury-model-item" onclick="showSection('uaz-hunter-parts')"><h3>Hunter</h3><div class="luxury-model-arrow">➔</div></div>
         </div>
-
-        <div id="gazel-biznes-parts" class="items-grid hidden"><div class="section-title" style="grid-column:span 2;">Gazel Biznes</div><div class="luxury-card" onclick="showSection('gazel-biznes-motor')"><div class="info"><h4>⚙️ Motor</h4></div></div><div class="luxury-card" onclick="showSection('gazel-biznes-xadavoy')"><div class="info"><h4>🛠️ Xadavoy</h4></div></div><div class="luxury-card" onclick="showSection('gazel-biznes-tashqi')"><div class="info"><h4>🚘 Tashqi</h4></div></div></div>
+          <div id="gazel-biznes-parts" class="items-grid hidden"><div class="section-title" style="grid-column:span 2;">Gazel Biznes</div><div class="luxury-card" onclick="showSection('gazel-biznes-motor')"><div class="info"><h4>⚙️ Motor</h4></div></div><div class="luxury-card" onclick="showSection('gazel-biznes-xadavoy')"><div class="info"><h4>🛠️ Xadavoy</h4></div></div><div class="luxury-card" onclick="showSection('gazel-biznes-tashqi')"><div class="info"><h4>🚘 Tashqi</h4></div></div></div>
         <div id="gazel-next-parts" class="items-grid hidden"><div class="section-title" style="grid-column:span 2;">Gazel Next</div><div class="luxury-card" onclick="showSection('gazel-next-motor')"><div class="info"><h4>⚙️ Motor</h4></div></div><div class="luxury-card" onclick="showSection('gazel-next-xadavoy')"><div class="info"><h4>🛠️ Xadavoy</h4></div></div><div class="luxury-card" onclick="showSection('gazel-next-tashqi')"><div class="info"><h4>🚘 Tashqi</h4></div></div></div>
         <div id="gazel-eski-parts" class="items-grid hidden"><div class="section-title" style="grid-column:span 2;">Gazel Eski</div><div class="luxury-card" onclick="showSection('gazel-eski-motor')"><div class="info"><h4>⚙️ Motor</h4></div></div><div class="luxury-card" onclick="showSection('gazel-eski-xadavoy')"><div class="info"><h4>🛠️ Xadavoy</h4></div></div><div class="luxury-card" onclick="showSection('gazel-eski-tashqi')"><div class="info"><h4>🚘 Tashqi</h4></div></div></div>
         <div id="volga-2401-parts" class="items-grid hidden"><div class="section-title" style="grid-column:span 2;">Volga 2401</div><div class="luxury-card" onclick="showSection('volga-2401-motor')"><div class="info"><h4>⚙️ Motor</h4></div></div><div class="luxury-card" onclick="showSection('volga-2401-xadavoy')"><div class="info"><h4>🛠️ Xadavoy</h4></div></div><div class="luxury-card" onclick="showSection('volga-2401-tashqi')"><div class="info"><h4>🚘 Tashqi</h4></div></div></div>
@@ -301,7 +308,6 @@
         <div id="volga-31105-motor" class="items-grid hidden"></div><div id="volga-31105-xadavoy" class="items-grid hidden"></div><div id="volga-31105-tashqi" class="items-grid hidden"></div>
         <div id="volga-31029-motor" class="items-grid hidden"></div><div id="volga-31029-xadavoy" class="items-grid hidden"></div><div id="volga-31029-tashqi" class="items-grid hidden"></div>
         <div id="sobol-motor" class="items-grid hidden"></div><div id="sobol-xadavoy" class="items-grid hidden"></div><div id="sobol-tashqi" class="items-grid hidden"></div>
-
         <div id="chevy-damas-motor" class="items-grid hidden"></div><div id="chevy-damas-xadavoy" class="items-grid hidden"></div><div id="chevy-damas-tashqi" class="items-grid hidden"></div>
         <div id="chevy-cobalt-motor" class="items-grid hidden"></div><div id="chevy-cobalt-xadavoy" class="items-grid hidden"></div><div id="chevy-cobalt-tashqi" class="items-grid hidden"></div>
         <div id="chevy-gentra-motor" class="items-grid hidden"></div><div id="chevy-gentra-xadavoy" class="items-grid hidden"></div><div id="chevy-gentra-tashqi" class="items-grid hidden"></div>
@@ -319,12 +325,10 @@
         <div id="chevy-labo-motor" class="items-grid hidden"></div><div id="chevy-labo-xadavoy" class="items-grid hidden"></div><div id="chevy-labo-tashqi" class="items-grid hidden"></div>
         <div id="chevy-matiz-motor" class="items-grid hidden"></div><div id="chevy-matiz-xadavoy" class="items-grid hidden"></div><div id="chevy-matiz-tashqi" class="items-grid hidden"></div>
         <div id="chevy-epica-motor" class="items-grid hidden"></div><div id="chevy-epica-xadavoy" class="items-grid hidden"></div><div id="chevy-epica-tashqi" class="items-grid hidden"></div>
-
         <div id="daewoo-nexia1-motor" class="items-grid hidden"></div><div id="daewoo-nexia1-xadavoy" class="items-grid hidden"></div><div id="daewoo-nexia1-tashqi" class="items-grid hidden"></div>
         <div id="daewoo-nexia2-motor" class="items-grid hidden"></div><div id="daewoo-nexia2-xadavoy" class="items-grid hidden"></div><div id="daewoo-nexia2-tashqi" class="items-grid hidden"></div>
         <div id="daewoo-matiz-motor" class="items-grid hidden"></div><div id="daewoo-matiz-xadavoy" class="items-grid hidden"></div><div id="daewoo-matiz-tashqi" class="items-grid hidden"></div>
         <div id="daewoo-tico-motor" class="items-grid hidden"></div><div id="daewoo-tico-xadavoy" class="items-grid hidden"></div><div id="daewoo-tico-tashqi" class="items-grid hidden"></div>
-
         <div id="uaz-patriot-motor" class="items-grid hidden"></div><div id="uaz-patriot-xadavoy" class="items-grid hidden"></div><div id="uaz-patriot-tashqi" class="items-grid hidden"></div>
         <div id="uaz-hunter-motor" class="items-grid hidden"></div><div id="uaz-hunter-xadavoy" class="items-grid hidden"></div><div id="uaz-hunter-tashqi" class="items-grid hidden"></div>
     </div>
@@ -338,17 +342,90 @@
     <div class="nav-item" id="nav-profile" onclick="showProfile()"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span>Profil</span></div>
     <div class="nav-item hidden" id="nav-admin" onclick="openModal('adminModal')"><svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg><span>Admin</span></div>
 </div>
+<div id="productModal">
+    <div class="pm-img-header">
+        <button class="pm-close-btn" onclick="closeModal()">×</button>      
+        <img id="pm-img" src="" onload="this.style.opacity=1">
+        <div class="pm-edit-icon" id="pm-edit-btn">✏️</div>
+    </div>
+    <div class="pm-info-section">
+        <h2 id="pm-title" class="pm-title"></h2>
+        <div id="pm-stock" class="pm-stock-info"></div>
+        <div id="pm-desc" class="pm-desc"></div>
+        <h3 id="similar-title" style="font-size: 15px; font-weight: 700; margin-bottom: 12px; display:none; color: var(--text-main);">O'xshash tovarlar</h3>
+        <div id="pm-similar-items" class="pm-similar-wrapper"></div>
+    </div>
+    <div class="pm-sticky-bar">
+        <div class="pm-sticky-price-wrap">
+            <span class="pm-sticky-label">Narxi:</span>
+            <span class="pm-sticky-price" id="pm-price"></span>
+        </div>
+        <button class="pm-sticky-btn" id="pm-buy-btn">Savatga qo'shish</button>
+    </div>
+</div>
 
-<div id="productModal"><div class="pm-img-header"><button class="pm-close-btn" onclick="closeModal()">×</button><img id="pm-img" src="" onload="this.style.opacity=1"><div class="pm-edit-icon" id="pm-edit-btn">✏️</div></div><div class="pm-info-section"><h2 id="pm-title" class="pm-title"></h2><div id="pm-desc" class="pm-desc"></div><h3 id="similar-title" style="font-size: 15px; font-weight: 700; margin-bottom: 12px; display:none; color: var(--text-main);">O'xshash tovarlar</h3><div id="pm-similar-items" class="pm-similar-wrapper"></div></div><div class="pm-sticky-bar"><div class="pm-sticky-price-wrap"><span class="pm-sticky-label">Narxi:</span><span class="pm-sticky-price" id="pm-price"></span></div><button class="pm-sticky-btn" id="pm-buy-btn">Savatga</button></div></div>
-<div class="modal-standard" id="orderDetailModal"><div class="modal-header"><h2>📋 Tafsiloti</h2><button class="close-btn" onclick="closeModal()">×</button></div><div style="text-align: center; margin-bottom: 15px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px;"><div id="od-code" style="font-size: 20px; font-weight: 800; color: var(--luxury-gold); letter-spacing: 1px; margin-bottom: 5px;"></div><div id="od-date" style="color: var(--text-muted); font-size: 12px; margin-bottom: 10px;"></div><div id="od-status"></div></div><h3 style="font-size: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">Tovarlar:</h3><div id="od-items" style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;"></div><div style="text-align: right; font-size: 18px; font-weight: 800; color: var(--luxury-gold);" id="od-total"></div><div id="od-review-section" style="margin-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;"></div></div>
-<div class="modal-standard" id="profileEditModal"><div class="modal-header"><h2>👤 Ma'lumot</h2><button class="close-btn" onclick="closeModal()">×</button></div><span class="luxury-input-label">ISMINGIZ</span><input type="text" id="user-edit-name" class="search-box" style="margin-bottom: 15px;"><span class="luxury-input-label">RAQAMINGIZ</span><input type="tel" id="user-edit-phone" placeholder="+998 90 123 45 67" class="search-box" style="margin-bottom: 25px;"><button class="btn-checkout" onclick="saveProfile()">Saqlash</button></div>
-<div class="modal-standard" id="cartModal"><div class="modal-header"><h2>🛒 Savat</h2><button class="close-btn" onclick="closeModal()">×</button></div><div id="cart-items-container" style="flex:1; overflow-y:auto; border-bottom: 1px solid var(--glass-border); padding-bottom: 10px;"></div><div style="padding:20px 0; font-size: 16px; font-weight: 500;">Jami: <span id="cart-total-sum" style="color:var(--luxury-gold); font-weight: 800; float: right; font-size: 20px;">0 so'm</span></div><button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openPaymentModal()">Buyurtma</button></div>
-<div class="modal-standard" id="paymentModal"><div class="modal-header"><h2>💳 To'lov</h2><button class="close-btn" onclick="closeModal()">×</button></div><div id="payment-options"><div class="luxury-card" onclick="selectPayment('card')" style="margin-bottom: 15px; align-items: center; flex-direction: row; gap: 15px; padding: 20px;"><span style="font-size: 28px;">💳</span><div style="flex:1;"><h4 style="margin:0; font-size: 18px;">Karta orqali</h4><p style="margin: 5px 0 0; font-size: 13px; color: var(--text-muted);">Uzcard/Humo</p></div></div><div class="luxury-card" onclick="selectPayment('cash')" style="align-items: center; flex-direction: row; gap: 15px; padding: 20px;"><span style="font-size: 28px;">💵</span><div style="flex:1;"><h4 style="margin:0; font-size: 18px;">Naqd</h4><p style="margin: 5px 0 0; font-size: 13px; color: var(--text-muted);">Qabul qilganda</p></div></div></div><div id="card-details" class="hidden" style="text-align: center;"><div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px; border: 1px dashed var(--luxury-gold); margin-bottom: 20px;"><div style="font-size: 18px; font-weight: 800; letter-spacing: 2px; color: var(--text-main); margin-bottom: 5px;">5614 6818 7479 6349</div><div style="font-size: 12px; color: var(--luxury-gold);">Axtamov Anvarjon</div></div><button class="btn-checkout" style="background:rgba(255,255,255,0.1); color:white; margin-bottom: 10px;" onclick="copyCard()">📋 Nusxalash</button><button class="btn-checkout" onclick="confirmOrder('Karta')">✅ To'ladim</button></div></div>
-<div class="modal-standard" id="contactModal"><div class="modal-header"><h2>📞 Aloqa</h2><button class="close-btn" onclick="closeModal()">×</button></div><div style="text-align: center;"><img src="https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png" style="width: 100%; border-radius: 16px; margin-bottom: 20px;"><a href="tel:+998882893030" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(0, 122, 255, 0.1); color: var(--primary-blue); border: 1px solid rgba(0, 122, 255, 0.3);">📱 +998 88 289 30 30</a><a href="https://t.me/anvaraxtamov2004" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(40, 167, 69, 0.1); color: #28a745; border: 1px solid rgba(40, 167, 69, 0.3);">💬 Telegram</a></div></div>
+<div class="modal-standard" id="orderDetailModal">
+    <div class="modal-header"><h2>📋 Tafsiloti</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div style="text-align: center; margin-bottom: 15px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px;">
+        <div id="od-code" style="font-size: 20px; font-weight: 800; color: var(--luxury-gold); letter-spacing: 1px; margin-bottom: 5px;"></div>
+        <div id="od-date" style="color: var(--text-muted); font-size: 12px; margin-bottom: 10px;"></div>
+        <div id="od-status"></div>
+    </div>
+    <h3 style="font-size: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">Tovarlar:</h3>
+    <div id="od-items" style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;"></div>
+    <div style="text-align: right; font-size: 18px; font-weight: 800; color: var(--luxury-gold);" id="od-total"></div>
+    <div id="od-review-section" style="margin-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;"></div>
+</div>
+
+<div class="modal-standard" id="profileEditModal">
+    <div class="modal-header"><h2>👤 Ma'lumot</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <span class="luxury-input-label">ISMINGIZ</span><input type="text" id="user-edit-name" class="search-box" style="margin-bottom: 15px;">
+    <span class="luxury-input-label">RAQAMINGIZ</span><input type="tel" id="user-edit-phone" placeholder="+998 90 123 45 67" class="search-box" style="margin-bottom: 25px;">
+    <button class="btn-checkout" onclick="saveProfile()">Saqlash</button>
+</div>
+
+<div class="modal-standard" id="cartModal">
+    <div class="modal-header"><h2>🛒 Savat</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div id="cart-items-container" style="flex:1; overflow-y:auto; border-bottom: 1px solid var(--glass-border); padding-bottom: 10px;"></div>
+    <div style="padding:20px 0; font-size: 16px; font-weight: 500;">Jami: <span id="cart-total-sum" style="color:var(--luxury-gold); font-weight: 800; float: right; font-size: 20px;">0 so'm</span></div>
+    <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openPaymentModal()">Buyurtma</button>
+</div>
+
+<div class="modal-standard" id="paymentModal">
+    <div class="modal-header"><h2>💳 To'lov</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div id="payment-options">
+        <div class="luxury-card" onclick="selectPayment('card')" style="margin-bottom: 15px; align-items: center; flex-direction: row; gap: 15px; padding: 20px;"><span style="font-size: 28px;">💳</span><div style="flex:1;"><h4 style="margin:0; font-size: 18px;">Karta orqali</h4><p style="margin: 5px 0 0; font-size: 13px; color: var(--text-muted);">Uzcard/Humo</p></div></div>
+        <div class="luxury-card" onclick="selectPayment('cash')" style="align-items: center; flex-direction: row; gap: 15px; padding: 20px;"><span style="font-size: 28px;">💵</span><div style="flex:1;"><h4 style="margin:0; font-size: 18px;">Naqd</h4><p style="margin: 5px 0 0; font-size: 13px; color: var(--text-muted);">Qabul qilganda</p></div></div>
+    </div>
+    <div id="card-details" class="hidden" style="text-align: center;">
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px; border: 1px dashed var(--luxury-gold); margin-bottom: 20px;"><div style="font-size: 18px; font-weight: 800; letter-spacing: 2px; color: var(--text-main); margin-bottom: 5px;">5614 6818 7479 6349</div><div style="font-size: 12px; color: var(--luxury-gold);">Axtamov Anvarjon</div></div>
+        <button class="btn-checkout" style="background:rgba(255,255,255,0.1); color:white; margin-bottom: 10px;" onclick="copyCard()">📋 Nusxalash</button>
+        <button class="btn-checkout" onclick="confirmOrder('Karta')">✅ To'ladim</button>
+    </div>
+</div>
+
+<div class="modal-standard" id="contactModal">
+    <div class="modal-header"><h2>📞 Aloqa</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div style="text-align: center;">
+        <img src="https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png" style="width: 100%; border-radius: 16px; margin-bottom: 20px;">
+        <a href="tel:+998882893030" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(0, 122, 255, 0.1); color: var(--primary-blue); border: 1px solid rgba(0, 122, 255, 0.3);">📱 +998 88 289 30 30</a>
+        <a href="https://t.me/anvaraxtamov2004" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(40, 167, 69, 0.1); color: #28a745; border: 1px solid rgba(40, 167, 69, 0.3);">💬 Telegram</a>
+    </div>
+</div>
 
 <div class="modal-standard" id="editModal">
     <div class="modal-header"><h2 style="color: #30d158;">✏️ Tahrirlash</h2><button class="close-btn" onclick="closeModal()">×</button></div>
-    <input type="hidden" id="edit-id"><span class="luxury-input-label">NOMI</span><input type="text" id="edit-name" class="search-box" style="margin-bottom: 15px;"><span class="luxury-input-label">NARXI</span><input type="number" id="edit-price" class="search-box" style="margin-bottom: 15px;"><span class="luxury-input-label">TAVSIFI</span><textarea id="edit-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;"></textarea><input type="file" id="edit-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'edit')"><div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px;"><img id="edit-img-preview" src="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; border: 1px solid var(--luxury-gold);"><button type="button" class="btn-checkout" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); color: white;" onclick="document.getElementById('edit-img-file').click()">📸 Rasm</button></div><input type="hidden" id="edit-img-url">
+    <input type="hidden" id="edit-id">
+    <span class="luxury-input-label">NOMI</span><input type="text" id="edit-name" class="search-box" style="margin-bottom: 15px;">
+    <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="edit-price" class="search-box" style="margin-bottom: 15px;">
+    <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="edit-stock" class="search-box" style="margin-bottom: 15px;">
+    <span class="luxury-input-label">TAVSIFI</span><textarea id="edit-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;"></textarea>
+    <input type="file" id="edit-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'edit')">
+    <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px;">
+        <img id="edit-img-preview" src="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; border: 1px solid var(--luxury-gold);">
+        <button type="button" class="btn-checkout" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); color: white;" onclick="document.getElementById('edit-img-file').click()">📸 Rasm</button>
+    </div>
+    <input type="hidden" id="edit-img-url">
     <span class="luxury-input-label">1. MASHINANI TANLANG</span>
     <div style="font-size:12px; color:var(--primary-blue); font-weight:bold; margin:10px 0 5px;">🚛 GAZ / VOLGA / SOBOL</div>
     <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
@@ -375,15 +452,22 @@
 
 <div class="modal-standard" id="adminModal">
     <div class="modal-header"><h2 style="color: #ff453a;">⚙️ Admin Panel</h2><button class="close-btn" onclick="closeModal()">×</button></div>
-    <button class="btn-checkout" style="background: var(--primary-blue); color: white; margin-bottom: 15px; font-weight: 800; font-size: 14px;" onclick="openAdminOrders()">📦 BARCHA BUYURTMALAR</button>
-    <button class="btn-checkout" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px dashed var(--luxury-gold); margin-bottom: 25px; font-weight: 800; font-size: 14px;" onclick="document.getElementById('add-product-wrapper').classList.toggle('hidden')">➕ YANGI TOVAR QO'SHISH</button>
+    
+    <button class="btn-checkout" style="background: var(--primary-blue); color: white; margin-bottom: 12px; font-weight: 800; font-size: 14px;" onclick="openAdminOrders()">📦 BARCHA BUYURTMALAR</button>
+    <button class="btn-checkout" style="background: rgba(212, 175, 55, 0.2); color: var(--luxury-gold); margin-bottom: 25px; font-weight: 800; font-size: 14px; border: 1px solid var(--luxury-gold);" onclick="openAdminInventory()">📊 OMBOR (QOLDIQLAR)</button>
+    <hr style="border-color: rgba(255,255,255,0.05); margin-bottom: 20px;">
+    
+    <button class="btn-checkout" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px dashed var(--luxury-gold); margin-bottom: 10px; font-weight: 800; font-size: 14px;" onclick="document.getElementById('add-product-wrapper').classList.toggle('hidden')">➕ YANGI TOVAR QO'SHISH</button>
     
     <div id="add-product-wrapper" class="hidden">
-        <hr style="border-color: rgba(255,255,255,0.05); margin-bottom: 20px;">
-        <h3 style="margin-top:0; color: var(--luxury-gold);">Yangi Tovar Formasi</h3>
+        <h3 style="margin-top:20px; color: var(--luxury-gold);">Yangi Tovar Formasi</h3>
         <span class="luxury-input-label">NOMI</span><input type="text" id="add-name" class="search-box" style="margin-bottom: 15px;">
-        <span class="luxury-input-label">NARXI</span><input type="number" id="add-price" class="search-box" style="margin-bottom: 15px;">
-        <input type="file" id="add-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'add')"><button type="button" class="btn-checkout" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); color:white; margin-bottom: 15px;" onclick="document.getElementById('add-img-file').click()">📸 Rasm Tanlash</button><img id="add-img-preview" src="" style="width: 140px; height: 140px; object-fit: cover; border-radius: 16px; display: none; margin: 0 auto 15px; border: 2px solid var(--luxury-gold);"><input type="hidden" id="add-img-url" class="search-box">
+        <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="add-price" class="search-box" style="margin-bottom: 15px;">
+        <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="add-stock" class="search-box" style="margin-bottom: 15px;" value="10">
+        <input type="file" id="add-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'add')">
+        <button type="button" class="btn-checkout" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); color:white; margin-bottom: 15px;" onclick="document.getElementById('add-img-file').click()">📸 Rasm Tanlash</button>
+        <img id="add-img-preview" src="" style="width: 140px; height: 140px; object-fit: cover; border-radius: 16px; display: none; margin: 0 auto 15px; border: 2px solid var(--luxury-gold);">
+        <input type="hidden" id="add-img-url" class="search-box">
         
         <span class="luxury-input-label">1. MASHINANI TANLANG</span>
         <div style="font-size:12px; color:var(--primary-blue); font-weight:bold; margin:10px 0 5px;">🚛 GAZ / VOLGA / SOBOL</div>
@@ -410,9 +494,13 @@
     </div>
 </div>
 
+<div class="modal-standard" id="adminInventoryModal">
+    <div class="modal-header"><h2 style="color: var(--luxury-gold);">📊 Ombor</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div id="admin-inventory-list"></div>
+</div>
+
 <div class="modal-standard" id="adminOrdersModal"><div class="modal-header"><h2 style="color: var(--primary-blue);">📦 Buyurtmalar</h2><button class="close-btn" onclick="closeModal()">×</button></div><div id="admin-orders-list"></div></div>
 <div class="modal-standard" id="cropModal" style="z-index: 3000; padding: 15px;"><div class="modal-header"><h2>✂️ Kesish</h2><button class="close-btn" onclick="closeCropModal()">×</button></div><div style="width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 20px;"><img id="cropper-image" src="" style="max-width: 100%; display: block;"></div><button class="btn-checkout" id="crop-save-btn" onclick="uploadCroppedImage()">Saqlash</button></div>
-
 <script>
     let tg = window.Telegram.WebApp;
     tg.expand();
@@ -422,6 +510,7 @@
     let currentCropper = null, currentTargetInput = "";
     let currentUser = tg.initDataUnsafe?.user?.id;
     let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
+    let tgUsername = tg.initDataUnsafe?.user?.username ? '@'+tg.initDataUnsafe.user.username : "Yo'q";
     const urlParams = new URLSearchParams(window.location.search);
     let botPhone = urlParams.get('phone') ? decodeURIComponent(urlParams.get('phone')) : "";
     let botName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : userName;
@@ -436,7 +525,7 @@
     let productsDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, cart = {}, myOrders = [], myProfile = { name: botName, phone: botPhone }, isDataLoaded = false;
 
     function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
-    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">📦 Qabul</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lda</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">✅ Yakun</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
+    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
 
     function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; }
     updateProfileUI();
@@ -456,12 +545,12 @@
     function saveProfile() { let nN = document.getElementById('user-edit-name').value.trim(); let nP = document.getElementById('user-edit-phone').value.trim(); if(!nN || !nP) { showToast("Kiritish shart!", "warning"); return; } myProfile.name = nN; myProfile.phone = nP; updateProfileUI(); if (currentUser) { db.ref('users/' + currentUser + '/profile').set(myProfile).then(() => { showToast("Saqlandi!"); closeModal(); }); } else { showToast("Saqlandi!"); closeModal(); } }
     function showToast(m, t = 'success') { const c = document.getElementById('toast-container'); const el = document.createElement('div'); el.className = 'toast'; el.style.borderLeftColor = t === 'success' ? 'var(--accent-green)' : 'var(--luxury-gold)'; el.innerHTML = `<span>${t === 'success' ? '✅' : '⚠️'}</span> <span>${m}</span>`; c.appendChild(el); setTimeout(() => el.remove(), 3000); }
 
-    const initialProducts = [ { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", desc: "100% original", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "gazel-biznes-motor", badge: "hot" } ];
+    const initialProducts = [ { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", desc: "100% original", price: 1060000, stock: 10, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "gazel-biznes-motor", badge: "hot" } ];
 
     db.ref('products').on('value', (snap) => {
         document.getElementById('loading-text').style.display = 'none'; document.getElementById('content-area').classList.remove('hidden');
         if (snap.exists()) { productsDB = snap.val().filter(p => p !== null); } else { productsDB = initialProducts; db.ref('products').set(productsDB); }
-        renderProducts(); updateCartBadge();
+        renderProducts(); updateCartBadge(); if(activeModal === 'adminInventoryModal') renderAdminInventory();
     });
 
     function toggleChip(el) { el.classList.toggle('selected'); }
@@ -481,19 +570,19 @@
     function closeCropModal() { closeModal(); if(currentCropper) currentCropper.destroy(); }
 
     function saveNewProduct() {
-        let n = document.getElementById('add-name').value; let p = parseInt(document.getElementById('add-price').value); let img = document.getElementById('add-img-url').value;
+        let n = document.getElementById('add-name').value; let p = parseInt(document.getElementById('add-price').value); let st = parseInt(document.getElementById('add-stock').value) || 0; let img = document.getElementById('add-img-url').value;
         let sMods = Array.from(document.querySelectorAll('#adminModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
         let sTyps = Array.from(document.querySelectorAll('#adminModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
         if(!n || !p || !img || sMods.length === 0 || sTyps.length === 0) { showToast("To'ldiring va tanlang!", "warning"); return; }
         let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
         let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
-        productsDB.push({ id: newId, name: n, desc: "Sifatli zapchast", price: p, img: img, category: sCats[0], categories: sCats });
-        db.ref('products').set(productsDB).then(() => { showToast("Saqlandi!"); closeModal(); document.getElementById('add-name').value = ''; document.getElementById('add-price').value = ''; document.getElementById('add-img-preview').style.display = 'none'; document.querySelectorAll('#adminModal .cat-chip').forEach(c => c.classList.remove('selected')); });
+        productsDB.push({ id: newId, name: n, desc: "Sifatli zapchast", price: p, stock: st, img: img, category: sCats[0], categories: sCats });
+        db.ref('products').set(productsDB).then(() => { showToast("Saqlandi!"); closeModal(); document.getElementById('add-name').value = ''; document.getElementById('add-price').value = ''; document.getElementById('add-stock').value = '10'; document.getElementById('add-img-preview').style.display = 'none'; document.querySelectorAll('#adminModal .cat-chip').forEach(c => c.classList.remove('selected')); });
     }
 
     function openEditModal(e) {
         if(e) e.stopPropagation(); let id = document.getElementById('pm-buy-btn').getAttribute('data-id'); let p = productsDB.find(x => x.id == id); if(!p) return;
-        document.getElementById('edit-id').value = p.id; document.getElementById('edit-name').value = p.name; document.getElementById('edit-price').value = p.price; document.getElementById('edit-desc').value = p.desc || ""; document.getElementById('edit-img-url').value = p.img; document.getElementById('edit-img-preview').src = p.img;
+        document.getElementById('edit-id').value = p.id; document.getElementById('edit-name').value = p.name; document.getElementById('edit-price').value = p.price; document.getElementById('edit-stock').value = p.stock !== undefined ? p.stock : 10; document.getElementById('edit-desc').value = p.desc || ""; document.getElementById('edit-img-url').value = p.img; document.getElementById('edit-img-preview').src = p.img;
         document.querySelectorAll('#editModal .cat-chip').forEach(c => c.classList.remove('selected'));
         let cats = p.categories || [p.category];
         cats.forEach(c => { let parts = c.split('-'); let t = parts.pop(); let m = parts.join('-'); let mC = document.querySelector(`#editModal .model-chip[data-val="${m}"]`); if(mC) mC.classList.add('selected'); let tC = document.querySelector(`#editModal .type-chip[data-val="${t}"]`); if(tC) tC.classList.add('selected'); });
@@ -501,15 +590,40 @@
     }
 
     function saveEditProduct() {
-        let id = parseInt(document.getElementById('edit-id').value); let n = document.getElementById('edit-name').value; let p = parseInt(document.getElementById('edit-price').value); let d = document.getElementById('edit-desc').value; let img = document.getElementById('edit-img-url').value;
+        let id = parseInt(document.getElementById('edit-id').value); let n = document.getElementById('edit-name').value; let p = parseInt(document.getElementById('edit-price').value); let st = parseInt(document.getElementById('edit-stock').value) || 0; let d = document.getElementById('edit-desc').value; let img = document.getElementById('edit-img-url').value;
         let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val')); let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
         if(!n || !p || !img || sMods.length === 0 || sTyps.length === 0) { showToast("Xato!", "warning"); return; }
         let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
         let idx = productsDB.findIndex(x => x.id === id);
-        if(idx !== -1) { productsDB[idx].name = n; productsDB[idx].price = p; productsDB[idx].desc = d; productsDB[idx].img = img; productsDB[idx].categories = sCats; productsDB[idx].category = sCats[0]; db.ref('products').set(productsDB).then(() => { showToast("Yangilandi!"); closeModal(); }); }
+        if(idx !== -1) { productsDB[idx].name = n; productsDB[idx].price = p; productsDB[idx].stock = st; productsDB[idx].desc = d; productsDB[idx].img = img; productsDB[idx].categories = sCats; productsDB[idx].category = sCats[0]; db.ref('products').set(productsDB).then(() => { showToast("Yangilandi!"); closeModal(); }); }
     }
 
     function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
+
+    function openAdminInventory() {
+        document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.replaceState({ modal: 'adminInventoryModal' }, ""); renderAdminInventory();
+    }
+    
+    function renderAdminInventory() {
+        let c = document.getElementById('admin-inventory-list');
+        c.innerHTML = productsDB.map(p => {
+            let st = p.stock !== undefined ? p.stock : 10;
+            return `
+            <div class="inventory-item">
+                <div class="inv-info"><h4>${p.name}</h4><p>${p.price.toLocaleString()} s</p></div>
+                <div class="inv-controls">
+                    <input type="number" id="inv-input-${p.id}" class="inv-input" value="${st}">
+                    <button class="inv-btn" onclick="fastSaveStock(${p.id})">Saqlash</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+    
+    function fastSaveStock(id) {
+        let val = parseInt(document.getElementById(`inv-input-${id}`).value) || 0;
+        let idx = productsDB.findIndex(x => x.id === id);
+        if(idx !== -1) { productsDB[idx].stock = val; db.ref('products').set(productsDB).then(() => { showToast("Qoldiq saqlandi!"); }); }
+    }
 
     window.history.replaceState({ section: 'main-menu' }, "");
     setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
@@ -520,13 +634,42 @@
         document.querySelectorAll('.items-grid').forEach(c => { let id = c.id; if(id.endsWith('-motor') || id.endsWith('-xadavoy') || id.endsWith('-tashqi')) { let items = productsDB.filter(x => x.category === id || (x.categories && x.categories.includes(id))); c.innerHTML = items.map(x => cardHTML(x)).join(''); } });
     }
 
-    function addToCartQuick(e, id) { e.stopPropagation(); addToCart(id); }
-    function cardHTML(p) { let bH = ''; if(p.badge === 'hot') bH = '<div class="badge hot">🔥 Top</div>'; if(p.badge === 'new') bH = '<div class="badge new">✨ Yangi</div>'; return `<div class="luxury-card" onclick="openProduct(${p.id})">${bH}<div class="img-wrap"><img src="${p.img}" onload="this.style.opacity=1"></div><div class="info"><h4>${p.name}</h4><div class="price-row"><div class="price">${p.price.toLocaleString()} so'm</div><button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div></div></div>`; }
+    function addToCartQuick(e, id) { 
+        e.stopPropagation(); 
+        let p = productsDB.find(x => x.id == id);
+        let st = p.stock !== undefined ? p.stock : 10;
+        if(st <= 0) { showToast("Kechirasiz, bu tovar qolmagan", "warning"); return; }
+        if(cart[id] && cart[id] >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+        addToCart(id); 
+    }
+    
+    function cardHTML(p) { 
+        let st = p.stock !== undefined ? p.stock : 10;
+        let bH = ''; 
+        if(st <= 0) bH = '<div class="badge" style="background:gray;">Tugagan</div>';
+        else if(p.badge === 'hot') bH = '<div class="badge hot">🔥 Top</div>'; 
+        else if(p.badge === 'new') bH = '<div class="badge new">✨ Yangi</div>'; 
+        let oosStyle = st <= 0 ? 'filter: grayscale(1); opacity:0.7;' : '';
+        
+        return `<div class="luxury-card" onclick="openProduct(${p.id})">${bH}<div class="img-wrap" style="${oosStyle}"><img src="${p.img}" onload="this.style.opacity=1"></div><div class="info"><h4>${p.name}</h4><div class="price-row"><div class="price">${p.price.toLocaleString()} so'm</div><button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div></div></div>`; 
+    }
 
     function openProduct(id) {
         let p = productsDB.find(x => x.id == id); if(!p) return;
         document.getElementById('pm-img').src = p.img; document.getElementById('pm-title').innerText = p.name; document.getElementById('pm-desc').innerText = p.desc || ""; document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} s`;
-        let buyB = document.getElementById('pm-buy-btn'); buyB.onclick = () => { addToCart(id); closeModal(); }; buyB.setAttribute('data-id', id);
+        
+        let st = p.stock !== undefined ? p.stock : 10;
+        let sInf = document.getElementById('pm-stock');
+        let buyB = document.getElementById('pm-buy-btn');
+        if(st <= 0) {
+            sInf.innerHTML = `<span style="color:#ff453a;">❌ Sotuvda qolmagan</span>`;
+            buyB.disabled = true; buyB.innerText = "Tugagan"; buyB.onclick = null;
+        } else {
+            sInf.innerHTML = `<span style="color:var(--accent-green);">✅ Sotuvda bor: ${st} ta</span>`;
+            buyB.disabled = false; buyB.innerText = "Savatga qo'shish"; buyB.onclick = () => { if(cart[id] && cart[id]>=st){showToast("Omborda bunday ko'p emas","warning");} else {addToCart(id); closeModal();} };
+        }
+        
+        buyB.setAttribute('data-id', id);
         let edB = document.getElementById('pm-edit-btn'); if (currentUser === ADMIN_ID) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
         let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
         if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} s</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
@@ -561,20 +704,47 @@
             for(let id in cart) { let p = productsDB.find(x => x.id == id); if(!p) continue; t += p.price * cart[id]; c.innerHTML += `<div class="cart-row"><img src="${p.img}" onload="this.style.opacity=1"><div class="cart-info"><h4>${p.name}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[id]).toLocaleString()} s</span></div><div class="cart-controls"><button onclick="chg(${id},-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[id]}</span><button onclick="chg(${id},1)">+</button></div></div>`; } b.style.display = 'block';
         } document.getElementById('cart-total-sum').innerText = t.toLocaleString();
     }
-    function chg(id, d) { cart[id] += d; if(cart[id] <= 0) delete cart[id]; saveLocalCart(); updateCartBadge(); renderCartItems(); }
+    
+    function chg(id, d) { 
+        let p = productsDB.find(x => x.id == id);
+        let st = p && p.stock !== undefined ? p.stock : 10;
+        if(d > 0 && cart[id] >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+        cart[id] += d; if(cart[id] <= 0) delete cart[id]; saveLocalCart(); updateCartBadge(); renderCartItems(); 
+    }
+    
     function openPaymentModal() { if (Object.keys(cart).length === 0) return; if (!myProfile.phone) { showToast("Raqam kiriting!", "warning"); setTimeout(() => { closeModal(); showProfile(); setTimeout(() => openModal('profileEditModal'), 300); }, 1500); return; } document.getElementById('payment-options').classList.remove('hidden'); document.getElementById('card-details').classList.add('hidden'); openModal('paymentModal'); }
     function selectPayment(t) { if(t === 'cash') confirmOrder('Naqd pul'); else if(t === 'card') { document.getElementById('payment-options').classList.add('hidden'); document.getElementById('card-details').classList.remove('hidden'); } }
     function copyCard() { navigator.clipboard.writeText("5614681874796349"); showToast("Nusxalandi!"); }
 
     async function confirmOrder(pm) {
         const lo = document.getElementById('order-loading-overlay'); lo.classList.add('active'); let cO = generateOrderCode(); 
-        let tgU = tg.initDataUnsafe?.user?.username ? '@'+tg.initDataUnsafe.user.username : "Yo'q";
-        let aT = `🆕 <b>YANGI BUYURTMA: #${cO}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n🔗 <b>Username:</b> ${tgU}\n📞 <b>Telefon:</b> ${myProfile.phone}\n📍 <b>Viloyat:</b> ${botRegion}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${pm}\n\n🛒 <b>Mahsulotlar:</b>\n`; 
+        let aT = `🆕 <b>YANGI BUYURTMA: #${cO}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n🔗 <b>Username:</b> ${tgUsername}\n📞 <b>Telefon:</b> ${myProfile.phone}\n📍 <b>Viloyat:</b> ${botRegion}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${pm}\n\n🛒 <b>Mahsulotlar:</b>\n`; 
         let t = 0; let sI = {};
-        for (let id in cart) { let p = productsDB.find(x => x.id == id); if (p) { let s = p.price * cart[id]; aT += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${s.toLocaleString()} so'm\n`; t += s; sI[id] = cart[id]; } } aT += `\n💰 <b>Jami:</b> ${t.toLocaleString()} so'm`;
+        
+        for (let id in cart) { 
+            let pIdx = productsDB.findIndex(x => x.id == id); 
+            if (pIdx !== -1) { 
+                let p = productsDB[pIdx];
+                let s = p.price * cart[id]; 
+                aT += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${s.toLocaleString()} so'm\n`; 
+                t += s; sI[id] = cart[id]; 
+                
+                // OMBOARDAN AYIRISH
+                productsDB[pIdx].stock = (productsDB[pIdx].stock || 0) - cart[id];
+                if(productsDB[pIdx].stock < 0) productsDB[pIdx].stock = 0;
+            } 
+        } 
+        aT += `\n💰 <b>Jami:</b> ${t.toLocaleString()} so'm`;
+        
         try {
             const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: ADMIN_ID, text: aT, parse_mode: "HTML", reply_markup: { inline_keyboard: [ [{text:"✅ Qabul qildik", callback_data:"qabul_"+currentUser}], [{text:"🚚 Yo'lga chiqdi", callback_data:"yolda_"+currentUser}], [{text:"🏁 Yetkazib berildi", callback_data:"yetkazildi_"+currentUser}] ] } }) });
-            if (res.ok) { if(currentUser) fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${cO} raqamli buyurtmangiz qabul qilindi!\nTo'lov turi: ${pm}` }) }); myOrders.unshift({ id: Date.now(), code: cO, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: sI, total: t, status: 'kutilmoqda' }); saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge(); lo.classList.remove('active'); showToast("Qabul qilindi!"); setTimeout(() => { if(pm === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); tg.close(); }, 2000); }
+            if (res.ok) { 
+                db.ref('products').set(productsDB); // Omborni yangilash
+                if(currentUser) fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${cO} raqamli buyurtmangiz qabul qilindi!\nTo'lov turi: ${pm}` }) }); 
+                myOrders.unshift({ id: Date.now(), code: cO, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: sI, total: t, status: 'kutilmoqda' }); 
+                saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge(); lo.classList.remove('active'); showToast("Qabul qilindi!"); 
+                setTimeout(() => { if(pm === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); tg.close(); }, 2000); 
+            }
         } catch (err) { lo.classList.remove('active'); showToast("Xatolik", "warning"); }
     }
 
