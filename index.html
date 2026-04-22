@@ -90,7 +90,7 @@
         .similar-card .img-wrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; padding: 8px; box-sizing: border-box; opacity: 0; transition: opacity 0.5s ease; }
         .similar-card h4 { font-size: 11px; margin: 8px 8px 4px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .similar-card .price { font-size: 13px; font-weight: 700; color: var(--luxury-gold); margin: 0 8px 8px; }
-        .pm-sticky-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(28, 28, 30, 0.95); backdrop-filter: blur(15px); border-top: 1px solid var(--glass-border); padding: 15px 20px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; z-index: 2001; }
+        .pm-sticky-bar { position: sticky; bottom: 0; left: 0; width: 100%; background: rgba(28, 28, 30, 0.95); backdrop-filter: blur(15px); border-top: 1px solid var(--glass-border); padding: 15px 20px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; z-index: 2001; }
         .pm-sticky-price-wrap { display: flex; flex-direction: column; }
         .pm-sticky-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
         .pm-sticky-price { font-size: 22px; font-weight: 800; color: var(--luxury-gold); }
@@ -522,7 +522,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    let productsDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, cart = {}, myOrders = [], myProfile = { name: botName, phone: botPhone }, isDataLoaded = false;
+    let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, cart = {}, myOrders = [], myProfile = { name: botName, phone: botPhone }, isDataLoaded = false;
 
     function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
     function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
@@ -547,12 +547,20 @@
 
     const initialProducts = [ { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", desc: "100% original", price: 1060000, stock: 10, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "gazel-biznes-motor", badge: "hot" } ];
 
-    db.ref('products').on('value', (snap) => {
+     db.ref('products').on('value', (snap) => {
         document.getElementById('loading-text').style.display = 'none'; document.getElementById('content-area').classList.remove('hidden');
         if (snap.exists()) { productsDB = snap.val().filter(p => p !== null); } else { productsDB = initialProducts; db.ref('products').set(productsDB); }
+        
+        // Tovarlarni har safar kirganda random (aralash) qilish
+        displayDB = productsDB.slice();
+        for(let i = displayDB.length - 1; i > 0; i--){
+            const j = Math.floor(Math.random() * (i + 1));
+            [displayDB[i], displayDB[j]] = [displayDB[j], displayDB[i]];
+        }
+        
         renderProducts(); updateCartBadge(); if(activeModal === 'adminInventoryModal') renderAdminInventory();
     });
-
+    
     function toggleChip(el) { el.classList.toggle('selected'); }
 
     function handleFileSelect(e, t) {
@@ -630,10 +638,9 @@
     let limitCount = 12; window.addEventListener('scroll', () => { if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 150) { if (limitCount < productsDB.length) { limitCount += 12; renderProducts(); } } });
 
     function renderProducts() {
-        let hc = document.getElementById('home-products'); if(hc) { let hi = productsDB.slice(0, limitCount); hc.innerHTML = hi.map(x => cardHTML(x)).join(''); }
-        document.querySelectorAll('.items-grid').forEach(c => { let id = c.id; if(id.endsWith('-motor') || id.endsWith('-xadavoy') || id.endsWith('-tashqi')) { let items = productsDB.filter(x => x.category === id || (x.categories && x.categories.includes(id))); c.innerHTML = items.map(x => cardHTML(x)).join(''); } });
+        let hc = document.getElementById('home-products'); if(hc) { let hi = displayDB.slice(0, limitCount); hc.innerHTML = hi.map(x => cardHTML(x)).join(''); }
+        document.querySelectorAll('.items-grid').forEach(c => { let id = c.id; if(id.endsWith('-motor') || id.endsWith('-xadavoy') || id.endsWith('-tashqi')) { let items = displayDB.filter(x => x.category === id || (x.categories && x.categories.includes(id))); c.innerHTML = items.map(x => cardHTML(x)).join(''); } });
     }
-
     function addToCartQuick(e, id) { 
         e.stopPropagation(); 
         let p = productsDB.find(x => x.id == id);
