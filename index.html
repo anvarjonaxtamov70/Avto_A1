@@ -431,7 +431,7 @@
             from { transform: translateY(100%); } 
             to { transform: translateY(0); } 
         }
-        .pm-img-header { 
+      .pm-img-header { 
             background: #ffffff; 
             width: 100%; 
             height: 380px; 
@@ -1041,6 +1041,23 @@
             filter: drop-shadow(0 8px 12px rgba(0,0,0,0.5)); 
             opacity: 0; transition: opacity 0.5s ease;
         }
+        
+        /* YANGI TUGMA DIZAYNI */
+        .admin-add-btn {
+            display: none;
+            align-items: center; justify-content: center;
+            background: rgba(212, 175, 55, 0.05);
+            border: 2px dashed var(--luxury-gold);
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 16px;
+            cursor: pointer;
+            color: var(--luxury-gold);
+            font-size: 16px; font-weight: 800;
+            transition: 0.2s;
+        }
+        .admin-add-btn:active { background: rgba(212, 175, 55, 0.2); }
+        .admin-add-btn.small { padding: 15px; border-radius: 16px; font-size: 14px; margin: 0 20px 15px; }
     </style>
 </head>
 <body>
@@ -1079,13 +1096,16 @@
         <span class="chip" onclick="applyQuickSearch('Galovka')">🔩 Galovka</span>
     </div>
     <div id="loading-text">Yuklanmoqda...</div>
+    
     <div id="content-area" class="hidden"> 
         <div id="main-menu">
             <div class="section-title">Ommabop tovarlar</div>
             <div id="home-products" class="items-grid"></div>
         </div>
+        
         <div id="katalog-menu" class="hidden" style="padding: 0 20px;">
             <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">Mashina rusumini tanlang</div>
+            
             <div class="premium-cat-card" onclick="showSection('gazel-types')">
                 <div class="premium-cat-info"><h3>Gazel</h3><p>YUK MASHINALARI</p></div>
                 <div class="premium-cat-img"><img src="https://i.postimg.cc/cJybN99d/gazel.jpg" onload="this.style.opacity=1"></div>
@@ -1102,7 +1122,11 @@
                 <div class="premium-cat-info"><h3>Faralar</h3><p>XIZMAT VA QISMLAR</p></div>
                 <div class="premium-cat-img"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80" onload="this.style.opacity=1"></div>
             </div>
+
+            <div id="dynamic-brands-container"></div>
+            <div class="admin-add-btn" id="btn-add-marka" onclick="openModal('addBrandModal')">➕ YANGI MARKA QO'SHISH</div>
         </div>
+
         <div id="profile-section" class="hidden">
             <div class="section-title" style="margin-top: 0;">Kabinet</div>
             <div style="padding: 0 20px;">
@@ -1127,10 +1151,12 @@
                 </div>
             </div>
         </div>
+
         <div id="my-orders-section" class="hidden">
             <div class="section-title" style="margin-top: 0;">Buyurtmalarim</div>
             <div id="orders-list-container" style="padding: 0 20px;"></div>
         </div>
+
         <div id="gazel-types" class="hidden" style="padding: 0 20px;">
             <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">Gazel modellari</div>
             <div class="premium-cat-card" onclick="showSection('gazel-biznes-sections')">
@@ -1146,6 +1172,7 @@
                 <div class="premium-cat-img"><img src="https://i.postimg.cc/tRh3rPmP/gazel-2008.jpg" onload="this.style.opacity=1"></div>
             </div>
         </div>
+
         <div id="volga-types" class="hidden" style="padding: 0 20px;">
             <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">Volga modellari</div>
             <div class="premium-cat-card" onclick="showSection('volga-2401-sections')">
@@ -1169,6 +1196,7 @@
                 <div class="premium-cat-img"><img src="https://i.postimg.cc/XvqQ9SPL/gaz-3110-volga-211234-800x800.png" onload="this.style.opacity=1"></div>
             </div>
         </div>
+
         <div id="uaz-types" class="hidden" style="padding: 0 20px;">
             <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">UAZ modellari</div>
             <div class="premium-cat-card" onclick="showSection('uaz-patriot-sections')">
@@ -1180,6 +1208,7 @@
                 <div class="premium-cat-img"><img src="https://i.postimg.cc/XYMtRtfX/xanter.jpg" onload="this.style.opacity=1"></div>
             </div>
         </div>
+
         <div id="fara-club-sections" class="hidden" style="padding: 0 20px;">
             <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">Xizmatlar</div>
             <div class="premium-cat-card" onclick="showSection('fara-tozalash-items')">
@@ -1191,6 +1220,7 @@
                 <div class="premium-cat-img"><img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=500&q=80" onload="this.style.opacity=1"></div>
             </div>
         </div>
+
         <div id="gazel-biznes-sections" class="items-grid hidden">
             <div class="section-title" style="grid-column:span 2;">Gazel Biznes qismlari</div>
             <div class="luxury-card" onclick="showSection('biznes-motor')"><div class="img-wrap"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg" onload="this.style.opacity=1"></div><div class="info"><h4>⚙️ Motor</h4></div></div>
@@ -1206,6 +1236,7 @@
             <div class="luxury-card" onclick="showSection('eski-motor')"><div class="img-wrap"><img src="https://i.postimg.cc/1XjHHK47/67-image.jpg" onload="this.style.opacity=1"></div><div class="info"><h4>⚙️ Motor</h4></div></div>
             <div class="luxury-card" onclick="showSection('eski-xadavoy')"><div class="img-wrap"><img src="https://i.postimg.cc/zvG5sT5p/xadavoy.jpg" onload="this.style.opacity=1"></div><div class="info"><h4>🛠️ Xadavoy</h4></div></div>
         </div>
+
         <div id="volga-2401-sections" class="items-grid hidden">
             <div class="section-title" style="grid-column:span 2;">Gaz 2401 qismlari</div>
             <div class="luxury-card" onclick="showSection('volga-2401-motor')"><div class="info"><h4>⚙️ Motor</h4></div></div>
@@ -1231,6 +1262,7 @@
             <div class="luxury-card" onclick="showSection('volga-31029-motor')"><div class="info"><h4>⚙️ Motor</h4></div></div>
             <div class="luxury-card" onclick="showSection('volga-31029-xadavoy')"><div class="info"><h4>🛠️ Xadavoy</h4></div></div>
         </div>
+
         <div id="biznes-motor" class="items-grid hidden"></div> 
         <div id="biznes-xadavoy" class="items-grid hidden"></div>
         <div id="next-motor" class="items-grid hidden"></div> 
@@ -1253,9 +1285,14 @@
         <div id="uaz-hunter-xadavoy" class="items-grid hidden"></div>
         <div id="fara-tozalash-items" class="items-grid hidden"></div> 
         <div id="fara-tiklash-items" class="items-grid hidden"></div>
+
+        <div id="dynamic-subcats-area"></div>
+        <div id="dynamic-products-area"></div>
+
     </div>
     <div id="search-results" class="search-list hidden"></div>
 </div>
+
 <div class="bottom-nav">
     <div class="nav-item active" id="nav-home" onclick="goHome()">
         <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
@@ -1279,6 +1316,7 @@
         <span>Admin</span>
     </div>
 </div>
+
 <div id="productModal">
     <div class="pm-img-header">
         <button class="pm-close-btn" onclick="closeModal()">×</button>
@@ -1299,6 +1337,7 @@
         <button class="pm-sticky-btn" id="pm-buy-btn">Savatga qo'shish</button>
     </div>
 </div>
+
 <div class="modal-standard" id="orderDetailModal">
     <div class="modal-header">
         <h2>📋 Buyurtma Tafsiloti</h2>
@@ -1314,6 +1353,7 @@
     <div style="text-align: right; font-size: 18px; font-weight: 800; color: var(--luxury-gold);" id="od-total"></div>
     <div id="od-review-section" style="margin-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;"></div>
 </div>
+
 <div class="modal-standard" id="profileEditModal">
     <div class="modal-header">
         <h2>👤 Shaxsiy Ma'lumotlar</h2>
@@ -1326,6 +1366,7 @@
     <input type="tel" id="user-edit-phone" placeholder="+998 90 123 45 67" class="search-box" style="margin-bottom: 25px;">
     <button class="btn-checkout" onclick="saveProfile()">Saqlash</button>
 </div>
+
 <div class="modal-standard" id="cartModal">
     <div class="modal-header">
         <h2>🛒 Savat</h2>
@@ -1337,6 +1378,7 @@
     </div>
     <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openPaymentModal()">Buyurtma berish</button>
 </div>
+
 <div class="modal-standard" id="paymentModal">
     <div class="modal-header">
         <h2>💳 To'lov turi</h2>
@@ -1368,6 +1410,7 @@
         <button class="btn-checkout" onclick="confirmOrder('Karta')">✅ To'lov qildim</button>
     </div>
 </div>
+
 <div class="modal-standard" id="contactModal">
     <div class="modal-header">
         <h2>📞 Biz bilan Aloqa</h2>
@@ -1380,6 +1423,7 @@
         <a href="https://t.me/anvaraxtamov2004" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(40, 167, 69, 0.1); color: #28a745; border: 1px solid rgba(40, 167, 69, 0.3);">💬 Telegram orqali yozish</a>
     </div>
 </div>
+
 <div class="modal-standard" id="editModal">
     <div class="modal-header">
         <h2 style="color: #30d158;">✏️ Tahrirlash</h2>
@@ -1435,12 +1479,14 @@
             <span class="cat-chip" data-val="fara-tozalash-items" onclick="toggleChip(this)">Tozalash</span>
             <span class="cat-chip" data-val="fara-tiklash-items" onclick="toggleChip(this)">Bi-Led o'rnatish</span>
         </div>
+        <div id="dynamic-admin-chips-edit-container"></div>
     </div>
     <div style="display: flex; gap: 10px;">
         <button class="btn-checkout" style="background: #ff453a; color: white; width: 30%;" onclick="deleteProduct()">O'CHIR</button>
         <button class="btn-checkout" style="width: 70%;" onclick="saveEditProduct()">SAQLASH</button>
     </div>
 </div>
+
 <div class="modal-standard" id="adminModal">
     <div class="modal-header">
         <h2 style="color: #ff453a;">⚙️ Admin Panel</h2>
@@ -1494,9 +1540,34 @@
             <span class="cat-chip" data-val="fara-tozalash-items" onclick="toggleChip(this)">Tozalash</span>
             <span class="cat-chip" data-val="fara-tiklash-items" onclick="toggleChip(this)">Bi-Led o'rnatish</span>
         </div>
+        <div id="dynamic-admin-chips-container"></div>
     </div>
     <button class="btn-checkout" onclick="saveNewProduct()">BAZAGA SAQLASH</button>
 </div>
+
+<div class="modal-standard" id="addBrandModal">
+    <div class="modal-header">
+        <h2 style="color: var(--luxury-gold);">🚗 Yangi Marka</h2>
+        <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+    <span class="luxury-input-label">MARKA NOMI (Masalan: Lada)</span>
+    <input type="text" id="new-brand-name" class="search-box" style="margin-bottom: 15px;">
+    <span class="luxury-input-label">QISQA TA'RIF (YENGIL MASHINALAR)</span>
+    <input type="text" id="new-brand-desc" class="search-box" style="margin-bottom: 25px;">
+    <button class="btn-checkout" onclick="saveNewBrand()">SAQLASH</button>
+</div>
+
+<div class="modal-standard" id="addSubCatModal">
+    <div class="modal-header">
+        <h2 style="color: var(--luxury-gold);">⚙️ Yangi Qism</h2>
+        <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+    <input type="hidden" id="current-parent-brand">
+    <span class="luxury-input-label">QISM NOMI (Masalan: Motor)</span>
+    <input type="text" id="new-subcat-name" class="search-box" style="margin-bottom: 25px;">
+    <button class="btn-checkout" onclick="saveNewSubCat()">SAQLASH</button>
+</div>
+
 <div class="modal-standard" id="adminOrdersModal">
     <div class="modal-header">
         <h2 style="color: var(--primary-blue);">📦 Barcha Buyurtmalar</h2>
@@ -1528,16 +1599,22 @@
     let botPhone = urlParams.get('phone') ? decodeURIComponent(urlParams.get('phone')) : "";
     let botName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : userName;
     let botRegion = urlParams.get('region') ? decodeURIComponent(urlParams.get('region')) : "Noma'lum";
+    
     if (currentUser === ADMIN_ID) { 
         let adminBtn = document.getElementById('nav-admin');
         if(adminBtn) adminBtn.classList.remove('hidden');
+        let btnMarka = document.getElementById('btn-add-marka');
+        if(btnMarka) btnMarka.style.display = 'flex'; // Yangi tugmani faqat admin ko'radi
     }
+    
     const firebaseConfig = { 
         databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/" 
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+    
     let productsDB = []; 
+    let dynamicData = {}; // YANGI: Dinamik ma'lumotlar bazasi
     let historyStack = ['main-menu'];
     let activeModal = null; 
     let searchActive = false; 
@@ -1545,12 +1622,117 @@
     let myOrders = []; 
     let myProfile = { name: botName, phone: botPhone }; 
     let isDataLoaded = false;
+
+    // YANGI: Dinamik kategoriyalarni bazadan o'qish
+    db.ref('dynamic_categories').on('value', snap => {
+        if(snap.exists()) {
+            dynamicData = snap.val();
+            renderDynamicUI();
+        }
+    });
+
+    // YANGI: Marka saqlash
+    function saveNewBrand() {
+        let name = document.getElementById('new-brand-name').value.trim();
+        let desc = document.getElementById('new-brand-desc').value.trim();
+        if(!name) { showToast("Nomi kiritilishi shart!", "warning"); return; }
+        
+        let brandId = 'brand_' + Date.now();
+        db.ref('dynamic_categories/' + brandId).set({
+            id: brandId, name: name, desc: desc, subcats: {}
+        }).then(() => {
+            showToast("Marka saqlandi!");
+            closeModal();
+            document.getElementById('new-brand-name').value = '';
+            document.getElementById('new-brand-desc').value = '';
+        });
+    }
+
+    // YANGI: Qism saqlash
+    function saveNewSubCat() {
+        let parentId = document.getElementById('current-parent-brand').value;
+        let name = document.getElementById('new-subcat-name').value.trim();
+        if(!name) { showToast("Nomi kiritilishi shart!", "warning"); return; }
+
+        let subcatId = 'subcat_' + Date.now();
+        db.ref(`dynamic_categories/${parentId}/subcats/${subcatId}`).set({
+            id: subcatId, name: name
+        }).then(() => {
+            showToast("Qism saqlandi!");
+            closeModal();
+            document.getElementById('new-subcat-name').value = '';
+            // Orqaga qaytib o'sha sahifani ochish
+            showSection('dynamic-brand-page-' + parentId);
+        });
+    }
+
+    // YANGI: Yaratilgan dinamik qismlarni ekranga chizish
+    function renderDynamicUI() {
+        let brandsContainer = document.getElementById('dynamic-brands-container');
+        let subcatsArea = document.getElementById('dynamic-subcats-area');
+        let prodsArea = document.getElementById('dynamic-products-area');
+        let adminChips = document.getElementById('dynamic-admin-chips-container');
+        let adminChipsEdit = document.getElementById('dynamic-admin-chips-edit-container');
+        
+        brandsContainer.innerHTML = '';
+        subcatsArea.innerHTML = '';
+        prodsArea.innerHTML = '';
+        adminChips.innerHTML = '';
+        if(adminChipsEdit) adminChipsEdit.innerHTML = '';
+
+        for(let bId in dynamicData) {
+            let brand = dynamicData[bId];
+            
+            // 1. Katalogda chiqishi
+            brandsContainer.innerHTML += `
+            <div class="premium-cat-card" onclick="showSection('dynamic-brand-page-${brand.id}')">
+                <div class="premium-cat-info"><h3>${brand.name}</h3><p>${brand.desc || 'QISMLAR'}</p></div>
+                <div class="premium-cat-img" style="font-size:40px; display:flex; align-items:center; justify-content:center;">🚘</div>
+            </div>`;
+
+            // 2. Qismlar sahifasi
+            let subcatsHTML = `<div id="dynamic-brand-page-${brand.id}" class="hidden" style="padding: 0 20px;">
+                <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">${brand.name} qismlari</div>`;
+            
+            let chipsHTML = `<div class="cat-group-title">🆕 ${brand.name}</div>`;
+
+            if(brand.subcats) {
+                subcatsHTML += `<div class="items-grid">`;
+                for(let sId in brand.subcats) {
+                    let subcat = brand.subcats[sId];
+                    subcatsHTML += `
+                    <div class="luxury-card" onclick="showSection('dynamic-prod-page-${subcat.id}')">
+                        <div class="info" style="padding: 20px 12px; text-align:center;"><h4>⚙️ ${subcat.name}</h4></div>
+                    </div>`;
+                    
+                    chipsHTML += `<span class="cat-chip" data-val="${subcat.id}" onclick="toggleChip(this)">${subcat.name}</span>`;
+
+                    // 3. Mahsulotlar sahifasi
+                    prodsArea.innerHTML += `
+                    <div id="dynamic-prod-page-${subcat.id}" class="items-grid hidden">
+                        <div class="section-title" style="grid-column:span 2;">${brand.name} - ${subcat.name}</div>
+                    </div>`;
+                }
+                subcatsHTML += `</div>`;
+            }
+
+            adminChips.innerHTML += chipsHTML;
+            if(adminChipsEdit) adminChipsEdit.innerHTML += chipsHTML;
+
+            // Admin bo'lsa qism qo'shish tugmasi
+            if(currentUser === ADMIN_ID) {
+                subcatsHTML += `<div class="admin-add-btn small" style="display:flex; margin-top:15px;" onclick="document.getElementById('current-parent-brand').value='${brand.id}'; openModal('addSubCatModal');">➕ YANGI QISM QO'SHISH</div>`;
+            }
+            subcatsHTML += `</div>`;
+            subcatsArea.innerHTML += subcatsHTML;
+        }
+        renderProducts(); 
+    }
+
     function generateOrderCode() {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = 'A1-';
-        for(let i=0; i<5; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
+        for(let i=0; i<5; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
         return result;
     }
     function getStatusHTML(status) {
@@ -1623,24 +1805,18 @@
         container.appendChild(toast); 
         setTimeout(() => { toast.remove(); }, 3000);
     }
-    const initialProducts = [
-        { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya Original", desc: "100% original Rossiya zavod porshenlari.", price: 1060000, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "biznes-motor", badge: "hot" },
-        { id: 2, name: "Gidrokompensator", car: "Gazel Biznes", brand: "Xitoy Premium", desc: "Sifatli va hamyonbop variant.", price: 20000, img: "https://i.postimg.cc/FRVhpbPs/gizrokompesator.jpg", category: "biznes-motor" },
-        { id: 4, name: "Giliza", car: "Gazel Biznes", brand: "Original", desc: "Dvigatel uchun yuqori sifatli giliza.", price: 150000, img: "https://i.postimg.cc/ydDM5cDf/1704954008428-bulletin.jpg", category: "biznes-motor", badge: "new" },
-        { id: 5, name: "Val", car: "Gazel Biznes", brand: "Original", desc: "Mustahkam dvigatel vali.", price: 850000, img: "https://i.postimg.cc/rwbCj4LX/val.jpg", category: "biznes-motor" }
-    ];
+    
+    // Eski bazaviy tovarlar o'rniga faqat db ishlaydi
     db.ref('products').on('value', (snapshot) => {
         document.getElementById('loading-text').style.display = 'none'; 
         document.getElementById('content-area').classList.remove('hidden');
         if (snapshot.exists()) { 
             productsDB = snapshot.val().filter(p => p !== null); 
-        } else { 
-            productsDB = initialProducts; 
-            db.ref('products').set(productsDB); 
         }
         renderProducts(); 
         updateCartBadge();
     });
+
     function toggleChip(element) { 
         element.classList.toggle('selected'); 
     }
@@ -1726,6 +1902,7 @@
             document.getElementById('add-name').value = ''; 
             document.getElementById('add-price').value = ''; 
             document.getElementById('add-img-preview').style.display = 'none'; 
+            document.querySelectorAll('#adminModal .cat-chip.selected').forEach(c => c.classList.remove('selected'));
         });
     }
     function openEditModal(e) {
@@ -1790,12 +1967,16 @@
         }); 
     }
     window.history.replaceState({ section: 'main-menu' }, ""); 
+    
+    // Welcome screen timeout
     setTimeout(() => { 
-        document.getElementById('welcome-screen').style.opacity = '0'; 
-        setTimeout(() => { 
-            document.getElementById('welcome-screen').style.display = 'none'; 
-        }, 500); 
-    }, 1500);
+        let wel = document.getElementById('welcome-screen');
+        if(wel) {
+            wel.style.opacity = '0'; 
+            setTimeout(() => { wel.style.display = 'none'; }, 500); 
+        }
+    }, 2000); // vaqt ozgina oshirildi
+    
     let limitCount = 12; 
     window.addEventListener('scroll', () => { 
         if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 150) { 
@@ -1805,18 +1986,21 @@
             } 
         } 
     });
+    
     function renderProducts() {
         let homeContainer = document.getElementById('home-products');
         if(homeContainer) { 
             let homeItems = productsDB.slice(0, limitCount); 
             homeContainer.innerHTML = homeItems.map(p => cardHTML(p)).join(''); 
         }
+        
         let categoryNames = [
             'biznes-motor', 'biznes-xadavoy', 'next-motor', 'next-xadavoy', 'eski-motor', 'eski-xadavoy', 
             'volga-2401-motor', 'volga-2401-xadavoy', 'volga-2410-motor', 'volga-2410-xadavoy', 'volga-3110-motor', 'volga-3110-xadavoy', 
             'volga-31105-motor', 'volga-31105-xadavoy', 'volga-31029-motor', 'volga-31029-xadavoy',
             'uaz-patriot-motor', 'uaz-patriot-xadavoy', 'uaz-hunter-motor', 'uaz-hunter-xadavoy', 'fara-tozalash-items', 'fara-tiklash-items'
         ];
+        // Eski kategoriyalar u-n
         categoryNames.forEach(cat => { 
             let container = document.getElementById(cat); 
             if(container) { 
@@ -1824,7 +2008,22 @@
                 container.innerHTML = items.map(p => cardHTML(p)).join(''); 
             } 
         });
+        
+        // YANGI: Dinamik kategoriyalar uchun
+        for(let bId in dynamicData) {
+            if(dynamicData[bId].subcats) {
+                for(let sId in dynamicData[bId].subcats) {
+                    let container = document.getElementById('dynamic-prod-page-' + sId);
+                    if(container) {
+                        let items = productsDB.filter(p => p.category === sId || (p.categories && p.categories.includes(sId)));
+                        let titleHTML = `<div class="section-title" style="grid-column:span 2;">${dynamicData[bId].name} - ${dynamicData[bId].subcats[sId].name} qismlari</div>`;
+                        container.innerHTML = titleHTML + items.map(p => cardHTML(p)).join('');
+                    }
+                }
+            }
+        }
     }
+    
     function addToCartQuick(e, id) { 
         e.stopPropagation(); 
         addToCart(id); 
@@ -2006,13 +2205,15 @@
         } 
     }
     function showSection(id) {
-        document.querySelectorAll('#content-area > div').forEach(div => { 
+        document.querySelectorAll('#content-area > div, #dynamic-subcats-area > div, #dynamic-products-area > div').forEach(div => { 
             div.classList.add('hidden'); 
             div.classList.remove('animate-slide-up'); 
         });
         let target = document.getElementById(id); 
-        target.classList.remove('hidden'); 
-        target.classList.add('animate-slide-up'); 
+        if(target) {
+            target.classList.remove('hidden'); 
+            target.classList.add('animate-slide-up'); 
+        }
         if (historyStack[historyStack.length - 1] !== id) { 
             historyStack.push(id); 
             window.history.pushState({ section: id }, ""); 
@@ -2379,11 +2580,14 @@
         if (historyStack.length > 1) {
             historyStack.pop(); 
             let previousId = historyStack[historyStack.length - 1];
-            document.querySelectorAll('#content-area > div').forEach(div => { 
+            document.querySelectorAll('#content-area > div, #dynamic-subcats-area > div, #dynamic-products-area > div').forEach(div => { 
                 div.classList.add('hidden'); 
             });
-            document.getElementById(previousId).classList.remove('hidden'); 
-            document.getElementById(previousId).classList.add('animate-slide-up');
+            let target = document.getElementById(previousId);
+            if(target){
+                target.classList.remove('hidden'); 
+                target.classList.add('animate-slide-up');
+            }
             let sliderContainer = document.querySelector('.slider-container');
             if(sliderContainer) {
                 sliderContainer.style.display = (previousId === 'main-menu') ? 'block' : 'none';
