@@ -839,28 +839,31 @@
         `).join(''); 
     }); 
 }
-  function changeOrderStatus(uid, orderId, newStatus) {
+function changeOrderStatus(uid, orderId, newStatus) {
         db.ref('users/' + uid + '/orders').once('value', snapshot => {
             if(snapshot.exists()) {
                 let userOrders = snapshot.val();
                 let idx = userOrders.findIndex(o => o.id === orderId);
+                
                 if(idx !== -1) {
                     let oldStatus = userOrders[idx].status;
                     userOrders[idx].status = newStatus;
+                    
                     db.ref('users/' + uid + '/orders').set(userOrders).then(() => {
                         showToast("Holat o'zgartirildi!");
                         openAdminOrders(); 
                         
-                        // YANGI QO'SHILGAN QISM: TELEGRAM BOTGA XABAR JO'NATISH
-                        // Agar status o'zgargan bo'lsa, Telegram botga "edit_status" buyrug'ini yuboramiz
+                        // TELEGRAM BOTGA XABAR JO'NATISH QISMI
                         if (oldStatus !== newStatus) {
-                            tg.sendData(JSON.stringify({
+                            let dataToSend = {
                                 action: 'edit_status',
                                 user_id: uid,
                                 order_id: orderId,
                                 new_status: newStatus
-                            }));
+                            };
+                            tg.sendData(JSON.stringify(dataToSend));
                         }
+                        
                     });
                 }
             }
