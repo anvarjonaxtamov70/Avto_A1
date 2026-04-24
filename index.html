@@ -587,6 +587,14 @@
 </div>
 
 <div class="modal-standard" id="adminOrdersModal"><div class="modal-header"><h2 style="color: var(--primary-blue);">📦 Buyurtmalar</h2><button class="close-btn" onclick="closeModal()">×</button></div><div id="admin-orders-list"></div></div>
+    <div class="modal-standard" id="adminChatModal">
+    <div class="modal-header"><h2 style="color: var(--luxury-gold);">💬 Mijoz bilan chat</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div id="admin-chat-messages" style="height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
+    <div style="display: flex; gap: 8px;">
+        <input type="text" id="admin-chat-input" class="search-box" placeholder="Javob yozing..." style="padding: 12px; border-radius: 12px; flex: 1;">
+        <button class="btn-checkout" style="width: auto; padding: 0 20px; border-radius: 12px; font-size: 18px;" onclick="sendAdminMessage()">➤</button>
+    </div>
+</div>
 <div class="modal-standard" id="cropModal" style="z-index: 3000; padding: 15px;"><div class="modal-header"><h2>✂️ Kesish</h2><button class="close-btn" onclick="closeCropModal()">×</button></div><div style="width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 20px;"><img id="cropper-image" src="" style="max-width: 100%; display: block;"></div><button class="btn-checkout" id="crop-save-btn" onclick="uploadCroppedImage()">Saqlash</button></div>
 <div class="modal-standard" id="adminStatsModal">
     <div class="modal-header"><h2 style="color: #34c759;">📊 Statistika</h2><button class="close-btn" onclick="closeModal()">×</button></div>
@@ -1167,6 +1175,100 @@ async function confirmOrder(paymentMethod) {
             renderChatMessages(); // Oynani yangilash
         }
     }
+
+// =====================================
+    // ADMIN: MIJOZ BILAN YOZISHMA (CHAT)
+    // =====================================
+    let currentAdminChatUid = null;
+    let currentAdminChatOrderId = null;
+
+    // Chat oynasini ochish
+    window.openAdminChat = (uid, orderId) => {
+        currentAdminChatUid = uid;
+        currentAdminChatOrderId = orderId;
+        renderAdminChatMessages();
+        openModal('adminChatModal');
+    }
+
+    // Xabarlarni o'qib, ekranga chizish
+    window.renderAdminChatMessages = () => {
+        let box = document.getElementById('admin-chat-messages');
+        box.innerHTML = '<p style="text-align:center; color:gray;">Yuklanmoqda...</p>';
+
+        db.ref('users/' + currentAdminChatUid + '/orders').once('value', snapshot => {
+            if(snapshot.exists()) {
+                let orders = snapshot.val();
+                let o = orders.find(x => x.id === currentAdminChatOrderId);
+                
+                if(o && o.messages && o.messages.length > 0) {
+                    let chatHtml = '';
+                    o.messages.forEach(msg => {
+                        let isMe = msg.sender === 'admin';
+                        chatHtml += `
+                            <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'};">
+                                <div style="max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 13px; 
+                                     background: ${isMe ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)'}; 
+                                     color: ${isMe ? '#000' : 'white'}; border-bottom-${isMe ? 'right' : 'left'}-radius: 2px;">
+                                    ${msg.text}
+                                    <div style="font-size: 9px; opacity: 0.7; text-align: right; margin-top: 4px;">${msg.time}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    box.innerHTML = chatHtml;
+                } else {
+                    box.innerHTML = `<div style="color: gray; text-align: center; font-size: 12px; margin-top: 20px;">Hali xabarlar yo'q.</div>`;
+                }
+                box.scrollTop = box.scrollHeight; // Har doim pastga tushirib qo'yish
+            }
+        });
+    }
+
+    // Admindan xabar jo'natish
+    window.sendAdminMessage = () => {
+        let input = document.getElementById('admin-chat-input');
+        let text = input.value.trim();
+        if(!text) return;
+
+        db.ref('users/' + currentAdminChatUid + '/orders').once('value', snapshot => {
+            if(snapshot.exists()) {
+                let orders = snapshot.val();
+                let idx = orders.findIndex(x => x.id === currentAdminChatOrderId);
+                
+                if(idx !== -1) {
+                    if(!orders[idx].messages) orders[idx].messages = [];
+                    
+                    let now = new Date();
+                    let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+                    
+                    orders[idx].messages.push({
+                        sender: 'admin',
+                        text: text,
+                        time: timeString
+                    });
+
+                    // Bazaga saqlash
+                    db.ref('users/' + currentAdminChatUid + '/orders').set(orders).then(() => {
+                        input.value = '';
+                        renderAdminChatMessages();
+                        
+                        // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
+                        let orderCode = orders[idx].code || currentAdminChatOrderId;
+                        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ 
+                                chat_id: currentAdminChatUid, 
+                                text: `📩 <b>#${orderCode}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${text}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`, 
+                                parse_mode: "HTML" 
+                            })
+                        });
+                    });
+                }
+            }
+        });
+    }
+    
     function openAdminStats() {
         document.getElementById('adminModal').style.display = 'none';
         let sM = document.getElementById('adminStatsModal');
@@ -1280,10 +1382,11 @@ async function confirmOrder(paymentMethod) {
                 </div>
                 <p>👤 ${o.uN}<br>📞 ${o.uP}</p>
                 <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px;">💰 ${o.total.toLocaleString()} so'm</p>
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul qildik</button>` : ''}
-                    ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lga chiqdi</button>` : ''}
-                    ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazib berildi</button>` : ''}
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button style="padding:10px; background:rgba(255,255,255,0.1); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="openAdminChat('${o.uI}', ${o.id})">💬 Chat</button>
+                    ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
+                    ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lda</button>` : ''}
+                    ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazildi</button>` : ''}
                 </div>
             </div>
         `).join(''); 
