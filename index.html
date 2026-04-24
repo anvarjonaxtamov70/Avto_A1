@@ -449,12 +449,21 @@
     <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="edit-price" class="search-box" style="margin-bottom: 15px;">
     <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="edit-stock" class="search-box" style="margin-bottom: 15px;">
     <span class="luxury-input-label">TAVSIFI</span><textarea id="edit-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;"></textarea>
-    <input type="file" id="edit-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'edit')">
-    <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px;">
-        <img id="edit-img-preview" src="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; border: 1px solid var(--luxury-gold);">
-        <button type="button" class="btn-checkout" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); color: white;" onclick="document.getElementById('edit-img-file').click()">📸 Rasm</button>
+    <span class="luxury-input-label">RASMLAR (Maksimal 3 ta)</span>
+    <div style="display:flex; gap:8px; margin-bottom:15px;">
+        <button type="button" class="btn-checkout" style="flex:1; padding:10px; background:rgba(255,255,255,0.05); border:1px dashed var(--luxury-gold); color:white; font-size:12px;" onclick="document.getElementById('edit-img-file').click()">📸 1</button>
+        <button type="button" class="btn-checkout" style="flex:1; padding:10px; background:rgba(255,255,255,0.05); border:1px dashed var(--luxury-gold); color:white; font-size:12px;" onclick="document.getElementById('edit-img-file2').click()">📸 2</button>
+        <button type="button" class="btn-checkout" style="flex:1; padding:10px; background:rgba(255,255,255,0.05); border:1px dashed var(--luxury-gold); color:white; font-size:12px;" onclick="document.getElementById('edit-img-file3').click()">📸 3</button>
     </div>
-    <input type="hidden" id="edit-img-url">
+    <div style="display:flex; gap:10px; margin-bottom:15px; justify-content:center;">
+        <img id="edit-img-preview" src="" style="width:70px; height:70px; object-fit:cover; border-radius:12px; display:none; border:1px solid var(--luxury-gold);">
+        <img id="edit-img-preview2" src="" style="width:70px; height:70px; object-fit:cover; border-radius:12px; display:none; border:1px solid var(--luxury-gold);">
+        <img id="edit-img-preview3" src="" style="width:70px; height:70px; object-fit:cover; border-radius:12px; display:none; border:1px solid var(--luxury-gold);">
+    </div>
+    <input type="file" id="edit-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'edit')">
+    <input type="file" id="edit-img-file2" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'edit2')">
+    <input type="file" id="edit-img-file3" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'edit3')">
+    <input type="hidden" id="edit-img-url"><input type="hidden" id="edit-img-url2"><input type="hidden" id="edit-img-url3">
     <span class="luxury-input-label">1. MASHINANI TANLANG</span>
     <div style="font-size:12px; color:var(--primary-blue); font-weight:bold; margin:10px 0 5px;">🚛 GAZ / VOLGA / SOBOL</div>
     <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
@@ -778,47 +787,42 @@ function openEditModal(e) {
 }
 
 function saveEditProduct() {
-    let id = parseInt(document.getElementById('edit-id').value); 
-    let n = document.getElementById('edit-name').value; 
-    let p = parseInt(document.getElementById('edit-price').value); 
-    let st = parseInt(document.getElementById('edit-stock').value) || 0; 
-    let d = document.getElementById('edit-desc').value; 
-    
-    let img1 = document.getElementById('edit-img-url').value;
-    let img2 = document.getElementById('edit-img-url2') ? document.getElementById('edit-img-url2').value : "";
-    let img3 = document.getElementById('edit-img-url3') ? document.getElementById('edit-img-url3').value : "";
-    
-    let imagesArr = [];
-    if(img1) imagesArr.push(img1);
-    if(img2) imagesArr.push(img2);
-    if(img3) imagesArr.push(img3);
-
-    let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val')); 
-    let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
-    
-    if(!n || !p || imagesArr.length === 0 || sMods.length === 0 || sTyps.length === 0) { 
-        showToast("Xato! Rasm va malumotlar to'liq emas.", "warning"); 
-        return; 
-    }
-    
-    let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
-    let idx = productsDB.findIndex(x => x.id === id);
-    
-    if(idx !== -1) { 
-        productsDB[idx].name = n; 
-        productsDB[idx].price = p; 
-        productsDB[index].stock = st; 
-        productsDB[idx].desc = d; 
-        productsDB[idx].img = imagesArr[0]; // asosiy rasm
-        productsDB[idx].images = imagesArr; // barcha rasmlar ro'yxati
-        productsDB[idx].categories = sCats; 
-        productsDB[idx].category = sCats[0]; 
+        let id = parseInt(document.getElementById('edit-id').value); let n = document.getElementById('edit-name').value; let p = parseInt(document.getElementById('edit-price').value); let st = parseInt(document.getElementById('edit-stock').value) || 0; let d = document.getElementById('edit-desc').value; 
         
-        db.ref('products').set(productsDB).then(() => { 
-            showToast("Yangilandi!"); closeModal(); 
-        }); 
+        let img1 = document.getElementById('edit-img-url').value;
+        let img2 = document.getElementById('edit-img-url2') ? document.getElementById('edit-img-url2').value : "";
+        let img3 = document.getElementById('edit-img-url3') ? document.getElementById('edit-img-url3').value : "";
+        
+        let imagesArr = [];
+        if(img1) imagesArr.push(img1);
+        if(img2) imagesArr.push(img2);
+        if(img3) imagesArr.push(img3);
+
+        let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val')); let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
+        
+        if(!n || !p || imagesArr.length === 0 || sMods.length === 0 || sTyps.length === 0) { 
+            showToast("Malumot, rasm yoki kategoriya chala!", "warning"); 
+            return; 
+        }
+        
+        let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
+        let idx = productsDB.findIndex(x => x.id === id);
+        
+        if(idx !== -1) { 
+            productsDB[idx].name = n; 
+            productsDB[idx].price = p; 
+            productsDB[idx].stock = st; 
+            productsDB[idx].desc = d; 
+            productsDB[idx].img = imagesArr[0]; // asosiy rasm sifatida birinchisi
+            productsDB[idx].images = imagesArr; // barcha 3 ta rasm ro'yxati
+            productsDB[idx].categories = sCats; 
+            productsDB[idx].category = sCats[0]; 
+            db.ref('products').set(productsDB).then(() => { 
+                showToast("Yangilandi!"); 
+                closeModal(); 
+            }); 
+        }
     }
-}
 
     function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
 
@@ -935,7 +939,7 @@ function saveEditProduct() {
     function searchProducts() {
         let q = document.getElementById('searchInput').value.toLowerCase().trim(); let r = document.getElementById('search-results'); let c = document.getElementById('content-area'); let cb = document.getElementById('clearSearchBtn'); let qc = document.getElementById('quick-chips'); let sC = document.querySelector('.slider-container'); let bn = document.querySelector('.bottom-nav');
         if (q.length > 0) cb.classList.add('show'); else cb.classList.remove('show');
-        if (!searchActive) { searchActive = true; window.history.pushState({ search: true }, ""); c.classList.add('hidden'); if(sC) sC.style.display = 'none'; r.classList.remove('hidden'); qc.classList.remove('hidden'); if(bn) { bn.style.pointerEvents = 'none'; bn.style.opacity = '0.4'; } tg.BackButton.show(); document.getElementById('back-btn').style.display = 'flex'; }
+        if (!searchActive) { searchActive = true; window.history.pushState({ search: true }, ""); c.classList.add('hidden'); if(sC) sC.style.display = 'none'; r.classList.remove('hidden'); qc.classList.remove('hidden');if(bn) { bn.style.display = 'none'; } tg.BackButton.show(); document.getElementById('back-btn').style.display = 'flex'; }
         if (q.length > 0) {
             qc.style.display = 'none'; let filt = productsDB.filter(x => x.name.toLowerCase().includes(q) || (x.car && x.car.toLowerCase().includes(q)));
             if (filt.length === 0) r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><p>Hech narsa topilmadi.</p></div>`;
@@ -944,7 +948,7 @@ function saveEditProduct() {
     }
     function clearSearch() { document.getElementById('searchInput').value = ''; searchProducts(); document.getElementById('searchInput').focus(); }
     function applyQuickSearch(t) { document.getElementById('searchInput').value = t; searchProducts(); }
-    function exitSearch() { searchActive = false; document.getElementById('searchInput').value = ''; document.getElementById('search-results').classList.add('hidden'); document.getElementById('quick-chips').classList.add('hidden'); document.getElementById('clearSearchBtn').classList.remove('show'); document.getElementById('content-area').classList.remove('hidden'); let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; let bn = document.querySelector('.bottom-nav'); if(bn) { bn.style.pointerEvents = 'auto'; bn.style.opacity = '1'; } updateBtns(); }
+    function exitSearch() { searchActive = false; document.getElementById('searchInput').value = ''; document.getElementById('search-results').classList.add('hidden'); document.getElementById('quick-chips').classList.add('hidden'); document.getElementById('clearSearchBtn').classList.remove('show'); document.getElementById('content-area').classList.remove('hidden'); let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; let bn = document.querySelector('.bottom-nav');if(bn) { bn.style.display = 'flex'; } updateBtns(); }
 
     function updateCartBadge() { let tot = Object.values(cart).reduce((a,b)=>a+b,0); let b = document.getElementById('nav-badge'); b.innerText = tot; if(tot > 0) { b.classList.add('show'); b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse'); } else { b.classList.remove('show'); } }
     function addToCart(id) { cart[id] = (cart[id] || 0) + 1; saveLocalCart(); updateCartBadge(); tg.HapticFeedback.impactOccurred('medium'); showToast('Savatda!'); }
