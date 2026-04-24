@@ -664,13 +664,29 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
     async function uploadCroppedImage() {
         if(!currentCropper) return; let btn = document.getElementById('crop-save-btn'); let oldT = btn.innerText; btn.innerText = "Kuting..."; btn.disabled = true;
         try { const canvas = currentCropper.getCroppedCanvas({ width: 600, height: 600 }); const fd = new FormData(); fd.append("image", canvas.toDataURL('image/jpeg', 0.85).split(',')[1]); const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: fd }); const r = await res.json();
-            if(r.success) { if(currentTargetInput === 'add') { document.getElementById('add-img-url').value = r.data.url; document.getElementById('add-img-preview').src = r.data.url; document.getElementById('add-img-preview').style.display = 'block'; } else if(currentTargetInput === 'edit') { document.getElementById('edit-img-url').value = r.data.url; document.getElementById('edit-img-preview').src = r.data.url; document.getElementById('edit-img-preview').style.display = 'block'; } showToast("Yuklandi!"); closeModal(); }
+         if(r.success) { 
+                let base = currentTargetInput.startsWith('add') ? 'add' : 'edit';
+                let num = currentTargetInput.replace(base, ''); 
+                let urlInp = document.getElementById(`${base}-img-url${num}`);
+                let prevImg = document.getElementById(`${base}-img-preview${num}`);
+                if(urlInp && prevImg) {
+                    urlInp.value = r.data.url;
+                    prevImg.src = r.data.url;
+                    prevImg.style.display = 'block';
+                }
+                showToast("Yuklandi!"); closeModal(); 
+            }  
         } catch (err) { console.error(err); } finally { btn.innerText = oldT; btn.disabled = false; }
     }
     function closeCropModal() { closeModal(); if(currentCropper) currentCropper.destroy(); }
 
     function saveNewProduct() {
         let n = document.getElementById('add-name').value; let p = parseInt(document.getElementById('add-price').value); let st = parseInt(document.getElementById('add-stock').value) || 0; let img = document.getElementById('add-img-url').value;
+        let img2 = document.getElementById('add-img-url2') ? document.getElementById('add-img-url2').value : "";
+        let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
+        let imagesArr = [img];
+        if(img2) imagesArr.push(img2);
+        if(img3) imagesArr.push(img3);
         let descVal = document.getElementById('add-desc') ? document.getElementById('add-desc').value.trim() : "";
         if(!descVal) descVal = "Tavsif kiritilmagan";
         let sMods = Array.from(document.querySelectorAll('#adminModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
@@ -678,7 +694,7 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
         if(!n || !p || !img || sMods.length === 0 || sTyps.length === 0) { showToast("To'ldiring va tanlang!", "warning"); return; }
         let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
         let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
-        productsDB.push({ id: newId, name: n, desc: descVal, price: p, stock: st, img: img, category: sCats[0], categories: sCats });
+        productsDB.push({ id: newId, name: n, desc: descVal, price: p, stock: st, img: img, images: imagesArr, category: sCats[0], categories: sCats });
         db.ref('products').set(productsDB).then(() => { showToast("Saqlandi!"); closeModal(); document.getElementById('add-name').value = ''; document.getElementById('add-price').value = ''; document.getElementById('add-stock').value = '10'; if(document.getElementById('add-desc')) document.getElementById('add-desc').value = ''; document.getElementById('add-img-preview').style.display = 'none'; document.querySelectorAll('#adminModal .cat-chip').forEach(c => c.classList.remove('selected')); });
     }
 
