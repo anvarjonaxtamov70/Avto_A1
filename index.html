@@ -853,16 +853,43 @@ function changeOrderStatus(uid, orderId, newStatus) {
                         showToast("Holat o'zgartirildi!");
                         openAdminOrders(); 
                         
-                        // TELEGRAM BOTGA XABAR JO'NATISH QISMI
+                        // =======================================================
+                        // TELEGRAMGA TO'G'RIDAN-TO'G'RI XABAR JO'NATISH (API ORQALI)
+                        // =======================================================
                         if (oldStatus !== newStatus) {
-                            let dataToSend = {
-                                action: 'edit_status',
-                                user_id: uid,
-                                order_id: orderId,
-                                new_status: newStatus
-                            };
-                            tg.sendData(JSON.stringify(dataToSend));
+                            let statusText = "";
+                            let mijozMsg = "";
+
+                            if (newStatus === "qabul") {
+                                statusText = "✅ QABUL QILINDI";
+                                mijozMsg = "✅ Buyurtmangiz qabul qilindi va yig'ilmoqda!";
+                            } else if (newStatus === "yolda") {
+                                statusText = "🚚 YO'LGA CHIQDI";
+                                mijozMsg = "🚚 Buyurtmangiz yo'lga chiqdi! Kuting.";
+                            } else if (newStatus === "yetkazildi") {
+                                statusText = "🏁 YETKAZIB BERILDI";
+                                mijozMsg = "🏁 Buyurtmangiz muvaffaqiyatli yetkazib berildi. Xaridingiz uchun rahmat!";
+                            }
+
+                            let adminMsg = `🔄 <b>Diqqat!</b> WebApp orqali buyurtma holati o'zgardi.\n\n🆔 Buyurtma: <b>#${orderId}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
+
+                            // 1. ADMINGA SMS JO'NATISH
+                            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ chat_id: ADMIN_ID, text: adminMsg, parse_mode: "HTML" })
+                            });
+
+                            // 2. MIJOZGA SMS JO'NATISH
+                            if (uid && uid !== "Noma'lum" && mijozMsg !== "") {
+                                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ chat_id: uid, text: mijozMsg })
+                                });
+                            }
                         }
+                        // =======================================================
                         
                     });
                 }
