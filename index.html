@@ -380,7 +380,8 @@
 <div class="modal-standard" id="profileEditModal">
     <div class="modal-header"><h2>👤 Ma'lumot</h2><button class="close-btn" onclick="closeModal()">×</button></div>
     <span class="luxury-input-label">ISMINGIZ</span><input type="text" id="user-edit-name" class="search-box" style="margin-bottom: 15px;">
-    <span class="luxury-input-label">RAQAMINGIZ</span><input type="tel" id="user-edit-phone" placeholder="+998 90 123 45 67" class="search-box" style="margin-bottom: 25px;">
+    <span class="luxury-input-label">RAQAMINGIZ</span><input type="tel" id="user-edit-phone" placeholder="+998 90 123 45 67" class="search-box" style="margin-bottom: 15px;">
+    <span class="luxury-input-label">YETKAZIB BERISH MANZILI (Ixtiyoriy)</span><input type="text" id="user-edit-address" placeholder="Viloyat, shahar, ko'cha..." class="search-box" style="margin-bottom: 25px;">
     <button class="btn-checkout" onclick="saveProfile()">Saqlash</button>
 </div>
 
@@ -464,6 +465,7 @@
         <span class="luxury-input-label">NOMI</span><input type="text" id="add-name" class="search-box" style="margin-bottom: 15px;">
         <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="add-price" class="search-box" style="margin-bottom: 15px;">
         <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="add-stock" class="search-box" style="margin-bottom: 15px;" value="10">
+        <span class="luxury-input-label">TAVSIFI (MA'LUMOT)</span><textarea id="add-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;" placeholder="Tovar haqida..."></textarea>
         <input type="file" id="add-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'add')">
         <button type="button" class="btn-checkout" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); color:white; margin-bottom: 15px;" onclick="document.getElementById('add-img-file').click()">📸 Rasm Tanlash</button>
         <img id="add-img-preview" src="" style="width: 140px; height: 140px; object-fit: cover; border-radius: 16px; display: none; margin: 0 auto 15px; border: 2px solid var(--luxury-gold);">
@@ -521,15 +523,12 @@
     const firebaseConfig = { databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-
-    let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, cart = {}, myOrders = [], myProfile = { name: botName, phone: botPhone }, isDataLoaded = false;
+let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, cart = {}, myOrders = [], myProfile = { name: botName, phone: botPhone, address: "" }, isDataLoaded = false;
 
     function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
     function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
-
-    function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; }
+function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; }
     updateProfileUI();
-
     if (currentUser) {
         db.ref('users/' + currentUser).on('value', (snap) => {
             if (snap.exists()) {
@@ -542,7 +541,7 @@
 
     function saveLocalCart() { if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
     function saveLocalOrders() { if (currentUser) db.ref('users/' + currentUser + '/orders').set(myOrders); }
-    function saveProfile() { let nN = document.getElementById('user-edit-name').value.trim(); let nP = document.getElementById('user-edit-phone').value.trim(); if(!nN || !nP) { showToast("Kiritish shart!", "warning"); return; } myProfile.name = nN; myProfile.phone = nP; updateProfileUI(); if (currentUser) { db.ref('users/' + currentUser + '/profile').set(myProfile).then(() => { showToast("Saqlandi!"); closeModal(); }); } else { showToast("Saqlandi!"); closeModal(); } }
+    function saveProfile() { let nN = document.getElementById('user-edit-name').value.trim(); let nP = document.getElementById('user-edit-phone').value.trim(); let nA = document.getElementById('user-edit-address') ? document.getElementById('user-edit-address').value.trim() : ""; if(!nN || !nP) { showToast("Ism va raqamni kiritish shart!", "warning"); return; } myProfile.name = nN; myProfile.phone = nP; myProfile.address = nA; updateProfileUI(); if (currentUser) { db.ref('users/' + currentUser + '/profile').set(myProfile).then(() => { showToast("Saqlandi!"); closeModal(); }); } else { showToast("Saqlandi!"); closeModal(); } }
     function showToast(m, t = 'success') { const c = document.getElementById('toast-container'); const el = document.createElement('div'); el.className = 'toast'; el.style.borderLeftColor = t === 'success' ? 'var(--accent-green)' : 'var(--luxury-gold)'; el.innerHTML = `<span>${t === 'success' ? '✅' : '⚠️'}</span> <span>${m}</span>`; c.appendChild(el); setTimeout(() => el.remove(), 3000); }
 
     const initialProducts = [ { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", desc: "100% original", price: 1060000, stock: 10, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "gazel-biznes-motor", badge: "hot" } ];
@@ -579,13 +578,15 @@
 
     function saveNewProduct() {
         let n = document.getElementById('add-name').value; let p = parseInt(document.getElementById('add-price').value); let st = parseInt(document.getElementById('add-stock').value) || 0; let img = document.getElementById('add-img-url').value;
+        let descVal = document.getElementById('add-desc') ? document.getElementById('add-desc').value.trim() : "";
+        if(!descVal) descVal = "Tavsif kiritilmagan";
         let sMods = Array.from(document.querySelectorAll('#adminModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
         let sTyps = Array.from(document.querySelectorAll('#adminModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
         if(!n || !p || !img || sMods.length === 0 || sTyps.length === 0) { showToast("To'ldiring va tanlang!", "warning"); return; }
         let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
         let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
-        productsDB.push({ id: newId, name: n, desc: "Sifatli zapchast", price: p, stock: st, img: img, category: sCats[0], categories: sCats });
-        db.ref('products').set(productsDB).then(() => { showToast("Saqlandi!"); closeModal(); document.getElementById('add-name').value = ''; document.getElementById('add-price').value = ''; document.getElementById('add-stock').value = '10'; document.getElementById('add-img-preview').style.display = 'none'; document.querySelectorAll('#adminModal .cat-chip').forEach(c => c.classList.remove('selected')); });
+        productsDB.push({ id: newId, name: n, desc: descVal, price: p, stock: st, img: img, category: sCats[0], categories: sCats });
+        db.ref('products').set(productsDB).then(() => { showToast("Saqlandi!"); closeModal(); document.getElementById('add-name').value = ''; document.getElementById('add-price').value = ''; document.getElementById('add-stock').value = '10'; if(document.getElementById('add-desc')) document.getElementById('add-desc').value = ''; document.getElementById('add-img-preview').style.display = 'none'; document.querySelectorAll('#adminModal .cat-chip').forEach(c => c.classList.remove('selected')); });
     }
 
     function openEditModal(e) {
@@ -663,8 +664,7 @@
 
     function openProduct(id) {
         let p = productsDB.find(x => x.id == id); if(!p) return;
-        document.getElementById('pm-img').src = p.img; document.getElementById('pm-title').innerText = p.name; document.getElementById('pm-desc').innerText = p.desc || ""; document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} s`;
-        
+        document.getElementById('pm-img').src = p.img; document.getElementById('pm-title').innerText = p.name; document.getElementById('pm-desc').innerText = p.desc || "Tavsif kiritilmagan"; document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} s`;       
         let st = p.stock !== undefined ? p.stock : 10;
         let sInf = document.getElementById('pm-stock');
         let buyB = document.getElementById('pm-buy-btn');
@@ -723,11 +723,13 @@
     function selectPayment(t) { if(t === 'cash') confirmOrder('Naqd pul'); else if(t === 'card') { document.getElementById('payment-options').classList.add('hidden'); document.getElementById('card-details').classList.remove('hidden'); } }
     function copyCard() { navigator.clipboard.writeText("5614681874796349"); showToast("Nusxalandi!"); }
 
-   async function confirmOrder(paymentMethod) {
+async function confirmOrder(paymentMethod) {
         const loadingOverlay = document.getElementById('order-loading-overlay'); 
         loadingOverlay.classList.add('active');
         let newOrderCode = generateOrderCode(); 
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n📞 <b>Telefon:</b> ${myProfile.phone}\n📍 <b>Viloyat:</b> ${botRegion}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
+        
+        let addressText = myProfile.address ? `\n📍 <b>Manzil:</b> ${myProfile.address}` : "";
+        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n📞 <b>Telefon:</b> ${myProfile.phone}${addressText}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
         let total = 0; 
         let savedItems = {};
         
@@ -738,6 +740,10 @@
                 adminText += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
                 total += sum; 
                 savedItems[id] = cart[id]; 
+                
+                // ZAXIRADAN AYIRISH
+                p.stock = (p.stock !== undefined ? p.stock : 10) - cart[id];
+                if (p.stock < 0) p.stock = 0; 
             } 
         }
         adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
@@ -746,33 +752,25 @@
             const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
                 method: "POST", 
                 headers: { "Content-Type": "application/json" }, 
-                body: JSON.stringify({ 
-                    chat_id: ADMIN_ID, 
-                    text: adminText, 
-                    parse_mode: "HTML"
-                    // DIQQAT: Shu yerdagi eski telegram tugmalari (reply_markup) olib tashlandi!
-                }) 
+                body: JSON.stringify({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" }) 
             });
             
             if (res.ok) {
+                // OMBORNI YANGILASH
+                db.ref('products').set(productsDB);
+                
                 if(currentUser) { 
                     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
                         method: "POST", 
                         headers: { "Content-Type": "application/json" }, 
                         body: JSON.stringify({ 
                             chat_id: currentUser, 
-                            text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\nTo'lov turi: ${paymentMethod}` 
+                            text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` 
                         }) 
                     }); 
                 }
                 myOrders.unshift({ 
-                    id: Date.now(), 
-                    code: newOrderCode, 
-                    date: new Date().toLocaleDateString('uz-UZ'), 
-                    time: new Date().toLocaleTimeString('uz-UZ'), 
-                    items: savedItems, 
-                    total: total, 
-                    status: 'kutilmoqda' 
+                    id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' 
                 }); 
                 saveLocalOrders(); 
                 cart = {}; 
