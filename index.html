@@ -230,6 +230,13 @@
             <div class="section-title" style="margin-top: 0;">Kabinet</div>          
             <div style="padding: 0 20px;">
                 <div class="profile-header"><div class="profile-avatar" id="pf-avatar">M</div><div class="profile-info"><h3 id="pf-name">Mijoz</h3><p id="pf-id">ID: Yuklanmoqda...</p></div></div>
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 16px; padding: 15px; margin-bottom: 20px;">
+    <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--luxury-gold);">📦 Buyurtmani kuzatish</h4>
+    <div style="display: flex; gap: 10px;">
+        <input type="text" id="track-order-input" class="search-box" placeholder="#A1-XXXXX" style="padding: 10px 15px; border-radius: 10px; flex: 1;">
+        <button class="btn-checkout" style="width: auto; padding: 10px 20px; border-radius: 10px; font-size: 14px;" onclick="trackOrder(this)">Izlash</button>
+    </div>
+</div>
                 <div class="profile-menu-item" onclick="showMyOrders()"><div class="left"><svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> Mening Buyurtmalarim</div><div style="color:var(--text-muted); font-size:20px;">›</div></div>
                 <div class="profile-menu-item" onclick="openModal('profileEditModal')"><div class="left"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> Shaxsiy Ma'lumotlar</div><div style="color:var(--text-muted); font-size:20px;">›</div></div>
                 <div class="profile-menu-item" onclick="openModal('contactModal')"><div class="left"><svg viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg> Biz bilan Aloqa</div><div style="color:var(--text-muted); font-size:20px;">›</div></div>
@@ -1265,6 +1272,69 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     function updateBtns() { let iD = historyStack.length > 1; let bB = document.getElementById('back-btn'); if(bB) bB.style.display = iD ? 'flex' : 'none'; if (iD || activeModal || searchActive) tg.BackButton.show(); else tg.BackButton.hide(); }
     updateBtns();
     let aS = document.getElementById('main-slider'); if (aS) { setInterval(() => { if (aS.scrollWidth - aS.clientWidth <= aS.scrollLeft + 5) aS.scrollTo({ left: 0, behavior: 'smooth' }); else aS.scrollBy({ left: aS.clientWidth, behavior: 'smooth' }); }, 3500); } 
+    // ==========================================
+    // 8-FUNKSIYA: BUYURTMA IZLASH TIZIMI
+    // ==========================================
+    window.trackOrder = (btn) => {
+        let code = document.getElementById('track-order-input').value.trim().toUpperCase();
+        if(!code) { showToast("Kodni kiriting!", "warning"); return; }
+        
+        // Agar mijoz faqat raqamni yozsa, oldiga A1- qo'shib qo'yamiz
+        if(!code.startsWith("A1-") && !code.startsWith("#A1-")) code = "A1-" + code;
+        if(code.startsWith("#")) code = code.substring(1); // # belgisini olib tashlaymiz
+
+        let oldText = btn.innerText;
+        btn.innerText = "...";
+        btn.disabled = true;
+
+        // Firebase'dan barcha foydalanuvchilarning buyurtmalarini izlaymiz
+        db.ref('users').once('value', (s) => {
+            btn.innerText = oldText;
+            btn.disabled = false;
+            let found = false;
+
+            if(s.exists()) {
+                let us = s.val();
+                for(let uid in us) {
+                    if(us[uid].orders) {
+                        let ords = safeArray(us[uid].orders);
+                        let target = ords.find(o => (o.code === code) || (o.id == code));
+                        
+                        if(target) {
+                            found = true;
+                            showTrackedOrder(target);
+                            break;
+                        }
+                    }
+                }
+            }
+            if(!found) {
+                showToast("Bunday buyurtma topilmadi!", "warning");
+            }
+        });
+    }
+
+    // Topilgan buyurtmani ekranga chiqarish (Tafsilot oynasi)
+    window.showTrackedOrder = (o) => {
+        document.getElementById('od-code').innerText = "Kuzatuv: #" + (o.code || o.id); 
+        document.getElementById('od-date').innerText = o.date + " " + o.time; 
+        document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda');
+        
+        let itemsHtml = ''; 
+        if (o.items) {
+            for(let pid in o.items) { 
+                let p = productsDB.find(x => x.id == pid); 
+                if(p) itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${p.name} (x${o.items[pid]})</span> <span style="color:var(--luxury-gold);">${(p.price * o.items[pid]).toLocaleString()} s</span></div>`; 
+            }
+        }
+        document.getElementById('od-items').innerHTML = itemsHtml; 
+        document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm";
+        
+        // Qidiruv orqali kirganda birovning buyurtmasini baholamasligi uchun review o'chiriladi
+        document.getElementById('od-review-section').innerHTML = ''; 
+        
+        openModal('orderDetailModal');
+    }
 </script>
 </body>
 </html>
