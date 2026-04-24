@@ -762,7 +762,47 @@
     function setStarRating(r) { sR = r; let s = document.getElementById('rating-stars-container').children; for(let i=0; i<s.length; i++) { if(i < r) s[i].classList.add('active'); else s[i].classList.remove('active'); } }
     function saveOrderReview() { if(sR === 0) return; let idx = myOrders.findIndex(x => x.id === cRO); if(idx !== -1) { myOrders[idx].review = { rating: sR, text: "" }; saveLocalOrders(); showToast("Rahmat!"); closeModal(); } }
 
-    function openAdminOrders() { document.getElementById('adminModal').style.display = 'none'; let aM = document.getElementById('adminOrdersModal'); aM.style.display = 'flex'; activeModal = 'adminOrdersModal'; window.history.replaceState({ modal: 'adminOrdersModal' }, ""); let c = document.getElementById('admin-orders-list'); c.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>'; db.ref('users').once('value', (s) => { let aO = []; if(s.exists()) { let us = s.val(); for(let uid in us) { if(us[uid].orders) { let ph = us[uid].profile ? us[uid].profile.phone : ""; let nm = us[uid].profile ? us[uid].profile.name : ""; us[uid].orders.forEach(o => { aO.push({ uI: uid, uN: nm, uP: ph, ...o }); }); } } } aO.sort((a,b) => b.id - a.id); if(aO.length === 0) { c.innerHTML = '<p style="text-align:center;">Buyurtmalar yo\'q.</p>'; return; } c.innerHTML = aO.map(o => `<div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block;"><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><b>#${o.code||o.id}</b>${getStatusHTML(o.status||'kutilmoqda')}</div><p>👤 ${o.uN}<br>📞 ${o.uP}</p><p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px;">💰 ${o.total.toLocaleString()} so'm</p><div style="display:flex; gap:8px;"><button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul qildik</button><button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lga chiqdi</button><button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazib berildi</button></div></div>`).join(''); }); }
+    function openAdminOrders() { 
+    document.getElementById('adminModal').style.display = 'none'; 
+    let aM = document.getElementById('adminOrdersModal'); 
+    aM.style.display = 'flex'; 
+    activeModal = 'adminOrdersModal'; 
+    window.history.replaceState({ modal: 'adminOrdersModal' }, ""); 
+    let c = document.getElementById('admin-orders-list'); 
+    c.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>'; 
+    db.ref('users').once('value', (s) => { 
+        let aO = []; 
+        if(s.exists()) { 
+            let us = s.val(); 
+            for(let uid in us) { 
+                if(us[uid].orders) { 
+                    let ph = us[uid].profile ? us[uid].profile.phone : ""; 
+                    let nm = us[uid].profile ? us[uid].profile.name : ""; 
+                    us[uid].orders.forEach(o => { aO.push({ uI: uid, uN: nm, uP: ph, ...o }); }); 
+                } 
+            } 
+        } 
+        aO.sort((a,b) => b.id - a.id); 
+        if(aO.length === 0) { 
+            c.innerHTML = '<p style="text-align:center;">Buyurtmalar yo\'q.</p>'; 
+            return; 
+        } 
+        c.innerHTML = aO.map(o => `
+            <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <b>#${o.code||o.id}</b>${getStatusHTML(o.status||'kutilmoqda')}
+                </div>
+                <p>👤 ${o.uN}<br>📞 ${o.uP}</p>
+                <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px;">💰 ${o.total.toLocaleString()} so'm</p>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul qildik</button>` : ''}
+                    ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lga chiqdi</button>` : ''}
+                    ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazib berildi</button>` : ''}
+                </div>
+            </div>
+        `).join(''); 
+    }); 
+}
     function changeOrderStatus(uid, oId, nS) { db.ref('users/' + uid + '/orders').once('value', s => { if(s.exists()) { let o = s.val(); let i = o.findIndex(x => x.id === oId); if(i !== -1) { o[i].status = nS; db.ref('users/' + uid + '/orders').set(o).then(() => { showToast("O'zgardi!"); openAdminOrders(); }); } } }); }
 
     function openModal(id) { if (activeModal === id) return; if(id === 'cartModal') renderCartItems(); let m = document.getElementById(id); m.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = id; window.history.pushState({ modal: id }, ""); tg.BackButton.show(); updateBtns(); }
