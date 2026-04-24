@@ -723,36 +723,72 @@
     function selectPayment(t) { if(t === 'cash') confirmOrder('Naqd pul'); else if(t === 'card') { document.getElementById('payment-options').classList.add('hidden'); document.getElementById('card-details').classList.remove('hidden'); } }
     function copyCard() { navigator.clipboard.writeText("5614681874796349"); showToast("Nusxalandi!"); }
 
-    async function confirmOrder(pm) {
-        const lo = document.getElementById('order-loading-overlay'); lo.classList.add('active'); let cO = generateOrderCode(); 
-        let aT = `🆕 <b>YANGI BUYURTMA: #${cO}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n🔗 <b>Username:</b> ${tgUsername}\n📞 <b>Telefon:</b> ${myProfile.phone}\n📍 <b>Viloyat:</b> ${botRegion}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${pm}\n\n🛒 <b>Mahsulotlar:</b>\n`; 
-        let t = 0; let sI = {};
+   async function confirmOrder(paymentMethod) {
+        const loadingOverlay = document.getElementById('order-loading-overlay'); 
+        loadingOverlay.classList.add('active');
+        let newOrderCode = generateOrderCode(); 
+        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n📞 <b>Telefon:</b> ${myProfile.phone}\n📍 <b>Viloyat:</b> ${botRegion}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
+        let total = 0; 
+        let savedItems = {};
         
         for (let id in cart) { 
-            let pIdx = productsDB.findIndex(x => x.id == id); 
-            if (pIdx !== -1) { 
-                let p = productsDB[pIdx];
-                let s = p.price * cart[id]; 
-                aT += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${s.toLocaleString()} so'm\n`; 
-                t += s; sI[id] = cart[id]; 
-                
-                // OMBOARDAN AYIRISH
-                productsDB[pIdx].stock = (productsDB[pIdx].stock || 0) - cart[id];
-                if(productsDB[pIdx].stock < 0) productsDB[pIdx].stock = 0;
+            let p = productsDB.find(x => x.id == id); 
+            if (p) { 
+                let sum = p.price * cart[id]; 
+                adminText += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
+                total += sum; 
+                savedItems[id] = cart[id]; 
             } 
-        } 
-        aT += `\n💰 <b>Jami:</b> ${t.toLocaleString()} so'm`;
+        }
+        adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
         
         try {
-            const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: ADMIN_ID, text: aT, parse_mode: "HTML", reply_markup: { inline_keyboard: [ [{text:"✅ Qabul qildik", callback_data:"qabul_"+currentUser}], [{text:"🚚 Yo'lga chiqdi", callback_data:"yolda_"+currentUser}], [{text:"🏁 Yetkazib berildi", callback_data:"yetkazildi_"+currentUser}] ] } }) });
-            if (res.ok) { 
-                db.ref('products').set(productsDB); // Omborni yangilash
-                if(currentUser) fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${cO} raqamli buyurtmangiz qabul qilindi!\nTo'lov turi: ${pm}` }) }); 
-                myOrders.unshift({ id: Date.now(), code: cO, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: sI, total: t, status: 'kutilmoqda' }); 
-                saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge(); lo.classList.remove('active'); showToast("Qabul qilindi!"); 
-                setTimeout(() => { if(pm === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); tg.close(); }, 2000); 
+            const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
+                method: "POST", 
+                headers: { "Content-Type": "application/json" }, 
+                body: JSON.stringify({ 
+                    chat_id: ADMIN_ID, 
+                    text: adminText, 
+                    parse_mode: "HTML"
+                    // DIQQAT: Shu yerdagi eski telegram tugmalari (reply_markup) olib tashlandi!
+                }) 
+            });
+            
+            if (res.ok) {
+                if(currentUser) { 
+                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
+                        method: "POST", 
+                        headers: { "Content-Type": "application/json" }, 
+                        body: JSON.stringify({ 
+                            chat_id: currentUser, 
+                            text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\nTo'lov turi: ${paymentMethod}` 
+                        }) 
+                    }); 
+                }
+                myOrders.unshift({ 
+                    id: Date.now(), 
+                    code: newOrderCode, 
+                    date: new Date().toLocaleDateString('uz-UZ'), 
+                    time: new Date().toLocaleTimeString('uz-UZ'), 
+                    items: savedItems, 
+                    total: total, 
+                    status: 'kutilmoqda' 
+                }); 
+                saveLocalOrders(); 
+                cart = {}; 
+                saveLocalCart(); 
+                updateCartBadge();
+                loadingOverlay.classList.remove('active'); 
+                showToast("Qabul qilindi!");
+                setTimeout(() => { 
+                    if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
+                    tg.close(); 
+                }, 2000);
             }
-        } catch (err) { lo.classList.remove('active'); showToast("Xatolik", "warning"); }
+        } catch (err) { 
+            loadingOverlay.classList.remove('active'); 
+            showToast("Internetni tekshiring", "warning"); 
+        }
     }
 
     function renderMyOrders() { let c = document.getElementById('orders-list-container'); if (myOrders.length === 0) { c.innerHTML = `<p style="text-align:center; color:gray; padding-top:40px;">Buyurtmalar yo'q.</p>`; return; } c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${o.total.toLocaleString()} so'm</div></div>`).join(''); }
