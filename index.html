@@ -463,6 +463,7 @@
     <div class="modal-header"><h2 style="color: #ff453a;">⚙️ Admin Panel</h2><button class="close-btn" onclick="closeModal()">×</button></div>
     
     <button class="btn-checkout" style="background: var(--primary-blue); color: white; margin-bottom: 12px; font-weight: 800; font-size: 14px;" onclick="openAdminOrders()">📦 BARCHA BUYURTMALAR</button>
+    <button class="btn-checkout" style="background: #34c759; color: white; margin-bottom: 12px; font-weight: 800; font-size: 14px;" onclick="openAdminStats()">📊 STATISTIKA VA HISOBOT</button>
     <button class="btn-checkout" style="background: rgba(212, 175, 55, 0.2); color: var(--luxury-gold); margin-bottom: 25px; font-weight: 800; font-size: 14px; border: 1px solid var(--luxury-gold);" onclick="openAdminInventory()">📊 OMBOR (QOLDIQLAR)</button>
     <hr style="border-color: rgba(255,255,255,0.05); margin-bottom: 20px;">
     
@@ -511,6 +512,12 @@
 
 <div class="modal-standard" id="adminOrdersModal"><div class="modal-header"><h2 style="color: var(--primary-blue);">📦 Buyurtmalar</h2><button class="close-btn" onclick="closeModal()">×</button></div><div id="admin-orders-list"></div></div>
 <div class="modal-standard" id="cropModal" style="z-index: 3000; padding: 15px;"><div class="modal-header"><h2>✂️ Kesish</h2><button class="close-btn" onclick="closeCropModal()">×</button></div><div style="width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 20px;"><img id="cropper-image" src="" style="max-width: 100%; display: block;"></div><button class="btn-checkout" id="crop-save-btn" onclick="uploadCroppedImage()">Saqlash</button></div>
+<div class="modal-standard" id="adminStatsModal">
+    <div class="modal-header"><h2 style="color: #34c759;">📊 Statistika</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div id="admin-stats-content" style="padding-bottom: 20px;">
+        <p style="text-align:center;">Ma'lumotlar yuklanmoqda...</p>
+    </div>
+</div>    
 <script>
     let tg = window.Telegram.WebApp;
     tg.expand();
@@ -836,6 +843,87 @@ async function confirmOrder(paymentMethod) {
     function setStarRating(r) { sR = r; let s = document.getElementById('rating-stars-container').children; for(let i=0; i<s.length; i++) { if(i < r) s[i].classList.add('active'); else s[i].classList.remove('active'); } }
     function saveOrderReview() { if(sR === 0) return; let idx = myOrders.findIndex(x => x.id === cRO); if(idx !== -1) { myOrders[idx].review = { rating: sR, text: "" }; saveLocalOrders(); showToast("Rahmat!"); closeModal(); } }
 
+    function openAdminStats() {
+        document.getElementById('adminModal').style.display = 'none';
+        let sM = document.getElementById('adminStatsModal');
+        sM.style.display = 'flex';
+        activeModal = 'adminStatsModal';
+        window.history.replaceState({ modal: 'adminStatsModal' }, "");
+        
+        let c = document.getElementById('admin-stats-content');
+        c.innerHTML = '<p style="text-align:center; margin-top:30px;"><span class="hourglass" style="transform:scale(0.5); display:inline-block;"></span></p>';
+        
+        db.ref('users').once('value', (s) => {
+            let totalRevenue = 0;
+            let todayRevenue = 0;
+            let totalCustomers = 0;
+            let productSales = {}; 
+            let todayDate = new Date().toLocaleDateString('uz-UZ');
+
+            if(s.exists()) {
+                let us = s.val();
+                totalCustomers = Object.keys(us).length;
+                
+                for(let uid in us) {
+                    if(us[uid].orders) {
+                        us[uid].orders.forEach(o => {
+                            // Faqat muvaffaqiyatli 'yetkazildi' bo'lganlar daromadga qo'shiladi
+                            if(o.status === 'yetkazildi') {
+                                totalRevenue += o.total;
+                                if(o.date === todayDate) todayRevenue += o.total;
+                            }
+                            
+                            // Tovarlar reytingini hisoblash
+                            if(o.items && o.status !== 'bekor_qilingan') {
+                                for(let pid in o.items) {
+                                    productSales[pid] = (productSales[pid] || 0) + o.items[pid];
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+
+            // Top 5 ta eng ko'p sotilgan tovarni saralash
+            let topProducts = Object.keys(productSales)
+                .map(id => ({ id: id, count: productSales[id] }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+
+            let topHtml = topProducts.map(tp => {
+                let p = productsDB.find(x => x.id == tp.id);
+                let pName = p ? p.name : "O'chirilgan tovar";
+                return `<div style="display:flex; justify-content:space-between; margin-bottom:8px; background:rgba(255,255,255,0.05); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);"><span>${pName}</span><span style="color:var(--luxury-gold); font-weight:800;">${tp.count} ta</span></div>`;
+            }).join('');
+            
+            if(topHtml === '') topHtml = "<p style='color:gray; font-size:13px; text-align:center;'>Hali tovar sotilmagan.</p>";
+
+            c.innerHTML = `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom: 15px;">
+                    <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                        <div style="font-size:26px; margin-bottom:5px;">📈</div>
+                        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi foyda</div>
+                        <div style="font-size:14px; font-weight:800; color:#34c759; margin-top:5px;">${todayRevenue.toLocaleString()} s</div>
+                    </div>
+                    <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                        <div style="font-size:26px; margin-bottom:5px;">👥</div>
+                        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami Mijozlar</div>
+                        <div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${totalCustomers} kishi</div>
+                    </div>
+                </div>
+                
+                <div class="luxury-card" style="padding:20px; display:block; margin-bottom:25px; text-align:center; border: 1px solid rgba(212, 175, 55, 0.3);">
+                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy Sof Daromad</div>
+                    <div style="font-size:26px; font-weight:800; color:var(--luxury-gold);">${totalRevenue.toLocaleString()} so'm</div>
+                    <div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilgan buyurtmalar)</div>
+                </div>
+
+                <h3 style="font-size:16px; margin-bottom:15px; color:white; display:flex; align-items:center; gap:8px;">🏆 Xit Savdolar (Top 5)</h3>
+                ${topHtml}
+            `;
+        });
+    }
+    
     function openAdminOrders() { 
     document.getElementById('adminModal').style.display = 'none'; 
     let aM = document.getElementById('adminOrdersModal'); 
