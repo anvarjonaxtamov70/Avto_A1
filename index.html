@@ -680,41 +680,145 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
     }
     function closeCropModal() { closeModal(); if(currentCropper) currentCropper.destroy(); }
 
-    function saveNewProduct() {
-        let n = document.getElementById('add-name').value; let p = parseInt(document.getElementById('add-price').value); let st = parseInt(document.getElementById('add-stock').value) || 0; let img = document.getElementById('add-img-url').value;
-        let img2 = document.getElementById('add-img-url2') ? document.getElementById('add-img-url2').value : "";
-        let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
-        let imagesArr = [img];
-        if(img2) imagesArr.push(img2);
-        if(img3) imagesArr.push(img3);
-        let descVal = document.getElementById('add-desc') ? document.getElementById('add-desc').value.trim() : "";
-        if(!descVal) descVal = "Tavsif kiritilmagan";
-        let sMods = Array.from(document.querySelectorAll('#adminModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
-        let sTyps = Array.from(document.querySelectorAll('#adminModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
-        if(!n || !p || !img || sMods.length === 0 || sTyps.length === 0) { showToast("To'ldiring va tanlang!", "warning"); return; }
-        let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
-        let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
-        productsDB.push({ id: newId, name: n, desc: descVal, price: p, stock: st, img: img, images: imagesArr, category: sCats[0], categories: sCats });
-        db.ref('products').set(productsDB).then(() => { showToast("Saqlandi!"); closeModal(); document.getElementById('add-name').value = ''; document.getElementById('add-price').value = ''; document.getElementById('add-stock').value = '10'; if(document.getElementById('add-desc')) document.getElementById('add-desc').value = ''; document.getElementById('add-img-preview').style.display = 'none'; document.querySelectorAll('#adminModal .cat-chip').forEach(c => c.classList.remove('selected')); });
-    }
+function saveNewProduct() {
+    let n = document.getElementById('add-name').value; 
+    let p = parseInt(document.getElementById('add-price').value); 
+    let st = parseInt(document.getElementById('add-stock').value) || 0; 
+    
+    // 3 ta rasmni o'qish
+    let img1 = document.getElementById('add-img-url').value;
+    let img2 = document.getElementById('add-img-url2') ? document.getElementById('add-img-url2').value : "";
+    let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
+    
+    let imagesArr = [];
+    if(img1) imagesArr.push(img1);
+    if(img2) imagesArr.push(img2);
+    if(img3) imagesArr.push(img3);
 
-    function openEditModal(e) {
-        if(e) e.stopPropagation(); let id = document.getElementById('pm-buy-btn').getAttribute('data-id'); let p = productsDB.find(x => x.id == id); if(!p) return;
-        document.getElementById('edit-id').value = p.id; document.getElementById('edit-name').value = p.name; document.getElementById('edit-price').value = p.price; document.getElementById('edit-stock').value = p.stock !== undefined ? p.stock : 10; document.getElementById('edit-desc').value = p.desc || ""; document.getElementById('edit-img-url').value = p.img; document.getElementById('edit-img-preview').src = p.img;
-        document.querySelectorAll('#editModal .cat-chip').forEach(c => c.classList.remove('selected'));
-        let cats = p.categories || [p.category];
-        cats.forEach(c => { let parts = c.split('-'); let t = parts.pop(); let m = parts.join('-'); let mC = document.querySelector(`#editModal .model-chip[data-val="${m}"]`); if(mC) mC.classList.add('selected'); let tC = document.querySelector(`#editModal .type-chip[data-val="${t}"]`); if(tC) tC.classList.add('selected'); });
-        document.getElementById('productModal').style.display = 'none'; document.getElementById('editModal').style.display = 'flex'; activeModal = 'editModal'; window.history.replaceState({ modal: 'editModal' }, ""); updateBtns();
+    let descVal = document.getElementById('add-desc') ? document.getElementById('add-desc').value.trim() : "";
+    if(!descVal) descVal = "Tavsif kiritilmagan";
+    
+    let sMods = Array.from(document.querySelectorAll('#adminModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
+    let sTyps = Array.from(document.querySelectorAll('#adminModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
+    
+    // Xatolik tekshirish (1 ta rasm shart)
+    if(!n || !p || imagesArr.length === 0 || sMods.length === 0 || sTyps.length === 0) { 
+        showToast("Ma'lumotlar to'liq emas yoki rasm yuklanmadi!", "warning"); 
+        return; 
     }
+    
+    let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
+    let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
+    
+    // Bazaga jo'natish (img ga ham 1-rasm, images ga hamma rasm)
+    productsDB.push({ id: newId, name: n, desc: descVal, price: p, stock: st, img: imagesArr[0], images: imagesArr, category: sCats[0], categories: sCats });
+    
+    db.ref('products').set(productsDB).then(() => { 
+        showToast("Saqlandi!"); 
+        closeModal(); 
+        document.getElementById('add-name').value = ''; 
+        document.getElementById('add-price').value = ''; 
+        document.getElementById('add-stock').value = '10'; 
+        if(document.getElementById('add-desc')) document.getElementById('add-desc').value = ''; 
+        
+        // Rasmlarni tozalash
+        document.getElementById('add-img-preview').style.display = 'none'; document.getElementById('add-img-url').value = '';
+        if(document.getElementById('add-img-preview2')) { document.getElementById('add-img-preview2').style.display = 'none'; document.getElementById('add-img-url2').value = ''; }
+        if(document.getElementById('add-img-preview3')) { document.getElementById('add-img-preview3').style.display = 'none'; document.getElementById('add-img-url3').value = ''; }
+        
+        document.querySelectorAll('#adminModal .cat-chip').forEach(c => c.classList.remove('selected')); 
+    });
+}
 
-    function saveEditProduct() {
-        let id = parseInt(document.getElementById('edit-id').value); let n = document.getElementById('edit-name').value; let p = parseInt(document.getElementById('edit-price').value); let st = parseInt(document.getElementById('edit-stock').value) || 0; let d = document.getElementById('edit-desc').value; let img = document.getElementById('edit-img-url').value;
-        let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val')); let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
-        if(!n || !p || !img || sMods.length === 0 || sTyps.length === 0) { showToast("Xato!", "warning"); return; }
-        let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
-        let idx = productsDB.findIndex(x => x.id === id);
-        if(idx !== -1) { productsDB[idx].name = n; productsDB[idx].price = p; productsDB[idx].stock = st; productsDB[idx].desc = d; productsDB[idx].img = img; productsDB[idx].categories = sCats; productsDB[idx].category = sCats[0]; db.ref('products').set(productsDB).then(() => { showToast("Yangilandi!"); closeModal(); }); }
+function openEditModal(e) {
+    if(e) e.stopPropagation(); 
+    let id = document.getElementById('pm-buy-btn').getAttribute('data-id'); 
+    let p = productsDB.find(x => x.id == id); 
+    if(!p) return;
+    
+    document.getElementById('edit-id').value = p.id; 
+    document.getElementById('edit-name').value = p.name; 
+    document.getElementById('edit-price').value = p.price; 
+    document.getElementById('edit-stock').value = p.stock !== undefined ? p.stock : 10; 
+    document.getElementById('edit-desc').value = p.desc || ""; 
+    
+    // Rasmlarni yuklash
+    let imgs = p.images && p.images.length > 0 ? p.images : [p.img];
+    
+    // 1-rasm
+    document.getElementById('edit-img-url').value = imgs[0] || ""; 
+    document.getElementById('edit-img-preview').src = imgs[0] || "";
+    document.getElementById('edit-img-preview').style.display = imgs[0] ? 'block' : 'none';
+    
+    // 2-rasm
+    if(document.getElementById('edit-img-url2')) {
+        document.getElementById('edit-img-url2').value = imgs[1] || "";
+        document.getElementById('edit-img-preview2').src = imgs[1] || "";
+        document.getElementById('edit-img-preview2').style.display = imgs[1] ? 'block' : 'none';
     }
+    
+    // 3-rasm
+    if(document.getElementById('edit-img-url3')) {
+        document.getElementById('edit-img-url3').value = imgs[2] || "";
+        document.getElementById('edit-img-preview3').src = imgs[2] || "";
+        document.getElementById('edit-img-preview3').style.display = imgs[2] ? 'block' : 'none';
+    }
+    
+    document.querySelectorAll('#editModal .cat-chip').forEach(c => c.classList.remove('selected'));
+    let cats = p.categories || [p.category];
+    cats.forEach(c => { 
+        let parts = c.split('-'); let t = parts.pop(); let m = parts.join('-'); 
+        let mC = document.querySelector(`#editModal .model-chip[data-val="${m}"]`); if(mC) mC.classList.add('selected'); 
+        let tC = document.querySelector(`#editModal .type-chip[data-val="${t}"]`); if(tC) tC.classList.add('selected'); 
+    });
+    
+    document.getElementById('productModal').style.display = 'none'; 
+    document.getElementById('editModal').style.display = 'flex'; 
+    activeModal = 'editModal'; window.history.replaceState({ modal: 'editModal' }, ""); updateBtns();
+}
+
+function saveEditProduct() {
+    let id = parseInt(document.getElementById('edit-id').value); 
+    let n = document.getElementById('edit-name').value; 
+    let p = parseInt(document.getElementById('edit-price').value); 
+    let st = parseInt(document.getElementById('edit-stock').value) || 0; 
+    let d = document.getElementById('edit-desc').value; 
+    
+    let img1 = document.getElementById('edit-img-url').value;
+    let img2 = document.getElementById('edit-img-url2') ? document.getElementById('edit-img-url2').value : "";
+    let img3 = document.getElementById('edit-img-url3') ? document.getElementById('edit-img-url3').value : "";
+    
+    let imagesArr = [];
+    if(img1) imagesArr.push(img1);
+    if(img2) imagesArr.push(img2);
+    if(img3) imagesArr.push(img3);
+
+    let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val')); 
+    let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
+    
+    if(!n || !p || imagesArr.length === 0 || sMods.length === 0 || sTyps.length === 0) { 
+        showToast("Xato! Rasm va malumotlar to'liq emas.", "warning"); 
+        return; 
+    }
+    
+    let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
+    let idx = productsDB.findIndex(x => x.id === id);
+    
+    if(idx !== -1) { 
+        productsDB[idx].name = n; 
+        productsDB[idx].price = p; 
+        productsDB[index].stock = st; 
+        productsDB[idx].desc = d; 
+        productsDB[idx].img = imagesArr[0]; // asosiy rasm
+        productsDB[idx].images = imagesArr; // barcha rasmlar ro'yxati
+        productsDB[idx].categories = sCats; 
+        productsDB[idx].category = sCats[0]; 
+        
+        db.ref('products').set(productsDB).then(() => { 
+            showToast("Yangilandi!"); closeModal(); 
+        }); 
+    }
+}
 
     function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
 
