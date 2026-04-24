@@ -803,7 +803,33 @@
         `).join(''); 
     }); 
 }
-    function changeOrderStatus(uid, oId, nS) { db.ref('users/' + uid + '/orders').once('value', s => { if(s.exists()) { let o = s.val(); let i = o.findIndex(x => x.id === oId); if(i !== -1) { o[i].status = nS; db.ref('users/' + uid + '/orders').set(o).then(() => { showToast("O'zgardi!"); openAdminOrders(); }); } } }); }
+  function changeOrderStatus(uid, orderId, newStatus) {
+        db.ref('users/' + uid + '/orders').once('value', snapshot => {
+            if(snapshot.exists()) {
+                let userOrders = snapshot.val();
+                let idx = userOrders.findIndex(o => o.id === orderId);
+                if(idx !== -1) {
+                    let oldStatus = userOrders[idx].status;
+                    userOrders[idx].status = newStatus;
+                    db.ref('users/' + uid + '/orders').set(userOrders).then(() => {
+                        showToast("Holat o'zgartirildi!");
+                        openAdminOrders(); 
+                        
+                        // YANGI QO'SHILGAN QISM: TELEGRAM BOTGA XABAR JO'NATISH
+                        // Agar status o'zgargan bo'lsa, Telegram botga "edit_status" buyrug'ini yuboramiz
+                        if (oldStatus !== newStatus) {
+                            tg.sendData(JSON.stringify({
+                                action: 'edit_status',
+                                user_id: uid,
+                                order_id: orderId,
+                                new_status: newStatus
+                            }));
+                        }
+                    });
+                }
+            }
+        });
+    }
 
     function openModal(id) { if (activeModal === id) return; if(id === 'cartModal') renderCartItems(); let m = document.getElementById(id); m.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = id; window.history.pushState({ modal: id }, ""); tg.BackButton.show(); updateBtns(); }
     function closeModal() { if(activeModal) window.history.back(); }
