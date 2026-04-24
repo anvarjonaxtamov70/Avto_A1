@@ -587,11 +587,18 @@
 </div>
 
 <div class="modal-standard" id="adminOrdersModal">
-    <div class="modal-header">
-<div class="modal-header"><h2 style="color: var(--luxury-gold);">📊 Ombor</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div class="modal-header"><h2 style="color: var(--primary-blue);">📦 Buyurtmalar</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-orders-list"></div>
 </div>
-    <div class="modal-standard" id="adminChatModal">
+
+<div class="modal-standard" id="adminChatModal">
+    <div class="modal-header"><h2 style="color: var(--luxury-gold);">💬 Mijoz bilan chat</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div id="admin-chat-messages" style="height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
+    <div style="display: flex; gap: 8px;">
+        <input type="text" id="admin-chat-input" class="search-box" placeholder="Javob yozing..." style="padding: 12px; border-radius: 12px; flex: 1;">
+        <button class="btn-checkout" style="width: auto; padding: 0 20px; border-radius: 12px; font-size: 18px;" onclick="sendAdminMessage()">➤</button>
+    </div>
+</div>
   <div class="modal-header"><h2 style="color: var(--luxury-gold);">💬 Mijoz bilan chat</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-chat-messages" style="height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
     <div style="display: flex; gap: 8px;">
@@ -1549,7 +1556,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 let us = s.val();
                 for(let uid in us) {
                     if(us[uid].orders) {
-                        let ords = safeArray(us[uid].orders);
+                       let ords = us[uid].orders || [];
                         let target = ords.find(o => (o.code === code) || (o.id == code));
                         
                         if(target) {
@@ -1583,7 +1590,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm";
         
         // Qidiruv orqali kirganda birovning buyurtmasini baholamasligi uchun review o'chiriladi
-        document.getElementById('od-review-section').innerHTML = ''; 
+        if(document.getElementById('od-review-section')) document.getElementById('od-review-section').innerHTML = '';
         
         openModal('orderDetailModal');
     }
