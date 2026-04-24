@@ -586,7 +586,13 @@
     <div id="admin-inventory-list"></div>
 </div>
 
-<div class="modal-standard" id="adminOrdersModal"><div class="modal-header"><h2 style="color: var(--primary-blue);">📦 Buyurtmalar</h2><button class="close-btn" onclick="closeModal()">×</button></div><div id="admin-orders-list"></div></div>
+<div class="modal-standard" id="adminOrdersModal">
+    <div class="modal-header">
+        <h2 style="color: var(--primary-blue);">📦 Buyurtmalar</h2>
+        <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+    <div id="admin-orders-list"></div>
+</div>
     <div class="modal-standard" id="adminChatModal">
     <div class="modal-header"><h2 style="color: var(--luxury-gold);">💬 Mijoz bilan chat</h2><button class="close-btn" onclick="closeModal()">×</button></div>
     <div id="admin-chat-messages" style="height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
@@ -1457,10 +1463,55 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     function closeModal() { if(activeModal) window.history.back(); }
     function goHome() { if(activeModal) closeModal(); if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); } updateNav('nav-home'); }
 
-   window.addEventListener('popstate', function(e) {
-        if (activeModal) { document.getElementById(activeModal).style.display = 'none'; document.body.style.overflow = ''; activeModal = null; updateBtns(); let cS = historyStack[historyStack.length - 1]; if(cS === 'profile-section') updateNav('nav-profile'); else if(cS === 'katalog-menu') updateNav('nav-catalog'); else if(cS === 'wishlist-section') updateNav('nav-wishlist'); else updateNav('nav-home'); return; }
-      if (searchActive) { exitSearch(); return; }
-        if (historyStack.length > 1) { historyStack.pop(); let pId = historyStack[historyStack.length - 1]; document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); }); document.getElementById(pId).classList.remove('hidden'); document.getElementById(pId).classList.add('animate-slide-up'); let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (pId === 'main-menu') ? 'block' : 'none'; if(pId === 'profile-section') updateNav('nav-profile'); else if(pId === 'katalog-menu') updateNav('nav-catalog'); else if(pId === 'wishlist-section') updateNav('nav-wishlist'); else updateNav('nav-home'); updateBtns(); } else { tg.close(); }
+window.addEventListener('popstate', function(e) {
+        if (activeModal) {
+            // Oldingi ochiq bo'lgan modalni yopamiz
+            document.getElementById(activeModal).style.display = 'none'; 
+            
+            // MAHSUS TEKSHIRUV: Agar biz Admin Chatdan chiqqan bo'lsak, 
+            // tizimni "Buyurtmalar oynasi ochildi" deb aldamaymiz, aksincha qaytaramiz:
+            if (activeModal === 'adminChatModal') {
+                activeModal = 'adminOrdersModal';
+                document.getElementById('adminOrdersModal').style.display = 'flex';
+                // overflow ni 'hidden' qoldiramiz, chunki hali oynadamiz
+                document.body.style.overflow = 'hidden'; 
+                updateBtns();
+                // BU YERDA RETURN QILISH JUDA MUHIM, pastga o'tib ketmasligi uchun
+                return;
+            }
+
+            // Oddiy holatda oyna yopilishi
+            document.body.style.overflow = ''; 
+            activeModal = null; 
+            updateBtns(); 
+            
+            // Pastki menyuni to'g'ri faollashtirish
+            let cS = historyStack[historyStack.length - 1]; 
+            if(cS === 'profile-section') updateNav('nav-profile'); 
+            else if(cS === 'katalog-menu') updateNav('nav-catalog'); 
+            else if(cS === 'wishlist-section') updateNav('nav-wishlist'); 
+            else updateNav('nav-home'); 
+            return; 
+        }
+        
+        if (searchActive) { exitSearch(); return; }
+        
+        if (historyStack.length > 1) { 
+            historyStack.pop(); 
+            let pId = historyStack[historyStack.length - 1]; 
+            document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); }); 
+            document.getElementById(pId).classList.remove('hidden'); 
+            document.getElementById(pId).classList.add('animate-slide-up'); 
+            let sC = document.querySelector('.slider-container'); 
+            if(sC) sC.style.display = (pId === 'main-menu') ? 'block' : 'none'; 
+            if(pId === 'profile-section') updateNav('nav-profile'); 
+            else if(pId === 'katalog-menu') updateNav('nav-catalog'); 
+            else if(pId === 'wishlist-section') updateNav('nav-wishlist'); 
+            else updateNav('nav-home'); 
+            updateBtns(); 
+        } else { 
+            tg.close(); 
+        }
     });
 
     tg.onEvent('backButtonClicked', function() { window.history.back(); });
