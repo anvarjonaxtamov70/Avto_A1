@@ -176,6 +176,14 @@
         .admin-card p { margin: 0; font-size: 11px; color: var(--text-muted); }
         .admin-card.gold-dashed { border: 1px dashed var(--luxury-gold); background: rgba(212, 175, 55, 0.05); }
         .admin-card.gold-dashed:active { background: rgba(212, 175, 55, 0.15); }
+        /* Tovar ichidagi rasm slideri */
+        .pm-slider-container { width: 100%; height: 100%; position: relative; overflow: hidden; }
+        .pm-slider { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; width: 100%; height: 100%; scroll-behavior: smooth; }
+        .pm-slider::-webkit-scrollbar { display: none; }
+        .pm-slider img { flex: 0 0 100%; width: 100%; height: 100%; object-fit: contain; scroll-snap-align: start; padding: 25px; box-sizing: border-box; }
+        .pm-slider-dots { position: absolute; bottom: 15px; left: 0; width: 100%; display: flex; justify-content: center; gap: 8px; z-index: 10; }
+        .pm-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,0,0,0.3); transition: 0.3s; }
+        .pm-dot.active { background: var(--luxury-gold); width: 20px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -362,7 +370,10 @@
 <div id="productModal">
     <div class="pm-img-header">
         <button class="pm-close-btn" onclick="closeModal()">×</button>      
-        <img id="pm-img" src="" onload="this.style.opacity=1">
+      <div class="pm-slider-container">
+            <div class="pm-slider" id="pm-slider-wrapper" onscroll="updateSliderDots()"></div>
+            <div class="pm-slider-dots" id="pm-slider-dots"></div>
+        </div>
         <div class="pm-edit-icon" id="pm-edit-btn">✏️</div>
     </div>
     <div class="pm-info-section">
@@ -503,10 +514,21 @@
         <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="add-price" class="search-box" style="margin-bottom: 15px;">
         <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="add-stock" class="search-box" style="margin-bottom: 15px;" value="10">
         <span class="luxury-input-label">TAVSIFI (MA'LUMOT)</span><textarea id="add-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;" placeholder="Tovar haqida..."></textarea>
+        <span class="luxury-input-label">RASMLAR (Maksimal 3 ta)</span>
+        <div style="display:flex; gap:8px; margin-bottom:15px;">
+            <button type="button" class="btn-checkout" style="flex:1; padding:10px; background:rgba(255,255,255,0.05); border:1px dashed var(--luxury-gold); color:white; font-size:12px;" onclick="document.getElementById('add-img-file').click()">📸 1 (Asosiy)</button>
+            <button type="button" class="btn-checkout" style="flex:1; padding:10px; background:rgba(255,255,255,0.05); border:1px dashed var(--luxury-gold); color:white; font-size:12px;" onclick="document.getElementById('add-img-file2').click()">📸 2</button>
+            <button type="button" class="btn-checkout" style="flex:1; padding:10px; background:rgba(255,255,255,0.05); border:1px dashed var(--luxury-gold); color:white; font-size:12px;" onclick="document.getElementById('add-img-file3').click()">📸 3</button>
+        </div>
+        <div style="display:flex; gap:10px; margin-bottom:15px; justify-content:center;">
+            <img id="add-img-preview" src="" style="width:70px; height:70px; object-fit:cover; border-radius:12px; display:none; border:1px solid var(--luxury-gold);">
+            <img id="add-img-preview2" src="" style="width:70px; height:70px; object-fit:cover; border-radius:12px; display:none; border:1px solid var(--luxury-gold);">
+            <img id="add-img-preview3" src="" style="width:70px; height:70px; object-fit:cover; border-radius:12px; display:none; border:1px solid var(--luxury-gold);">
+        </div>
         <input type="file" id="add-img-file" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'add')">
-        <button type="button" class="btn-checkout" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--luxury-gold); color:white; margin-bottom: 15px;" onclick="document.getElementById('add-img-file').click()">📸 Rasm Tanlash</button>
-        <img id="add-img-preview" src="" style="width: 140px; height: 140px; object-fit: cover; border-radius: 16px; display: none; margin: 0 auto 15px; border: 2px solid var(--luxury-gold);">
-        <input type="hidden" id="add-img-url" class="search-box">
+        <input type="file" id="add-img-file2" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'add2')">
+        <input type="file" id="add-img-file3" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'add3')">
+        <input type="hidden" id="add-img-url"><input type="hidden" id="add-img-url2"><input type="hidden" id="add-img-url3">
         
         <span class="luxury-input-label">1. MASHINANI TANLANG</span>
         <div style="font-size:12px; color:var(--primary-blue); font-weight:bold; margin:10px 0 5px;">🚛 GAZ / VOLGA / SOBOL</div>
@@ -739,7 +761,10 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
 
     function openProduct(id) {
         let p = productsDB.find(x => x.id == id); if(!p) return;
-        document.getElementById('pm-img').src = p.img; document.getElementById('pm-title').innerText = p.name; document.getElementById('pm-desc').innerText = p.desc || "Tavsif kiritilmagan"; document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} s`;       
+        let imgs = p.images && p.images.length > 0 ? p.images : [p.img];
+         document.getElementById('pm-slider-wrapper').innerHTML = imgs.map(src => `<img src="${src}">`).join('');
+         document.getElementById('pm-slider-dots').innerHTML = imgs.length > 1 ? imgs.map((_, i) => `<div class="pm-dot ${i===0?'active':''}"></div>`).join('') : '';
+         document.getElementById('pm-slider-wrapper').scrollLeft = 0;
         let st = p.stock !== undefined ? p.stock : 10;
         let sInf = document.getElementById('pm-stock');
         let buyB = document.getElementById('pm-buy-btn');
@@ -756,6 +781,14 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
         let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
         if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} s</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
         let mod = document.getElementById('productModal'); mod.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); tg.BackButton.show(); updateBtns();
+    }
+
+    function updateSliderDots() {
+        let sw = document.getElementById('pm-slider-wrapper');
+        let idx = Math.round(sw.scrollLeft / sw.clientWidth);
+        document.querySelectorAll('#pm-slider-dots .pm-dot').forEach((d, i) => {
+            if(i === idx) d.classList.add('active'); else d.classList.remove('active');
+        });
     }
 
     function searchProducts() {
