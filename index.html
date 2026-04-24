@@ -496,11 +496,6 @@
             <p>Katalogga qo'shish</p>
         </div>
     </div>
-    ```
-
-Shunday qilib, sizda 472-qatordagi `modal-header` dan so'ng to'g'ridan-to'g'ri yangi dizayn (grid) boshlanadi va u tugagandan keyin 481-qatordagi (endi u sal pastroqqa tushadi) `add-product-wrapper` davom etib ketaveradi. 
-
-Saqlab (`Commit changes`), test qilib ko'ring! Menyu zo'r ko'rinishga kelishi aniq.
     
     <div id="add-product-wrapper" class="hidden">
         <h3 style="margin-top:20px; color: var(--luxury-gold);">Yangi Tovar Formasi</h3>
@@ -813,6 +808,9 @@ async function confirmOrder(paymentMethod) {
         let total = 0; 
         let savedItems = {};
         
+        // 1. Kam qolgan tovarlarni yig'ish uchun bo'sh matn ochamiz
+        let lowStockAlerts = ""; 
+        
         for (let id in cart) { 
             let p = productsDB.find(x => x.id == id); 
             if (p) { 
@@ -824,6 +822,11 @@ async function confirmOrder(paymentMethod) {
                 // ZAXIRADAN AYIRISH
                 p.stock = (p.stock !== undefined ? p.stock : 10) - cart[id];
                 if (p.stock < 0) p.stock = 0; 
+                
+                // 2. TEKSHIRUV: Agar tovar 3 ta yoki undan kam qolsa, ro'yxatga qo'shamiz
+                if (p.stock <= 3) {
+                    lowStockAlerts += `\n⚠️ <b>${p.name}</b>: atigi ${p.stock} ta qoldi!`;
+                }
             } 
         }
         adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
@@ -838,6 +841,16 @@ async function confirmOrder(paymentMethod) {
             if (res.ok) {
                 // OMBORNI YANGILASH
                 db.ref('products').set(productsDB);
+                
+                // 3. XABARNOMA YUBORISH: Agar kam qolgan tovarlar bo'lsa, Adminga alohida SMS ketadi
+                if (lowStockAlerts !== "") {
+                    let alertMsg = `🚨 <b>DIQQAT: ZAXIRA TUGAMOQDA!</b>\nShu buyurtmadan keyin omborda ba'zi tovarlar kam qoldi:${lowStockAlerts}`;
+                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" })
+                    });
+                }
                 
                 if(currentUser) { 
                     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
