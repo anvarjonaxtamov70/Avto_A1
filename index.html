@@ -847,6 +847,9 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 
                 if(idx !== -1) {
                     let oldStatus = userOrders[idx].status;
+                    // BAZADAN QISQA KODNI OLISH (Agar yo'q bo'lsa, ID ni oladi)
+                    let displayCode = userOrders[idx].code || orderId; 
+                    
                     userOrders[idx].status = newStatus;
                     
                     db.ref('users/' + uid + '/orders').set(userOrders).then(async () => {
@@ -860,16 +863,17 @@ async function changeOrderStatus(uid, orderId, newStatus) {
 
                             if (newStatus === "qabul") {
                                 statusText = "✅ QABUL QILINDI";
-                                mijozMsg = "✅ Buyurtmangiz qabul qilindi va yig'ilmoqda!";
+                                mijozMsg = `✅ #${displayCode} raqamli buyurtmangiz qabul qilindi va yig'ilmoqda!`;
                             } else if (newStatus === "yolda") {
                                 statusText = "🚚 YO'LGA CHIQDI";
-                                mijozMsg = "🚚 Buyurtmangiz yo'lga chiqdi! Kuting.";
+                                mijozMsg = `🚚 #${displayCode} raqamli buyurtmangiz yo'lga chiqdi! Kuting.`;
                             } else if (newStatus === "yetkazildi") {
                                 statusText = "🏁 YETKAZIB BERILDI";
-                                mijozMsg = "🏁 Buyurtmangiz muvaffaqiyatli yetkazib berildi. Xaridingiz uchun rahmat!";
+                                mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz muvaffaqiyatli yetkazib berildi. Xaridingiz uchun rahmat!`;
                             }
 
-                            let adminMsg = `🔄 <b>Diqqat!</b> WebApp orqali buyurtma holati o'zgardi.\n\n🆔 Buyurtma: <b>#${orderId}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
+                            // ADMINGA SMS DA HAM QISQA KOD ISHLATILADI
+                            let adminMsg = `🔄 <b>Diqqat!</b> WebApp orqali buyurtma holati o'zgardi.\n\n🆔 Buyurtma: <b>#${displayCode}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
 
                             try {
                                 // 1. ADMINGA SMS
@@ -896,7 +900,6 @@ async function changeOrderStatus(uid, orderId, newStatus) {
             }
         });
     }
-
     function openModal(id) { if (activeModal === id) return; if(id === 'cartModal') renderCartItems(); let m = document.getElementById(id); m.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = id; window.history.pushState({ modal: id }, ""); tg.BackButton.show(); updateBtns(); }
     function closeModal() { if(activeModal) window.history.back(); }
     function goHome() { if(activeModal) closeModal(); if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); } updateNav('nav-home'); }
