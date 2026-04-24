@@ -409,7 +409,17 @@
     <h3 style="font-size: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">Tovarlar:</h3>
     <div id="od-items" style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;"></div>
     <div style="text-align: right; font-size: 18px; font-weight: 800; color: var(--luxury-gold);" id="od-total"></div>
-    <div id="od-review-section" style="margin-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;"></div>
+    <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+        <h3 style="font-size: 15px; margin-bottom: 10px; color: var(--luxury-gold);">💬 Buyurtma muhokamasi</h3>
+        
+        <div id="od-chat-messages" style="height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;">
+            </div>
+
+        <div style="display: flex; gap: 8px;">
+            <input type="text" id="od-chat-input" class="search-box" placeholder="Xabar yozing..." style="padding: 12px; border-radius: 12px; flex: 1;">
+            <button class="btn-checkout" style="width: auto; padding: 0 20px; border-radius: 12px; font-size: 18px;" onclick="sendOrderMessage()">➤</button>
+        </div>
+    </div>
 </div>
 
 <div class="modal-standard" id="profileEditModal">
@@ -1069,11 +1079,94 @@ async function confirmOrder(paymentMethod) {
 
     function renderMyOrders() { let c = document.getElementById('orders-list-container'); if (myOrders.length === 0) { c.innerHTML = `<p style="text-align:center; color:gray; padding-top:40px;">Buyurtmalar yo'q.</p>`; return; } c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${o.total.toLocaleString()} so'm</div></div>`).join(''); }
 
-    let cRO = null, sR = 0;
-    function openOrderDetails(id) { let o = myOrders.find(x => x.id === id); if(!o) return; document.getElementById('od-code').innerText = "Buyurtma: #" + (o.code || o.id); document.getElementById('od-date').innerText = o.date + " " + o.time; document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda'); let iH = ''; for(let pId in o.items) { let p = productsDB.find(x => x.id == pId); if(p) iH += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${p.name} (x${o.items[pId]})</span><span style="color:var(--luxury-gold);">${(p.price * o.items[pId]).toLocaleString()} so'm</span></div>`; } document.getElementById('od-items').innerHTML = iH; document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm"; let rS = document.getElementById('od-review-section'); if(o.status === 'yetkazildi') { if(o.review) { rS.innerHTML = `<h4 style="text-align:center; margin-top:0;">Baho</h4><div style="text-align:center; font-size:30px; color:var(--luxury-gold);">${'★'.repeat(o.review.rating)}</div>`; } else { cRO = o.id; sR = 0; rS.innerHTML = `<h4 style="text-align:center; margin-top:0;">Baholang</h4><div class="rating-stars" id="rating-stars-container"><span onclick="setStarRating(1)">★</span><span onclick="setStarRating(2)">★</span><span onclick="setStarRating(3)">★</span><span onclick="setStarRating(4)">★</span><span onclick="setStarRating(5)">★</span></div><button class="btn-checkout" onclick="saveOrderReview()">Yuborish</button>`; } } else { rS.innerHTML = ''; } openModal('orderDetailModal'); }
-    function setStarRating(r) { sR = r; let s = document.getElementById('rating-stars-container').children; for(let i=0; i<s.length; i++) { if(i < r) s[i].classList.add('active'); else s[i].classList.remove('active'); } }
-    function saveOrderReview() { if(sR === 0) return; let idx = myOrders.findIndex(x => x.id === cRO); if(idx !== -1) { myOrders[idx].review = { rating: sR, text: "" }; saveLocalOrders(); showToast("Rahmat!"); closeModal(); } }
+// =====================================
+    // CHAT: BUYURTMA TAFSILOTI VA YOZISHMA
+    // =====================================
+    let currentOpenOrderId = null; // Hozir qaysi buyurtma ochiqligini bilish uchun
 
+    window.openOrderDetails = (id) => { 
+        let o = myOrders.find(x => x.id === id); 
+        if(!o) return; 
+        
+        currentOpenOrderId = id; // ID ni saqlab qo'yamiz
+        
+        document.getElementById('od-code').innerText = "Buyurtma: #" + (o.code || o.id); 
+        document.getElementById('od-date').innerText = o.date + " " + o.time; 
+        document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda'); 
+        
+        let iH = ''; 
+        for(let pId in o.items) { 
+            let p = productsDB.find(x => x.id == pId); 
+            if(p) iH += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${p.name} (x${o.items[pId]})</span><span style="color:var(--luxury-gold);">${(p.price * o.items[pId]).toLocaleString()} s</span></div>`; 
+        } 
+        document.getElementById('od-items').innerHTML = iH; 
+        document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm"; 
+        
+        // Chat xabarlarini ekranga chiqarish
+        renderChatMessages();
+        
+        openModal('orderDetailModal'); 
+    }
+
+    // Chatdagi xabarlarni chizish funksiyasi
+    window.renderChatMessages = () => {
+        let box = document.getElementById('od-chat-messages');
+        box.innerHTML = '';
+        
+        let o = myOrders.find(x => x.id === currentOpenOrderId); 
+        if(!o) return;
+
+        if(!o.messages || o.messages.length === 0) {
+            box.innerHTML = `<div style="color: gray; text-align: center; font-size: 12px; margin-top: 20px;">Hali xabarlar yo'q. Adminga savolingiz bo'lsa yozing.</div>`;
+            return;
+        }
+
+        let chatHtml = '';
+        o.messages.forEach(msg => {
+            // Mijoz yozgan xabar o'ngda (ko'k rangda), adminniki chapda (qora rangda) bo'ladi
+            let isMe = msg.sender === 'mijoz';
+            chatHtml += `
+                <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'};">
+                    <div style="max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 13px; 
+                         background: ${isMe ? 'var(--primary-blue)' : 'rgba(255,255,255,0.1)'}; 
+                         color: white; border-bottom-${isMe ? 'right' : 'left'}-radius: 2px;">
+                        ${msg.text}
+                        <div style="font-size: 9px; opacity: 0.7; text-align: right; margin-top: 4px;">${msg.time}</div>
+                    </div>
+                </div>
+            `;
+        });
+        box.innerHTML = chatHtml;
+        box.scrollTop = box.scrollHeight; // Har doim eng pastki xabarni ko'rsatish
+    }
+
+    // Xabar jo'natish tugmasi bosilganda
+    window.sendOrderMessage = () => {
+        let input = document.getElementById('od-chat-input');
+        let text = input.value.trim();
+        if(!text) return;
+
+        let idx = myOrders.findIndex(x => x.id === currentOpenOrderId);
+        if(idx !== -1) {
+            // Agar messages massivi yo'q bo'lsa, yangi ochamiz
+            if(!myOrders[idx].messages) myOrders[idx].messages = [];
+            
+            // Yangi xabarni qo'shamiz
+            let now = new Date();
+            let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+            
+            myOrders[idx].messages.push({
+                sender: 'mijoz',
+                text: text,
+                time: timeString
+            });
+
+            // Bazaga saqlaymiz
+            saveLocalOrders();
+            input.value = ''; // Yozish joyini tozalash
+            renderChatMessages(); // Oynani yangilash
+        }
+    }
     function openAdminStats() {
         document.getElementById('adminModal').style.display = 'none';
         let sM = document.getElementById('adminStatsModal');
