@@ -1438,17 +1438,18 @@ window.openAdminChat = (uid, orderId) => {
     aM.querySelector('.modal-header h2').innerHTML = '📦 Buyurtmalar';
     
     // ZAMONAVIY CHIP TUGMALAR DIZAYNI
+   // ZAMONAVIY "GRID" (SETKA) DIZAYNI
     c.innerHTML = `
-        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; justify-content: center;">
-            <button onclick="filterAdminOrders('barchasi', this)" style="background:rgba(255,255,255,0.05); color:var(--text-main); border:1px solid var(--glass-border); padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">Barchasi</button>
-            <button onclick="filterAdminOrders('kutilmoqda', this)" style="background:rgba(255, 204, 0, 0.15); color:#ffcc00; border:1px solid #ffcc00; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">⏳ Kutilmoqda</button>
-            <button onclick="filterAdminOrders('qabul', this)" style="background:rgba(0, 122, 255, 0.15); color:#007aff; border:1px solid #007aff; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">✅ Qabul</button>
-            <button onclick="filterAdminOrders('yolda', this)" style="background:rgba(255, 149, 0, 0.15); color:#ff9500; border:1px solid #ff9500; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🚚 Yo'lda</button>
-            <button onclick="filterAdminOrders('yetkazildi', this)" style="background:rgba(52, 199, 89, 0.15); color:#34c759; border:1px solid #34c759; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🏁 Yetkazildi</button>
-            <button onclick="filterAdminOrders('bekor_qilingan', this)" style="background:rgba(255, 69, 58, 0.15); color:#ff453a; border:1px solid #ff453a; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">❌ Bekor qilingan</button>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px;">
+            <button onclick="filterAdminOrders('barchasi', this)" style="background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.2); padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">Barchasi</button>
+            <button onclick="filterAdminOrders('kutilmoqda', this)" style="background:var(--card-bg); color:#ffcc00; border:1px solid #ffcc00; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">⏳ Kutilmoqda</button>
+            <button onclick="filterAdminOrders('qabul', this)" style="background:var(--card-bg); color:#007aff; border:1px solid #007aff; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">✅ Qabul</button>
+            <button onclick="filterAdminOrders('yolda', this)" style="background:var(--card-bg); color:#ff9500; border:1px solid #ff9500; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">🚚 Yo'lda</button>
+            <button onclick="filterAdminOrders('yetkazildi', this)" style="background:var(--card-bg); color:#34c759; border:1px solid #34c759; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">🏁 Yetkazildi</button>
+            <button onclick="filterAdminOrders('bekor_qilingan', this)" style="background:var(--card-bg); color:#ff453a; border:1px solid #ff453a; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">❌ Bekor</button>
         </div>
         <div id="admin-orders-render-box"><p style="text-align:center;">Yuklanmoqda...</p></div>
-    `; 
+    `;
 
     window.allFetchedOrders = []; 
 
@@ -1813,20 +1814,41 @@ window.renderAdminOrdersUI = (ordersArr) => {
     }
     
     box.innerHTML = ordersArr.map(o => {
+        
+        // O'QILMAGAN XABARLARNI HISOBLASH MANTIQI
+        let unreadCount = 0;
+        if (o.messages) {
+            for (let i = o.messages.length - 1; i >= 0; i--) {
+                if (o.messages[i].sender === 'admin') break; // Admin javob bergan bo'lsa sanashni to'xtatadi
+                if (o.messages[i].sender === 'mijoz') unreadCount++;
+            }
+        }
+        
+        // Agar yangi xabar bo'lsa, Chat tugmasi qizil bo'lib yonib turadi
+        let chatBtnStyle = unreadCount > 0 
+            ? `background:var(--accent-red); color:#fff; border:none; box-shadow: 0 0 10px rgba(255, 69, 58, 0.5);` 
+            : `background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.1);`;
+        let chatBtnText = unreadCount > 0 ? `💬 Chat (${unreadCount})` : `💬 Chat`;
+
         return `
-        <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block;">
+        <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block; position:relative;">
+            
+            ${/* Yangi xabar bo'lsa kartochka burchagida ham qizil doiracha chiqadi */''}
+            ${unreadCount > 0 ? `<div style="position:absolute; top:-8px; right:-8px; background:var(--accent-red); color:white; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; box-shadow:0 4px 10px rgba(255,69,58,0.6); z-index:10;">${unreadCount}</div>` : ''}
+            
             <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
                 <b style="color:var(--luxury-gold);">#${o.code||o.id}</b>
                 ${getStatusHTML(o.status||'kutilmoqda')}
             </div>
             <p style="margin:5px 0;">👤 ${o.uN || 'Ismsiz'}<br>📞 ${o.uP || 'Raqamsiz'}</p>
             <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px; font-size:16px;">💰 ${o.total.toLocaleString()} so'm</p>
+            
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button style="padding:10px; background:rgba(255,255,255,0.1); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:1px solid rgba(255,255,255,0.1);" onclick="openAdminChat('${o.uI}', ${o.id})">💬 Chat</button>
+                <button style="padding:10px; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; ${chatBtnStyle}" onclick="openAdminChat('${o.uI}', ${o.id})">${chatBtnText}</button>
                 ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
                 ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lda</button>` : ''}
                 ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazildi</button>` : ''}
-                ${o.status !== 'bekor_qilingan' ? `<button style="padding:10px; background:var(--accent-red); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor qilish</button>` : ''}
+                ${o.status !== 'bekor_qilingan' ? `<button style="padding:10px; background:var(--accent-red); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor</button>` : ''}
             </div>
         </div>
     `}).join(''); 
