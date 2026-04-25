@@ -1392,15 +1392,31 @@ window.openAdminChat = (uid, orderId) => {
         });
     }
     
-    function openAdminOrders() { 
+  function openAdminOrders() { 
     document.getElementById('adminModal').style.display = 'none'; 
     let aM = document.getElementById('adminOrdersModal'); 
-    aM.querySelector('.modal-header h2').innerHTML = '📦 Buyurtmalar';
     aM.style.display = 'flex'; 
     activeModal = 'adminOrdersModal'; 
     window.history.replaceState({ modal: 'adminOrdersModal' }, ""); 
     let c = document.getElementById('admin-orders-list'); 
-    c.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>'; 
+    
+    aM.querySelector('.modal-header h2').innerHTML = '📦 Buyurtmalar';
+    
+    // ZAMONAVIY CHIP TUGMALAR DIZAYNI
+    c.innerHTML = `
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; justify-content: center;">
+            <button onclick="filterAdminOrders('barchasi')" style="background:rgba(255,255,255,0.05); color:var(--text-main); border:1px solid var(--glass-border); padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">Barchasi</button>
+            <button onclick="filterAdminOrders('kutilmoqda')" style="background:rgba(255, 204, 0, 0.15); color:#ffcc00; border:1px solid #ffcc00; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">⏳ Kutilmoqda</button>
+            <button onclick="filterAdminOrders('qabul')" style="background:rgba(0, 122, 255, 0.15); color:#007aff; border:1px solid #007aff; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">✅ Qabul</button>
+            <button onclick="filterAdminOrders('yolda')" style="background:rgba(255, 149, 0, 0.15); color:#ff9500; border:1px solid #ff9500; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🚚 Yo'lda</button>
+            <button onclick="filterAdminOrders('yetkazildi')" style="background:rgba(52, 199, 89, 0.15); color:#34c759; border:1px solid #34c759; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🏁 Yetkazildi</button>
+            <button onclick="filterAdminOrders('bekor_qilingan')" style="background:rgba(255, 69, 58, 0.15); color:#ff453a; border:1px solid #ff453a; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">❌ Bekor qilingan</button>
+        </div>
+        <div id="admin-orders-render-box"><p style="text-align:center;">Yuklanmoqda...</p></div>
+    `; 
+
+    window.allFetchedOrders = []; 
+
     db.ref('users').once('value', (s) => { 
         let aO = []; 
         if(s.exists()) { 
@@ -1409,33 +1425,20 @@ window.openAdminChat = (uid, orderId) => {
                 if(us[uid].orders) { 
                     let ph = us[uid].profile ? us[uid].profile.phone : ""; 
                     let nm = us[uid].profile ? us[uid].profile.name : ""; 
-                    us[uid].orders.forEach(o => { aO.push({ uI: uid, uN: nm, uP: ph, ...o }); }); 
+                    // Qotib qolishni oldini olish uchun Object.values ishlatamiz
+                    let userOrdersArr = Array.isArray(us[uid].orders) ? us[uid].orders : Object.values(us[uid].orders);
+                    userOrdersArr.forEach(o => { 
+                        if(o && (o.id || o.code)) aO.push({ uI: uid, uN: nm, uP: ph, ...o }); 
+                    }); 
                 } 
             } 
         } 
         aO.sort((a,b) => b.id - a.id); 
-        if(aO.length === 0) { 
-            c.innerHTML = '<p style="text-align:center;">Buyurtmalar yo\'q.</p>'; 
-            return; 
-        } 
-        c.innerHTML = aO.map(o => `
-            <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <b>#${o.code||o.id}</b>${getStatusHTML(o.status||'kutilmoqda')}
-                </div>
-                <p>👤 ${o.uN}<br>📞 ${o.uP}</p>
-                <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px;">💰 ${o.total.toLocaleString()} so'm</p>
-<div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button style="padding:10px; background:rgba(255,255,255,0.1); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="openAdminChat('${o.uI}', ${o.id})">💬 Chat</button>
-                ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
-                ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lda</button>` : ''}
-                ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazildi</button>` : ''}
-                ${o.status !== 'bekor_qilingan' ? `<button style="padding:10px; background:var(--accent-red); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor qilish</button>` : ''}
-            </div>
-            </div>
-        `).join(''); 
+        window.allFetchedOrders = aO;
+        renderAdminOrdersUI(aO);
     }); 
 }
+    
 async function changeOrderStatus(uid, orderId, newStatus) {
         db.ref('users/' + uid + '/orders').once('value', async snapshot => {
             if(snapshot.exists()) {
@@ -1722,7 +1725,7 @@ window.searchCustomers = () => {
     );
     renderCustomersList(filtered);
 }
-    window.openCustomerSpecificOrders = (uid, customerName) => {
+window.openCustomerSpecificOrders = (uid, customerName) => {
     if(document.getElementById('adminCustomersModal')) document.getElementById('adminCustomersModal').style.display = 'none';
     let aM = document.getElementById('adminOrdersModal');
     aM.style.display = 'flex';
@@ -1732,38 +1735,44 @@ window.searchCustomers = () => {
     let c = document.getElementById('admin-orders-list');
     if(!c) return;
     
-    // Sarlavhani aynan mijoz ismiga o'zgartiramiz
     aM.querySelector('.modal-header h2').innerHTML = `📦 ${customerName} buyurtmalari`;
 
-    // Filtr tugmalarini va ro'yxat qutisini chizamiz
+    // ZAMONAVIY TUGMALAR (SHU YERGA HAM QO'YILDI)
     c.innerHTML = `
-        <div style="display:flex; gap:8px; margin-bottom:15px; overflow-x:auto; padding-bottom:5px; scrollbar-width:none;">
-            <button onclick="filterAdminOrders('barchasi')" style="background:rgba(255,255,255,0.1); color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Barchasi</button>
-            <button onclick="filterAdminOrders('kutilmoqda')" style="background:#ffcc00; color:#000; border:none; padding:8px 12px; border-radius:12px; font-weight:bold; white-space:nowrap; cursor:pointer;">Kutilmoqda</button>
-            <button onclick="filterAdminOrders('qabul')" style="background:#007aff; color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Qabul qilingan</button>
-            <button onclick="filterAdminOrders('yolda')" style="background:#ff9500; color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Yo'lda</button>
-            <button onclick="filterAdminOrders('yetkazildi')" style="background:#34c759; color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Yetkazildi</button>
-            <button onclick="filterAdminOrders('bekor_qilingan')" style="background:#ff453a; color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Bekor qilingan</button>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; justify-content: center;">
+            <button onclick="filterAdminOrders('barchasi')" style="background:rgba(255,255,255,0.05); color:var(--text-main); border:1px solid var(--glass-border); padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">Barchasi</button>
+            <button onclick="filterAdminOrders('kutilmoqda')" style="background:rgba(255, 204, 0, 0.15); color:#ffcc00; border:1px solid #ffcc00; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">⏳ Kutilmoqda</button>
+            <button onclick="filterAdminOrders('qabul')" style="background:rgba(0, 122, 255, 0.15); color:#007aff; border:1px solid #007aff; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">✅ Qabul</button>
+            <button onclick="filterAdminOrders('yolda')" style="background:rgba(255, 149, 0, 0.15); color:#ff9500; border:1px solid #ff9500; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🚚 Yo'lda</button>
+            <button onclick="filterAdminOrders('yetkazildi')" style="background:rgba(52, 199, 89, 0.15); color:#34c759; border:1px solid #34c759; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🏁 Yetkazildi</button>
+            <button onclick="filterAdminOrders('bekor_qilingan')" style="background:rgba(255, 69, 58, 0.15); color:#ff453a; border:1px solid #ff453a; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">❌ Bekor qilingan</button>
         </div>
         <div id="admin-orders-render-box"><p style="text-align:center;">Yuklanmoqda...</p></div>
     `;
 
-    // Faqatgina shu mijozning buyurtmalarini bazadan tortib olamiz
     db.ref('users/' + uid).once('value', (s) => {
         let aO = [];
-        if(s.exists() && s.val().orders) {
+        if(s.exists()) {
             let userData = s.val();
-            let ph = userData.profile ? userData.profile.phone : ""; 
-            let nm = userData.profile ? userData.profile.name : ""; 
-            userData.orders.forEach(o => { aO.push({ uI: uid, uN: nm, uP: ph, ...o }); });
+            if(userData.orders) {
+                let ph = userData.profile ? userData.profile.phone : ""; 
+                let nm = userData.profile ? userData.profile.name : ""; 
+                // Qotib qolishni himoyalash: Object.values
+                Object.values(userData.orders).forEach(o => { 
+                    if(o && o.id) aO.push({ uI: uid, uN: nm, uP: ph, ...o }); 
+                });
+            }
         }
         aO.sort((a,b) => b.id - a.id);
         window.allFetchedOrders = aO;
         renderAdminOrdersUI(aO);
     });
 }
-</script>
     
-</body>
-    
+</script>    
+</body>    
 </html>
+
+
+
+
