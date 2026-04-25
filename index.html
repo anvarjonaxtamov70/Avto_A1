@@ -1768,6 +1768,45 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
         renderAdminOrdersUI(aO);
     });
 }
+    // Buyurtmalarni ekranga chizish funksiyasi
+window.renderAdminOrdersUI = (ordersArr) => {
+    let box = document.getElementById('admin-orders-render-box');
+    if(!box) return;
+    if(ordersArr.length === 0) { 
+        box.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Buyurtmalar topilmadi.</p>'; 
+        return; 
+    }
+    
+    box.innerHTML = ordersArr.map(o => {
+        return `
+        <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <b style="color:var(--luxury-gold);">#${o.code||o.id}</b>
+                ${getStatusHTML(o.status||'kutilmoqda')}
+            </div>
+            <p style="margin:5px 0;">👤 ${o.uN || 'Ismsiz'}<br>📞 ${o.uP || 'Raqamsiz'}</p>
+            <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px; font-size:16px;">💰 ${o.total.toLocaleString()} so'm</p>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button style="padding:10px; background:rgba(255,255,255,0.1); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:1px solid rgba(255,255,255,0.1);" onclick="openAdminChat('${o.uI}', ${o.id})">💬 Chat</button>
+                ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
+                ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lda</button>` : ''}
+                ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazildi</button>` : ''}
+                ${o.status !== 'bekor_qilingan' ? `<button style="padding:10px; background:var(--accent-red); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor qilish</button>` : ''}
+            </div>
+        </div>
+    `}).join(''); 
+}
+
+// Filtrlash funksiyasi
+window.filterAdminOrders = (status) => {
+    if(!window.allFetchedOrders) return;
+    if(status === 'barchasi') {
+        renderAdminOrdersUI(window.allFetchedOrders);
+    } else {
+        let filtered = window.allFetchedOrders.filter(o => (o.status || 'kutilmoqda') === status);
+        renderAdminOrdersUI(filtered);
+    }
+}
     
 </script>    
 </body>    
