@@ -1047,56 +1047,86 @@ function saveEditProduct() {
         return `<div class="luxury-card" onclick="openProduct(${p.id})">${bH}${heartBtn}<div class="img-wrap" style="${oosStyle}"><img src="${p.img}" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/150?text=Rasm+yoq'; this.style.opacity=1;"></div><div class="info"><h4>${p.name}</h4><div class="price-row"><div class="price">${p.price.toLocaleString()} so'm</div><button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div></div></div>`; 
     }
 
- function openProduct(id) {
-        let p = productsDB.find(x => x.id == id); if(!p) return;
+function openProduct(id) {
+    let p = productsDB.find(x => x.id == id); if(!p) return;
 
-        let imgs = [];
-        if (p.images && p.images.length > 0) { imgs = p.images; } else if (p.img) { imgs = [p.img]; }
+    let imgs = [];
+    if (p.images && p.images.length > 0) { imgs = p.images; } else if (p.img) { imgs = [p.img]; }
 
-        let sliderWrapper = document.getElementById('pm-slider-wrapper');
-        let dotsWrapper = document.getElementById('pm-slider-dots');
+    let sliderWrapper = document.getElementById('pm-slider-wrapper');
+    let dotsWrapper = document.getElementById('pm-slider-dots');
 
-        if (imgs.length > 0) {
-            sliderWrapper.innerHTML = imgs.map(src => `<img src="${src}" onload="this.style.opacity=1" onerror="this.style.opacity=1; this.src='https://via.placeholder.com/300?text=Rasm+yoq'">`).join('');
-            dotsWrapper.innerHTML = imgs.length > 1 ? imgs.map((_, i) => `<div class="pm-dot ${i===0?'active':''}"></div>`).join('') : '';
-        } else {
-            sliderWrapper.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;color:gray;">Rasm yuklanmagan</div>`;
-            dotsWrapper.innerHTML = '';
-        }
-        sliderWrapper.scrollLeft = 0;
+    if (imgs.length > 0) {
+        sliderWrapper.innerHTML = imgs.map(src => `<img src="${src}" onload="this.style.opacity=1" onerror="this.style.opacity=1; this.src='https://via.placeholder.com/300?text=Rasm+yoq'">`).join('');
+        dotsWrapper.innerHTML = imgs.length > 1 ? imgs.map((_, i) => `<div class="pm-dot ${i===0?'active':''}"></div>`).join('') : '';
+    } else {
+        sliderWrapper.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;color:gray;">Rasm yuklanmagan</div>`;
+        dotsWrapper.innerHTML = '';
+    }
+    sliderWrapper.scrollLeft = 0;
 
-        document.getElementById('pm-title').innerText = p.name; 
-        document.getElementById('pm-desc').innerText = p.desc || "Tavsif kiritilmagan"; 
-        document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} so'm`;
+    document.getElementById('pm-title').innerText = p.name; 
+    document.getElementById('pm-desc').innerText = p.desc || "Tavsif kiritilmagan"; 
+    document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} so'm`;
+    
+    let buyB = document.getElementById('pm-buy-btn');
+    let sInf = document.getElementById('pm-stock');
+    
+    // ==========================================
+    // YANGI MANTIQ: TOVAR TURIGA QARAB O'ZGARADI
+    // ==========================================
+    if (p.product_type === 'razmerli' && p.sizes && p.sizes.length > 0) {
+        // 1. RAZMERLI TOVAR
+        window.currentSelectedCar = p.sizes[0].size; 
+        window.currentSelectedStock = p.sizes[0].stock;
         
+        let sizesHtml = `
+        <div style="margin-top: 15px;">
+            <p style="font-size: 12px; font-weight: bold; color: var(--text-muted); margin-bottom: 8px;">Razmerni tanlang:</p>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;" id="pm-size-options">
+                ${p.sizes.map((s, i) => `
+                    <button onclick="selectSizeModel(this, ${s.stock})" data-size="${s.size}" style="background: ${i===0 ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255,255,255,0.05)'}; color: ${i===0 ? 'var(--luxury-gold)' : 'white'}; border: 1px solid ${i===0 ? 'var(--luxury-gold)' : 'var(--glass-border)'}; padding: 8px 15px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s;" class="pm-size-btn ${i===0 ? 'selected' : ''}">${s.size}</button>
+                `).join('')}
+            </div>
+        </div>`;
+        
+        sInf.innerHTML = `<div id="dynamic-stock-info"></div>` + sizesHtml;
+        updateDynamicStock(window.currentSelectedStock);
+
+        buyB.onclick = () => {
+            if (window.currentSelectedStock <= 0) {
+                showToast("Bu razmerdan qolmagan!", "warning"); return;
+            }
+            let finalCartId = id + "||" + window.currentSelectedCar; 
+            let totalInCart = 0;
+            for(let cid in cart) { if(cid.startsWith(id + "||" + window.currentSelectedCar)) totalInCart += cart[cid]; }
+            if(totalInCart >= window.currentSelectedStock){
+                showToast("Omborda bunday ko'p emas", "warning");
+            } else {
+                addToCartWithOptions(finalCartId);
+                closeModal();
+            }
+        };
+    } else {
+        // 2. ODDIY TOVAR (Eski mantiq o'z holicha qoldi)
         let st = p.stock !== undefined ? p.stock : 10;
-        let sInf = document.getElementById('pm-stock');
-        let buyB = document.getElementById('pm-buy-btn');
-         // 1. Sotuvda bor/yo'qligini tekshirish
-        let stockHtml = '';
-        
-        // ADMIN UCHUN RAQAM KO'RINADI, MIJOZ UCHUN YASHIRILADI
         let stockText = (currentUser === ADMIN_ID) ? `✅ Sotuvda bor: ${st} ta` : `✅ Sotuvda bor`;
-        
+        let stockHtml = st <= 0 
+            ? `<span style="color:#ff453a; font-weight:bold;">❌ Sotuvda qolmagan</span>`
+            : `<span style="color:var(--accent-green); font-weight:bold;">${stockText}</span>`;
+            
         if(st <= 0) {
-            stockHtml = `<span style="color:#ff453a; font-weight:bold;">❌ Sotuvda qolmagan</span>`;
             buyB.disabled = true; buyB.innerText = "Tugagan"; buyB.onclick = null;
         } else {
-            stockHtml = `<span style="color:var(--accent-green); font-weight:bold;">${stockText}</span>`;
             buyB.disabled = false; buyB.innerText = "Savatga qo'shish";
         }
 
-        // MASHINA TANLASH (RAZMER KABI)
         const carNames = {'gazel-biznes':'Gazel Biznes','gazel-next':'Gazel Next','gazel-eski':'Gazel Eski','volga-2401':'Volga 2401','volga-2410':'Volga 2410','volga-3110':'Volga 3110','volga-31105':'Volga 31105','volga-31029':'Volga 31029','sobol':'Sobol','chevy-damas':'Damas','chevy-cobalt':'Cobalt','chevy-gentra':'Gentra','chevy-lacetti':'Lacetti','chevy-malibu1':'Malibu 1','chevy-malibu2':'Malibu 2','chevy-tracker2':'Tracker 2','chevy-nexia3':'Nexia 3','chevy-spark':'Spark','chevy-onix':'Onix','chevy-captiva1':'Captiva 1','chevy-captiva2':'Captiva 2','chevy-captiva3':'Captiva 3','chevy-captiva4':'Captiva 4','chevy-labo':'Labo','chevy-matiz':'Matiz (Chevy)','chevy-epica':'Epica','daewoo-nexia1':'Nexia 1','daewoo-nexia2':'Nexia 2','daewoo-matiz':'Matiz','daewoo-tico':'Tico','uaz-patriot':'Patriot','uaz-hunter':'Hunter'};
-        
         let uniqueModels = new Set();
         let pCats = p.categories || [p.category];
         pCats.forEach(c => {
-            for(let key in carNames) {
-                if(c && c.startsWith(key)) uniqueModels.add(carNames[key]);
-            }
+            for(let key in carNames) { if(c && c.startsWith(key)) uniqueModels.add(carNames[key]); }
         });
-        
         let carsArr = Array.from(uniqueModels);
         let modelsHtml = '';
         if(carsArr.length > 0) {
@@ -1120,25 +1150,19 @@ function saveEditProduct() {
             buyB.onclick = () => {
                 let finalCartId = id + "||" + window.currentSelectedCar;
                 let totalInCart = 0;
-                for(let cid in cart) {
-                    if(cid.startsWith(id + "||")) totalInCart += cart[cid];
-                }
-                
-                if(totalInCart >= st){
-                    showToast("Omborda bunday ko'p emas", "warning");
-                } else {
-                    addToCartWithOptions(finalCartId);
-                    closeModal();
-                }
+                for(let cid in cart) { if(cid.startsWith(id + "||")) totalInCart += cart[cid]; }
+                if(totalInCart >= st){ showToast("Omborda bunday ko'p emas", "warning"); } 
+                else { addToCartWithOptions(finalCartId); closeModal(); }
             };
         }
-
-        buyB.setAttribute('data-id', id);
-        let edB = document.getElementById('pm-edit-btn'); if (currentUser === ADMIN_ID) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
-        let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
-        if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
-        let mod = document.getElementById('productModal'); mod.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); tg.BackButton.show(); updateBtns();
     }
+
+    buyB.setAttribute('data-id', id);
+    let edB = document.getElementById('pm-edit-btn'); if (currentUser === ADMIN_ID) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
+    let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
+    if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
+    let mod = document.getElementById('productModal'); mod.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); tg.BackButton.show(); updateBtns();
+}
     
     function backToCart() {
         // To'lov oynasini yashiramiz
@@ -2172,6 +2196,39 @@ window.addSizeField = () => {
         <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
     `;
     container.appendChild(div);
+};
+
+    window.selectSizeModel = (btn, stock) => {
+    document.querySelectorAll('.pm-size-btn').forEach(b => {
+        b.style.background = 'rgba(255,255,255,0.05)';
+        b.style.color = 'white';
+        b.style.borderColor = 'var(--glass-border)';
+        b.classList.remove('selected');
+    });
+    btn.style.background = 'rgba(212, 175, 55, 0.2)';
+    btn.style.color = 'var(--luxury-gold)';
+    btn.style.borderColor = 'var(--luxury-gold)';
+    btn.classList.add('selected');
+    
+    // Razmerni va uning qoldig'ini xotiraga olamiz
+    window.currentSelectedCar = btn.getAttribute('data-size');
+    window.currentSelectedStock = stock;
+    updateDynamicStock(stock);
+};
+
+window.updateDynamicStock = (st) => {
+    let box = document.getElementById('dynamic-stock-info');
+    let buyB = document.getElementById('pm-buy-btn');
+    if(!box) return;
+    
+    let stockText = (currentUser === ADMIN_ID) ? `✅ Sotuvda bor: ${st} ta` : `✅ Sotuvda bor`;
+    if(st <= 0) {
+        box.innerHTML = `<span style="color:#ff453a; font-weight:bold;">❌ Sotuvda qolmagan</span>`;
+        buyB.disabled = true; buyB.innerText = "Tugagan";
+    } else {
+        box.innerHTML = `<span style="color:var(--accent-green); font-weight:bold;">${stockText}</span>`;
+        buyB.disabled = false; buyB.innerText = "Savatga qo'shish";
+    }
 };
     
 </script>    
