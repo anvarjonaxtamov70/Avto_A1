@@ -629,8 +629,10 @@
     const firebaseConfig = { databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, cart = JSON.parse(localStorage.getItem('avto_cart')) || {}, myOrders = [], wishlist = [], myProfile = { name: botName, phone: botPhone, address: "" }, isDataLoaded = false;
 
+    let cart = {}; try { cart = JSON.parse(localStorage.getItem('avto_cart')) || {}; } catch(e) { localStorage.removeItem('avto_cart'); }
+    let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, myOrders = [], wishlist = [], myProfile = { name: botName, phone: botPhone, address: "" }, isDataLoaded = false;
+    
     function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
     function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">❌ Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
 function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; }
