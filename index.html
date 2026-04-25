@@ -438,7 +438,7 @@
 </div>
 
 <div class="modal-standard" id="paymentModal">
-    <div class="modal-header"><h2>💳 To'lov</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-header"><h2>💳 To'lov</h2><button class="close-btn" style="font-size: 24px;" onclick="backToCart()">←</button></div>
     <div id="payment-options">
         <div class="luxury-card" onclick="selectPayment('card')" style="margin-bottom: 15px; align-items: center; flex-direction: row; gap: 15px; padding: 20px;"><span style="font-size: 28px;">💳</span><div style="flex:1;"><h4 style="margin:0; font-size: 18px;">Karta orqali</h4><p style="margin: 5px 0 0; font-size: 13px; color: var(--text-muted);">Uzcard/Humo</p></div></div>
         <div class="luxury-card" onclick="selectPayment('cash')" style="align-items: center; flex-direction: row; gap: 15px; padding: 20px;"><span style="font-size: 28px;">💵</span><div style="flex:1;"><h4 style="margin:0; font-size: 18px;">Naqd</h4><p style="margin: 5px 0 0; font-size: 13px; color: var(--text-muted);">Qabul qilganda</p></div></div>
@@ -982,6 +982,19 @@ function saveEditProduct() {
         let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
         if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} s</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
         let mod = document.getElementById('productModal'); mod.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); tg.BackButton.show(); updateBtns();
+    }
+    function backToCart() {
+        // To'lov oynasini yashiramiz
+        document.getElementById('paymentModal').style.display = 'none';
+        
+        // Savat oynasini qaytadan ko'rsatamiz
+        let cM = document.getElementById('cartModal');
+        cM.style.display = 'flex';
+        
+        // Holatni Savatga qaytaramiz
+        activeModal = 'cartModal';
+        window.history.replaceState({ modal: 'cartModal' }, "");
+        renderCartItems(); // Savat ichini yangilab qo'yamiz
     }
 
     function updateSliderDots() {
