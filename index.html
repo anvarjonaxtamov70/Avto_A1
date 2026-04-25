@@ -994,18 +994,42 @@ function saveEditProduct() {
         document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.replaceState({ modal: 'adminInventoryModal' }, ""); renderAdminInventory();
     }
     
+
     function renderAdminInventory() {
         let c = document.getElementById('admin-inventory-list');
         c.innerHTML = productsDB.map(p => {
-            let st = p.stock !== undefined ? p.stock : 10;
-            return `
-            <div class="inventory-item">
-                <div class="inv-info"><h4>${p.name}</h4><p>${p.price.toLocaleString()} so'm</p></div>
-                <div class="inv-controls">
-                    <input type="number" id="inv-input-${p.id}" class="inv-input" value="${st}">
-                    <button class="inv-btn" onclick="fastSaveStock(${p.id})">Saqlash</button>
-                </div>
-            </div>`;
+            if (p.product_type === 'razmerli' && p.sizes) {
+                // RAZMERLI TOVARLAR UCHUN OMBOR
+                let sizesHtml = p.sizes.map((s, idx) => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; margin-top:5px;">
+                        <span style="font-size:12px; color:var(--luxury-gold); font-weight:bold;">Razmer: ${s.size}</span>
+                        <div class="inv-controls">
+                            <input type="number" id="inv-input-${p.id}-${idx}" class="inv-input" value="${s.stock}" style="width:40px; padding:4px; font-size:12px;">
+                            <button class="inv-btn" style="padding:4px 8px; font-size:11px;" onclick="fastSaveSizeStock(${p.id}, ${idx})">Saqlash</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                return `
+                <div class="inventory-item" style="flex-direction:column; align-items:stretch;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                        <div class="inv-info"><h4>${p.name}</h4><p>${p.price.toLocaleString()} so'm</p></div>
+                        <span style="font-size:10px; background:var(--primary-blue); padding:3px 6px; border-radius:4px; color:white; font-weight:bold;">Razmerli</span>
+                    </div>
+                    <div style="margin-top:10px; border-top:1px dashed var(--glass-border); padding-top:5px;">${sizesHtml}</div>
+                </div>`;
+            } else {
+                // ODDIY TOVARLAR UCHUN OMBOR (Eski holat)
+                let st = p.stock !== undefined ? p.stock : 10;
+                return `
+                <div class="inventory-item">
+                    <div class="inv-info"><h4>${p.name}</h4><p>${p.price.toLocaleString()} so'm</p></div>
+                    <div class="inv-controls">
+                        <input type="number" id="inv-input-${p.id}" class="inv-input" value="${st}">
+                        <button class="inv-btn" onclick="fastSaveStock(${p.id})">Saqlash</button>
+                    </div>
+                </div>`;
+            }
         }).join('');
     }
     
@@ -1014,6 +1038,19 @@ function saveEditProduct() {
         let idx = productsDB.findIndex(x => x.id === id);
         if(idx !== -1) { productsDB[idx].stock = val; db.ref('products').set(productsDB).then(() => { showToast("Qoldiq saqlandi!"); }); }
     }
+
+    // YANGI: Razmerning aniq qoldig'ini tezkor saqlash
+    window.fastSaveSizeStock = (id, sizeIdx) => {
+        let val = parseInt(document.getElementById(`inv-input-${id}-${sizeIdx}`).value) || 0;
+        let idx = productsDB.findIndex(x => x.id === id);
+        if(idx !== -1) { 
+            productsDB[idx].sizes[sizeIdx].stock = val;
+            // Umumiy tovar qoldig'ini barcha razmerlar yig'indisi qilib qo'yamiz
+            productsDB[idx].stock = productsDB[idx].sizes.reduce((sum, s) => sum + s.stock, 0);
+            db.ref('products').set(productsDB).then(() => { showToast("Razmer qoldig'i saqlandi!"); }); 
+        }
+    };
+   
 
     window.history.replaceState({ section: 'main-menu' }, "");
     setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
@@ -1277,10 +1314,25 @@ for (let fullId in cart) {
                 savedItems[fullId] = cart[fullId]; 
                 
                 // ZAXIRADAN AYIRISH
-                p.stock = (p.stock !== undefined ? p.stock : 10) - cart[fullId];
-                if (p.stock < 0) p.stock = 0; 
-                if (p.stock <= 3) {
-                    lowStockAlerts += `\n⚠️ <b>${p.name}</b>: atigi ${p.stock} ta qoldi!`;
+                if (p.product_type === 'razmerli' && p.sizes) {
+                    // Agar razmerli tovar bo'lsa, faqat sotilgan razmerni ayiramiz
+                    let sIdx = p.sizes.findIndex(s => s.size === carOpt);
+                    if (sIdx !== -1) {
+                        p.sizes[sIdx].stock -= cart[fullId];
+                        if (p.sizes[sIdx].stock < 0) p.sizes[sIdx].stock = 0;
+                        if (p.sizes[sIdx].stock <= 3) {
+                            lowStockAlerts += `\n⚠️ <b>${p.name} (Razmer: ${carOpt})</b>: atigi ${p.sizes[sIdx].stock} ta qoldi!`;
+                        }
+                    }
+                    // Umumiy stockni qayta hisoblab qo'yamiz
+                    p.stock = p.sizes.reduce((sum, s) => sum + s.stock, 0);
+                } else {
+                    // Oddiy tovar bo'lsa, umumiy stockdan ayiramiz
+                    p.stock = (p.stock !== undefined ? p.stock : 10) - cart[fullId];
+                    if (p.stock < 0) p.stock = 0; 
+                    if (p.stock <= 3) {
+                        lowStockAlerts += `\n⚠️ <b>${p.name}</b>: atigi ${p.stock} ta qoldi!`;
+                    }
                 }
             } 
         }
