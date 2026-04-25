@@ -538,7 +538,42 @@
         <h3 style="margin-top:20px; color: var(--luxury-gold);">Yangi Tovar Formasi</h3>
         <span class="luxury-input-label">NOMI</span><input type="text" id="add-name" class="search-box" style="margin-bottom: 15px;">
         <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="add-price" class="search-box" style="margin-bottom: 15px;">
-        <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="add-stock" class="search-box" style="margin-bottom: 15px;" value="10">
+      <span class="luxury-input-label">TOVAR TURI</span>
+        <select id="admin-prod-type" class="search-box" style="margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white;" onchange="toggleProductTypeFields()">
+            <option value="oddiy">Oddiy tovar (Bitta umumiy sklad)</option>
+            <option value="razmerli">Razmerli tovar (Kolsa, Porshen, va h.k.)</option>
+        </select>
+
+        <div id="admin-oddiy-fields">
+            <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="add-stock" class="search-box" style="margin-bottom: 15px;" value="10">
+        </div>
+
+        <div id="admin-razmerli-fields" style="display: none; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px dashed var(--luxury-gold);">
+            <span class="luxury-input-label" style="color: var(--luxury-gold);">MARKANI TANLANG</span>
+            <select id="admin-prod-brand" class="search-box" style="margin-bottom: 10px; background: rgba(0,0,0,0.5); color: white;" onchange="updateBrandModels()">
+                <option value="">-- Marka tanlang --</option>
+                <option value="gaz">GAZ (Universal razmerlar)</option>
+                <option value="daewoo">Daewoo</option>
+                <option value="chevy">Chevrolet</option>
+                <option value="uaz">UAZ</option>
+            </select>
+
+            <div id="admin-brand-models-box" style="display:none;">
+                <span class="luxury-input-label">MASHINA MODELI</span>
+                <select id="admin-prod-model" class="search-box" style="margin-bottom: 10px; background: rgba(0,0,0,0.5); color: white;">
+                    </select>
+            </div>
+
+            <span class="luxury-input-label">RAZMERLAR VA QOLDIQ (Sklad)</span>
+            <div id="admin-sizes-container">
+                <div class="size-input-row" style="display:flex; gap:8px; margin-bottom:8px;">
+                    <input type="text" placeholder="Razmer (mas. 92.5)" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-name">
+                    <input type="number" placeholder="Soni" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-stock">
+                    <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
+                </div>
+            </div>
+            <button type="button" onclick="addSizeField()" style="width:100%; padding:10px; background: rgba(212, 175, 55, 0.2); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 5px;">+ Yangi razmer qo'shish</button>
+        </div>
         <span class="luxury-input-label">TAVSIFI (MA'LUMOT)</span><textarea id="add-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;" placeholder="Tovar haqida..."></textarea>
         <span class="luxury-input-label">RASMLAR (Maksimal 3 ta)</span>
         <div style="display:flex; gap:8px; margin-bottom:15px;">
@@ -964,13 +999,17 @@ function saveEditProduct() {
         let st = p.stock !== undefined ? p.stock : 10;
         let sInf = document.getElementById('pm-stock');
         let buyB = document.getElementById('pm-buy-btn');
-        
+         // 1. Sotuvda bor/yo'qligini tekshirish
         let stockHtml = '';
+        
+        // ADMIN UCHUN RAQAM KO'RINADI, MIJOZ UCHUN YASHIRILADI
+        let stockText = (currentUser === ADMIN_ID) ? `✅ Sotuvda bor: ${st} ta` : `✅ Sotuvda bor`;
+        
         if(st <= 0) {
             stockHtml = `<span style="color:#ff453a; font-weight:bold;">❌ Sotuvda qolmagan</span>`;
             buyB.disabled = true; buyB.innerText = "Tugagan"; buyB.onclick = null;
         } else {
-            stockHtml = `<span style="color:var(--accent-green); font-weight:bold;">✅ Sotuvda bor: ${st} ta</span>`;
+            stockHtml = `<span style="color:var(--accent-green); font-weight:bold;">${stockText}</span>`;
             buyB.disabled = false; buyB.innerText = "Savatga qo'shish";
         }
 
@@ -1994,6 +2033,72 @@ window.chg = (fullId, d) => {
     cart[fullId] += d; 
     if(cart[fullId] <= 0) delete cart[fullId]; 
     saveLocalCart(); updateCartBadge(); renderCartItems(); 
+};
+    // =====================================
+// RAZMERLI TOVARLAR UCHUN ADMIN MANTIQI
+// =====================================
+window.toggleProductTypeFields = () => {
+    let type = document.getElementById('admin-prod-type').value;
+    if(type === 'razmerli') {
+        document.getElementById('admin-oddiy-fields').style.display = 'none';
+        document.getElementById('admin-razmerli-fields').style.display = 'block';
+    } else {
+        document.getElementById('admin-oddiy-fields').style.display = 'block';
+        document.getElementById('admin-razmerli-fields').style.display = 'none';
+    }
+};
+
+window.updateBrandModels = () => {
+    let brand = document.getElementById('admin-prod-brand').value;
+    let box = document.getElementById('admin-brand-models-box');
+    let select = document.getElementById('admin-prod-model');
+    
+    select.innerHTML = ''; // Tozalash
+    
+    if(brand === 'gaz') {
+        box.style.display = 'none'; // GAZ uchun mashina kerak emas
+    } else if (brand === 'daewoo') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="nexia1">Nexia 1</option>
+            <option value="nexia2">Nexia 2</option>
+            <option value="matiz">Matiz</option>
+            <option value="tico">Tico</option>
+            <option value="damas">Damas</option>
+        `;
+    } else if (brand === 'chevy') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="cobalt">Cobalt</option>
+            <option value="gentra">Gentra</option>
+            <option value="lacetti">Lacetti</option>
+            <option value="spark">Spark</option>
+            <option value="nexia3">Nexia 3</option>
+        `;
+    } else if (brand === 'uaz') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="patriot">Patriot</option>
+            <option value="hunter">Hunter</option>
+        `;
+    } else {
+        box.style.display = 'none';
+    }
+};
+
+window.addSizeField = () => {
+    let container = document.getElementById('admin-sizes-container');
+    let div = document.createElement('div');
+    div.style.display = 'flex';
+    div.style.gap = '8px';
+    div.style.marginBottom = '8px';
+    div.className = 'size-input-row';
+    div.innerHTML = `
+        <input type="text" placeholder="Razmer (masalan: 92.5)" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-name">
+        <input type="number" placeholder="Soni" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-stock">
+        <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
+    `;
+    container.appendChild(div);
 };
     
 </script>    
