@@ -522,6 +522,11 @@
             <h3>Ombor</h3>
             <p>Zaxira nazorati</p>
         </div>
+        <div class="admin-card" onclick="openAdminCustomers()">
+            <div class="a-icon" style="color: #ff9500;">👥</div>
+            <h3>Mijozlar</h3>
+            <p>Foydalanuvchilar bazasi</p>
+        </div>
         <div class="admin-card gold-dashed" onclick="document.getElementById('add-product-wrapper').classList.toggle('hidden')">
             <div class="a-icon">➕</div>
             <h3 style="color: var(--luxury-gold);">Yangi Tovar</h3>
@@ -606,6 +611,17 @@
 <div class="modal-standard" id="adminStatsModal">
     <div class="modal-header"><h2 style="color: #34c759;">📊 Statistika</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-stats-content" style="padding-bottom: 20px;">
+        <p style="text-align:center;">Ma'lumotlar yuklanmoqda...</p>
+    </div>
+</div>
+    <div class="modal-standard" id="adminCustomersModal">
+    <div class="modal-header"><h2 style="color: #ff9500;">👥 Mijozlar Ro'yxati</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    
+    <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+        <input type="text" id="customer-search-input" class="search-box" placeholder="Mijoz ismi yoki ID si..." oninput="searchCustomers()" style="flex: 1; padding: 10px 15px; border-radius: 12px; font-size: 13px;">
+    </div>
+    
+    <div id="admin-customers-list">
         <p style="text-align:center;">Ma'lumotlar yuklanmoqda...</p>
     </div>
 </div>
@@ -1503,12 +1519,12 @@ async function changeOrderStatus(uid, orderId, newStatus) {
 }
 
             // 2. Agar Ichki Admin oynalaridan qaytayotgan bo'lsak -> Admin Panelga o'tamiz
-            if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal') {
+           if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal') {
                 activeModal = 'adminModal';
                 document.getElementById('adminModal').style.display = 'flex';
                 document.body.style.overflow = 'hidden';
                 updateBtns();
-                window.history.pushState({ modal: 'adminModal' }, ""); // Tarixni tiklash
+                window.history.pushState({ modal: 'adminModal' }, ""); // Tarixni tiklash    
                 return;
             }
 
@@ -1613,6 +1629,93 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         
         openModal('orderDetailModal');
     }
+    // =====================================
+// ADMIN: MIJOZLAR RO'YXATI
+// =====================================
+let allCustomersData = [];
+
+window.openAdminCustomers = () => {
+    document.getElementById('adminModal').style.display = 'none';
+    let cM = document.getElementById('adminCustomersModal');
+    cM.style.display = 'flex';
+    activeModal = 'adminCustomersModal';
+    window.history.replaceState({ modal: 'adminCustomersModal' }, "");
+    
+    let listBox = document.getElementById('admin-customers-list');
+    listBox.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
+    
+    db.ref('users').once('value', (s) => {
+        allCustomersData = [];
+        if(s.exists()) {
+            let us = s.val();
+            for(let uid in us) {
+                let p = us[uid].profile || {};
+                let ords = us[uid].orders || [];
+                // Faqat muvaffaqiyatli yoki barcha buyurtmalar soni:
+                let totalOrdersCount = ords.length; 
+                
+                // Qancha pul sarflaganini hisoblash (Faqat 'yetkazildi' holatidagilarni qo'shamiz)
+                let totalSpent = ords.reduce((sum, o) => {
+                    if (o.status === 'yetkazildi') return sum + (o.total || 0);
+                    return sum;
+                }, 0);
+
+                allCustomersData.push({
+                    uid: uid,
+                    name: p.name || "Nomsiz mijoz",
+                    phone: p.phone || "Kiritilmagan",
+                    address: p.address || "Kiritilmagan",
+                    ordersCount: totalOrdersCount,
+                    totalSpent: totalSpent
+                });
+            }
+        }
+        
+        // Eng ko'p pul sarflaganlar tepada turishi uchun saralash (Sort)
+        allCustomersData.sort((a, b) => b.totalSpent - a.totalSpent);
+        renderCustomersList(allCustomersData);
+    });
+}
+
+window.renderCustomersList = (arr) => {
+    let listBox = document.getElementById('admin-customers-list');
+    if(arr.length === 0) {
+        listBox.innerHTML = '<p style="text-align:center; color: gray;">Mijozlar topilmadi.</p>';
+        return;
+    }
+    
+    listBox.innerHTML = arr.map(c => `
+        <div class="luxury-card" style="margin-bottom: 12px; padding: 15px; display: block;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div>
+                    <h4 style="margin: 0 0 4px 0; font-size: 15px;">${c.name}</h4>
+                    <span style="font-size: 11px; color: var(--text-muted);">ID: <code>${c.uid}</code></span>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 14px; font-weight: bold; color: var(--luxury-gold);">${c.totalSpent.toLocaleString()} s</div>
+                    <span style="font-size: 10px; color: var(--accent-green); background: rgba(48,209,88,0.1); padding: 2px 6px; border-radius: 6px;">${c.ordersCount} ta xarid</span>
+                </div>
+            </div>
+            <div style="font-size: 13px; color: var(--text-main);">📞 ${c.phone}</div>
+            ${c.address && c.address !== "Kiritilmagan" ? `<div style="font-size: 11px; color: gray; margin-top: 4px;">📍 ${c.address}</div>` : ''}
+        </div>
+    `).join('');
+}
+
+window.searchCustomers = () => {
+    let q = document.getElementById('customer-search-input').value.toLowerCase().trim();
+    if(q.length === 0) {
+        renderCustomersList(allCustomersData);
+        return;
+    }
+    
+    let filtered = allCustomersData.filter(c => 
+        c.name.toLowerCase().includes(q) || 
+        c.uid.toString().includes(q) ||
+        (c.phone && c.phone.includes(q))
+    );
+    renderCustomersList(filtered);
+}
 </script>
     
 </body>
