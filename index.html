@@ -1934,6 +1934,67 @@ window.filterAdminOrders = (status, btnElement) => {
         renderAdminOrdersUI(filtered);
     }
 }
+    // =====================================
+// MASHINA TANLASH VA SAVAT FUNKSIYALARI (TUZATILGAN)
+// =====================================
+
+window.selectCarModel = (btn) => {
+    document.querySelectorAll('.pm-car-btn').forEach(b => {
+        b.style.background = 'rgba(255,255,255,0.05)';
+        b.style.color = 'white';
+        b.style.borderColor = 'var(--glass-border)';
+        b.classList.remove('selected');
+    });
+    btn.style.background = 'rgba(212, 175, 55, 0.2)';
+    btn.style.color = 'var(--luxury-gold)';
+    btn.style.borderColor = 'var(--luxury-gold)';
+    btn.classList.add('selected');
+    window.currentSelectedCar = btn.getAttribute('data-car');
+};
+
+window.addToCartWithOptions = (finalId) => { 
+    cart[finalId] = (cart[finalId] || 0) + 1; 
+    saveLocalCart(); 
+    updateCartBadge(); 
+    if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium'); 
+    showToast('Savatda!'); 
+};
+
+window.renderCartItems = () => {
+    let c = document.getElementById('cart-items-container'); 
+    let b = document.getElementById('main-checkout-btn'); 
+    let t = 0; 
+    c.innerHTML = '';
+    if(Object.keys(cart).length === 0) { 
+        c.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; 
+        b.style.display = 'none'; 
+    } else {
+        for(let fullId in cart) { 
+            let [baseId, carOpt] = String(fullId).split('||');
+            let p = productsDB.find(x => x.id == baseId); 
+            if(!p) continue; 
+            t += p.price * cart[fullId]; 
+            let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
+            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[fullId]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${fullId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[fullId]}</span><button onclick="chg('${fullId}',1)">+</button></div></div>`; 
+        } 
+        b.style.display = 'block';
+    } 
+    document.getElementById('cart-total-sum').innerText = t.toLocaleString() + " so'm";
+};
+
+window.chg = (fullId, d) => { 
+    let [baseId, carOpt] = String(fullId).split('||');
+    let p = productsDB.find(x => x.id == baseId);
+    let st = p && p.stock !== undefined ? p.stock : 10;
+    
+    let totalInCart = 0;
+    for(let cid in cart) { if(cid.startsWith(baseId + "||")) totalInCart += cart[cid]; }
+    
+    if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+    cart[fullId] += d; 
+    if(cart[fullId] <= 0) delete cart[fullId]; 
+    saveLocalCart(); updateCartBadge(); renderCartItems(); 
+};
     
 </script>    
 </body>    
