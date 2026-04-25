@@ -939,16 +939,11 @@ function saveEditProduct() {
         return `<div class="luxury-card" onclick="openProduct(${p.id})">${bH}${heartBtn}<div class="img-wrap" style="${oosStyle}"><img src="${p.img}" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/150?text=Rasm+yoq'; this.style.opacity=1;"></div><div class="info"><h4>${p.name}</h4><div class="price-row"><div class="price">${p.price.toLocaleString()} so'm</div><button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div></div></div>`; 
     }
 
-  function openProduct(id) {
+ function openProduct(id) {
         let p = productsDB.find(x => x.id == id); if(!p) return;
 
-        // RASMNI TEKSHIRISH VA CHIQARISH
         let imgs = [];
-        if (p.images && p.images.length > 0) {
-            imgs = p.images;
-        } else if (p.img) {
-            imgs = [p.img];
-        }
+        if (p.images && p.images.length > 0) { imgs = p.images; } else if (p.img) { imgs = [p.img]; }
 
         let sliderWrapper = document.getElementById('pm-slider-wrapper');
         let dotsWrapper = document.getElementById('pm-slider-dots');
@@ -969,20 +964,70 @@ function saveEditProduct() {
         let st = p.stock !== undefined ? p.stock : 10;
         let sInf = document.getElementById('pm-stock');
         let buyB = document.getElementById('pm-buy-btn');
+        
+        let stockHtml = '';
         if(st <= 0) {
-            sInf.innerHTML = `<span style="color:#ff453a;">❌ Sotuvda qolmagan</span>`;
+            stockHtml = `<span style="color:#ff453a; font-weight:bold;">❌ Sotuvda qolmagan</span>`;
             buyB.disabled = true; buyB.innerText = "Tugagan"; buyB.onclick = null;
         } else {
-            sInf.innerHTML = `<span style="color:var(--accent-green);">✅ Sotuvda bor: ${st} ta</span>`;
-            buyB.disabled = false; buyB.innerText = "Savatga qo'shish"; buyB.onclick = () => { if(cart[id] && cart[id]>=st){showToast("Omborda bunday ko'p emas","warning");} else {addToCart(id); closeModal();} };
+            stockHtml = `<span style="color:var(--accent-green); font-weight:bold;">✅ Sotuvda bor: ${st} ta</span>`;
+            buyB.disabled = false; buyB.innerText = "Savatga qo'shish";
         }
+
+        // MASHINA TANLASH (RAZMER KABI)
+        const carNames = {'gazel-biznes':'Gazel Biznes','gazel-next':'Gazel Next','gazel-eski':'Gazel Eski','volga-2401':'Volga 2401','volga-2410':'Volga 2410','volga-3110':'Volga 3110','volga-31105':'Volga 31105','volga-31029':'Volga 31029','sobol':'Sobol','chevy-damas':'Damas','chevy-cobalt':'Cobalt','chevy-gentra':'Gentra','chevy-lacetti':'Lacetti','chevy-malibu1':'Malibu 1','chevy-malibu2':'Malibu 2','chevy-tracker2':'Tracker 2','chevy-nexia3':'Nexia 3','chevy-spark':'Spark','chevy-onix':'Onix','chevy-captiva1':'Captiva 1','chevy-captiva2':'Captiva 2','chevy-captiva3':'Captiva 3','chevy-captiva4':'Captiva 4','chevy-labo':'Labo','chevy-matiz':'Matiz (Chevy)','chevy-epica':'Epica','daewoo-nexia1':'Nexia 1','daewoo-nexia2':'Nexia 2','daewoo-matiz':'Matiz','daewoo-tico':'Tico','uaz-patriot':'Patriot','uaz-hunter':'Hunter'};
         
+        let uniqueModels = new Set();
+        let pCats = p.categories || [p.category];
+        pCats.forEach(c => {
+            for(let key in carNames) {
+                if(c && c.startsWith(key)) uniqueModels.add(carNames[key]);
+            }
+        });
+        
+        let carsArr = Array.from(uniqueModels);
+        let modelsHtml = '';
+        if(carsArr.length > 0) {
+            modelsHtml = `
+            <div style="margin-top: 15px;">
+                <p style="font-size: 12px; font-weight: bold; color: var(--text-muted); margin-bottom: 8px;">Qaysi mashina uchun?</p>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;" id="pm-car-options">
+                    ${carsArr.map((m, i) => `
+                        <button onclick="selectCarModel(this)" data-car="${m}" style="background: ${i===0 ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255,255,255,0.05)'}; color: ${i===0 ? 'var(--luxury-gold)' : 'white'}; border: 1px solid ${i===0 ? 'var(--luxury-gold)' : 'var(--glass-border)'}; padding: 8px 15px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s;" class="pm-car-btn ${i===0 ? 'selected' : ''}">${m}</button>
+                    `).join('')}
+                </div>
+            </div>`;
+            window.currentSelectedCar = carsArr[0];
+        } else {
+            window.currentSelectedCar = "Universal";
+        }
+
+        sInf.innerHTML = stockHtml + modelsHtml;
+        
+        if(st > 0) {
+            buyB.onclick = () => {
+                let finalCartId = id + "||" + window.currentSelectedCar;
+                let totalInCart = 0;
+                for(let cid in cart) {
+                    if(cid.startsWith(id + "||")) totalInCart += cart[cid];
+                }
+                
+                if(totalInCart >= st){
+                    showToast("Omborda bunday ko'p emas", "warning");
+                } else {
+                    addToCartWithOptions(finalCartId);
+                    closeModal();
+                }
+            };
+        }
+
         buyB.setAttribute('data-id', id);
         let edB = document.getElementById('pm-edit-btn'); if (currentUser === ADMIN_ID) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
         let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
-        if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} s</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
+        if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
         let mod = document.getElementById('productModal'); mod.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); tg.BackButton.show(); updateBtns();
     }
+    
     function backToCart() {
         // To'lov oynasini yashiramiz
         document.getElementById('paymentModal').style.display = 'none';
@@ -1034,11 +1079,16 @@ function saveEditProduct() {
         } document.getElementById('cart-total-sum').innerText = t.toLocaleString();
     }
     
-    function chg(id, d) { 
-        let p = productsDB.find(x => x.id == id);
+function chg(fullId, d) { 
+        let [baseId, carOpt] = fullId.split('||');
+        let p = productsDB.find(x => x.id == baseId);
         let st = p && p.stock !== undefined ? p.stock : 10;
-        if(d > 0 && cart[id] >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
-        cart[id] += d; if(cart[id] <= 0) delete cart[id]; saveLocalCart(); updateCartBadge(); renderCartItems(); 
+        
+        let totalInCart = 0;
+        for(let cid in cart) { if(cid.startsWith(baseId + "||")) totalInCart += cart[cid]; }
+        
+        if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+        cart[fullId] += d; if(cart[fullId] <= 0) delete cart[fullId]; saveLocalCart(); updateCartBadge(); renderCartItems(); 
     }
     
     function openPaymentModal() { 
@@ -1080,19 +1130,19 @@ async function confirmOrder(paymentMethod) {
         // 1. Kam qolgan tovarlarni yig'ish uchun bo'sh matn ochamiz
         let lowStockAlerts = ""; 
         
-        for (let id in cart) { 
-            let p = productsDB.find(x => x.id == id); 
+for (let fullId in cart) { 
+            let [baseId, carOpt] = fullId.split('||');
+            let p = productsDB.find(x => x.id == baseId); 
             if (p) { 
-                let sum = p.price * cart[id]; 
-                adminText += `▪️ ${p.name}\n   ➖ ${cart[id]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
+                let sum = p.price * cart[fullId]; 
+                let dName = carOpt && carOpt !== "Universal" ? `${p.name} (${carOpt})` : p.name;
+                adminText += `▪️ ${dName}\n   ➖ ${cart[fullId]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
                 total += sum; 
-                savedItems[id] = cart[id]; 
+                savedItems[fullId] = cart[fullId]; 
                 
                 // ZAXIRADAN AYIRISH
-                p.stock = (p.stock !== undefined ? p.stock : 10) - cart[id];
+                p.stock = (p.stock !== undefined ? p.stock : 10) - cart[fullId];
                 if (p.stock < 0) p.stock = 0; 
-                
-                // 2. TEKSHIRUV: Agar tovar 3 ta yoki undan kam qolsa, ro'yxatga qo'shamiz
                 if (p.stock <= 3) {
                     lowStockAlerts += `\n⚠️ <b>${p.name}</b>: atigi ${p.stock} ta qoldi!`;
                 }
@@ -1169,10 +1219,14 @@ async function confirmOrder(paymentMethod) {
         document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda'); 
         
         let iH = ''; 
-        for(let pId in o.items) { 
-            let p = productsDB.find(x => x.id == pId); 
-            if(p) iH += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${p.name} (x${o.items[pId]})</span><span style="color:var(--luxury-gold);">${(p.price * o.items[pId]).toLocaleString()} s</span></div>`; 
-        } 
+        for(let fullId in o.items) { 
+                    let [baseId, carOpt] = fullId.split('||');
+                    let p = productsDB.find(x => x.id == baseId); 
+                    if(p) {
+                        let dName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="font-size:10px; color:gray;">[${carOpt}]</span>` : p.name;
+                        iH += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${dName} (x${o.items[fullId]})</span><span style="color:var(--luxury-gold);">${(p.price * o.items[fullId]).toLocaleString()} so'm</span></div>`; 
+                    }
+                }
         document.getElementById('od-items').innerHTML = iH; 
         document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm"; 
         
