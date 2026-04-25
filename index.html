@@ -1028,7 +1028,29 @@ function saveEditProduct() {
         cart[id] += d; if(cart[id] <= 0) delete cart[id]; saveLocalCart(); updateCartBadge(); renderCartItems(); 
     }
     
-    function openPaymentModal() { if (Object.keys(cart).length === 0) return; if (!myProfile.phone) { showToast("Raqam kiriting!", "warning"); setTimeout(() => { closeModal(); showProfile(); setTimeout(() => openModal('profileEditModal'), 300); }, 1500); return; } document.getElementById('payment-options').classList.remove('hidden'); document.getElementById('card-details').classList.add('hidden'); openModal('paymentModal'); }
+    function openPaymentModal() { 
+        if (Object.keys(cart).length === 0) return; 
+        if (!myProfile.phone) { 
+            showToast("Raqam kiriting!", "warning"); 
+            setTimeout(() => { closeModal(); showProfile(); setTimeout(() => openModal('profileEditModal'), 300); }, 1500); 
+            return; 
+        } 
+        
+        // Qotib qolishni oldini olish: Savat oynasini yashiramiz
+        document.getElementById('cartModal').style.display = 'none'; 
+        
+        document.getElementById('payment-options').classList.remove('hidden'); 
+        document.getElementById('card-details').classList.add('hidden'); 
+        
+        // To'lov oynasini xavfsiz ochish
+        let m = document.getElementById('paymentModal'); 
+        m.style.display = 'flex'; 
+        document.body.style.overflow = 'hidden';
+        activeModal = 'paymentModal'; 
+        window.history.replaceState({ modal: 'paymentModal' }, ""); 
+        tg.BackButton.show(); 
+        updateBtns(); 
+    }
     function selectPayment(t) { if(t === 'cash') confirmOrder('Naqd pul'); else if(t === 'card') { document.getElementById('payment-options').classList.add('hidden'); document.getElementById('card-details').classList.remove('hidden'); } }
     function copyCard() { navigator.clipboard.writeText("5614681874796349"); showToast("Nusxalandi!"); }
 
