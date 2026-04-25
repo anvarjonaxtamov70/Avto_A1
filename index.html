@@ -1395,6 +1395,7 @@ window.openAdminChat = (uid, orderId) => {
     function openAdminOrders() { 
     document.getElementById('adminModal').style.display = 'none'; 
     let aM = document.getElementById('adminOrdersModal'); 
+    aM.querySelector('.modal-header h2').innerHTML = '📦 Buyurtmalar';
     aM.style.display = 'flex'; 
     activeModal = 'adminOrdersModal'; 
     window.history.replaceState({ modal: 'adminOrdersModal' }, ""); 
@@ -1450,7 +1451,12 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     
                     db.ref('users/' + uid + '/orders').set(userOrders).then(async () => {
                         showToast("Holat o'zgartirildi!");
-                        openAdminOrders(); 
+                        let hTitle = document.querySelector('#adminOrdersModal .modal-header h2').innerText;
+                        if(hTitle === '📦 Buyurtmalar') {
+                            openAdminOrders(); 
+                        } else {
+                            openCustomerSpecificOrders(uid, hTitle.replace('📦 ', '').replace(' buyurtmalari', ''));
+                        }
                         
                         // TELEGRAMGA TO'G'RIDAN-TO'G'RI XABAR JO'NATISH
                         if (oldStatus !== newStatus) {
@@ -1685,7 +1691,7 @@ window.renderCustomersList = (arr) => {
     }
     
     listBox.innerHTML = arr.map(c => `
-        <div class="luxury-card" style="margin-bottom: 12px; padding: 15px; display: block;">
+        <div class="luxury-card" style="margin-bottom: 12px; padding: 15px; display: block; cursor: pointer; border: 1px solid transparent;" onclick="openCustomerSpecificOrders('${c.uid}', '${c.name}')" onmouseover="this.style.borderColor='var(--luxury-gold)'" onmouseout="this.style.borderColor='transparent'">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                 <div>
                     <h4 style="margin: 0 0 4px 0; font-size: 15px;">${c.name}</h4>
@@ -1715,6 +1721,46 @@ window.searchCustomers = () => {
         (c.phone && c.phone.includes(q))
     );
     renderCustomersList(filtered);
+}
+    window.openCustomerSpecificOrders = (uid, customerName) => {
+    if(document.getElementById('adminCustomersModal')) document.getElementById('adminCustomersModal').style.display = 'none';
+    let aM = document.getElementById('adminOrdersModal');
+    aM.style.display = 'flex';
+    activeModal = 'adminOrdersModal';
+    window.history.pushState({ modal: 'adminOrdersModal' }, "");
+
+    let c = document.getElementById('admin-orders-list');
+    if(!c) return;
+    
+    // Sarlavhani aynan mijoz ismiga o'zgartiramiz
+    aM.querySelector('.modal-header h2').innerHTML = `📦 ${customerName} buyurtmalari`;
+
+    // Filtr tugmalarini va ro'yxat qutisini chizamiz
+    c.innerHTML = `
+        <div style="display:flex; gap:8px; margin-bottom:15px; overflow-x:auto; padding-bottom:5px; scrollbar-width:none;">
+            <button onclick="filterAdminOrders('barchasi')" style="background:rgba(255,255,255,0.1); color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Barchasi</button>
+            <button onclick="filterAdminOrders('kutilmoqda')" style="background:#ffcc00; color:#000; border:none; padding:8px 12px; border-radius:12px; font-weight:bold; white-space:nowrap; cursor:pointer;">Kutilmoqda</button>
+            <button onclick="filterAdminOrders('qabul')" style="background:#007aff; color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Qabul qilingan</button>
+            <button onclick="filterAdminOrders('yolda')" style="background:#ff9500; color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Yo'lda</button>
+            <button onclick="filterAdminOrders('yetkazildi')" style="background:#34c759; color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Yetkazildi</button>
+            <button onclick="filterAdminOrders('bekor_qilingan')" style="background:#ff453a; color:white; border:none; padding:8px 12px; border-radius:12px; white-space:nowrap; cursor:pointer;">Bekor qilingan</button>
+        </div>
+        <div id="admin-orders-render-box"><p style="text-align:center;">Yuklanmoqda...</p></div>
+    `;
+
+    // Faqatgina shu mijozning buyurtmalarini bazadan tortib olamiz
+    db.ref('users/' + uid).once('value', (s) => {
+        let aO = [];
+        if(s.exists() && s.val().orders) {
+            let userData = s.val();
+            let ph = userData.profile ? userData.profile.phone : ""; 
+            let nm = userData.profile ? userData.profile.name : ""; 
+            userData.orders.forEach(o => { aO.push({ uI: uid, uN: nm, uP: ph, ...o }); });
+        }
+        aO.sort((a,b) => b.id - a.id);
+        window.allFetchedOrders = aO;
+        renderAdminOrdersUI(aO);
+    });
 }
 </script>
     
