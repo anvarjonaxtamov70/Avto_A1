@@ -629,10 +629,10 @@
     const firebaseConfig = { databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, cart = {}, myOrders = [], wishlist = [], myProfile = { name: botName, phone: botPhone, address: "" }, isDataLoaded = false;
+    let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, cart = JSON.parse(localStorage.getItem('avto_cart')) || {}, myOrders = [], wishlist = [], myProfile = { name: botName, phone: botPhone, address: "" }, isDataLoaded = false;
 
     function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
-    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
+    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">❌ Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
 function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; }
     updateProfileUI();
     if (currentUser) {
@@ -649,7 +649,7 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
         });
     }
 
-    function saveLocalCart() { if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
+    function saveLocalCart() { localStorage.setItem('avto_cart', JSON.stringify(cart)); if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
     function saveLocalWishlist() { if (currentUser) db.ref('users/' + currentUser + '/wishlist').set(wishlist); }
 
     function toggleWishlist(e, id) {
@@ -1404,12 +1404,13 @@ window.openAdminChat = (uid, orderId) => {
                 </div>
                 <p>👤 ${o.uN}<br>📞 ${o.uP}</p>
                 <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px;">💰 ${o.total.toLocaleString()} so'm</p>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <button style="padding:10px; background:rgba(255,255,255,0.1); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="openAdminChat('${o.uI}', ${o.id})">💬 Chat</button>
-                    ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
-                    ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lda</button>` : ''}
-                    ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazildi</button>` : ''}
-                </div>
+<div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button style="padding:10px; background:rgba(255,255,255,0.1); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="openAdminChat('${o.uI}', ${o.id})">💬 Chat</button>
+                ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
+                ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lda</button>` : ''}
+                ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazildi</button>` : ''}
+                ${o.status !== 'bekor_qilingan' ? `<button style="padding:10px; background:var(--accent-red); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor qilish</button>` : ''}
+            </div>
             </div>
         `).join(''); 
     }); 
@@ -1445,6 +1446,10 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                             } else if (newStatus === "yetkazildi") {
                                 statusText = "🏁 YETKAZIB BERILDI";
                                 mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz muvaffaqiyatli yetkazib berildi. Xaridingiz uchun rahmat!`;
+                            }
+                            } else if (newStatus === "bekor_qilingan") {
+                                statusText = "❌ BEKOR QILINDI";
+                                mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi. Batafsil ma'lumot olish uchun admin bilan bog'laning.`;
                             }
 
                             // ADMINGA SMS DA HAM QISQA KOD ISHLATILADI
