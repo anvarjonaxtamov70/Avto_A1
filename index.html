@@ -641,9 +641,11 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
                 let data = snap.val(); cart = data.cart || {}; myOrders = data.orders || []; wishlist = data.wishlist || [];
                 if(data.profile) { myProfile = data.profile; updateProfileUI(); }
                     if(!isDataLoaded) { updateCartBadge(); if(activeModal === 'cartModal') renderCartItems(); if(activeModal === 'my-orders-section') renderMyOrders(); isDataLoaded = true; }
-                    else {
+                   else {
+                    setTimeout(() => {
                         if(activeModal === 'my-orders-section') renderMyOrders();
-                        if(activeModal === 'orderDetailModal') renderChatMessages();
+                        if(activeModal === 'orderDetailModal' && typeof renderChatMessages === 'function') renderChatMessages();
+                    }, 50);
                 }
             }
         });
