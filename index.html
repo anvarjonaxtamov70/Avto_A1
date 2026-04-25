@@ -1060,14 +1060,27 @@ function saveEditProduct() {
         let hc = document.getElementById('home-products'); if(hc) { let hi = displayDB.slice(0, limitCount); hc.innerHTML = hi.map(x => cardHTML(x)).join(''); }
         document.querySelectorAll('.items-grid').forEach(c => { let id = c.id; if(id.endsWith('-motor') || id.endsWith('-xadavoy') || id.endsWith('-tashqi')) { let items = displayDB.filter(x => x.category === id || (x.categories && x.categories.includes(id))); c.innerHTML = items.map(x => cardHTML(x)).join(''); } });
     }
-    function addToCartQuick(e, id) { 
-        e.stopPropagation(); 
-        let p = productsDB.find(x => x.id == id);
-        let st = p.stock !== undefined ? p.stock : 10;
-        if(st <= 0) { showToast("Kechirasiz, bu tovar qolmagan", "warning"); return; }
-        if(cart[id] && cart[id] >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
-        addToCart(id); 
+function addToCartQuick(e, id) { 
+    e.stopPropagation(); 
+    let p = productsDB.find(x => x.id == id);
+    
+    // RAZMERLI TOVAR BO'LSA - mahsulot sahifasiga yo'naltir
+    if(p.product_type === 'razmerli') {
+        showToast("Razmer tanlash uchun tovarni oching!", "warning");
+        openProduct(id);
+        return;
     }
+    
+    let st = p.stock !== undefined ? p.stock : 10;
+    if(st <= 0) { showToast("Kechirasiz, bu tovar qolmagan", "warning"); return; }
+    
+    let totalInCart = 0;
+    for(let cid in cart) { if(cid.startsWith(id + "||")) totalInCart += cart[cid]; }
+    if(totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+    
+    let finalId = id + "||Universal";
+    addToCartWithOptions(finalId);
+}
     
    function cardHTML(p) { 
         let st = p.stock !== undefined ? p.stock : 10;
@@ -2173,15 +2186,29 @@ window.renderCartItems = () => {
 window.chg = (fullId, d) => { 
     let [baseId, carOpt] = String(fullId).split('||');
     let p = productsDB.find(x => x.id == baseId);
-    let st = p && p.stock !== undefined ? p.stock : 10;
+    if(!p) return;
     
-    let totalInCart = 0;
-    for(let cid in cart) { if(cid.startsWith(baseId + "||")) totalInCart += cart[cid]; }
+    let st = p.stock !== undefined ? p.stock : 10;
     
-    if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
-    cart[fullId] += d; 
+    // Razmerli bo'lsa, faqat o'sha razmer qoldig'ini tekshir
+    if(p.product_type === 'razmerli' && p.sizes && carOpt) {
+        let sObj = p.sizes.find(s => s.size === carOpt);
+        if(sObj) st = sObj.stock;
+    }
+    
+    let totalSameSize = cart[fullId] || 0;
+    
+    if(d > 0 && totalSameSize >= st) { 
+        showToast("Omborda bunday ko'p emas", "warning"); 
+        return; 
+    }
+    
+    // TO'G'RI: || 0 qo'shildi
+    cart[fullId] = (cart[fullId] || 0) + d; 
     if(cart[fullId] <= 0) delete cart[fullId]; 
-    saveLocalCart(); updateCartBadge(); renderCartItems(); 
+    saveLocalCart(); 
+    updateCartBadge(); 
+    renderCartItems(); 
 };
     // =====================================
 // RAZMERLI TOVARLAR UCHUN ADMIN MANTIQI
