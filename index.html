@@ -586,7 +586,7 @@
     <div id="admin-orders-list"></div>
 </div>
 
-<div class="modal-standard" id="adminChatModal">
+<div class="modal-standard" id="adminChatModal" style="z-index: 3500;">
     <div class="modal-header"><h2 style="color: var(--luxury-gold);">💬 Mijoz bilan chat</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-chat-messages" style="height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
     <div style="display: flex; gap: 8px;">
@@ -1189,13 +1189,25 @@ async function confirmOrder(paymentMethod) {
     let currentAdminChatUid = null;
     let currentAdminChatOrderId = null;
 
-    // Chat oynasini ochish
-    window.openAdminChat = (uid, orderId) => {
-        currentAdminChatUid = uid;
-        currentAdminChatOrderId = orderId;
-        renderAdminChatMessages();
-        openModal('adminChatModal');
-    }
+// YANGI:
+window.openAdminChat = (uid, orderId) => {
+    currentAdminChatUid = uid;
+    currentAdminChatOrderId = orderId;
+    
+    // Avval adminOrdersModal ni yashiramiz
+    document.getElementById('adminOrdersModal').style.display = 'none';
+    
+    renderAdminChatMessages();
+    
+    // Keyin chatni ochamiz
+    let m = document.getElementById('adminChatModal');
+    m.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    activeModal = 'adminChatModal';
+    window.history.pushState({ modal: 'adminChatModal' }, "");
+    tg.BackButton.show();
+    updateBtns();
+}
 
     // Xabarlarni o'qib, ekranga chizish
     window.renderAdminChatMessages = () => {
@@ -1469,15 +1481,15 @@ async function changeOrderStatus(uid, orderId, newStatus) {
             let current = activeModal;
             document.getElementById(current).style.display = 'none';
 
-            // 1. Agar Chatdan qaytayotgan bo'lsak -> Buyurtmalarga o'tamiz
-            if (current === 'adminChatModal') {
-                activeModal = 'adminOrdersModal';
-                document.getElementById('adminOrdersModal').style.display = 'flex';
-                document.body.style.overflow = 'hidden';
-                updateBtns();
-                window.history.pushState({ modal: 'adminOrdersModal' }, ""); // Tarixni tiklash
-                return;
-            }
+    // popstate ichida bu qismni toping:
+    if (current === 'adminChatModal') {
+        activeModal = 'adminOrdersModal';
+        document.getElementById('adminOrdersModal').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        updateBtns();
+        window.history.pushState({ modal: 'adminOrdersModal' }, "");
+    return;
+}
 
             // 2. Agar Ichki Admin oynalaridan qaytayotgan bo'lsak -> Admin Panelga o'tamiz
             if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal') {
