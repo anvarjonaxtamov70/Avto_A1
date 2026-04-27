@@ -464,7 +464,35 @@
     <input type="hidden" id="edit-id">
     <span class="luxury-input-label">NOMI</span><input type="text" id="edit-name" class="search-box" style="margin-bottom: 15px;">
     <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="edit-price" class="search-box" style="margin-bottom: 15px;">
-    <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="edit-stock" class="search-box" style="margin-bottom: 15px;">
+     <span class="luxury-input-label">TOVAR TURI</span>
+    <select id="edit-prod-type" class="search-box" style="margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white;" onchange="toggleEditProductTypeFields()">
+        <option value="oddiy">Oddiy tovar</option>
+        <option value="razmerli">Razmerli tovar</option>
+    </select>
+
+    <div id="edit-oddiy-fields">
+        <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="edit-stock" class="search-box" style="margin-bottom: 15px;">
+    </div>
+
+    <div id="edit-razmerli-fields" style="display: none; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px dashed var(--luxury-gold);">
+        <span class="luxury-input-label" style="color: var(--luxury-gold);">MARKANI TANLANG</span>
+        <select id="edit-prod-brand" class="search-box" style="margin-bottom: 10px; background: rgba(0,0,0,0.5); color: white;" onchange="updateEditBrandModels()">
+            <option value="">-- Marka tanlang --</option>
+            <option value="gaz">GAZ (Universal)</option>
+            <option value="daewoo">Daewoo</option>
+            <option value="chevy">Chevrolet</option>
+            <option value="uaz">UAZ</option>
+        </select>
+
+        <div id="edit-brand-models-box" style="display:none;">
+            <span class="luxury-input-label">MASHINA MODELI</span>
+            <select id="edit-prod-model" class="search-box" style="margin-bottom: 10px; background: rgba(0,0,0,0.5); color: white;"></select>
+        </div>
+
+        <span class="luxury-input-label">RAZMERLAR VA QOLDIQ</span>
+        <div id="edit-sizes-container"></div>
+        <button type="button" onclick="addEditSizeField()" style="width:100%; padding:10px; background: rgba(212, 175, 55, 0.2); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 5px;">+ Yangi razmer qo'shish</button>
+    </div>
     <span class="luxury-input-label">TAVSIFI</span><textarea id="edit-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;"></textarea>
     <span class="luxury-input-label">RASMLAR (Maksimal 3 ta)</span>
     <div style="display:flex; gap:8px; margin-bottom:15px;">
@@ -903,7 +931,14 @@ function saveNewProduct() {
     });
 }
 
-function openEditModal(e) {
+
+
+    function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
+
+    function openAdminInventory() {
+        document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.replaceState({ modal: 'adminInventoryModal' }, ""); renderAdminInventory();
+    }
+    function openEditModal(e) {
     if(e) e.stopPropagation(); 
     let id = document.getElementById('pm-buy-btn').getAttribute('data-id'); 
     let p = productsDB.find(x => x.id == id); 
@@ -912,25 +947,54 @@ function openEditModal(e) {
     document.getElementById('edit-id').value = p.id; 
     document.getElementById('edit-name').value = p.name; 
     document.getElementById('edit-price').value = p.price; 
-    document.getElementById('edit-stock').value = p.stock !== undefined ? p.stock : 10; 
     document.getElementById('edit-desc').value = p.desc || ""; 
+    
+    // Tovar turi va razmerlarni yuklash
+    let pType = p.product_type || 'oddiy';
+    document.getElementById('edit-prod-type').value = pType;
+    toggleEditProductTypeFields();
+
+    if (pType === 'oddiy') {
+        document.getElementById('edit-stock').value = p.stock !== undefined ? p.stock : 10; 
+    } else {
+        document.getElementById('edit-prod-brand').value = p.brand || "";
+        updateEditBrandModels();
+        if(p.model) {
+            setTimeout(() => {
+                let modSel = document.getElementById('edit-prod-model');
+                if(modSel) modSel.value = p.model;
+            }, 50);
+        }
+        
+        let sCont = document.getElementById('edit-sizes-container');
+        sCont.innerHTML = '';
+        if(p.sizes && p.sizes.length > 0) {
+            p.sizes.forEach(s => {
+                let div = document.createElement('div');
+                div.className = 'size-input-row';
+                div.style.cssText = 'display:flex; gap:8px; margin-bottom:8px;';
+                div.innerHTML = `
+                    <input type="text" value="${s.size}" class="size-name" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;">
+                    <input type="number" value="${s.stock}" class="size-stock" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;">
+                    <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
+                `;
+                sCont.appendChild(div);
+            });
+        } else {
+            addEditSizeField();
+        }
+    }
     
     // Rasmlarni yuklash
     let imgs = p.images && p.images.length > 0 ? p.images : [p.img];
-    
-    // 1-rasm
     document.getElementById('edit-img-url').value = imgs[0] || ""; 
     document.getElementById('edit-img-preview').src = imgs[0] || "";
     document.getElementById('edit-img-preview').style.display = imgs[0] ? 'block' : 'none';
-    
-    // 2-rasm
     if(document.getElementById('edit-img-url2')) {
         document.getElementById('edit-img-url2').value = imgs[1] || "";
         document.getElementById('edit-img-preview2').src = imgs[1] || "";
         document.getElementById('edit-img-preview2').style.display = imgs[1] ? 'block' : 'none';
     }
-    
-    // 3-rasm
     if(document.getElementById('edit-img-url3')) {
         document.getElementById('edit-img-url3').value = imgs[2] || "";
         document.getElementById('edit-img-preview3').src = imgs[2] || "";
@@ -951,49 +1015,123 @@ function openEditModal(e) {
 }
 
 function saveEditProduct() {
-        let id = parseInt(document.getElementById('edit-id').value); let n = document.getElementById('edit-name').value; let p = parseInt(document.getElementById('edit-price').value); let st = parseInt(document.getElementById('edit-stock').value) || 0; let d = document.getElementById('edit-desc').value; 
-        
-        let img1 = document.getElementById('edit-img-url').value;
-        let img2 = document.getElementById('edit-img-url2') ? document.getElementById('edit-img-url2').value : "";
-        let img3 = document.getElementById('edit-img-url3') ? document.getElementById('edit-img-url3').value : "";
-        
-        let imagesArr = [];
-        if(img1) imagesArr.push(img1);
-        if(img2) imagesArr.push(img2);
-        if(img3) imagesArr.push(img3);
+    let id = parseInt(document.getElementById('edit-id').value); 
+    let n = document.getElementById('edit-name').value.trim(); 
+    let p = parseInt(document.getElementById('edit-price').value); 
+    let d = document.getElementById('edit-desc').value.trim(); 
+    let pType = document.getElementById('edit-prod-type').value;
+    
+    let img1 = document.getElementById('edit-img-url').value;
+    let img2 = document.getElementById('edit-img-url2') ? document.getElementById('edit-img-url2').value : "";
+    let img3 = document.getElementById('edit-img-url3') ? document.getElementById('edit-img-url3').value : "";
+    
+    let imagesArr = [];
+    if(img1) imagesArr.push(img1);
+    if(img2) imagesArr.push(img2);
+    if(img3) imagesArr.push(img3);
 
-        let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val')); let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
-        
-        if(!n || !p || imagesArr.length === 0 || sMods.length === 0 || sTyps.length === 0) { 
-            showToast("Malumot, rasm yoki kategoriya chala!", "warning"); 
-            return; 
-        }
-        
-        let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
-        let idx = productsDB.findIndex(x => x.id === id);
-        
-        if(idx !== -1) { 
-            productsDB[idx].name = n; 
-            productsDB[idx].price = p; 
-            productsDB[idx].stock = st; 
-            productsDB[idx].desc = d; 
-            productsDB[idx].img = imagesArr[0]; // asosiy rasm sifatida birinchisi
-            productsDB[idx].images = imagesArr; // barcha 3 ta rasm ro'yxati
-            productsDB[idx].categories = sCats; 
-            productsDB[idx].category = sCats[0]; 
-            db.ref('products').set(productsDB).then(() => { 
-                showToast("Yangilandi!"); 
-                closeModal(); 
-            }); 
-        }
-    }
-
-    function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
-
-    function openAdminInventory() {
-        document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.replaceState({ modal: 'adminInventoryModal' }, ""); renderAdminInventory();
+    let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val')); 
+    let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
+    
+    if(!n || !p || imagesArr.length === 0 || sMods.length === 0 || sTyps.length === 0) { 
+        showToast("Ma'lumot, rasm yoki kategoriya chala!", "warning"); 
+        return; 
     }
     
+    let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
+    let idx = productsDB.findIndex(x => x.id === id);
+    
+    if(idx !== -1) { 
+        productsDB[idx].name = n; 
+        productsDB[idx].price = p; 
+        productsDB[idx].desc = d || "Tavsif kiritilmagan"; 
+        productsDB[idx].img = imagesArr[0]; 
+        productsDB[idx].images = imagesArr; 
+        productsDB[idx].categories = sCats; 
+        productsDB[idx].category = sCats[0]; 
+        productsDB[idx].product_type = pType;
+
+        if (pType === 'oddiy') {
+            productsDB[idx].stock = parseInt(document.getElementById('edit-stock').value) || 0;
+            delete productsDB[idx].sizes;
+            delete productsDB[idx].brand;
+            delete productsDB[idx].model;
+        } else {
+            let brand = document.getElementById('edit-prod-brand').value;
+            let model = document.getElementById('edit-prod-model') ? document.getElementById('edit-prod-model').value : "";
+            
+            if(!brand) { showToast("Markani tanlang!", "warning"); return; }
+            
+            let sizes = [];
+            let totalStock = 0;
+            document.querySelectorAll('#edit-sizes-container .size-input-row').forEach(row => {
+                let sName = row.querySelector('.size-name').value.trim();
+                let sStock = parseInt(row.querySelector('.size-stock').value) || 0;
+                if(sName) {
+                    sizes.push({ size: sName, stock: sStock });
+                    totalStock += sStock;
+                }
+            });
+
+            if(sizes.length === 0) {
+                showToast("Kamida 1 ta razmer kiriting!", "warning");
+                return;
+            }
+            
+            productsDB[idx].brand = brand;
+            productsDB[idx].model = model;
+            productsDB[idx].sizes = sizes;
+            productsDB[idx].stock = totalStock;
+        }
+
+        db.ref('products').set(productsDB).then(() => { 
+            showToast("Yangilandi!"); 
+            closeModal(); 
+        }); 
+    }
+}
+
+window.toggleEditProductTypeFields = () => {
+    let type = document.getElementById('edit-prod-type').value;
+    if(type === 'razmerli') {
+        document.getElementById('edit-oddiy-fields').style.display = 'none';
+        document.getElementById('edit-razmerli-fields').style.display = 'block';
+    } else {
+        document.getElementById('edit-oddiy-fields').style.display = 'block';
+        document.getElementById('edit-razmerli-fields').style.display = 'none';
+    }
+};
+
+window.updateEditBrandModels = () => {
+    let brand = document.getElementById('edit-prod-brand').value;
+    let box = document.getElementById('edit-brand-models-box');
+    let select = document.getElementById('edit-prod-model');
+    select.innerHTML = ''; 
+    if(brand === 'gaz') { box.style.display = 'none'; } 
+    else if (brand === 'daewoo') {
+        box.style.display = 'block';
+        select.innerHTML = `<option value="nexia1">Nexia 1</option><option value="nexia2">Nexia 2</option><option value="matiz">Matiz</option><option value="tico">Tico</option><option value="damas">Damas</option>`;
+    } else if (brand === 'chevy') {
+        box.style.display = 'block';
+        select.innerHTML = `<option value="cobalt">Cobalt</option><option value="gentra">Gentra</option><option value="lacetti">Lacetti</option><option value="spark">Spark</option><option value="nexia3">Nexia 3</option>`;
+    } else if (brand === 'uaz') {
+        box.style.display = 'block';
+        select.innerHTML = `<option value="patriot">Patriot</option><option value="hunter">Hunter</option>`;
+    } else { box.style.display = 'none'; }
+};
+
+window.addEditSizeField = () => {
+    let container = document.getElementById('edit-sizes-container');
+    let div = document.createElement('div');
+    div.className = 'size-input-row';
+    div.style.cssText = 'display:flex; gap:8px; margin-bottom:8px;';
+    div.innerHTML = `
+        <input type="text" placeholder="Razmer (mas. 92.5)" class="size-name" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;">
+        <input type="number" placeholder="Soni" class="size-stock" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;">
+        <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
+    `;
+    container.appendChild(div);
+};
 
     function renderAdminInventory() {
         let c = document.getElementById('admin-inventory-list');
