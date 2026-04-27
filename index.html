@@ -2429,17 +2429,14 @@ window.addSizeField = () => {
     container.appendChild(div);
 };
 
-    // =====================================
-// 🚨 MUAMMOLARNI TO'LIQ HAL QILUVCHI KOD (SAVAT VA TO'LOV)
-// =====================================
+// 🚨 MUAMMOLARNI TO'LIQ HAL QILUVCHI KOD (NUQTADAN HIMOYALANGAN)
 
-// 1. SAVAT QIZIL BELGISINI (BADGE) TO'G'RILASH
 window.updateCartBadge = () => {
     let tot = 0;
     for(let key in cart) {
         if(cart[key]) {
             let val = parseInt(cart[key]);
-            if(!isNaN(val)) tot += val; // Faqat aniq sonlarni sanaydi
+            if(!isNaN(val)) tot += val;
         }
     }
     let b = document.getElementById('nav-badge'); 
@@ -2455,31 +2452,70 @@ window.updateCartBadge = () => {
     } 
 };
 
-// 2. SAVATGA TEZKOR QO'SHISHNI HIMOYALASH
-window.addToCartQuick = (e, id) => { 
-    e.stopPropagation(); 
-    let p = productsDB.find(x => x.id == id);
-    if(!p) return;
-    
-    // Razmerli tovar bo'lsa ichiga kirgizib yuboramiz
-    if(p.product_type === 'razmerli') {
-        showToast("Razmer tanlash uchun tovarni oching!", "warning");
-        openProduct(id);
-        return;
-    }
-    
-    let st = p.stock !== undefined ? parseInt(p.stock) : 10;
-    if(st <= 0) { showToast("Kechirasiz, bu tovar qolmagan", "warning"); return; }
-    
-    let totalInCart = 0;
-    for(let cid in cart) { if(cid.startsWith(id + "||")) totalInCart += parseInt(cart[cid]) || 0; }
-    if(totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
-    
-    let finalId = id + "||Universal";
-    if(typeof addToCartWithOptions === 'function') addToCartWithOptions(finalId);
+window.addToCartWithOptions = (finalId) => { 
+    // Firebase xato bermasligi uchun nuqtani himoyalaymiz
+    let safeId = finalId.replace(/\./g, "_dot_");
+    cart[safeId] = (parseInt(cart[safeId]) || 0) + 1; 
+    saveLocalCart(); 
+    updateCartBadge(); 
+    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium'); 
+    showToast('Savatda!'); 
 };
 
-// 3. TO'LOV (BUYURTMA BERISH) TIZIMINI QOTIB QOLMASLIGI UCHUN HIMOYALASH
+window.renderCartItems = () => {
+    let c = document.getElementById('cart-items-container'); 
+    let b = document.getElementById('main-checkout-btn'); 
+    let t = 0; 
+    c.innerHTML = '';
+    if(Object.keys(cart).length === 0) { 
+        c.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; 
+        if(b) b.style.display = 'none'; 
+    } else {
+        for(let safeId in cart) { 
+            let [baseId, carOptRaw] = String(safeId).split('||');
+            let p = productsDB.find(x => x.id == baseId); 
+            if(!p) continue; 
+            
+            let qty = parseInt(cart[safeId]) || 0;
+            let sum = p.price * qty;
+            t += sum; 
+            
+            // Ekranga chiqarishda yana nuqtani tiklaymiz
+            let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+            let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
+            
+            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${safeId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${qty}</span><button onclick="chg('${safeId}',1)">+</button></div></div>`; 
+        } 
+        if(b) b.style.display = 'block';
+    } 
+    let tSum = document.getElementById('cart-total-sum');
+    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+};
+
+window.chg = (safeId, d) => { 
+    let [baseId, carOptRaw] = String(safeId).split('||');
+    let p = productsDB.find(x => x.id == baseId);
+    if(!p) return;
+    
+    let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+    
+    let st = 10;
+    if (p.product_type === 'razmerli' && p.sizes) {
+        let sizeObj = p.sizes.find(s => s.size === carOpt);
+        if(sizeObj) st = sizeObj.stock;
+    } else {
+        st = p.stock !== undefined ? p.stock : 10;
+    }
+    
+    let totalInCart = 0;
+    for(let cid in cart) { if(cid.startsWith(baseId + "||" + (carOptRaw||""))) totalInCart += parseInt(cart[cid]) || 0; }
+    
+    if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+    cart[safeId] = (parseInt(cart[safeId]) || 0) + d; 
+    if(cart[safeId] <= 0) delete cart[safeId]; 
+    saveLocalCart(); updateCartBadge(); renderCartItems(); 
+};
+
 window.confirmOrder = async (paymentMethod) => {
     const loadingOverlay = document.getElementById('order-loading-overlay'); 
     if(loadingOverlay) loadingOverlay.classList.add('active');
@@ -2487,7 +2523,6 @@ window.confirmOrder = async (paymentMethod) => {
     try {
         let newOrderCode = generateOrderCode(); 
         
-        // Agar mijoz profili chala bo'lsa xato bermasligi uchun tekshiramiz
         let profName = (typeof myProfile !== 'undefined' && myProfile && myProfile.name) ? myProfile.name : "Mijoz";
         let profPhone = (typeof myProfile !== 'undefined' && myProfile && myProfile.phone) ? myProfile.phone : "Kiritilmagan";
         let profAddr = (typeof myProfile !== 'undefined' && myProfile && myProfile.address) ? `\n📍 <b>Manzil:</b> ${myProfile.address}` : "";
@@ -2499,22 +2534,25 @@ window.confirmOrder = async (paymentMethod) => {
         let savedItems = {};
         let lowStockAlerts = ""; 
         
-        for (let fullId in cart) { 
-            if(!cart[fullId]) continue; 
-            let parts = String(fullId).split('||');
+        for (let safeId in cart) { 
+            if(!cart[safeId]) continue; 
+            let parts = String(safeId).split('||');
             let baseId = parts[0];
-            let carOpt = parts[1];
+            let carOpt = parts[1] ? parts[1].replace(/_dot_/g, ".") : "";
             
             let p = productsDB.find(x => x.id == baseId); 
             if (p) { 
-                let qty = parseInt(cart[fullId]) || 0;
+                let qty = parseInt(cart[safeId]) || 0;
                 if(qty <= 0) continue;
 
                 let sum = p.price * qty; 
                 let dName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} (${carOpt})` : p.name;
                 adminText += `▪️ ${dName}\n   ➖ ${qty} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
                 total += sum; 
-                savedItems[fullId] = qty; 
+                
+                // Saqlashda ham nuqta bilan toza saqlaymiz
+                let cleanId = baseId + "||" + (carOpt || "Universal");
+                savedItems[cleanId] = qty; 
                 
                 if (p.product_type === 'razmerli' && p.sizes) {
                     let sIdx = p.sizes.findIndex(s => s.size === carOpt);
@@ -2582,6 +2620,8 @@ window.confirmOrder = async (paymentMethod) => {
         showToast("Internetni tekshiring", "warning"); 
     }
 };
+
+
     
 </script>    
 </body>    
