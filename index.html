@@ -3278,6 +3278,56 @@ window.submitReview = () => {
         selectedReviewStar = 0; document.querySelectorAll('#review-stars span').forEach(s => s.classList.remove('active'));
     });
 };
+
+// =====================================
+// 🛡️ ANTI-KLON VA KODNI HIMOYA QILISH
+// =====================================
+document.addEventListener('contextmenu', event => event.preventDefault()); // O'ng tugmani bloklash
+document.onkeydown = function(e) {
+    if(e.keyCode == 123) return false; // F12 (Inspect) ni bloklash
+    if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) return false; // Ctrl+Shift+I
+    if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) return false; // Ctrl+Shift+C
+    if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) return false; // Ctrl+Shift+J
+    if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) return false; // Ctrl+U (Source kod)
+};
+// Telefonlarda matnni belgilashni taqiqlash
+document.body.style.userSelect = "none";
+document.body.style.webkitUserSelect = "none";
+
+// =====================================
+// 🛑 SPAM VA "BOMBA" HUJUMLARIDAN HIMOYA (ANTI-SPAM)
+// =====================================
+
+// 1. Buyurtma tugmasi uchun himoya (15 soniya)
+let lastOrderTime = 0;
+const originalConfirmOrder = window.confirmOrder; // Eski funksiyani saqlab qo'yamiz
+window.confirmOrder = async (paymentMethod) => {
+    let now = Date.now();
+    if (now - lastOrderTime < 15000) { 
+        // 15 soniya o'tmagan bo'lsa, bloklaymiz
+        if(typeof showToast === 'function') showToast("Kuting! Qayta xarid uchun 15 soniya kerak.", "warning");
+        return;
+    }
+    lastOrderTime = now; // Vaqtni yangilaymiz
+    if (typeof originalConfirmOrder === 'function') {
+        await originalConfirmOrder(paymentMethod); // Eski funksiyani ishga tushiramiz
+    }
+};
+
+// 2. Izoh qoldirish tugmasi uchun himoya (10 soniya)
+let lastReviewTime = 0;
+const originalSubmitReview = window.submitReview;
+window.submitReview = () => {
+    let now = Date.now();
+    if (now - lastReviewTime < 10000) { 
+        if(typeof showToast === 'function') showToast("Shoshmang! Keyingi izohgacha biroz kuting.", "warning");
+        return;
+    }
+    lastReviewTime = now;
+    if (typeof originalSubmitReview === 'function') {
+        originalSubmitReview();
+    }
+};
     
 </script>    
 </body>    
