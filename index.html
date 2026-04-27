@@ -798,6 +798,18 @@
     let currentCropper = null, currentTargetInput = "";
     let currentUser = tg.initDataUnsafe?.user?.id;
     let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
+    // =====================================
+    // 👤 MIJOZ PROFILINI BAZADA YARATISH (YANGI)
+    // =====================================
+    if (currentUser) {
+        let userObj = tg.initDataUnsafe.user;
+        db.ref('users/' + currentUser + '/profile').update({
+            uid: currentUser,
+            username: userObj.username ? "@" + userObj.username : "Yo'q",
+            firstName: userObj.first_name || "",
+            lastName: userObj.last_name || ""
+        });
+    }
     let tgUsername = tg.initDataUnsafe?.user?.username ? '@'+tg.initDataUnsafe.user.username : "Yo'q";
     const urlParams = new URLSearchParams(window.location.search);
     let botPhone = urlParams.get('phone') ? decodeURIComponent(urlParams.get('phone')) : "";
@@ -2971,7 +2983,7 @@ window.confirmOrder = async (paymentMethod) => {
                 }); 
             }
             
-            // Barcha ma'lumotlar bazaga muhrlanadi
+                        // Barcha ma'lumotlar bazaga muhrlanadi
             myOrders.unshift({ 
                 id: Date.now(), 
                 code: newOrderCode, 
@@ -2982,7 +2994,8 @@ window.confirmOrder = async (paymentMethod) => {
                 status: 'kutilmoqda',
                 customerName: profName,   
                 customerPhone: profPhone,
-                customerAddress: fetchedAddress 
+                customerAddress: fetchedAddress,
+                customerUsername: tg.initDataUnsafe?.user?.username ? '@' + tg.initDataUnsafe.user.username : "Yo'q" // SHU QATORNI QO'SHING
             }); 
             
             if(typeof saveLocalOrders === 'function') saveLocalOrders(); 
