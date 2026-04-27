@@ -2081,10 +2081,13 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         
         openModal('orderDetailModal');
     }
-    // =====================================
-// ADMIN: MIJOZLAR RO'YXATI
 // =====================================
+// ADMIN: MIJOZLAR RO'YXATI VA BUYURTMALAR (PAGINATSIYA BILAN)
+// =====================================
+
 let allCustomersData = [];
+window.adminCustomersLimit = 20;
+window.lastCustomersRef = null;
 
 window.openAdminCustomers = () => {
     document.getElementById('adminModal').style.display = 'none';
@@ -2103,14 +2106,16 @@ window.openAdminCustomers = () => {
             for(let uid in us) {
                 let p = us[uid].profile || {};
                 let ords = us[uid].orders || [];
-                // Faqat muvaffaqiyatli yoki barcha buyurtmalar soni:
-                let totalOrdersCount = ords.length; 
                 
-                // Qancha pul sarflaganini hisoblash (Faqat 'yetkazildi' holatidagilarni qo'shamiz)
-                let totalSpent = ords.reduce((sum, o) => {
-                    if (o.status === 'yetkazildi') return sum + (o.total || 0);
-                    return sum;
-                }, 0);
+                // Array yoki Object ekanligini tekshirib sanaymiz
+                let totalOrdersCount = Array.isArray(ords) ? ords.length : Object.keys(ords).length; 
+                
+                let totalSpent = 0;
+                if(Array.isArray(ords)) {
+                    totalSpent = ords.reduce((sum, o) => o.status === 'yetkazildi' ? sum + (o.total || 0) : sum, 0);
+                } else {
+                    totalSpent = Object.values(ords).reduce((sum, o) => o.status === 'yetkazildi' ? sum + (o.total || 0) : sum, 0);
+                }
 
                 allCustomersData.push({
                     uid: uid,
@@ -2122,21 +2127,29 @@ window.openAdminCustomers = () => {
                 });
             }
         }
-        
-        // Eng ko'p pul sarflaganlar tepada turishi uchun saralash (Sort)
         allCustomersData.sort((a, b) => b.totalSpent - a.totalSpent);
         renderCustomersList(allCustomersData);
     });
-}
+};
 
 window.renderCustomersList = (arr) => {
     let listBox = document.getElementById('admin-customers-list');
+    
+    // Yangi ro'yxat kelsa limitni nollaymiz
+    if (window.lastCustomersRef !== arr) {
+        window.adminCustomersLimit = 20;
+        window.lastCustomersRef = arr;
+    }
+
     if(arr.length === 0) {
         listBox.innerHTML = '<p style="text-align:center; color: gray;">Mijozlar topilmadi.</p>';
         return;
     }
     
-    listBox.innerHTML = arr.map(c => `
+    // LIMIT QO'LLASH (Paginatsiya)
+    let visibleCustomers = arr.slice(0, window.adminCustomersLimit);
+    
+    let html = visibleCustomers.map(c => `
         <div class="luxury-card" style="margin-bottom: 12px; padding: 15px; display: block; cursor: pointer; border: 1px solid transparent;"onclick="openCustomerSpecificOrders('${c.uid}', '${c.name.replace(/'/g, "\\'")}')" onmouseover="this.style.borderColor='var(--luxury-gold)'" onmouseout="this.style.borderColor='transparent'">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                 <div>
@@ -2152,7 +2165,14 @@ window.renderCustomersList = (arr) => {
             ${c.address && c.address !== "Kiritilmagan" ? `<div style="font-size: 11px; color: gray; margin-top: 4px;">📍 ${c.address}</div>` : ''}
         </div>
     `).join('');
-}
+    
+    // Pastga tushganda chiqadigan "Yuklanmoqda" yozuvi
+    if (window.adminCustomersLimit < arr.length) {
+        html += `<div style="text-align:center; padding: 15px 0 30px; color: var(--luxury-gold); font-size: 12px; font-weight: bold; opacity: 0.7;">Pastga tushganda yana yuklanmoqda... ⏳</div>`;
+    }
+    
+    listBox.innerHTML = html;
+};
 
 window.searchCustomers = () => {
     let q = document.getElementById('customer-search-input').value.toLowerCase().trim();
@@ -2160,14 +2180,14 @@ window.searchCustomers = () => {
         renderCustomersList(allCustomersData);
         return;
     }
-    
     let filtered = allCustomersData.filter(c => 
         c.name.toLowerCase().includes(q) || 
         c.uid.toString().includes(q) ||
         (c.phone && c.phone.includes(q))
     );
     renderCustomersList(filtered);
-}
+};
+
 window.openCustomerSpecificOrders = (uid, customerName) => {
     if(document.getElementById('adminCustomersModal')) document.getElementById('adminCustomersModal').style.display = 'none';
     let aM = document.getElementById('adminOrdersModal');
@@ -2180,7 +2200,6 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
     
     aM.querySelector('.modal-header h2').innerHTML = `📦 ${customerName} buyurtmalari`;
 
-    // ZAMONAVIY TUGMALAR (SHU YERGA HAM QO'YILDI)
     c.innerHTML = `
         <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; justify-content: center;">
             <button onclick="filterAdminOrders('barchasi', this)" style="background:rgba(255,255,255,0.05); color:var(--text-main); border:1px solid var(--glass-border); padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">Barchasi</button>
@@ -2200,8 +2219,8 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
             if(userData.orders) {
                 let ph = userData.profile ? userData.profile.phone : ""; 
                 let nm = userData.profile ? userData.profile.name : ""; 
-                // Qotib qolishni himoyalash: Object.values
-                Object.values(userData.orders).forEach(o => { 
+                let ordsArray = Array.isArray(userData.orders) ? userData.orders : Object.values(userData.orders);
+                ordsArray.forEach(o => { 
                     if(o && o.id) aO.push({ uI: uid, uN: nm, uP: ph, ...o }); 
                 });
             }
@@ -2210,46 +2229,54 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
         window.allFetchedOrders = aO;
         renderAdminOrdersUI(aO);
     });
-}
-    // Buyurtmalarni ekranga chizish funksiyasi
+};
+
+window.adminOrdersLimit = 20;
+window.lastOrdersRef = null;
+
 window.renderAdminOrdersUI = (ordersArr) => {
     let box = document.getElementById('admin-orders-render-box');
     if(!box) return;
+
+    if (window.lastOrdersRef !== ordersArr) {
+        window.adminOrdersLimit = 20;
+        window.lastOrdersRef = ordersArr;
+    }
+
     if(ordersArr.length === 0) { 
         box.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Buyurtmalar topilmadi.</p>'; 
         return; 
     }
     
-    box.innerHTML = ordersArr.map(o => {
-        
-        // O'QILMAGAN XABARLARNI HISOBLASH MANTIQI
+    let visibleOrders = ordersArr.slice(0, window.adminOrdersLimit);
+    
+    let html = visibleOrders.map(o => {
         let unreadCount = 0;
         if (o.messages) {
             for (let i = o.messages.length - 1; i >= 0; i--) {
-                if (o.messages[i].sender === 'admin') break; // Admin javob bergan bo'lsa sanashni to'xtatadi
+                if (o.messages[i].sender === 'admin') break; 
                 if (o.messages[i].sender === 'mijoz') unreadCount++;
             }
         }
         
-        // Agar yangi xabar bo'lsa, Chat tugmasi qizil bo'lib yonib turadi
         let chatBtnStyle = unreadCount > 0 
             ? `background:var(--accent-red); color:#fff; border:none; box-shadow: 0 0 10px rgba(255, 69, 58, 0.5);` 
             : `background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.1);`;
         let chatBtnText = unreadCount > 0 ? `💬 Chat (${unreadCount})` : `💬 Chat`;
 
+        let dName = o.customerName || o.uN || 'Ismsiz';
+        let dPhone = o.customerPhone || o.uP || 'Raqamsiz';
+        let dAddr = o.customerAddress && o.customerAddress !== "Kiritilmagan" ? `<br>📍 ${o.customerAddress}` : "";
+
         return `
         <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block; position:relative;">
-            
-            ${/* Yangi xabar bo'lsa kartochka burchagida ham qizil doiracha chiqadi */''}
             ${unreadCount > 0 ? `<div style="position:absolute; top:-8px; right:-8px; background:var(--accent-red); color:white; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; box-shadow:0 4px 10px rgba(255,69,58,0.6); z-index:10;">${unreadCount}</div>` : ''}
-            
             <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
                 <b style="color:var(--luxury-gold);">#${o.code||o.id}</b>
                 ${getStatusHTML(o.status||'kutilmoqda')}
             </div>
-            <p style="margin:5px 0;">👤 ${o.uN || 'Ismsiz'}<br>📞 ${o.uP || 'Raqamsiz'}</p>
+            <p style="margin:5px 0; font-size: 13px;">👤 ${dName}<br>📞 ${dPhone}${dAddr}</p>
             <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px; font-size:16px;">💰 ${o.total.toLocaleString()} so'm</p>
-            
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button style="padding:10px; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; ${chatBtnStyle}" onclick="openAdminChat('${o.uI}', ${o.id})">${chatBtnText}</button>
                 ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
@@ -2258,14 +2285,18 @@ window.renderAdminOrdersUI = (ordersArr) => {
                 ${o.status !== 'bekor_qilingan' ? `<button style="padding:10px; background:var(--accent-red); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor</button>` : ''}
             </div>
         </div>
-    `}).join(''); 
-}
+        `}).join(''); 
+        
+    if (window.adminOrdersLimit < ordersArr.length) {
+        html += `<div style="text-align:center; padding: 15px 0 30px; color: var(--luxury-gold); font-size: 12px; font-weight: bold; opacity: 0.7;">Pastga tushganda yana yuklanmoqda... ⏳</div>`;
+    }
+    
+    box.innerHTML = html;
+};
 
-// Filtrlash funksiyasi
 window.filterAdminOrders = (status, btnElement) => {
     if(!window.allFetchedOrders) return;
 
-    // Barcha tugmalardan "aktiv" effektni olib tashlaymiz
     const buttons = document.querySelectorAll('#adminOrdersModal button');
     buttons.forEach(btn => {
         btn.style.transform = 'scale(1)';
@@ -2273,7 +2304,6 @@ window.filterAdminOrders = (status, btnElement) => {
         btn.style.borderWidth = '1px';
     });
 
-    // Bosilgan tugmani bo'rtib ko'rsatamiz
     if(btnElement) {
         btnElement.style.transform = 'scale(1.1)';
         btnElement.style.boxShadow = '0 0 15px rgba(255,255,255,0.2)';
@@ -2286,7 +2316,28 @@ window.filterAdminOrders = (status, btnElement) => {
         let filtered = window.allFetchedOrders.filter(o => (o.status || 'kutilmoqda') === status);
         renderAdminOrdersUI(filtered);
     }
-}
+};
+
+// =====================================
+// 🎯 SCROLL SEZGICHLARI (Yangi ma'lumotlarni pastdan ulash)
+// =====================================
+document.getElementById('adminOrdersModal').addEventListener('scroll', function() {
+    if (this.scrollTop + this.clientHeight >= this.scrollHeight - 80) {
+        if (window.lastOrdersRef && window.adminOrdersLimit < window.lastOrdersRef.length) {
+            window.adminOrdersLimit += 20;
+            renderAdminOrdersUI(window.lastOrdersRef);
+        }
+    }
+});
+
+document.getElementById('adminCustomersModal').addEventListener('scroll', function() {
+    if (this.scrollTop + this.clientHeight >= this.scrollHeight - 80) {
+        if (window.lastCustomersRef && window.adminCustomersLimit < window.lastCustomersRef.length) {
+            window.adminCustomersLimit += 20;
+            renderCustomersList(window.lastCustomersRef);
+        }
+    }
+});
     // =====================================
 // MASHINA TANLASH VA SAVAT FUNKSIYALARI (TUZATILGAN)
 // =====================================
