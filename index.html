@@ -184,6 +184,67 @@
         .pm-slider-dots { position: absolute; bottom: 15px; left: 0; width: 100%; display: flex; justify-content: center; gap: 8px; z-index: 10; }
         .pm-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,0,0,0.3); transition: 0.3s; }
         .pm-dot.active { background: var(--luxury-gold); width: 20px; border-radius: 4px; }
+                /* Yulduz baholash */
+        #review-stars span {
+            font-size: 32px;
+            color: rgba(255,255,255,0.15);
+            cursor: pointer;
+            transition: color 0.15s, transform 0.1s;
+            display: inline-block;
+        }
+        #review-stars span:hover,
+        #review-stars span.active {
+            color: var(--luxury-gold);
+            transform: scale(1.1);
+        }
+        /* Izoh kartochkasi */
+        .review-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .review-card .r-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .review-card .r-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .review-card .r-stars {
+            font-size: 13px;
+            color: var(--luxury-gold);
+            letter-spacing: 1px;
+        }
+        .review-card .r-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        .review-card .r-date {
+            font-size: 10px;
+            color: rgba(255,255,255,0.25);
+            margin-top: 5px;
+        }
+        /* Karta ustidagi reyting ko'rinishi */
+        .card-rating {
+            font-size: 10px;
+            color: var(--luxury-gold);
+            margin-top: 2px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        /* Grafik tugmalari */
+        .chart-btn-active {
+            border-color: var(--luxury-gold) !important;
+            background: rgba(212,175,55,0.2) !important;
+            color: var(--luxury-gold) !important;
+        }
     </style>
 </head>
 <body>
@@ -388,6 +449,28 @@
         <h2 id="pm-title" class="pm-title"></h2>
         <div id="pm-stock" class="pm-stock-info"></div>
         <div id="pm-desc" class="pm-desc"></div>
+        <div id="pm-review-section" style="margin-top: 20px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <h3 style="font-size: 15px; font-weight: 700; color: var(--text-main); margin: 0;">⭐ Baholar va izohlar</h3>
+        <span id="pm-avg-rating" style="font-size: 13px; color: var(--luxury-gold); font-weight: 800;"></span>
+    </div>
+    <div id="pm-reviews-list" style="max-height: 220px; overflow-y: auto; margin-bottom: 12px; scrollbar-width: none;"></div>
+    <div id="pm-add-review" class="hidden">
+        <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px;">
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Sizning bahongiz</p>
+            <div class="rating-stars" id="review-stars" style="justify-content:flex-start; gap:6px; margin:0 0 10px;">
+                <span data-val="1" onclick="setReviewStar(1)">★</span>
+                <span data-val="2" onclick="setReviewStar(2)">★</span>
+                <span data-val="3" onclick="setReviewStar(3)">★</span>
+                <span data-val="4" onclick="setReviewStar(4)">★</span>
+                <span data-val="5" onclick="setReviewStar(5)">★</span>
+            </div>
+            <textarea id="review-text" class="search-box" placeholder="Tovar haqida fikringiz..." style="height: 70px; resize: none; margin-bottom: 10px; font-size: 13px;"></textarea>
+            <button class="btn-checkout" onclick="submitReview()" style="width: 100%; padding: 12px; font-size: 14px; border-radius: 12px;">✅ Izoh qoldirish</button>
+        </div>
+    </div>
+    <div id="pm-review-login-msg" class="hidden" style="text-align:center; color:var(--text-muted); font-size:12px; padding:10px;">Izoh qoldirish uchun avval xarid qiling</div>
+</div>
         <h3 id="similar-title" style="font-size: 15px; font-weight: 700; margin-bottom: 12px; display:none; color: var(--text-main);">O'xshash tovarlar</h3>
         <div id="pm-similar-items" class="pm-similar-wrapper"></div>
     </div>
@@ -410,6 +493,11 @@
     <h3 style="font-size: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">Tovarlar:</h3>
     <div id="od-items" style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;"></div>
     <div style="text-align: right; font-size: 18px; font-weight: 800; color: var(--luxury-gold);" id="od-total"></div>
+    <div style="margin-top: 15px;">
+    <button class="btn-checkout" onclick="reorderItems()" style="background: linear-gradient(135deg, #e5c07b, #c5a028); color: #000; border: none; width: 100%; padding: 16px; border-radius: 14px; font-weight: 800; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        🔄 Qayta buyurtma berish
+    </button>
+</div>
     <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
         <h3 style="font-size: 15px; margin-bottom: 10px; color: var(--luxury-gold);">💬 Buyurtma muhokamasi</h3>
         
@@ -677,7 +765,19 @@
     <div id="admin-stats-content" style="padding-bottom: 20px;">
         <p style="text-align:center;">Ma'lumotlar yuklanmoqda...</p>
     </div>
+    <div id="admin-chart-section" style="margin-top: 20px; display: none;">
+    <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
+        <button onclick="loadChart('daily', this)" style="flex:1; padding:10px; border-radius:10px; font-weight:700; font-size:13px; cursor:pointer; border: 1px solid var(--luxury-gold); background: rgba(212,175,55,0.2); color: var(--luxury-gold);">📅 Kunlik</button>
+        <button onclick="loadChart('weekly', this)" style="flex:1; padding:10px; border-radius:10px; font-weight:700; font-size:13px; cursor:pointer; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.05); color: var(--text-muted);">📆 Haftalik</button>
+        <button onclick="loadChart('monthly', this)" style="flex:1; padding:10px; border-radius:10px; font-weight:700; font-size:13px; cursor:pointer; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.05); color: var(--text-muted);">🗓️ Oylik</button>
+    </div>
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 16px; padding: 15px;">
+        <canvas id="salesChart" height="200"></canvas>
+    </div>
+    <div id="chart-summary" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;"></div>
 </div>
+</div>
+    
     <div class="modal-standard" id="adminCustomersModal">
     <div class="modal-header"><h2 style="color: #ff9500;">👥 Mijozlar Ro'yxati</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     
@@ -1347,6 +1447,7 @@ function openProduct(id) {
     }
 
     buyB.setAttribute('data-id', id);
+    loadProductReviews(id);
     let edB = document.getElementById('pm-edit-btn'); if (currentUser === ADMIN_ID) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
     let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
     if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
@@ -3005,6 +3106,177 @@ window.renderAdminOrdersUI = (ordersArr) => {
             </div>
         </div>
         `}).join(''); 
+};
+    
+// ===================================================
+// 1. TAKRORIY BUYURTMA (REPEAT ORDER)
+// ===================================================
+window.reorderItems = () => {
+    let o = myOrders.find(x => x.id === currentOpenOrderId);
+    if (!o || !o.items) return;
+    let addedCount = 0; let outOfStock = [];
+
+    for (let safeId in o.items) {
+        let parts = String(safeId).split('||');
+        let baseId = parts[0];
+        let carOpt = parts[1] ? parts[1].replace(/_dot_/g, ".") : "Universal";
+        let p = productsDB.find(x => x.id == baseId);
+        if (!p) continue;
+
+        let stockLeft = 10;
+        if (p.product_type === 'razmerli' && p.sizes) {
+            let sz = p.sizes.find(s => s.size === carOpt);
+            if (sz) stockLeft = sz.stock;
+        } else {
+            stockLeft = p.stock !== undefined ? p.stock : 10;
+        }
+
+        if (stockLeft <= 0) { outOfStock.push(p.name); continue; }
+
+        let finalSafeId = baseId + "||" + (carOpt ? carOpt.replace(/\./g, "_dot_") : "Universal");
+        cart[finalSafeId] = (parseInt(cart[finalSafeId]) || 0) + (parseInt(o.items[safeId]) || 1);
+        addedCount++;
+    }
+    saveLocalCart(); updateCartBadge();
+
+    if (addedCount > 0) {
+        showToast(`${addedCount} ta tovar savatga qo'shildi!`, 'success');
+        setTimeout(() => { closeModal(); setTimeout(() => openModal('cartModal'), 300); }, 1000);
+    }
+    if (outOfStock.length > 0) setTimeout(() => { showToast(`Tugagan: ${outOfStock.slice(0,2).join(', ')}`, 'warning'); }, 1500);
+};
+
+// ===================================================
+// 2. GRAFIK STATISTIKA (CHART.JS)
+// ===================================================
+if (!window._chartJsLoaded) {
+    let script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+    script.onload = () => { window._chartJsLoaded = true; };
+    document.head.appendChild(script);
+}
+
+let salesChartInstance = null;
+
+window.openAdminStats = () => {
+    document.getElementById('adminModal').style.display = 'none';
+    let sM = document.getElementById('adminStatsModal');
+    sM.style.display = 'flex'; activeModal = 'adminStatsModal'; window.history.replaceState({ modal: 'adminStatsModal' }, "");
+    let c = document.getElementById('admin-stats-content');
+    c.innerHTML = '<p style="text-align:center; margin-top:30px; color:var(--luxury-gold);">Yuklanmoqda...</p>';
+
+    db.ref('users').once('value', (s) => {
+        let totalRevenue = 0, todayRevenue = 0, totalCustomers = 0; let productSales = {};
+        let todayDate = new Date().toLocaleDateString('uz-UZ');
+        let dailyData = {}; let weeklyData = {}; let monthlyData = {};
+        for (let i = 29; i >= 0; i--) { let d = new Date(); d.setDate(d.getDate() - i); dailyData[d.toLocaleDateString('uz-UZ')] = 0; }
+        let monthNames = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek'];
+        monthNames.forEach(m => monthlyData[m] = 0);
+
+        if (s.exists()) {
+            let us = s.val(); totalCustomers = Object.keys(us).length;
+            for (let uid in us) {
+                if (!us[uid].orders) continue;
+                let ords = Array.isArray(us[uid].orders) ? us[uid].orders : Object.values(us[uid].orders);
+                ords.forEach(o => {
+                    if (!o || !o.total) return; let amount = o.total || 0;
+                    if (o.status === 'yetkazildi') {
+                        totalRevenue += amount; if (o.date === todayDate) todayRevenue += amount;
+                        if (o.date && dailyData.hasOwnProperty(o.date)) dailyData[o.date] += amount;
+                        if (o.date) { let parts = o.date.split('.'); if (parts.length >= 2) { let mIdx = parseInt(parts[1]) - 1; if (mIdx >= 0 && mIdx < 12) monthlyData[monthNames[mIdx]] += amount; } }
+                    }
+                    if (o.items && o.status !== 'bekor_qilingan') { for (let pid in o.items) { let baseId = pid.split('||')[0]; productSales[baseId] = (productSales[baseId] || 0) + (parseInt(o.items[pid]) || 0); } }
+                });
+            }
+        }
+        let topProducts = Object.keys(productSales).map(id => ({ id, count: productSales[id] })).sort((a, b) => b.count - a.count).slice(0, 5);
+        let topHtml = topProducts.map((tp, i) => {
+            let p = productsDB.find(x => x.id == tp.id); let pName = p ? p.name : "O'chirilgan tovar"; let medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+            return `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:rgba(255,255,255,0.04); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);"><span style="font-size:13px;">${medals[i]} ${pName}</span><span style="color:var(--luxury-gold); font-weight:800; font-size:13px;">${tp.count} ta</span></div>`;
+        }).join('');
+        if (!topHtml) topHtml = "<p style='color:gray;font-size:13px;text-align:center;'>Hali sotilmagan.</p>";
+
+        c.innerHTML = `
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:15px;">
+                <div class="luxury-card" style="padding:15px; text-align:center; display:block;"><div style="font-size:22px; margin-bottom:5px;">📈</div><div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi foyda</div><div style="font-size:13px; font-weight:800; color:#34c759; margin-top:5px;">${todayRevenue.toLocaleString()} so'm</div></div>
+                <div class="luxury-card" style="padding:15px; text-align:center; display:block;"><div style="font-size:22px; margin-bottom:5px;">👥</div><div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami Mijozlar</div><div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${totalCustomers} kishi</div></div>
+            </div>
+            <div class="luxury-card" style="padding:20px; display:block; margin-bottom:20px; text-align:center; border:1px solid rgba(212,175,55,0.3);"><div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy Sof Daromad</div><div style="font-size:26px; font-weight:800; color:var(--luxury-gold);">${totalRevenue.toLocaleString()} so'm</div><div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilganlar)</div></div>
+            <h3 style="font-size:15px; margin-bottom:12px; color:white;">🏆 Xit Savdolar (Top 5)</h3>${topHtml}
+        `;
+        let chartSection = document.getElementById('admin-chart-section');
+        if (chartSection) {
+            chartSection.style.display = 'block'; window._chartData = { daily: dailyData, monthly: monthlyData };
+            setTimeout(() => loadChart('daily', document.querySelector('#admin-chart-section button')), 300);
+        }
+    });
+};
+
+window.loadChart = (type, btnEl) => {
+    document.querySelectorAll('#admin-chart-section button').forEach(b => { b.style.borderColor = 'var(--glass-border)'; b.style.background = 'rgba(255,255,255,0.05)'; b.style.color = 'var(--text-muted)'; });
+    if (btnEl) { btnEl.style.borderColor = 'var(--luxury-gold)'; btnEl.style.background = 'rgba(212,175,55,0.2)'; btnEl.style.color = 'var(--luxury-gold)'; }
+    if (!window._chartData || !window._chartJsLoaded) return;
+
+    let labels = [], data = [], title = '';
+    if (type === 'daily') {
+        let entries = Object.entries(window._chartData.daily).slice(-14); labels = entries.map(e => e[0].split('.').slice(0,2).join('.')); data = entries.map(e => Math.round(e[1] / 1000)); title = "So'nggi 14 kun (ming so'm)";
+    } else if (type === 'weekly') {
+        let entries = Object.entries(window._chartData.daily); let weeks = {};
+        entries.forEach(([date, val]) => { let d = date.split('.'); if(d.length < 2) return; let day = parseInt(d[0]); let weekNum = Math.ceil(day / 7); let key = d[1] + "/" + weekNum + "-hafta"; weeks[key] = (weeks[key] || 0) + val; });
+        let wEntries = Object.entries(weeks).slice(-8); labels = wEntries.map(e => e[0]); data = wEntries.map(e => Math.round(e[1] / 1000)); title = "Haftalik (ming so'm)";
+    } else {
+        let entries = Object.entries(window._chartData.monthly); labels = entries.map(e => e[0]); data = entries.map(e => Math.round(e[1] / 1000)); title = "Oylik (ming so'm)";
+    }
+
+    let canvas = document.getElementById('salesChart'); if (!canvas) return; let ctx = canvas.getContext('2d');
+    if (salesChartInstance) salesChartInstance.destroy();
+    salesChartInstance = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: title, data: data, backgroundColor: 'rgba(212, 175, 55, 0.35)', borderColor: '#D4AF37', borderWidth: 2, borderRadius: 8, hoverBackgroundColor: 'rgba(212, 175, 55, 0.6)', }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.y.toLocaleString() + " ming so'm" }, backgroundColor: '#1c1c1e', titleColor: '#D4AF37', bodyColor: '#fff', borderColor: '#D4AF37', borderWidth: 1, } }, scales: { x: { ticks: { color: '#8e8e93', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { ticks: { color: '#8e8e93', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } } } } });
+
+    let total = data.reduce((a, b) => a + b, 0); let maxVal = Math.max(...data); let maxIdx = data.indexOf(maxVal);
+    document.getElementById('chart-summary').innerHTML = `<div class="luxury-card" style="padding:12px; text-align:center; display:block;"><div style="font-size:10px; color:var(--text-muted); margin-bottom:4px;">Jami davr</div><div style="font-size:15px; font-weight:800; color:var(--luxury-gold);">${total.toLocaleString()} ming</div></div><div class="luxury-card" style="padding:12px; text-align:center; display:block;"><div style="font-size:10px; color:var(--text-muted); margin-bottom:4px;">Eng yaxshi</div><div style="font-size:13px; font-weight:800; color:#34c759;">${labels[maxIdx] || '—'}</div></div>`;
+};
+
+// ===================================================
+// 3. BAHOLASH VA IZOH TIZIMI (STAR RATING & REVIEWS)
+// ===================================================
+let currentReviewProductId = null; let selectedReviewStar = 0;
+
+window.loadProductReviews = (productId) => {
+    currentReviewProductId = productId; selectedReviewStar = 0;
+    document.querySelectorAll('#review-stars span').forEach(s => s.classList.remove('active'));
+    let reviewSection = document.getElementById('pm-review-section'); let reviewsList = document.getElementById('pm-reviews-list'); let addReview = document.getElementById('pm-add-review'); let loginMsg = document.getElementById('pm-review-login-msg'); let avgEl = document.getElementById('pm-avg-rating');
+    reviewsList.innerHTML = '<p style="color:gray; font-size:12px; text-align:center;">Yuklanmoqda...</p>'; if (addReview) addReview.classList.add('hidden'); if (loginMsg) loginMsg.classList.add('hidden');
+
+    db.ref('reviews/' + productId).once('value', (snap) => {
+        let reviews = []; if (snap.exists()) { let data = snap.val(); reviews = Object.values(data).filter(r => r && r.rating); }
+        if (reviews.length > 0) { let avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length; avgEl.innerText = '★ ' + avg.toFixed(1) + ' (' + reviews.length + ' baho)'; } else { avgEl.innerText = ''; }
+        if (reviews.length === 0) { reviewsList.innerHTML = '<p style="color:gray; font-size:12px; text-align:center; padding:10px;">Hali izoh yo\'q. Birinchi bo\'ling!</p>'; } else {
+            reviews.sort((a, b) => b.timestamp - a.timestamp);
+            reviewsList.innerHTML = reviews.map(r => `<div class="review-card"><div class="r-head"><span class="r-name">${r.userName || 'Mijoz'}</span><span class="r-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span></div>${r.text ? `<div class="r-text">${r.text}</div>` : ''}<div class="r-date">${r.date || ''}</div></div>`).join('');
+        }
+        if (!currentUser) { loginMsg.classList.remove('hidden'); return; }
+        let alreadyReviewed = reviews.some(r => r.userId == currentUser);
+        if (alreadyReviewed) { loginMsg.innerText = '✅ Siz allaqachon baho qo\'ydingiz'; loginMsg.classList.remove('hidden'); return; }
+        let hasBought = myOrders.some(o => o.status === 'yetkazildi' && o.items && Object.keys(o.items).some(k => k.split('||')[0] == productId));
+        if (hasBought) { addReview.classList.remove('hidden'); } else { loginMsg.innerText = 'Izoh qoldirish uchun avval xarid qiling'; loginMsg.classList.remove('hidden'); }
+    });
+};
+
+window.setReviewStar = (val) => {
+    selectedReviewStar = val;
+    document.querySelectorAll('#review-stars span').forEach((s, i) => { if (i < val) s.classList.add('active'); else s.classList.remove('active'); });
+};
+
+window.submitReview = () => {
+    if (selectedReviewStar === 0) { showToast("Yulduz tanlang!", "warning"); return; }
+    if (!currentUser || !currentReviewProductId) return;
+    let text = document.getElementById('review-text').value.trim(); let userName = myProfile.name || 'Mijoz'; let now = new Date();
+    let reviewData = { userId: currentUser, userName: userName, rating: selectedReviewStar, text: text, date: now.toLocaleDateString('uz-UZ'), timestamp: now.getTime() };
+    db.ref('reviews/' + currentReviewProductId + '/' + currentUser).set(reviewData).then(() => {
+        showToast("Rahmat! Bahongiz saqlandi ✅"); loadProductReviews(currentReviewProductId);
+        if (document.getElementById('review-text')) document.getElementById('review-text').value = '';
+        selectedReviewStar = 0; document.querySelectorAll('#review-stars span').forEach(s => s.classList.remove('active'));
+    });
 };
     
 </script>    
