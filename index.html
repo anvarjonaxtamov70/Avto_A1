@@ -2654,113 +2654,8 @@ window.chg = (safeId, d) => {
     saveLocalCart(); updateCartBadge(); renderCartItems(); 
 };
 
-window.confirmOrder = async (paymentMethod) => {
-    const loadingOverlay = document.getElementById('order-loading-overlay'); 
-    if(loadingOverlay) loadingOverlay.classList.add('active');
-    
-    try {
-        let newOrderCode = generateOrderCode(); 
-        
-        let profName = (typeof myProfile !== 'undefined' && myProfile && myProfile.name) ? myProfile.name : "Mijoz";
-        let profPhone = (typeof myProfile !== 'undefined' && myProfile && myProfile.phone) ? myProfile.phone : "Kiritilmagan";
-        let profAddr = (typeof myProfile !== 'undefined' && myProfile && myProfile.address) ? `\n📍 <b>Manzil:</b> ${myProfile.address}` : "";
-        let cUser = typeof currentUser !== 'undefined' ? currentUser : "Noma'lum";
-        
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${profName}\n📞 <b>Telefon:</b> ${profPhone}${profAddr}\n🆔 <b>ID:</b> <code>${cUser}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
-        
-        let total = 0; 
-        let savedItems = {};
-        let lowStockAlerts = ""; 
-        
-        for (let safeId in cart) { 
-            if(!cart[safeId]) continue; 
-            let parts = String(safeId).split('||');
-            let baseId = parts[0];
-            let carOpt = parts[1] ? parts[1].replace(/_dot_/g, ".") : "";
-            
-            let p = productsDB.find(x => x.id == baseId); 
-            if (p) { 
-                let qty = parseInt(cart[safeId]) || 0;
-                if(qty <= 0) continue;
-
-                let sum = p.price * qty; 
-                let dName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} (${carOpt})` : p.name;
-                adminText += `▪️ ${dName}\n   ➖ ${qty} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
-                total += sum; 
-                
-                // Saqlashda ham nuqta bilan toza saqlaymiz
-                let cleanId = baseId + "||" + (carOpt || "Universal");
-                savedItems[cleanId] = qty; 
-                
-                if (p.product_type === 'razmerli' && p.sizes) {
-                    let sIdx = p.sizes.findIndex(s => s.size === carOpt);
-                    if (sIdx !== -1) {
-                        p.sizes[sIdx].stock = (parseInt(p.sizes[sIdx].stock) || 0) - qty;
-                        if (p.sizes[sIdx].stock < 0) p.sizes[sIdx].stock = 0;
-                        if (p.sizes[sIdx].stock <= 3) {
-                            lowStockAlerts += `\n⚠️ <b>${p.name} (Razmer: ${carOpt})</b>: atigi ${p.sizes[sIdx].stock} ta qoldi!`;
-                        }
-                    }
-                    p.stock = p.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0);
-                } else {
-                    p.stock = (parseInt(p.stock !== undefined ? p.stock : 10) || 0) - qty;
-                    if (p.stock < 0) p.stock = 0; 
-                    if (p.stock <= 3) {
-                        lowStockAlerts += `\n⚠️ <b>${p.name}</b>: atigi ${p.stock} ta qoldi!`;
-                    }
-                }
-            } 
-        }
-        adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
-        
-        const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
-            method: "POST", 
-            headers: { "Content-Type": "application/json" }, 
-            body: JSON.stringify({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" }) 
-        });
-        
-        if (res.ok) {
-            db.ref('products').set(productsDB);
-            if (lowStockAlerts !== "") {
-                let alertMsg = `🚨 <b>DIQQAT: ZAXIRA TUGAMOQDA!</b>\nShu buyurtmadan keyin omborda ba'zi tovarlar kam qoldi:${lowStockAlerts}`;
-                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" })
-                });
-            }
-            if(typeof currentUser !== 'undefined' && currentUser) { 
-                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
-                    method: "POST", headers: { "Content-Type": "application/json" }, 
-                    body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${profName}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` }) 
-                }); 
-            }
-            
-            myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
-            if(typeof saveLocalOrders === 'function') saveLocalOrders(); 
-            cart = {}; 
-            if(typeof saveLocalCart === 'function') saveLocalCart(); 
-            updateCartBadge();
-            
-            if(loadingOverlay) loadingOverlay.classList.remove('active'); 
-            showToast("Qabul qilindi!");
-            
-            setTimeout(() => { 
-                if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
-                tg.close(); 
-            }, 2000);
-        } else {
-            if(loadingOverlay) loadingOverlay.classList.remove('active');
-            showToast("Xatolik! Adminga xabar bering.", "warning");
-        }
-    } catch (err) { 
-        console.error(err);
-        if(loadingOverlay) loadingOverlay.classList.remove('active'); 
-        showToast("Internetni tekshiring", "warning"); 
-    }
-};
-
 // =====================================
-// 🚨 FIREBASE NUQTA MUAMMOSINI HAL QILUVCHI HIMOYA KODI
+// 📍 MANZIL, ISM VA NUQTA MUAMMOLARINI HAL QILUVCHI YAKUNIY KOD
 // =====================================
 
 window.confirmOrder = async (paymentMethod) => {
@@ -2772,7 +2667,15 @@ window.confirmOrder = async (paymentMethod) => {
         
         let profName = (typeof myProfile !== 'undefined' && myProfile && myProfile.name) ? myProfile.name : "Mijoz";
         let profPhone = (typeof myProfile !== 'undefined' && myProfile && myProfile.phone) ? myProfile.phone : "Kiritilmagan";
-        let profAddr = (typeof myProfile !== 'undefined' && myProfile && myProfile.address) ? `\n📍 <b>Manzil:</b> ${myProfile.address}` : "";
+        
+        // Viloyatni (Manzilni) tutish
+        let fetchedAddress = (typeof myProfile !== 'undefined' && myProfile && myProfile.address) ? myProfile.address : "";
+        if (!fetchedAddress && typeof botRegion !== 'undefined' && botRegion && botRegion !== "Noma'lum") {
+            fetchedAddress = botRegion; 
+        }
+        if (!fetchedAddress) fetchedAddress = "Kiritilmagan";
+        
+        let profAddr = `\n📍 <b>Viloyat:</b> ${fetchedAddress}`;
         let cUser = typeof currentUser !== 'undefined' ? currentUser : "Noma'lum";
         
         let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${profName}\n📞 <b>Telefon:</b> ${profPhone}${profAddr}\n🆔 <b>ID:</b> <code>${cUser}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
@@ -2786,7 +2689,6 @@ window.confirmOrder = async (paymentMethod) => {
             let parts = String(safeId).split('||');
             let baseId = parts[0];
             let carOptRaw = parts[1] || "";
-            // Ekranga ko'rsatish uchun nuqtani tiklaymiz
             let carOpt = carOptRaw.replace(/_dot_/g, "."); 
             
             let p = productsDB.find(x => x.id == baseId); 
@@ -2799,7 +2701,6 @@ window.confirmOrder = async (paymentMethod) => {
                 adminText += `▪️ ${dName}\n   ➖ ${qty} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
                 total += sum; 
                 
-                // FIREBASE UCHUN HIMOYALANGAN KALIT (Nuqta _dot_ ga aylanadi)
                 let firebaseSafeKey = baseId + "||" + (carOpt ? carOpt.replace(/\./g, "_dot_") : "Universal");
                 savedItems[firebaseSafeKey] = qty; 
                 
@@ -2846,10 +2747,22 @@ window.confirmOrder = async (paymentMethod) => {
                 }); 
             }
             
-            myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
+            // Barcha ma'lumotlar bazaga muhrlanadi
+            myOrders.unshift({ 
+                id: Date.now(), 
+                code: newOrderCode, 
+                date: new Date().toLocaleDateString('uz-UZ'), 
+                time: new Date().toLocaleTimeString('uz-UZ'), 
+                items: savedItems, 
+                total: total, 
+                status: 'kutilmoqda',
+                customerName: profName,   
+                customerPhone: profPhone,
+                customerAddress: fetchedAddress 
+            }); 
+            
             if(typeof saveLocalOrders === 'function') saveLocalOrders(); 
             
-            // XATOSIZ O'TDI - SAVAT TOZALANADI
             cart = {}; 
             if(typeof saveLocalCart === 'function') saveLocalCart(); 
             updateCartBadge();
@@ -2923,128 +2836,6 @@ window.showTrackedOrder = (o) => {
     openModal('orderDetailModal');
 };
 
-// =====================================
-// 👤 ISMSIZ / RAQAMSIZ MUAMMOSINI HAL QILISH
-// =====================================
-
-window.confirmOrder = async (paymentMethod) => {
-    const loadingOverlay = document.getElementById('order-loading-overlay'); 
-    if(loadingOverlay) loadingOverlay.classList.add('active');
-    
-    try {
-        let newOrderCode = generateOrderCode(); 
-        
-        let profName = (typeof myProfile !== 'undefined' && myProfile && myProfile.name) ? myProfile.name : "Mijoz";
-        let profPhone = (typeof myProfile !== 'undefined' && myProfile && myProfile.phone) ? myProfile.phone : "Kiritilmagan";
-        let profAddr = (typeof myProfile !== 'undefined' && myProfile && myProfile.address) ? `\n📍 <b>Manzil:</b> ${myProfile.address}` : "";
-        let cUser = typeof currentUser !== 'undefined' ? currentUser : "Noma'lum";
-        
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${profName}\n📞 <b>Telefon:</b> ${profPhone}${profAddr}\n🆔 <b>ID:</b> <code>${cUser}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
-        
-        let total = 0; 
-        let savedItems = {};
-        let lowStockAlerts = ""; 
-        
-        for (let safeId in cart) { 
-            if(!cart[safeId]) continue; 
-            let parts = String(safeId).split('||');
-            let baseId = parts[0];
-            let carOptRaw = parts[1] || "";
-            let carOpt = carOptRaw.replace(/_dot_/g, "."); 
-            
-            let p = productsDB.find(x => x.id == baseId); 
-            if (p) { 
-                let qty = parseInt(cart[safeId]) || 0;
-                if(qty <= 0) continue;
-
-                let sum = p.price * qty; 
-                let dName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} (${carOpt})` : p.name;
-                adminText += `▪️ ${dName}\n   ➖ ${qty} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
-                total += sum; 
-                
-                let firebaseSafeKey = baseId + "||" + (carOpt ? carOpt.replace(/\./g, "_dot_") : "Universal");
-                savedItems[firebaseSafeKey] = qty; 
-                
-                if (p.product_type === 'razmerli' && p.sizes) {
-                    let sIdx = p.sizes.findIndex(s => s.size === carOpt);
-                    if (sIdx !== -1) {
-                        p.sizes[sIdx].stock = (parseInt(p.sizes[sIdx].stock) || 0) - qty;
-                        if (p.sizes[sIdx].stock < 0) p.sizes[sIdx].stock = 0;
-                        if (p.sizes[sIdx].stock <= 3) {
-                            lowStockAlerts += `\n⚠️ <b>${p.name} (Razmer: ${carOpt})</b>: atigi ${p.sizes[sIdx].stock} ta qoldi!`;
-                        }
-                    }
-                    p.stock = p.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0);
-                } else {
-                    p.stock = (parseInt(p.stock !== undefined ? p.stock : 10) || 0) - qty;
-                    if (p.stock < 0) p.stock = 0; 
-                    if (p.stock <= 3) {
-                        lowStockAlerts += `\n⚠️ <b>${p.name}</b>: atigi ${p.stock} ta qoldi!`;
-                    }
-                }
-            } 
-        }
-        adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
-        
-        const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
-            method: "POST", 
-            headers: { "Content-Type": "application/json" }, 
-            body: JSON.stringify({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" }) 
-        });
-        
-        if (res.ok) {
-            db.ref('products').set(productsDB);
-            if (lowStockAlerts !== "") {
-                let alertMsg = `🚨 <b>DIQQAT: ZAXIRA TUGAMOQDA!</b>\nShu buyurtmadan keyin omborda ba'zi tovarlar kam qoldi:${lowStockAlerts}`;
-                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" })
-                });
-            }
-            if(typeof currentUser !== 'undefined' && currentUser) { 
-                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
-                    method: "POST", headers: { "Content-Type": "application/json" }, 
-                    body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${profName}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` }) 
-                }); 
-            }
-            
-            // YANGILIK: Ism va raqamni buyurtmaning ichiga mahkamlab yozib qo'yamiz!
-            myOrders.unshift({ 
-                id: Date.now(), 
-                code: newOrderCode, 
-                date: new Date().toLocaleDateString('uz-UZ'), 
-                time: new Date().toLocaleTimeString('uz-UZ'), 
-                items: savedItems, 
-                total: total, 
-                status: 'kutilmoqda',
-                customerName: profName,   // <-- SHU YERDA SAQLANADI
-                customerPhone: profPhone  // <-- SHU YERDA SAQLANADI
-            }); 
-            
-            if(typeof saveLocalOrders === 'function') saveLocalOrders(); 
-            
-            cart = {}; 
-            if(typeof saveLocalCart === 'function') saveLocalCart(); 
-            updateCartBadge();
-            
-            if(loadingOverlay) loadingOverlay.classList.remove('active'); 
-            showToast("Qabul qilindi!");
-            
-            setTimeout(() => { 
-                if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
-                tg.close(); 
-            }, 2000);
-        } else {
-            if(loadingOverlay) loadingOverlay.classList.remove('active');
-            showToast("Xatolik! Adminga xabar bering.", "warning");
-        }
-    } catch (err) { 
-        console.error(err);
-        if(loadingOverlay) loadingOverlay.classList.remove('active'); 
-        showToast("Xatolik yuz berdi", "warning"); 
-    }
-};
-
 window.renderAdminOrdersUI = (ordersArr) => {
     let box = document.getElementById('admin-orders-render-box');
     if(!box) return;
@@ -3067,9 +2858,9 @@ window.renderAdminOrdersUI = (ordersArr) => {
             : `background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.1);`;
         let chatBtnText = unreadCount > 0 ? `💬 Chat (${unreadCount})` : `💬 Chat`;
 
-        // YANGILIK: O'zining ichiga mahkamlangan ismni birinchi o'qiydi
         let dName = o.customerName || o.uN || 'Ismsiz';
         let dPhone = o.customerPhone || o.uP || 'Raqamsiz';
+        let dAddr = o.customerAddress && o.customerAddress !== "Kiritilmagan" ? `<br>📍 ${o.customerAddress}` : "";
 
         return `
         <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block; position:relative;">
@@ -3079,7 +2870,7 @@ window.renderAdminOrdersUI = (ordersArr) => {
                 <b style="color:var(--luxury-gold);">#${o.code||o.id}</b>
                 ${getStatusHTML(o.status||'kutilmoqda')}
             </div>
-            <p style="margin:5px 0;">👤 ${dName}<br>📞 ${dPhone}</p>
+            <p style="margin:5px 0; font-size: 13px;">👤 ${dName}<br>📞 ${dPhone}${dAddr}</p>
             <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px; font-size:16px;">💰 ${o.total.toLocaleString()} so'm</p>
             
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
