@@ -239,7 +239,8 @@
 </div>
                 <div class="profile-menu-item" onclick="showMyOrders()"><div class="left"><svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> Mening Buyurtmalarim</div><div style="color:var(--text-muted); font-size:20px;">›</div></div>
                 <div class="profile-menu-item" onclick="openModal('profileEditModal')"><div class="left"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> Shaxsiy Ma'lumotlar</div><div style="color:var(--text-muted); font-size:20px;">›</div></div>
-                <div class="profile-menu-item" onclick="openModal('contactModal')"><div class="left"><svg viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg> Biz bilan Aloqa</div><div style="color:var(--text-muted); font-size:20px;">›</div></div>
+                <div class="profile-menu-item" onclick="openModal('contactModal')"><div class="left"><svg viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg> Biz bilan Aloqa</div><div style="color:var(--text-muted); font-size:20px;">›</div></div> 
+                <div class="profile-menu-item" onclick="clearAppCache()" style="border-color: rgba(255, 69, 58, 0.3); background: rgba(255, 69, 58, 0.05);"><div class="left"><span style="font-size: 20px;">🧹</span> Ilovani yangilash (Kesh)</div><div style="color:var(--accent-red); font-size:20px;">↻</div></div>
             </div>
         </div>
         <div id="my-orders-section" class="hidden"><div class="section-title" style="margin-top: 0;">Buyurtmalarim</div><div id="orders-list-container" style="padding: 0 20px;"></div></div>
@@ -1374,16 +1375,87 @@ function openProduct(id) {
         });
     }
 
-    function searchProducts() {
-        let q = document.getElementById('searchInput').value.toLowerCase().trim(); let r = document.getElementById('search-results'); let c = document.getElementById('content-area'); let cb = document.getElementById('clearSearchBtn'); let qc = document.getElementById('quick-chips'); let sC = document.querySelector('.slider-container'); let bn = document.querySelector('.bottom-nav');
-        if (q.length > 0) cb.classList.add('show'); else cb.classList.remove('show');
-        if (!searchActive) { searchActive = true; window.history.pushState({ search: true }, ""); c.classList.add('hidden'); if(sC) sC.style.display = 'none'; r.classList.remove('hidden'); qc.classList.remove('hidden');if(bn) { bn.style.display = 'none'; } tg.BackButton.show(); document.getElementById('back-btn').style.display = 'flex'; }
-        if (q.length > 0) {
-            qc.style.display = 'none'; let filt = productsDB.filter(x => x.name.toLowerCase().includes(q) || (x.car && x.car.toLowerCase().includes(q)));
-            if (filt.length === 0) r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><p>Hech narsa topilmadi.</p></div>`;
-            else r.innerHTML = filt.map(x => `<div class="search-item" onclick="openProduct(${x.id})"><img src="${x.img}" onload="this.style.opacity=1"><div class="search-info"><h4>${x.name}</h4><p class="price">${x.price.toLocaleString()} so'm</p></div><button class="btn-add-cart" onclick="addToCartQuick(event, ${x.id})" style="position:relative; right:0; bottom:0; width:40px; height:40px; border-radius:12px;"> <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div>`).join('');
-        } else { qc.style.display = 'flex'; r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><p>Qidirish uchun yozing.</p></div>`; }
+// =====================================
+// 🔍 AQLLI QIDIRUV (XATOLARNI KECHIRUVCHI) VA KESH
+// =====================================
+
+window.searchProducts = () => {
+    let qRaw = document.getElementById('searchInput').value.toLowerCase().trim();
+    
+    // 🧠 Sinonimlar va xatolar lug'ati (Istaganingizcha ko'paytiring)
+    const synonyms = {
+        "porshun": "porshen", "porshin": "porshen",
+        "kolca": "kolsa", "xalqa": "kolsa", "kalso": "kolsa",
+        "kalodka": "kalotka", "kolodka": "kalotka", "kalotki": "kalotka",
+        "amartizator": "amortizator", "amartiza": "amortizator",
+        "mator": "motor", "matar": "motor",
+        "galofka": "galovka", "qopqoq": "galovka",
+        "apora": "opora",
+        "xadavoy": "xodovoy", "xadovoy": "xodovoy",
+        "rul": "rul", "rulovoy": "rul",
+        "fara": "fara", "chirol": "fara", "chiroq": "fara"
+    };
+    
+    // Kiritilgan so'z lug'atda bo'lsa to'g'risiga almashtiradi, bo'lmasa o'zini qoldiradi
+    let q = synonyms[qRaw] || qRaw; 
+    
+    let r = document.getElementById('search-results'); 
+    let c = document.getElementById('content-area'); 
+    let cb = document.getElementById('clearSearchBtn'); 
+    let qc = document.getElementById('quick-chips'); 
+    let sC = document.querySelector('.slider-container'); 
+    let bn = document.querySelector('.bottom-nav');
+    
+    if (qRaw.length > 0) cb.classList.add('show'); else cb.classList.remove('show');
+    
+    if (!searchActive) { 
+        searchActive = true; 
+        window.history.pushState({ search: true }, ""); 
+        c.classList.add('hidden'); 
+        if(sC) sC.style.display = 'none'; 
+        r.classList.remove('hidden'); 
+        qc.classList.remove('hidden');
+        if(bn) bn.style.display = 'none'; 
+        tg.BackButton.show(); 
+        document.getElementById('back-btn').style.display = 'flex'; 
     }
+    
+    if (qRaw.length > 0) {
+        qc.style.display = 'none'; 
+        
+        // Kengaytirilgan izlash: endi tovar nomi, markasi yoki TAVSIFI (desc) ichidan ham qidiradi
+        let filt = productsDB.filter(x => {
+            let n = x.name ? x.name.toLowerCase() : "";
+            let car = x.car ? x.car.toLowerCase() : "";
+            let desc = x.desc ? x.desc.toLowerCase() : "";
+            return n.includes(q) || car.includes(q) || desc.includes(q);
+        });
+        
+        if (filt.length === 0) {
+            r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><p>Kechirasiz, hech narsa topilmadi. Boshqacha yozib ko'ring.</p></div>`;
+        } else {
+            r.innerHTML = filt.map(x => `<div class="search-item" onclick="openProduct(${x.id})"><img src="${x.img}" onload="this.style.opacity=1"><div class="search-info"><h4>${x.name}</h4><p class="price">${x.price.toLocaleString()} so'm</p></div><button class="btn-add-cart" onclick="addToCartQuick(event, ${x.id})" style="position:relative; right:0; bottom:0; width:40px; height:40px; border-radius:12px;"> <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div>`).join('');
+        }
+    } else { 
+        qc.style.display = 'flex'; 
+        r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><p>Zapchast nomini yozing...</p></div>`; 
+    }
+};
+
+// Keshni tozalash funksiyasi
+window.clearAppCache = () => {
+    // Agar dastur qotsa, shu tugma bosilsa o'ziga keladi
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm("Dasturni yangilaymizmi? (Savat va saqlanganlar o'chib ketmaydi)", function(ok) {
+            if(ok) {
+                showToast("Yangilanmoqda...", "success");
+                setTimeout(() => { window.location.reload(true); }, 800);
+            }
+        });
+    } else {
+        window.location.reload(true);
+    }
+};
     function clearSearch() { document.getElementById('searchInput').value = ''; searchProducts(); document.getElementById('searchInput').focus(); }
     function applyQuickSearch(t) { document.getElementById('searchInput').value = t; searchProducts(); }
     function exitSearch() { searchActive = false; document.getElementById('searchInput').value = ''; document.getElementById('search-results').classList.add('hidden'); document.getElementById('quick-chips').classList.add('hidden'); document.getElementById('clearSearchBtn').classList.remove('show'); document.getElementById('content-area').classList.remove('hidden'); let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; let bn = document.querySelector('.bottom-nav');if(bn) { bn.style.display = 'flex'; } updateBtns(); }
