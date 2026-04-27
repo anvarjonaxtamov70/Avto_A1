@@ -1258,25 +1258,55 @@ function openProduct(id) {
     function showProfile() { if(activeModal) closeModal(); updateNav('nav-profile'); showSection('profile-section'); }
     function showMyOrders() { closeModal(); renderMyOrders(); showSection('my-orders-section'); }
 
+// ==========================================
+    // TOZALANGAN SAVAT VA TO'LOV MANTIQI
+    // ==========================================
     function renderCartItems() {
-        let c = document.getElementById('cart-items-container'); let b = document.getElementById('main-checkout-btn'); let t = 0; c.innerHTML = '';
-        if(Object.keys(cart).length === 0) { c.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; b.style.display = 'none'; } else {
-            for(let id in cart) { let p = productsDB.find(x => x.id == id); if(!p) continue; t += p.price * cart[id]; c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${p.name}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[id]).toLocaleString()} s</span></div><div class="cart-controls"><button onclick="chg(${id},-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[id]}</span><button onclick="chg(${id},1)">+</button></div></div>`; } b.style.display = 'block';
-        } document.getElementById('cart-total-sum').innerText = t.toLocaleString();
+        let c = document.getElementById('cart-items-container'); 
+        let b = document.getElementById('main-checkout-btn'); 
+        let t = 0; 
+        c.innerHTML = '';
+        if(Object.keys(cart).length === 0) { 
+            c.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; 
+            if(b) b.style.display = 'none'; 
+        } else {
+            for(let fullId in cart) { 
+                let [baseId, carOpt] = String(fullId).split('||');
+                let p = productsDB.find(x => x.id == baseId); 
+                if(!p) continue; 
+                t += p.price * cart[fullId]; 
+                let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
+                // DIQQAT: Xatolik aynan shu tugmada yashiringan edi, to'g'irlandi!
+                c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[fullId]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${fullId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[fullId]}</span><button onclick="chg('${fullId}',1)">+</button></div></div>`; 
+            } 
+            if(b) b.style.display = 'block';
+        } 
+        let tSum = document.getElementById('cart-total-sum');
+        if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
     }
-    
-function chg(fullId, d) { 
-        let [baseId, carOpt] = fullId.split('||');
+
+    function chg(fullId, d) { 
+        let [baseId, carOpt] = String(fullId).split('||');
         let p = productsDB.find(x => x.id == baseId);
-        let st = p && p.stock !== undefined ? p.stock : 10;
+        if(!p) return;
+        
+        let st = 10;
+        if (p.product_type === 'razmerli' && p.sizes) {
+            let sizeObj = p.sizes.find(s => s.size === carOpt);
+            if(sizeObj) st = sizeObj.stock;
+        } else {
+            st = p.stock !== undefined ? p.stock : 10;
+        }
         
         let totalInCart = 0;
-        for(let cid in cart) { if(cid.startsWith(baseId + "||")) totalInCart += cart[cid]; }
+        for(let cid in cart) { if(cid.startsWith(baseId + "||" + (carOpt||""))) totalInCart += cart[cid]; }
         
         if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
-        cart[fullId] += d; if(cart[fullId] <= 0) delete cart[fullId]; saveLocalCart(); updateCartBadge(); renderCartItems(); 
+        cart[fullId] = (cart[fullId] || 0) + d; 
+        if(cart[fullId] <= 0) delete cart[fullId]; 
+        saveLocalCart(); updateCartBadge(); renderCartItems(); 
     }
-    
+
     function openPaymentModal() { 
         if (Object.keys(cart).length === 0) return; 
         if (!myProfile.phone) { 
@@ -1285,13 +1315,10 @@ function chg(fullId, d) {
             return; 
         } 
         
-        // Qotib qolishni oldini olish: Savat oynasini yashiramiz
         document.getElementById('cartModal').style.display = 'none'; 
-        
         document.getElementById('payment-options').classList.remove('hidden'); 
         document.getElementById('card-details').classList.add('hidden'); 
         
-        // To'lov oynasini xavfsiz ochish
         let m = document.getElementById('paymentModal'); 
         m.style.display = 'flex'; 
         document.body.style.overflow = 'hidden';
@@ -1300,10 +1327,11 @@ function chg(fullId, d) {
         tg.BackButton.show(); 
         updateBtns(); 
     }
+    
     function selectPayment(t) { if(t === 'cash') confirmOrder('Naqd pul'); else if(t === 'card') { document.getElementById('payment-options').classList.add('hidden'); document.getElementById('card-details').classList.remove('hidden'); } }
     function copyCard() { navigator.clipboard.writeText("5614681874796349"); showToast("Nusxalandi!"); }
 
-async function confirmOrder(paymentMethod) {
+    async function confirmOrder(paymentMethod) {
         const loadingOverlay = document.getElementById('order-loading-overlay'); 
         loadingOverlay.classList.add('active');
         let newOrderCode = generateOrderCode(); 
@@ -1312,23 +1340,19 @@ async function confirmOrder(paymentMethod) {
         let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n📞 <b>Telefon:</b> ${myProfile.phone}${addressText}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
         let total = 0; 
         let savedItems = {};
-        
-        // 1. Kam qolgan tovarlarni yig'ish uchun bo'sh matn ochamiz
         let lowStockAlerts = ""; 
         
-for (let fullId in cart) { 
+        for (let fullId in cart) { 
             let [baseId, carOpt] = fullId.split('||');
             let p = productsDB.find(x => x.id == baseId); 
             if (p) { 
                 let sum = p.price * cart[fullId]; 
-                let dName = carOpt && carOpt !== "Universal" ? `${p.name} (${carOpt})` : p.name;
+                let dName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} (${carOpt})` : p.name;
                 adminText += `▪️ ${dName}\n   ➖ ${cart[fullId]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
                 total += sum; 
                 savedItems[fullId] = cart[fullId]; 
                 
-                // ZAXIRADAN AYIRISH
                 if (p.product_type === 'razmerli' && p.sizes) {
-                    // Agar razmerli tovar bo'lsa, faqat sotilgan razmerni ayiramiz
                     let sIdx = p.sizes.findIndex(s => s.size === carOpt);
                     if (sIdx !== -1) {
                         p.sizes[sIdx].stock -= cart[fullId];
@@ -1337,10 +1361,8 @@ for (let fullId in cart) {
                             lowStockAlerts += `\n⚠️ <b>${p.name} (Razmer: ${carOpt})</b>: atigi ${p.sizes[sIdx].stock} ta qoldi!`;
                         }
                     }
-                    // Umumiy stockni qayta hisoblab qo'yamiz
                     p.stock = p.sizes.reduce((sum, s) => sum + s.stock, 0);
                 } else {
-                    // Oddiy tovar bo'lsa, umumiy stockdan ayiramiz
                     p.stock = (p.stock !== undefined ? p.stock : 10) - cart[fullId];
                     if (p.stock < 0) p.stock = 0; 
                     if (p.stock <= 3) {
@@ -1359,47 +1381,39 @@ for (let fullId in cart) {
             });
             
             if (res.ok) {
-                // OMBORNI YANGILASH
                 db.ref('products').set(productsDB);
-                
-                // 3. XABARNOMA YUBORISH: Agar kam qolgan tovarlar bo'lsa, Adminga alohida SMS ketadi
                 if (lowStockAlerts !== "") {
                     let alertMsg = `🚨 <b>DIQQAT: ZAXIRA TUGAMOQDA!</b>\nShu buyurtmadan keyin omborda ba'zi tovarlar kam qoldi:${lowStockAlerts}`;
                     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        method: "POST", headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" })
                     });
                 }
-                
                 if(currentUser) { 
                     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
-                        method: "POST", 
-                        headers: { "Content-Type": "application/json" }, 
-                        body: JSON.stringify({ 
-                            chat_id: currentUser, 
-                            text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` 
-                        }) 
+                        method: "POST", headers: { "Content-Type": "application/json" }, 
+                        body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` }) 
                     }); 
                 }
-                myOrders.unshift({ 
-                    id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' 
-                }); 
-                saveLocalOrders(); 
-                cart = {}; 
-                saveLocalCart(); 
-                updateCartBadge();
+                myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
+                saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge();
                 loadingOverlay.classList.remove('active'); 
                 showToast("Qabul qilindi!");
-                setTimeout(() => { 
-                    if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
-                    tg.close(); 
-                }, 2000);
+                setTimeout(() => { if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); tg.close(); }, 2000);
+            } else {
+                loadingOverlay.classList.remove('active');
+                showToast("Xatolik! Adminga xabar bering.", "warning");
             }
         } catch (err) { 
             loadingOverlay.classList.remove('active'); 
             showToast("Internetni tekshiring", "warning"); 
         }
+    }
+
+    function renderMyOrders() { 
+        let c = document.getElementById('orders-list-container'); 
+        if (myOrders.length === 0) { c.innerHTML = `<p style="text-align:center; color:gray; padding-top:40px;">Buyurtmalar yo'q.</p>`; return; } 
+        c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${o.total.toLocaleString()} so'm</div></div>`).join(''); 
     }
 
     function renderMyOrders() { let c = document.getElementById('orders-list-container'); if (myOrders.length === 0) { c.innerHTML = `<p style="text-align:center; color:gray; padding-top:40px;">Buyurtmalar yo'q.</p>`; return; } c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${o.total.toLocaleString()} so'm</div></div>`).join(''); }
@@ -2161,55 +2175,6 @@ window.addToCartWithOptions = (finalId) => {
     showToast('Savatda!'); 
 };
 
-window.renderCartItems = () => {
-    let c = document.getElementById('cart-items-container'); 
-    let b = document.getElementById('main-checkout-btn'); 
-    let t = 0; 
-    c.innerHTML = '';
-    if(Object.keys(cart).length === 0) { 
-        c.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; 
-        b.style.display = 'none'; 
-    } else {
-        for(let fullId in cart) { 
-            let [baseId, carOpt] = String(fullId).split('||');
-            let p = productsDB.find(x => x.id == baseId); 
-            if(!p) continue; 
-            t += p.price * cart[fullId]; 
-            let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
-            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[fullId]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${fullId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[fullId]}</span><button onclick="chg('${fullId}',1)">+</button></div></div>`; 
-        } 
-        b.style.display = 'block';
-    } 
-    document.getElementById('cart-total-sum').innerText = t.toLocaleString() + " so'm";
-};
-
-window.chg = (fullId, d) => { 
-    let [baseId, carOpt] = String(fullId).split('||');
-    let p = productsDB.find(x => x.id == baseId);
-    if(!p) return;
-    
-    let st = p.stock !== undefined ? p.stock : 10;
-    
-    // Razmerli bo'lsa, faqat o'sha razmer qoldig'ini tekshir
-    if(p.product_type === 'razmerli' && p.sizes && carOpt) {
-        let sObj = p.sizes.find(s => s.size === carOpt);
-        if(sObj) st = sObj.stock;
-    }
-    
-    let totalSameSize = cart[fullId] || 0;
-    
-    if(d > 0 && totalSameSize >= st) { 
-        showToast("Omborda bunday ko'p emas", "warning"); 
-        return; 
-    }
-    
-    // TO'G'RI: || 0 qo'shildi
-    cart[fullId] = (cart[fullId] || 0) + d; 
-    if(cart[fullId] <= 0) delete cart[fullId]; 
-    saveLocalCart(); 
-    updateCartBadge(); 
-    renderCartItems(); 
-};
     // =====================================
 // RAZMERLI TOVARLAR UCHUN ADMIN MANTIQI
 // =====================================
