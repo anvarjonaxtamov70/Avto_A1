@@ -2428,6 +2428,160 @@ window.addSizeField = () => {
     `;
     container.appendChild(div);
 };
+
+    // =====================================
+// 🚨 MUAMMOLARNI TO'LIQ HAL QILUVCHI KOD (SAVAT VA TO'LOV)
+// =====================================
+
+// 1. SAVAT QIZIL BELGISINI (BADGE) TO'G'RILASH
+window.updateCartBadge = () => {
+    let tot = 0;
+    for(let key in cart) {
+        if(cart[key]) {
+            let val = parseInt(cart[key]);
+            if(!isNaN(val)) tot += val; // Faqat aniq sonlarni sanaydi
+        }
+    }
+    let b = document.getElementById('nav-badge'); 
+    if(!b) return;
+    b.innerText = tot; 
+    if(tot > 0) { 
+        b.classList.add('show'); 
+        b.classList.remove('pulse'); 
+        void b.offsetWidth; 
+        b.classList.add('pulse'); 
+    } else { 
+        b.classList.remove('show'); 
+    } 
+};
+
+// 2. SAVATGA TEZKOR QO'SHISHNI HIMOYALASH
+window.addToCartQuick = (e, id) => { 
+    e.stopPropagation(); 
+    let p = productsDB.find(x => x.id == id);
+    if(!p) return;
+    
+    // Razmerli tovar bo'lsa ichiga kirgizib yuboramiz
+    if(p.product_type === 'razmerli') {
+        showToast("Razmer tanlash uchun tovarni oching!", "warning");
+        openProduct(id);
+        return;
+    }
+    
+    let st = p.stock !== undefined ? parseInt(p.stock) : 10;
+    if(st <= 0) { showToast("Kechirasiz, bu tovar qolmagan", "warning"); return; }
+    
+    let totalInCart = 0;
+    for(let cid in cart) { if(cid.startsWith(id + "||")) totalInCart += parseInt(cart[cid]) || 0; }
+    if(totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+    
+    let finalId = id + "||Universal";
+    if(typeof addToCartWithOptions === 'function') addToCartWithOptions(finalId);
+};
+
+// 3. TO'LOV (BUYURTMA BERISH) TIZIMINI QOTIB QOLMASLIGI UCHUN HIMOYALASH
+window.confirmOrder = async (paymentMethod) => {
+    const loadingOverlay = document.getElementById('order-loading-overlay'); 
+    if(loadingOverlay) loadingOverlay.classList.add('active');
+    
+    try {
+        let newOrderCode = generateOrderCode(); 
+        
+        // Agar mijoz profili chala bo'lsa xato bermasligi uchun tekshiramiz
+        let profName = (typeof myProfile !== 'undefined' && myProfile && myProfile.name) ? myProfile.name : "Mijoz";
+        let profPhone = (typeof myProfile !== 'undefined' && myProfile && myProfile.phone) ? myProfile.phone : "Kiritilmagan";
+        let profAddr = (typeof myProfile !== 'undefined' && myProfile && myProfile.address) ? `\n📍 <b>Manzil:</b> ${myProfile.address}` : "";
+        let cUser = typeof currentUser !== 'undefined' ? currentUser : "Noma'lum";
+        
+        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${profName}\n📞 <b>Telefon:</b> ${profPhone}${profAddr}\n🆔 <b>ID:</b> <code>${cUser}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
+        
+        let total = 0; 
+        let savedItems = {};
+        let lowStockAlerts = ""; 
+        
+        for (let fullId in cart) { 
+            if(!cart[fullId]) continue; 
+            let parts = String(fullId).split('||');
+            let baseId = parts[0];
+            let carOpt = parts[1];
+            
+            let p = productsDB.find(x => x.id == baseId); 
+            if (p) { 
+                let qty = parseInt(cart[fullId]) || 0;
+                if(qty <= 0) continue;
+
+                let sum = p.price * qty; 
+                let dName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} (${carOpt})` : p.name;
+                adminText += `▪️ ${dName}\n   ➖ ${qty} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
+                total += sum; 
+                savedItems[fullId] = qty; 
+                
+                if (p.product_type === 'razmerli' && p.sizes) {
+                    let sIdx = p.sizes.findIndex(s => s.size === carOpt);
+                    if (sIdx !== -1) {
+                        p.sizes[sIdx].stock = (parseInt(p.sizes[sIdx].stock) || 0) - qty;
+                        if (p.sizes[sIdx].stock < 0) p.sizes[sIdx].stock = 0;
+                        if (p.sizes[sIdx].stock <= 3) {
+                            lowStockAlerts += `\n⚠️ <b>${p.name} (Razmer: ${carOpt})</b>: atigi ${p.sizes[sIdx].stock} ta qoldi!`;
+                        }
+                    }
+                    p.stock = p.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0);
+                } else {
+                    p.stock = (parseInt(p.stock !== undefined ? p.stock : 10) || 0) - qty;
+                    if (p.stock < 0) p.stock = 0; 
+                    if (p.stock <= 3) {
+                        lowStockAlerts += `\n⚠️ <b>${p.name}</b>: atigi ${p.stock} ta qoldi!`;
+                    }
+                }
+            } 
+        }
+        adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
+        
+        const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
+            method: "POST", 
+            headers: { "Content-Type": "application/json" }, 
+            body: JSON.stringify({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" }) 
+        });
+        
+        if (res.ok) {
+            db.ref('products').set(productsDB);
+            if (lowStockAlerts !== "") {
+                let alertMsg = `🚨 <b>DIQQAT: ZAXIRA TUGAMOQDA!</b>\nShu buyurtmadan keyin omborda ba'zi tovarlar kam qoldi:${lowStockAlerts}`;
+                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" })
+                });
+            }
+            if(typeof currentUser !== 'undefined' && currentUser) { 
+                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, { 
+                    method: "POST", headers: { "Content-Type": "application/json" }, 
+                    body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${profName}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` }) 
+                }); 
+            }
+            
+            myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
+            if(typeof saveLocalOrders === 'function') saveLocalOrders(); 
+            cart = {}; 
+            if(typeof saveLocalCart === 'function') saveLocalCart(); 
+            updateCartBadge();
+            
+            if(loadingOverlay) loadingOverlay.classList.remove('active'); 
+            showToast("Qabul qilindi!");
+            
+            setTimeout(() => { 
+                if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
+                tg.close(); 
+            }, 2000);
+        } else {
+            if(loadingOverlay) loadingOverlay.classList.remove('active');
+            showToast("Xatolik! Adminga xabar bering.", "warning");
+        }
+    } catch (err) { 
+        console.error(err);
+        if(loadingOverlay) loadingOverlay.classList.remove('active'); 
+        showToast("Internetni tekshiring", "warning"); 
+    }
+};
     
 </script>    
 </body>    
