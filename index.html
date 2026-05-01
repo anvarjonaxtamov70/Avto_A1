@@ -3293,23 +3293,7 @@ document.body.style.webkitUserSelect = "none";
 // 🛑 SPAM VA "BOMBA" HUJUMLARIDAN HIMOYA (ANTI-SPAM)
 // =====================================
 
-// 1. Buyurtma tugmasi uchun himoya (15 soniya)
-let lastOrderTime = 0;
-const originalConfirmOrder = window.confirmOrder; // Eski funksiyani saqlab qo'yamiz
-window.confirmOrder = async (paymentMethod) => {
-    let now = Date.now();
-    if (now - lastOrderTime < 15000) { 
-        // 15 soniya o'tmagan bo'lsa, bloklaymiz
-        if(typeof showToast === 'function') showToast("Kuting! Qayta xarid uchun 15 soniya kerak.", "warning");
-        return;
-    }
-    lastOrderTime = now; // Vaqtni yangilaymiz
-    if (typeof originalConfirmOrder === 'function') {
-        await originalConfirmOrder(paymentMethod); // Eski funksiyani ishga tushiramiz
-    }
-};
-
-// 2. Izoh qoldirish tugmasi uchun himoya (10 soniya)
+// 1. Izoh qoldirish tugmasi uchun himoya (10 soniya)
 let lastReviewTime = 0;
 const originalSubmitReview = window.submitReview;
 window.submitReview = () => {
@@ -3327,7 +3311,3 @@ window.submitReview = () => {
 </script>    
 </body>    
 </html>
-
-
-
-
