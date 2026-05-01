@@ -792,7 +792,8 @@
 <script>
     let tg = window.Telegram.WebApp;
     tg.expand();
-    const ADMIN_ID = 5105291033;
+    const ADMIN_IDS = [5105291033, 483425630];
+    const ADMIN_ID = ADMIN_IDS[0];
     const BOT_TOKEN = "8503892855:AAHfonB_EV_5cJbrMbxlUHudLPF2dmmYpEU";
     const IMGBB_API_KEY = "ce514c623c419c594bde769bad36c8bc";
     const firebaseConfig = { databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/" };
@@ -820,7 +821,7 @@
     let botName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : userName;
     let botRegion = urlParams.get('region') ? decodeURIComponent(urlParams.get('region')) : "Noma'lum";
 
-    if (currentUser === ADMIN_ID) { let adminBtn = document.getElementById('nav-admin'); if(adminBtn) adminBtn.classList.remove('hidden'); }
+   if (ADMIN_IDS.includes(currentUser)) { let adminBtn = document.getElementById('nav-admin'); if(adminBtn) adminBtn.classList.remove('hidden'); }
     let cart = {}; try { cart = JSON.parse(localStorage.getItem('avto_cart')) || {}; } catch(e) { localStorage.removeItem('avto_cart'); }
     let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, myOrders = [], wishlist = [], myProfile = { name: botName, phone: botPhone, address: "" }, isDataLoaded = false;
     
@@ -1459,7 +1460,7 @@ function openProduct(id) {
 
     buyB.setAttribute('data-id', id);
     loadProductReviews(id);
-    let edB = document.getElementById('pm-edit-btn'); if (currentUser === ADMIN_ID) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
+    let edB = document.getElementById('pm-edit-btn'); if (ADMIN_IDS.includes(currentUser)) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
     let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
     if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
     let mod = document.getElementById('productModal'); mod.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); tg.BackButton.show(); updateBtns();
@@ -2647,7 +2648,7 @@ window.selectSizeModel = (btn, stock) => {
     let buyB = document.getElementById('pm-buy-btn');
     if(!box || !buyB) return;
     
-    let isAdmin = (typeof currentUser !== 'undefined' && typeof ADMIN_ID !== 'undefined' && currentUser === ADMIN_ID);
+    let isAdmin = (typeof currentUser !== 'undefined' && typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(currentUser));
     let stockText = isAdmin ? `✅ Sotuvda bor: ${stock} ta` : `✅ Sotuvda bor`;
     
     if(stock <= 0) {
