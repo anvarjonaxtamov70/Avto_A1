@@ -902,23 +902,65 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
         r.readAsDataURL(f); e.target.value = '';
     }
 
-    async function uploadCroppedImage() {
-        if(!currentCropper) return; let btn = document.getElementById('crop-save-btn'); let oldT = btn.innerText; btn.innerText = "Kuting..."; btn.disabled = true;
-        try { const canvas = currentCropper.getCroppedCanvas({ width: 600, height: 600 }); const fd = new FormData(); fd.append("image", canvas.toDataURL('image/jpeg', 0.85).split(',')[1]); const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: fd }); const r = await res.json();
-         if(r.success) { 
-                let base = currentTargetInput.startsWith('add') ? 'add' : 'edit';
-                let num = currentTargetInput.replace(base, ''); 
-                let urlInp = document.getElementById(`${base}-img-url${num}`);
-                let prevImg = document.getElementById(`${base}-img-preview${num}`);
-                if(urlInp && prevImg) {
-                    urlInp.value = r.data.url;
-                    prevImg.src = r.data.url;
-                    prevImg.style.display = 'block';
-                }
-                showToast("Yuklandi!"); closeModal(); 
-            }  
-        } catch (err) { console.error(err); } finally { btn.innerText = oldT; btn.disabled = false; }
-    }
+    function uploadCroppedImage() {
+            if(!currentCropper) return;
+            let btn = document.getElementById('crop-save-btn');
+            let oldT = btn.innerText;
+            btn.innerText = "Kuting...";
+            btn.disabled = true;
+    
+            try {
+                // Rasmni telefon qotmaydigan o'lchamda kesib olish
+                const canvas = currentCropper.getCroppedCanvas({ 
+                    width: 600, 
+                    height: 600,
+                    imageSmoothingEnabled: true,
+                    imageSmoothingQuality: 'medium'
+                });
+    
+                // Og'ir Base64 o'rniga yengil Blob (fayl) formatidan foydalanamiz
+                canvas.toBlob(async (blob) => {
+                    const fd = new FormData();
+                    fd.append("image", blob, "product_image.jpg");
+    
+                    try {
+                        const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { 
+                            method: "POST", 
+                            body: fd 
+                        });
+                        const r = await res.json();
+                        
+                        if(r.success) { 
+                            let base = currentTargetInput.startsWith('add') ? 'add' : 'edit';
+                            let num = currentTargetInput.replace(base, ''); 
+                            let urlInp = document.getElementById(`${base}-img-url${num}`);
+                            let prevImg = document.getElementById(`${base}-img-preview${num}`);
+                            
+                            if(urlInp && prevImg) {
+                                urlInp.value = r.data.url;
+                                prevImg.src = r.data.url;
+                                prevImg.style.display = 'block';
+                            }
+                            showToast("Rasm yuklandi!"); 
+                            closeCropModal(); 
+                        } else {
+                            showToast("Xatolik: ImgBB qabul qilmadi!", "warning");
+                        }
+                    } catch (err) { 
+                        console.error(err);
+                        showToast("Internetni tekshiring!", "warning");
+                    } finally { 
+                        btn.innerText = oldT; 
+                        btn.disabled = false; 
+                    }
+                }, 'image/jpeg', 0.8); // 0.8 bu rasm sifati (80%), telefonni qiynamaydi
+    
+            } catch (error) {
+                showToast("Rasmni kesishda xato yuz berdi!", "warning");
+                btn.innerText = oldT; 
+                btn.disabled = false; 
+            }
+        }
     function closeCropModal() { closeModal(); if(currentCropper) currentCropper.destroy(); }
 
 function saveNewProduct() {
