@@ -647,6 +647,17 @@
             <p>Katalogga qo'shish</p>
         </div>
     </div>
+    <div class="admin-card" onclick="openAdminDrafts()">
+            <div class="a-icon" style="color: #ff9500;">📝</div>
+            <h3>Qoralamalar</h3>
+            <p>Rasmsiz tovarlar</p>
+        </div>
+        <div class="admin-card" style="border: 1px solid #007aff; background: rgba(0,122,255,0.05);" onclick="openModal('adminBulkModal')">
+            <div class="a-icon">📋</div>
+            <h3 style="color: #007aff;">Ommaviy qo'shish</h3>
+            <p>Ro'yxat tashlash</p>
+        </div>
+
     
     <div id="add-product-wrapper" class="hidden">
         <h3 style="margin-top:20px; color: var(--luxury-gold);">Yangi Tovar Formasi</h3>
@@ -782,6 +793,24 @@
     <div id="admin-customers-list">
         <p style="text-align:center;">Ma'lumotlar yuklanmoqda...</p>
     </div>
+</div>
+    <div class="modal-standard" id="adminBulkModal">
+    <div class="modal-header"><h2 style="color: #007aff;">📋 Ommaviy qo'shish</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">Tovarlar ro'yxatini kiriting. Format: <b>Nomi - Narxi</b></p>
+    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 15px; font-family: monospace; font-size: 12px; color: #8e8e93;">
+        Namuna:<br>
+        Korennoy vkladish - 120000<br>
+        Shatun - 180000<br>
+        Val 850000
+    </div>
+    <textarea id="bulk-input" class="search-box" style="height: 250px; resize: none; margin-bottom: 15px; font-size: 14px;" placeholder="Ro'yxatni shu yerga tashlang..."></textarea>
+    <button class="btn-checkout" style="background: #007aff; color: white;" onclick="saveBulkProducts()">Barchasini Bazaga Saqlash</button>
+</div>
+
+<div class="modal-standard" id="adminDraftsModal">
+    <div class="modal-header"><h2 style="color: #ff9500;">📝 Qoralamalar</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <p style="font-size: 12px; color: gray; margin-bottom: 15px;">Bu tovarlar mijozlarga ko'rinmaydi. Ustiga bosib, rasmini va mashinani tanlang.</p>
+    <div id="admin-drafts-list"></div>
 </div>
 <script>
     let tg = window.Telegram.WebApp;
@@ -3419,12 +3448,15 @@ window.handleMultiImgUpload = async function(event, prefix) {
 };
 
 // ✅ TUZATILGAN: EditModal ochish (pushState ishlatadi)
-window.openEditModal = function(e) {
+window.openEditModal = function(e, directId = null) {
     if (e) e.stopPropagation();
-    let id = document.getElementById('pm-buy-btn').getAttribute('data-id');
+    let id = directId;
+    if (!id) {
+        let btn = document.getElementById('pm-buy-btn');
+        if (btn) id = btn.getAttribute('data-id');
+    }
     let p = productsDB.find(x => x.id == id);
     if (!p) return;
-
     document.getElementById('edit-id').value = p.id;
     document.getElementById('edit-name').value = p.name;
     document.getElementById('edit-price').value = p.price;
@@ -3527,6 +3559,8 @@ window.saveEditProduct = function() {
             productsDB[idx].stock = sizes.reduce((s, x) => s + x.stock, 0);
         }
 
+        delete productsDB[idx].is_draft; // <--- Qoralamadan tozalab, mijozga ko'rsatamiz!
+        
         db.ref('products').set(productsDB).then(() => {
             showToast("✅ Yangilandi!");
             renderProducts();
@@ -3601,6 +3635,92 @@ window.saveNewProduct = function() {
         document.getElementById('add-product-wrapper').classList.add('hidden');
     });
 };
+    // =====================================
+// 🚀 OMMAVIY QO'SHISH VA QORALAMALAR (DRAFTS)
+// =====================================
+
+window.saveBulkProducts = () => {
+    let text = document.getElementById('bulk-input').value.trim();
+    if (!text) { showToast("Ro'yxat bo'sh!", "warning"); return; }
+    
+    let lines = text.split('\n');
+    let addedCount = 0;
+    let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
+
+    lines.forEach(line => {
+        let cleanLine = line.trim();
+        if (!cleanLine) return;
+
+        // "Nomi - 150000" yoki "Nomi 150000" formatlarini o'qish
+        let match = cleanLine.match(/^(.*?)(?:[-=:]|\s+)?([\d\s]+)$/);
+        if (match) {
+            let name = match[1].trim().replace(/[-=:]$/, '').trim(); 
+            let price = parseInt(match[2].replace(/\s/g, ''));
+
+            if (name && !isNaN(price)) {
+                productsDB.push({
+                    id: newId++,
+                    name: name,
+                    price: price,
+                    desc: "Tavsif kiritilmagan",
+                    img: "",
+                    images: [],
+                    product_type: "oddiy",
+                    stock: 10,
+                    category: "draft", 
+                    categories: ["draft"],
+                    is_draft: true // Muhim: Mijozlardan yashirish uchun
+                });
+                addedCount++;
+            }
+        }
+    });
+
+    if (addedCount > 0) {
+        db.ref('products').set(productsDB).then(() => {
+            showToast(`✅ ${addedCount} ta tovar tayyorlandi!`);
+            document.getElementById('bulk-input').value = '';
+            closeModal();
+        });
+    } else {
+        showToast("Format xato. Nomi va narxi bo'lishi shart.", "warning");
+    }
+};
+
+window.openAdminDrafts = () => {
+    document.getElementById('adminModal').style.display = 'none';
+    let m = document.getElementById('adminDraftsModal');
+    m.style.display = 'flex';
+    activeModal = 'adminDraftsModal';
+    window.history.replaceState({ modal: 'adminDraftsModal' }, "");
+    
+    let c = document.getElementById('admin-drafts-list');
+    let drafts = productsDB.filter(p => p.is_draft === true);
+    
+    if (drafts.length === 0) {
+        c.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Qoralamalar yo\'q. Barchasi sotuvga qo\'yilgan.</p>';
+        return;
+    }
+
+    c.innerHTML = drafts.map(p => `
+        <div class="inventory-item" style="cursor:pointer;" onclick="editDraft(${p.id})">
+            <div class="inv-info">
+                <h4 style="color:var(--luxury-gold); margin-bottom:5px;">${p.name}</h4>
+                <p style="font-weight:bold;">${p.price.toLocaleString()} so'm</p>
+            </div>
+            <div class="inv-controls">
+                <span style="font-size:22px;">✏️</span>
+            </div>
+        </div>
+    `).join('');
+};
+
+window.editDraft = (id) => {
+    // Qoralamani tahrirlash uchun to'g'ridan-to'g'ri ID orqali ochish
+    openEditModal(null, id); 
+};
+
+
     
 </script>    
 </body>    
