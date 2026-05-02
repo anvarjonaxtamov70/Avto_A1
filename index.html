@@ -3777,34 +3777,40 @@ window.filterAdminDrafts = (filterBrand = null) => {
     if (window.currentDraftFilter !== 'all') {
         drafts = drafts.filter(p => {
             let catsStr = (p.categories || []).join(' ');
-            if (window.currentDraftFilter === 'gaz') return catsStr.includes('gazel') || catsStr.includes('volga') || catsStr.includes('sobol');
+            if (window.currentDraftFilter === 'gaz') return catsStr.includes('gazel') || catsStr.includes('volga') || catsStr.includes('sobol') || catsStr.includes('uaz');
             if (window.currentDraftFilter === 'chevy') return catsStr.includes('chevy');
             if (window.currentDraftFilter === 'daewoo') return catsStr.includes('daewoo');
             return true;
         });
     }
 
-    // Qidiruv bo'yicha filter
+    // Qidiruv bo'yicha filter (Nomidan yoki Partiya nomidan qidiradi)
     if (q) {
-        drafts = drafts.filter(p => p.name.toLowerCase().includes(q));
+        drafts = drafts.filter(p => p.name.toLowerCase().includes(q) || (p.batch_id && p.batch_id.toLowerCase().includes(q)));
     }
     
     if (drafts.length === 0) {
-        c.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Hech narsa topilmadi.</p>';
+        c.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Qoralamalar topilmadi.</p>';
         return;
     }
 
     c.innerHTML = drafts.map(p => {
-        // Kartochkada qaysi mashinaligi yozib turadi
         let firstCat = (p.categories && p.categories[0]) ? p.categories[0].split('-').slice(0,2).join(' ').toUpperCase() : '';
+        // Dublikat va Partiya dizaynlari
+        let conflictBadge = p.has_conflict ? `<div style="color:#ff453a; font-size:10px; font-weight:bold; margin-bottom:4px;">⚠️ DUBLIKAT (Eskisi yashirildi)</div>` : '';
+        let batchInfo = p.batch_id ? `<div style="color:gray; font-size:9px; margin-top:4px;">📁 ${p.batch_id.replace('Partiya_', '')}</div>` : '';
+        
         return `
-        <div class="inventory-item" style="cursor:pointer;" onclick="editDraft(${p.id})">
-            <div class="inv-info">
+        <div class="inventory-item" style="display:flex; justify-content:space-between; align-items:center; border: 1px solid ${p.has_conflict ? 'rgba(255,69,58,0.4)' : 'var(--glass-border)'};">
+            <div class="inv-info" style="flex:1; cursor:pointer;" onclick="editDraft(${p.id})">
+                ${conflictBadge}
                 <h4 style="color:var(--luxury-gold); margin-bottom:5px;">${p.name}</h4>
                 <p style="font-weight:bold; font-size:12px;">${p.price.toLocaleString()} so'm <span style="color:gray; font-size:10px; margin-left:10px; background:rgba(255,255,255,0.1); padding:2px 5px; border-radius:5px;">${firstCat}</span></p>
+                ${batchInfo}
             </div>
-            <div class="inv-controls">
-                <span style="font-size:20px;">✏️</span>
+            <div class="inv-controls" style="display:flex; gap:12px; align-items:center; padding-left:10px;">
+                <span style="font-size:22px; cursor:pointer;" onclick="editDraft(${p.id})">✏️</span>
+                <span style="font-size:22px; cursor:pointer; color:#ff453a; filter: grayscale(0.2);" onclick="deleteDraft(${p.id}, ${p.has_conflict ? 'true' : 'false'})">🗑️</span>
             </div>
         </div>
         `;
@@ -3818,6 +3824,41 @@ window.editDraft = (id) => {
         let editBtn = document.getElementById('pm-edit-btn');
         if (editBtn) editBtn.click();
     }, 100);
+};
+
+// 🗑️ Qoralamani o'chirish va Eskisini tiklash
+window.deleteDraft = (id, hasConflict) => {
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm(hasConflict ? "Yangi narxni bekor qilib, eskisini tiklaymizmi?" : "Bu qoralamani o'chirasizmi?", function(ok) {
+            if(ok) processDraftDeletion(id, hasConflict);
+        });
+    } else {
+        if(confirm("Bu qoralamani o'chirasizmi?")) processDraftDeletion(id, hasConflict);
+    }
+};
+
+window.processDraftDeletion = (id, hasConflict) => {
+    let draftIndex = productsDB.findIndex(p => p.id === id);
+    let draftName = "";
+    
+    if(draftIndex !== -1) {
+        draftName = productsDB[draftIndex].name.toLowerCase();
+        productsDB.splice(draftIndex, 1); // Qoralamani uchirib tashlaymiz
+    }
+    
+    // Agar u dublikat bo'lgan bo'lsa, eski yashirilgan tovarni topib QAYTA TIKLAYMIZ
+    if (hasConflict && draftName) {
+        let oldIndex = productsDB.findIndex(p => p.name.toLowerCase() === draftName && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
+        if (oldIndex !== -1) {
+            delete productsDB[oldIndex].is_draft; // Yashirinishdan chiqaramiz
+            productsDB[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+        }
+    }
+    
+    db.ref('products').set(productsDB).then(() => {
+        showToast(hasConflict ? "O'chirildi va eskisi tiklandi!" : "Qoralama o'chirildi!");
+        filterAdminDrafts(); // Oynani yangilab qoyish
+    });
 };
 
 
