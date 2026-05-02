@@ -2910,7 +2910,20 @@ window.confirmOrder = async (paymentMethod) => {
         let userTgLink = (tg.initDataUnsafe?.user?.username) ? '@' + tg.initDataUnsafe.user.username : "Username yo'q";
 
         // Manzil va ID
-        let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
+        // Firebase'dan manzilni qayta o'qish
+if (currentUser && (!myProfile.address || myProfile.address === "Noma'lum")) {
+    try {
+        let snap = await db.ref('users/' + currentUser + '/profile').once('value');
+        if (snap.exists() && snap.val().address) {
+            myProfile.address = snap.val().address;
+        }
+    } catch(e) {}
+}
+
+let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
+        let fetchedAddress = (myProfile.address && myProfile.address !== "Noma'lum" && myProfile.address !== "Kiritilmagan") 
+            ? myProfile.address 
+            : (botRegion && botRegion !== "Noma'lum" ? botRegion : "Kiritilmagan");
         let cUser = currentUser || "Noma'lum";
         
         let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${profName}\n📞 <b>Telefon:</b> <code>${profPhone}</code>\n💬 <b>Telegram:</b> ${userTgLink}\n📍 <b>Manzil:</b> ${fetchedAddress}\n🆔 <b>ID:</b> <code>${cUser}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
