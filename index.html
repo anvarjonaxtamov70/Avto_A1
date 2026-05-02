@@ -3653,56 +3653,86 @@ window.saveNewProduct = function() {
         document.getElementById('add-product-wrapper').classList.add('hidden');
     });
 };
-    // =====================================
-// 🚀 OMMAVIY QO'SHISH VA QORALAMALAR (DRAFTS)
+// =====================================
+// 🚀 AQLLI OMMAVIY QO'SHISH (SMART BULK IMPORT)
 // =====================================
 
-// =====================================
-// 🚀 OMMAVIY QO'SHISH VA QORALAMALAR (YANGILANGAN)
-// =====================================
-
-window.saveBulkProducts = () => {
+window.saveBulkProductsSmart = () => {
     let text = document.getElementById('bulk-input').value.trim();
     if (!text) { showToast("Ro'yxat bo'sh!", "warning"); return; }
     
-    // Qaysi mashina va tur tanlanganini aniqlaymiz
-    let sMods = Array.from(document.querySelectorAll('#adminBulkModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
-    let sTyps = Array.from(document.querySelectorAll('#adminBulkModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
-    
-    if (sMods.length === 0 || sTyps.length === 0) {
-        showToast("Mashina va turini tanlang!", "warning");
-        return;
-    }
-
-    let sCats = []; 
-    sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
+    // Admin yozgan kurs va foizni olamiz
+    let usdRate = parseFloat(document.getElementById('bulk-usd-rate').value) || 12600;
+    let markup = (parseFloat(document.getElementById('bulk-markup').value) || 25) / 100; // masalan, 25% = 0.25
 
     let lines = text.split('\n');
     let addedCount = 0;
+    let conflictCount = 0; // Nechta dublikat borligini sanaydi
     let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
+    
+    // Partiya uchun yagona ID
+    let batchId = "Partiya_" + new Date().toLocaleString('uz-UZ').replace(/[,:\s]+/g, '_'); 
 
     lines.forEach(line => {
         let cleanLine = line.trim();
         if (!cleanLine) return;
 
-        let match = cleanLine.match(/^(.*?)(?:[-=:]|\s+)?([\d\s]+)$/);
+        // Ro'yxatdan "Nomi - 15.5" ni ajratib olish ($ narxi bilan)
+        let match = cleanLine.match(/^(.*?)(?:[-=:]|\s+)?([\d.,]+)$/);
         if (match) {
             let name = match[1].trim().replace(/[-=:]$/, '').trim(); 
-            let price = parseInt(match[2].replace(/\s/g, ''));
+            let rawPriceUSD = parseFloat(match[2].replace(',', '.').replace(/\s/g, ''));
 
-            if (name && !isNaN(price)) {
+            if (name && !isNaN(rawPriceUSD)) {
+                // 1. Narxni hisoblash (USD -> Ustama -> UZS -> 1000 gacha yaxlitlash)
+                let finalPriceUZS = Math.round(((rawPriceUSD + (rawPriceUSD * markup)) * usdRate) / 1000) * 1000;
+
+                // 2. AQLLI SARALASH (Nomi ichidan mashinani topish)
+                let nLow = name.toLowerCase();
+                let sCats = ["draft"];
+                let brand = "Noma'lum";
+
+                // GAZ, VOLGA, UAZ qidirish
+                if (nLow.includes('газель') || nLow.includes('gazel') || nLow.includes('волга') || nLow.includes('volga') || nLow.includes('змз') || nLow.includes('уаз')) {
+                    brand = "gaz";
+                    if (nLow.includes('мотор') || nLow.includes('поршен') || nLow.includes('клапан') || nLow.includes('компенсатор')) sCats = ["gazel-biznes-motor"];
+                    else if (nLow.includes('хадавой') || nLow.includes('амортизатор') || nLow.includes('колодк') || nLow.includes('подшипник')) sCats = ["gazel-biznes-xadavoy"];
+                    else sCats = ["gazel-biznes-tashqi"];
+                } 
+                // CHEVROLET, DAEWOO qidirish
+                else if (nLow.includes('nexia') || nLow.includes('matiz') || nLow.includes('damas') || nLow.includes('chevrolet') || nLow.includes('ваз') || nLow.includes('vaz')) {
+                    brand = "chevy";
+                    sCats = ["chevy-cobalt-motor"]; // Default papka
+                }
+
+                // 3. DUBLIKAT NAZORATI (Bazadagi eskisini topish)
+                let existingIdx = productsDB.findIndex(p => p.name.toLowerCase() === name.toLowerCase() && !p.is_draft);
+                let isConflict = false;
+
+                if (existingIdx !== -1) {
+                    // Eskisini yashiramiz!
+                    productsDB[existingIdx].is_draft = true;
+                    productsDB[existingIdx].desc = "⚠️ DIQQAT: Yangi narx kelgani uchun bu eskisi yashirildi!";
+                    isConflict = true;
+                    conflictCount++;
+                }
+
+                // Yangisini bazaga tiqamiz
                 productsDB.push({
                     id: newId++,
                     name: name,
-                    price: price,
-                    desc: "Tavsif kiritilmagan",
+                    price: finalPriceUZS,
+                    desc: "Sana: " + new Date().toLocaleDateString() + " | Partiya: " + batchId,
                     img: "",
                     images: [],
                     product_type: "oddiy",
                     stock: 10,
                     category: sCats[0], 
-                    categories: sCats, // Endi mashinalar shu yerga yoziladi!
-                    is_draft: true
+                    categories: sCats,
+                    brand: brand,
+                    is_draft: true, // Har doim avval qoralamaga yashirin tushadi
+                    batch_id: batchId, 
+                    has_conflict: isConflict 
                 });
                 addedCount++;
             }
@@ -3711,13 +3741,14 @@ window.saveBulkProducts = () => {
 
     if (addedCount > 0) {
         db.ref('products').set(productsDB).then(() => {
-            showToast(`✅ ${addedCount} ta tovar tayyorlandi!`);
+            showToast(`✅ ${addedCount} ta yuklandi! ${conflictCount > 0 ? '⚠️ ' + conflictCount + ' ta dublikat ushlandi.' : ''}`, conflictCount > 0 ? "warning" : "success");
             document.getElementById('bulk-input').value = '';
-            document.querySelectorAll('#adminBulkModal .cat-chip').forEach(c => c.classList.remove('selected'));
             closeModal();
+            // Saqlangach, srazi Qoralamalarni ochib beradi
+            setTimeout(() => openAdminDrafts(), 500);
         });
     } else {
-        showToast("Format xato. Nomi va narxi bo'lishi shart.", "warning");
+        showToast("Xato! Nomi va Narxi ($) bo'lishi shart.", "warning");
     }
 };
 
