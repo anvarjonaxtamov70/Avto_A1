@@ -907,8 +907,8 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
         document.getElementById('loading-text').style.display = 'none'; document.getElementById('content-area').classList.remove('hidden');
         if (snap.exists()) { productsDB = snap.val().filter(p => p !== null); } else { productsDB = initialProducts; db.ref('products').set(productsDB); }
         
-        // Tovarlarni har safar kirganda random (aralash) qilish
-        displayDB = productsDB.slice();
+        // Mijozlarga faqat Qoralama (draft) bo'lmagan tovarlarni ko'rsatish
+        displayDB = productsDB.filter(p => !p.is_draft);
         for(let i = displayDB.length - 1; i > 0; i--){
             const j = Math.floor(Math.random() * (i + 1));
             [displayDB[i], displayDB[j]] = [displayDB[j], displayDB[i]];
@@ -1601,8 +1601,10 @@ window.searchProducts = () => {
     if (qRaw.length > 0) {
         qc.style.display = 'none'; 
         
-        // Kengaytirilgan izlash: endi tovar nomi, markasi yoki TAVSIFI (desc) ichidan ham qidiradi
+            // Kengaytirilgan izlash: endi tovar nomi, markasi yoki TAVSIFI (desc) ichidan ham qidiradi
         let filt = productsDB.filter(x => {
+            if (x.is_draft) return false; // <--- Qoralamalarni qidiruvdan butunlay yashiramiz!
+            
             let n = x.name ? x.name.toLowerCase() : "";
             let car = x.car ? x.car.toLowerCase() : "";
             let desc = x.desc ? x.desc.toLowerCase() : "";
@@ -3716,8 +3718,19 @@ window.openAdminDrafts = () => {
 };
 
 window.editDraft = (id) => {
-    // Qoralamani tahrirlash uchun to'g'ridan-to'g'ri ID orqali ochish
-    openEditModal(null, id); 
+    // 1. Qoralamalar oynasini yashiramiz
+    document.getElementById('adminDraftsModal').style.display = 'none';
+    
+    // 2. Tovarni "ochamiz" (xuddi siz tovar ichiga kirganingiz kabi mantiq ishlaydi)
+    openProduct(id);
+    
+    // 3. Va o'sha zahoti (0.1 soniyada) avtomat tarzda Tahrirlash tugmasini bosib yuboramiz!
+    setTimeout(() => {
+        let editBtn = document.getElementById('pm-edit-btn');
+        if (editBtn) {
+            editBtn.click();
+        }
+    }, 100);
 };
 
 
