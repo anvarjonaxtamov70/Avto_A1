@@ -582,7 +582,13 @@
         <div id="edit-sizes-container"></div>
         <button type="button" onclick="addEditSizeField()" style="width:100%; padding:10px; background: rgba(212, 175, 55, 0.2); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 5px;">+ Yangi razmer qo'shish</button>
     </div>
-    <span class="luxury-input-label">TAVSIFI</span><textarea id="edit-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;"></textarea>
+    <span class="luxury-input-label">TAVSIFI (Avto-matn: ustiga bosing)</span>
+<div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+    <span class="chip" style="background: rgba(212,175,55,0.1); color: var(--luxury-gold); border: 1px solid var(--luxury-gold);" onclick="addDescTemplate('edit', '🌟 100% Original zapchast, sifatiga to\'liq kafolat beramiz.')">🌟 Original</span>
+    <span class="chip" style="background: rgba(255,255,255,0.1); color: white;" onclick="addDescTemplate('edit', '🇷🇺 Rossiyada ishlab chiqarilgan, ishonchli va chidamli.')">🇷🇺 Rossiya</span>
+    <span class="chip" style="background: rgba(255,255,255,0.1); color: white;" onclick="addDescTemplate('edit', '🇨🇳 Xitoy (Zavodskoy), hamyonbop narx va yaxshi sifat.')">🇨🇳 Xitoy</span>
+</div>
+<textarea id="edit-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;"></textarea>
     <span class="luxury-input-label">RASMLAR (1-3 ta, bir vaqtda tanlang)</span>
 <button type="button" id="edit-upload-btn"
     style="width:100%;padding:15px;background:rgba(212,175,55,0.08);border:2px dashed var(--luxury-gold);color:var(--luxury-gold);border-radius:14px;font-size:15px;font-weight:700;margin-bottom:10px;cursor:pointer;"
@@ -699,7 +705,13 @@
             </div>
             <button type="button" onclick="addSizeField()" style="width:100%; padding:10px; background: rgba(212, 175, 55, 0.2); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 5px;">+ Yangi razmer qo'shish</button>
         </div>
-        <span class="luxury-input-label">TAVSIFI (MA'LUMOT)</span><textarea id="add-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;" placeholder="Tovar haqida..."></textarea>
+        <span class="luxury-input-label">TAVSIFI (Avto-matn: ustiga bosing)</span>
+<div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+    <span class="chip" style="background: rgba(212,175,55,0.1); color: var(--luxury-gold); border: 1px solid var(--luxury-gold);" onclick="addDescTemplate('add', '🌟 100% Original zapchast, sifatiga to\'liq kafolat beramiz.')">🌟 Original</span>
+    <span class="chip" style="background: rgba(255,255,255,0.1); color: white;" onclick="addDescTemplate('add', '🇷🇺 Rossiyada ishlab chiqarilgan, ishonchli va chidamli.')">🇷🇺 Rossiya</span>
+    <span class="chip" style="background: rgba(255,255,255,0.1); color: white;" onclick="addDescTemplate('add', '🇨🇳 Xitoy (Zavodskoy), hamyonbop narx va yaxshi sifat.')">🇨🇳 Xitoy</span>
+</div>
+<textarea id="add-desc" class="search-box" style="margin-bottom: 15px; height: 80px; resize: none;" placeholder="Tovar haqida..."></textarea>
                 <span class="luxury-input-label">RASMLAR (1-3 ta, bir vaqtda tanlang)</span>
         <button type="button" id="add-upload-btn"
             style="width:100%;padding:15px;background:rgba(212,175,55,0.08);border:2px dashed var(--luxury-gold);color:var(--luxury-gold);border-radius:14px;font-size:15px;font-weight:700;margin-bottom:10px;cursor:pointer;"
@@ -3863,7 +3875,21 @@ window.processDraftDeletion = (id, hasConflict) => {
     });
 };
 
-
+// =====================================
+// ✍️ TAVSIF UCHUN AVTO-MATN SHABLONLARI
+// =====================================
+window.addDescTemplate = (prefix, text) => {
+    let textarea = document.getElementById(`${prefix}-desc`);
+    if (textarea) {
+        // Agar yozuv qutisi bo'sh bo'lmasa, yangi qatordan qo'shadi, bo'sh bo'lsa shundayligicha yozadi
+        if (textarea.value.trim() !== '') {
+            textarea.value += '\n' + text;
+        } else {
+            textarea.value = text;
+        }
+        showToast("Matn qo'shildi!", "success");
+    }
+};
     
 </script>    
 </body>    
