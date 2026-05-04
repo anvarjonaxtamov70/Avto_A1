@@ -861,6 +861,25 @@
         <button class="btn-checkout" style="width: auto; padding: 0 20px; border-radius: 12px; font-size: 18px; background: #007aff; color: white;" onclick="sendAiMessage()">➤</button>
     </div>
 </div>
+    <div class="floating-btn" id="ai-chat-btn" onclick="openAiChat()" style="display:flex; bottom: 80px; right: 15px; background: linear-gradient(135deg, #007aff, #005bb5); box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4); z-index: 1400;">
+    <span style="font-size: 24px;">🤖</span>
+</div>
+
+<div class="modal-standard" id="aiChatModal" style="z-index: 4000;">
+    <div class="modal-header">
+        <h2 style="color: #007aff;">🤖 AI Usta</h2>
+        <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Qanday zapchast qidiryapsiz? O'z so'zlaringiz bilan yozing.</p>
+    
+    <div id="ai-chat-box" style="height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;">
+        </div>
+    
+    <div style="display: flex; gap: 8px;">
+        <input type="text" id="ai-chat-input" class="search-box" placeholder="Masalan: Damasga arzonroq kalotka..." style="padding: 12px; border-radius: 12px; flex: 1;">
+        <button class="btn-checkout" style="width: auto; padding: 0 20px; border-radius: 12px; font-size: 18px; background: #007aff; color: white;" onclick="sendAiMessage()">➤</button>
+    </div>
+</div>
 <script>
     let tg = window.Telegram.WebApp;
     tg.expand();
@@ -3991,7 +4010,44 @@ window.renderAiChat = (messages) => {
     box.innerHTML = html;
     box.scrollTop = box.scrollHeight;
 };
-
+// ==========================================
+// ✍️ ADMIN UCHUN AI TAVSIF YARATUVCHI
+// ==========================================
+window.generateAiDescription = (type) => {
+    let nameInput = document.getElementById(`${type}-name`).value.trim();
+    if(!nameInput) {
+        showToast("Avval tovar nomini yozing!", "warning");
+        return;
+    }
+    
+    let descBox = document.getElementById(`${type}-desc`);
+    let originalText = descBox.value;
+    descBox.value = "⏳ AI o'ylamoqda... Baza bilan bog'lanmoqda...";
+    
+    // Firebase orqali Pythonga vazifa beramiz
+    let taskId = Date.now().toString();
+    db.ref('ai_admin_tasks/' + taskId).set({
+        action: "generate_desc",
+        product_name: nameInput,
+        needs_processing: true
+    });
+    
+    // Python javobini kutamiz
+    let ref = db.ref('ai_admin_tasks/' + taskId);
+    ref.on('value', snap => {
+        let data = snap.val();
+        if(data && data.result) {
+            descBox.value = data.result; // AI yozgan zo'r matnni qutiga tushiramiz
+            ref.off('value'); // Kutishni to'xtatamiz
+            db.ref('ai_admin_tasks/' + taskId).remove(); // Axlatni tozalaymiz
+            showToast("✨ AI tavsif yozib berdi!", "success");
+        } else if (data && data.error) {
+            descBox.value = originalText;
+            ref.off('value');
+            showToast("Xatolik yuz berdi", "warning");
+        }
+    });
+};
     
 </script>    
 </body>    
