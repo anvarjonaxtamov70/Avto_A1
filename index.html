@@ -892,6 +892,9 @@
     <div class="modal-standard" id="adminDraftsModal">
     <div class="modal-header"><h2 style="color: #ff9500;">📝 Qoralamalar</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <p style="font-size: 12px; color: gray; margin-bottom: 10px;">Faqat o'zingiz ko'rasiz. Tahrirlash uchun ustiga bosing.</p>
+        <button onclick="deleteAllDrafts()" style="width: 100%; padding: 12px; background: rgba(255, 69, 58, 0.1); border: 1px solid var(--accent-red); color: var(--accent-red); border-radius: 10px; font-weight: bold; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        🗑 Barcha qoralamalarni tozalash
+    </button>
     
     <input type="text" id="draft-search-input" class="search-box" placeholder="🔍 Qoralamadan izlash..." oninput="filterAdminDrafts()" style="margin-bottom: 10px; padding: 10px 15px; border-radius: 10px;">
     
@@ -4148,6 +4151,43 @@ window.sendAiBulk = (btn) => {
         document.getElementById('ai-bulk-text').value = '';
         btn.innerHTML = oldText;
         btn.disabled = false;
+    });
+};
+
+    // ==========================================
+// 🗑 BARCHA QORALAMALARNI TOZALASH
+// ==========================================
+window.deleteAllDrafts = () => {
+    // 1. O'chirishdan oldin so'rash (xato bosilib ketmasligi uchun)
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm("Haqiqatan ham barcha qoralamalarni o'chirib tashlaysizmi? Bu amalni ortga qaytarib bo'lmaydi!", function(ok) {
+            if(ok) executeDeleteAllDrafts();
+        });
+    } else {
+        if(confirm("Haqiqatan ham barcha qoralamalarni o'chirib tashlaysizmi?")) executeDeleteAllDrafts();
+    }
+};
+
+window.executeDeleteAllDrafts = () => {
+    // 2. Bazadagi jami tovarlar sonini eslab qolamiz
+    let originalCount = productsDB.length;
+    
+    // 3. Faqat qoralama bo'lmagan (is_draft yozuvi yo'q) tovarlarni saqlab qolamiz
+    productsDB = productsDB.filter(p => !p.is_draft);
+    
+    let deletedCount = originalCount - productsDB.length;
+
+    if (deletedCount === 0) {
+        showToast("O'chirish uchun qoralamalar yo'q!", "warning");
+        return;
+    }
+
+    // 4. Tozalangan bazani Firebase'ga yuboramiz
+    db.ref('products').set(productsDB).then(() => {
+        showToast(`✅ ${deletedCount} ta qoralama o'chirildi!`, "success");
+        filterAdminDrafts(); // Oynadagi ro'yxatni yangilab qo'yamiz (bo'm-bo'sh bo'lib qoladi)
+    }).catch(err => {
+        showToast("Xatolik yuz berdi!", "warning");
     });
 };
     
