@@ -842,6 +842,25 @@
 
     <div id="admin-drafts-list"></div>
 </div>
+    <div class="floating-btn" id="ai-chat-btn" onclick="openAiChat()" style="display:flex; bottom: 80px; right: 15px; background: linear-gradient(135deg, #007aff, #005bb5); box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4); z-index: 1400;">
+    <span style="font-size: 24px;">🤖</span>
+</div>
+
+<div class="modal-standard" id="aiChatModal" style="z-index: 4000;">
+    <div class="modal-header">
+        <h2 style="color: #007aff;">🤖 AI Usta</h2>
+        <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Qanday zapchast qidiryapsiz? O'z so'zlaringiz bilan yozing.</p>
+    
+    <div id="ai-chat-box" style="height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;">
+        </div>
+    
+    <div style="display: flex; gap: 8px;">
+        <input type="text" id="ai-chat-input" class="search-box" placeholder="Masalan: Damasga arzonroq kalotka..." style="padding: 12px; border-radius: 12px; flex: 1;">
+        <button class="btn-checkout" style="width: auto; padding: 0 20px; border-radius: 12px; font-size: 18px; background: #007aff; color: white;" onclick="sendAiMessage()">➤</button>
+    </div>
+</div>
 <script>
     let tg = window.Telegram.WebApp;
     tg.expand();
@@ -3890,6 +3909,89 @@ window.addDescTemplate = (prefix, text) => {
         showToast("Matn qo'shildi!", "success");
     }
 };
+
+// ==========================================
+// 🤖 AI KO'PRIK (FIREBASE ORQALI PYTHONGA)
+// ==========================================
+
+window.openAiChat = () => {
+    openModal('aiChatModal');
+    let box = document.getElementById('ai-chat-box');
+    
+    if(!currentUser) {
+        box.innerHTML = '<p style="color:gray; text-align:center;">Iltimos, bot orqali kiring.</p>';
+        return;
+    }
+
+    // Firebase'dan AI xabarlarini doimiy o'qib turish
+    db.ref('ai_requests/' + currentUser).on('value', snap => {
+        let data = snap.exists() ? snap.val() : { messages: [] };
+        renderAiChat(data.messages || []);
+    });
+};
+
+window.sendAiMessage = () => {
+    let input = document.getElementById('ai-chat-input');
+    let text = input.value.trim();
+    if(!text || !currentUser) return;
+    
+    input.value = ''; // Inputni tozalash
+    let box = document.getElementById('ai-chat-box');
+    box.innerHTML += `<div style="text-align:right; color:gray; font-size:10px;">Yuborilmoqda...</div>`;
+    box.scrollTop = box.scrollHeight;
+    
+    db.ref('ai_requests/' + currentUser).once('value', snap => {
+        let data = snap.exists() ? snap.val() : { messages: [] };
+        if(!data.messages) data.messages = [];
+        
+        // Mijoz xabarini qo'shish
+        data.messages.push({ sender: 'user', text: text, time: Date.now() });
+        data.needs_processing = true; // Pythonga "Meni o'qi" degan ishora
+        
+        db.ref('ai_requests/' + currentUser).set(data);
+    });
+};
+
+window.renderAiChat = (messages) => {
+    let box = document.getElementById('ai-chat-box');
+    let html = `
+        <div style="display: flex; justify-content: flex-start;">
+            <div style="max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; background: rgba(255,255,255,0.1); color: white; border-bottom-left-radius: 2px;">
+                Assalomu alaykum! Men do'konning aqlli yordamchisiman. Mashinangiz nima va sizga qanday zapchast kerak?
+            </div>
+        </div>`;
+    
+    messages.forEach(m => {
+        let isMe = m.sender === 'user';
+        let bg = isMe ? '#007aff' : 'rgba(212,175,55,0.15)';
+        let color = isMe ? 'white' : 'var(--text-main)';
+        let border = isMe ? 'border-bottom-right-radius: 2px;' : 'border-bottom-left-radius: 2px; border: 1px solid rgba(212,175,55,0.4);';
+        
+        // Agar AI tovarlarni topgan bo'lsa, ularni tugma qilib chiqarish
+        let productsHtml = '';
+        if(m.found_products && m.found_products.length > 0) {
+            productsHtml = '<div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">';
+            m.found_products.forEach(id => {
+                let p = productsDB.find(x => x.id == id);
+                if(p) {
+                    productsHtml += `<button onclick="openProduct(${p.id})" style="background: rgba(0,0,0,0.6); border: 1px solid var(--luxury-gold); color: var(--luxury-gold); padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; text-align: left; transition: 0.2s;">🛒 ${p.name} — ${p.price.toLocaleString()} so'm</button>`;
+                }
+            });
+            productsHtml += '</div>';
+        }
+
+        html += `
+        <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; margin-top: 8px;">
+            <div style="max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; background: ${bg}; color: ${color}; ${border}">
+                ${m.text}
+                ${productsHtml}
+            </div>
+        </div>`;
+    });
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+};
+
     
 </script>    
 </body>    
