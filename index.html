@@ -3974,26 +3974,36 @@ window.sendAiMessage = () => {
 window.renderAiChat = (messages) => {
     let box = document.getElementById('ai-chat-box');
     let html = `
-        <div style="display: flex; justify-content: flex-start;">
-            <div style="max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; background: rgba(255,255,255,0.1); color: white; border-bottom-left-radius: 2px;">
-                Assalomu alaykum! Men do'konning aqlli yordamchisiman. Mashinangiz nima va sizga qanday zapchast kerak?
+        <div style="display: flex; justify-content: flex-start; margin-top: 8px;">
+            <div style="max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; background: rgba(255,255,255,0.1); color: white; border-bottom-left-radius: 2px; border: 1px solid rgba(0, 122, 255, 0.4);">
+                Assalomu alaykum! Men Avto_A1 do'konining aqlli yordamchisiman. Mashinangiz nima va sizga qanday zapchast kerak?
             </div>
         </div>`;
     
     messages.forEach(m => {
         let isMe = m.sender === 'user';
-        let bg = isMe ? '#007aff' : 'rgba(212,175,55,0.15)';
+        let bg = isMe ? '#007aff' : 'rgba(30, 30, 35, 0.9)';
         let color = isMe ? 'white' : 'var(--text-main)';
         let border = isMe ? 'border-bottom-right-radius: 2px;' : 'border-bottom-left-radius: 2px; border: 1px solid rgba(212,175,55,0.4);';
         
-        // Agar AI tovarlarni topgan bo'lsa, ularni tugma qilib chiqarish
+        // ZAMONAVIY VA ISHLAYDIGAN TOVAR TUGMALARI
         let productsHtml = '';
         if(m.found_products && m.found_products.length > 0) {
-            productsHtml = '<div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">';
+            productsHtml = '<div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">';
             m.found_products.forEach(id => {
                 let p = productsDB.find(x => x.id == id);
                 if(p) {
-                    productsHtml += `<button onclick="openProduct(${p.id})" style="background: rgba(0,0,0,0.6); border: 1px solid var(--luxury-gold); color: var(--luxury-gold); padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; text-align: left; transition: 0.2s;">🛒 ${p.name} — ${p.price.toLocaleString()} so'm</button>`;
+                    // Chatni yopib, keyin tovarni ochamiz (orqada qolib ketmasligi uchun)
+                    let imgSrc = p.img || 'https://via.placeholder.com/50';
+                    productsHtml += `
+                    <div onclick="closeModal(); setTimeout(() => openProduct(${p.id}), 300)" style="background: rgba(0,0,0,0.5); border: 1px solid var(--luxury-gold); padding: 8px; border-radius: 10px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s;">
+                        <img src="${imgSrc}" style="width: 40px; height: 40px; object-fit: contain; border-radius: 6px; background: white; padding: 2px;">
+                        <div style="flex: 1; text-align: left;">
+                            <div style="font-size: 12px; font-weight: bold; color: white;">${p.name}</div>
+                            <div style="font-size: 11px; color: var(--luxury-gold);">${p.price.toLocaleString()} so'm</div>
+                        </div>
+                        <div style="font-size: 16px;">👉</div>
+                    </div>`;
                 }
             });
             productsHtml += '</div>';
