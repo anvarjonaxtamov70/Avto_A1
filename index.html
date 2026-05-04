@@ -889,25 +889,37 @@
         Ro'yxatni topshirish
     </button>
 </div>
-    <div class="modal-standard" id="adminDraftsModal">
-    <div class="modal-header"><h2 style="color: #ff9500;">📝 Qoralamalar</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
-    <p style="font-size: 12px; color: gray; margin-bottom: 10px;">Faqat o'zingiz ko'rasiz. Tahrirlash uchun ustiga bosing.</p>
-        <button onclick="deleteAllDrafts()" style="width: 100%; padding: 12px; background: rgba(255, 69, 58, 0.1); border: 1px solid var(--accent-red); color: var(--accent-red); border-radius: 10px; font-weight: bold; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+<div class="modal-standard" id="adminDraftsModal" style="z-index: 3000; display: none;">
+    <div class="modal-header">
+        <h2 style="color: #ff9500;" id="drafts-modal-title">📝 Qoralamalar</h2>
+        <button class="close-btn" style="font-size: 24px;" onclick="closeDraftsModalCustom()">←</button>
+    </div>
+    
+    <button onclick="deleteAllDrafts()" style="width: 100%; padding: 12px; background: rgba(255, 69, 58, 0.1); border: 1px solid var(--accent-red); color: var(--accent-red); border-radius: 10px; font-weight: bold; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
         🗑 Barcha qoralamalarni tozalash
     </button>
-    
-    <input type="text" id="draft-search-input" class="search-box" placeholder="🔍 Qoralamadan izlash..." oninput="filterAdminDrafts()" style="margin-bottom: 10px; padding: 10px 15px; border-radius: 10px;">
-    
-<div style="margin-bottom: 15px;">
-        <select id="draft-brand-filter" class="search-box" style="background: rgba(0,0,0,0.5); color: var(--luxury-gold); font-weight: bold; border: 1px solid rgba(255,255,255,0.2);" onchange="filterAdminDrafts(this.value)">
-            <option value="all">📁 Barcha qoralamalar</option>
-            <option value="gaz">🚛 GAZ / Volga / UAZ</option>
-            <option value="chevy">🚘 Chevrolet</option>
-            <option value="daewoo">🚕 Daewoo</option>
-        </select>
+
+    <div id="draft-folders-view">
+        <p style="font-size: 12px; color: gray; margin-bottom: 15px; text-align: center;">Ro'yxat qilib qo'shilgan tovarlar alohida papkalarda saqlanadi.</p>
+        <div class="admin-grid" id="draft-folders-list">
+            </div>
     </div>
 
-    <div id="admin-drafts-list"></div>
+    <div id="draft-items-view" style="display: none;">
+        <input type="text" id="draft-search-input" class="search-box" placeholder="🔍 Papka ichidan izlash..." oninput="filterAdminDrafts()" style="margin-bottom: 10px; padding: 10px 15px; border-radius: 10px;">
+        
+        <div style="margin-bottom: 15px;">
+            <select id="draft-brand-filter" class="search-box" style="background: rgba(0,0,0,0.5); color: var(--luxury-gold); font-weight: bold; border: 1px solid rgba(255,255,255,0.2);" onchange="filterAdminDrafts(this.value)">
+                <option value="all">📁 Papkadagi barchasi</option>
+                <option value="gaz">🚛 GAZ / Volga / UAZ</option>
+                <option value="chevy">🚘 Chevrolet</option>
+                <option value="daewoo">🚕 Daewoo</option>
+            </select>
+        </div>
+
+        <div id="admin-drafts-list">
+            </div>
+    </div>
 </div>
     <div class="floating-btn" id="ai-chat-btn" onclick="openAiChat()" style="display:flex; bottom: 80px; right: 15px; background: linear-gradient(135deg, #007aff, #005bb5); box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4); z-index: 1400;">
     <span style="font-size: 24px;">🤖</span>
@@ -4188,6 +4200,220 @@ window.executeDeleteAllDrafts = () => {
         filterAdminDrafts(); // Oynadagi ro'yxatni yangilab qo'yamiz (bo'm-bo'sh bo'lib qoladi)
     }).catch(err => {
         showToast("Xatolik yuz berdi!", "warning");
+    });
+};
+
+// ==========================================
+// 📁 QORALAMALAR PAPKALARI (BATCHES) MANTIG'I
+// ==========================================
+window.currentDraftFolder = null;
+
+window.openAdminDrafts = () => {
+    document.getElementById('adminModal').style.display = 'none';
+    let m = document.getElementById('adminDraftsModal');
+    m.style.display = 'flex';
+    activeModal = 'adminDraftsModal';
+    window.history.replaceState({ modal: 'adminDraftsModal' }, "");
+    showDraftFolders();
+};
+
+window.closeDraftsModalCustom = () => {
+    if (document.getElementById('draft-items-view').style.display === 'block') {
+        backToFolders();
+    } else {
+        closeModal();
+    }
+};
+
+window.showDraftFolders = () => {
+    document.getElementById('draft-folders-view').style.display = 'block';
+    document.getElementById('draft-items-view').style.display = 'none';
+    document.getElementById('drafts-modal-title').innerHTML = "📝 Qoralamalar (Papkalar)";
+    
+    let drafts = productsDB.filter(p => p.is_draft);
+    let folders = {};
+    
+    drafts.forEach(p => {
+        let bId = p.batch_id || "Boshqalar";
+        if(!folders[bId]) folders[bId] = 0;
+        folders[bId]++;
+    });
+
+    let html = Object.keys(folders).map(bId => `
+        <div class="admin-card" style="position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; aspect-ratio: 1/1;" onclick="openDraftFolder('${bId}')">
+            <div style="position:absolute; top:10px; right:40px; cursor:pointer; background:rgba(255,255,255,0.1); padding:6px; border-radius:5px; font-size:14px;" onclick="renameFolder(event, '${bId}')">✏️</div>
+            <div style="position:absolute; top:10px; right:10px; cursor:pointer; background:rgba(255,69,58,0.1); padding:6px; border-radius:5px; font-size:14px; color:var(--accent-red);" onclick="deleteFolder(event, '${bId}')">🗑️</div>
+            
+            <div style="font-size:40px; margin-bottom:10px; filter: drop-shadow(0 4px 10px rgba(212,175,55,0.4));">📁</div>
+            <h3 style="font-size:12px; margin-bottom:5px; color:var(--luxury-gold); text-align:center;">${bId.replace('Partiya_', 'Partiya ')}</h3>
+            <p style="font-size:11px; font-weight:bold; color:var(--accent-green); background:rgba(48,209,88,0.1); padding:3px 8px; border-radius:6px;">${folders[bId]} ta tovar</p>
+        </div>
+    `).join('');
+
+    if(Object.keys(folders).length === 0) {
+        html = '<div style="grid-column: span 2; text-align:center; padding: 40px; background: rgba(255,255,255,0.05); border-radius: 16px;"><span style="font-size:40px;">📭</span><p style="color:gray; margin-top:10px;">Qoralamalar yo\'q.</p></div>';
+    }
+    document.getElementById('draft-folders-list').innerHTML = html;
+};
+
+// PAPKANI O'ZINI TO'LIQ O'CHIRISH
+window.deleteFolder = (e, batchId) => {
+    e.stopPropagation();
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm("Ushbu papkadagi BARCHA tovarlarni o'chirib tashlaysizmi?", function(ok) {
+            if(ok) executeDeleteFolder(batchId);
+        });
+    } else {
+        if(confirm("Ushbu papkadagi BARCHA tovarlarni o'chirib tashlaysizmi?")) executeDeleteFolder(batchId);
+    }
+};
+
+window.executeDeleteFolder = (batchId) => {
+    let itemsToDelete = productsDB.filter(p => p.is_draft && (p.batch_id || "Boshqalar") === batchId);
+    
+    itemsToDelete.forEach(draft => {
+        let draftIndex = productsDB.findIndex(p => p.id === draft.id);
+        if(draftIndex !== -1) {
+            productsDB.splice(draftIndex, 1);
+            if (draft.has_conflict) {
+                let oldIndex = productsDB.findIndex(p => p.name.toLowerCase() === draft.name.toLowerCase() && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
+                if (oldIndex !== -1) {
+                    delete productsDB[oldIndex].is_draft;
+                    productsDB[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+                }
+            }
+        }
+    });
+
+    db.ref('products').set(productsDB).then(() => {
+        showToast("Papka va uning ichidagi tovarlar o'chirildi!", "success");
+        showDraftFolders();
+    });
+};
+
+window.openDraftFolder = (batchId) => {
+    window.currentDraftFolder = batchId;
+    document.getElementById('draft-folders-view').style.display = 'none';
+    document.getElementById('draft-items-view').style.display = 'block';
+    
+    let displayTitle = batchId.replace('Partiya_', '');
+    if(displayTitle.length > 15) displayTitle = displayTitle.substring(0, 15) + '...';
+    document.getElementById('drafts-modal-title').innerHTML = `📁 ${displayTitle}`;
+    
+    document.getElementById('draft-search-input').value = '';
+    filterAdminDrafts('all');
+};
+
+window.backToFolders = () => {
+    window.currentDraftFolder = null;
+    showDraftFolders();
+};
+
+window.renameFolder = (e, oldName) => {
+    e.stopPropagation();
+    let currentDisplay = oldName.replace('Partiya_', '');
+    let newName = prompt("Papkaning yangi nomini kiriting:", currentDisplay);
+    if(!newName || newName.trim() === "" || newName === currentDisplay) return;
+    
+    let finalNewName = newName.trim();
+    let count = 0;
+    productsDB.forEach(p => {
+        if(p.is_draft && (p.batch_id || "Boshqalar") === oldName) {
+            p.batch_id = finalNewName; count++;
+        }
+    });
+
+    if(count > 0) {
+        db.ref('products').set(productsDB).then(() => {
+            showToast("Papka nomi o'zgardi!", "success");
+            showDraftFolders();
+        });
+    }
+};
+
+window.filterAdminDrafts = (filterBrand = null) => {
+    if (filterBrand) window.currentDraftFilter = filterBrand;
+    let q = document.getElementById('draft-search-input').value.toLowerCase().trim();
+    let c = document.getElementById('admin-drafts-list');
+    
+    let drafts = productsDB.filter(p => p.is_draft === true && (p.batch_id || "Boshqalar") === window.currentDraftFolder);
+    
+    if (window.currentDraftFilter !== 'all') {
+        drafts = drafts.filter(p => {
+            let catsStr = (p.categories || []).join(' ');
+            if (window.currentDraftFilter === 'gaz') return catsStr.includes('gazel') || catsStr.includes('volga') || catsStr.includes('sobol') || catsStr.includes('uaz');
+            if (window.currentDraftFilter === 'chevy') return catsStr.includes('chevy');
+            if (window.currentDraftFilter === 'daewoo') return catsStr.includes('daewoo');
+            return true;
+        });
+    }
+
+    if (q) drafts = drafts.filter(p => p.name.toLowerCase().includes(q));
+    
+    if (drafts.length === 0) {
+        c.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Bu papkada tovar topilmadi.</p>';
+        return;
+    }
+
+    c.innerHTML = drafts.map(p => {
+        let firstCat = (p.categories && p.categories[0]) ? p.categories[0].split('-').slice(0,2).join(' ').toUpperCase() : '';
+        let conflictBadge = p.has_conflict ? `<div style="color:#ff453a; font-size:10px; font-weight:bold; margin-bottom:4px;">⚠️ DUBLIKAT (Eskisi yashirildi)</div>` : '';
+        
+        return `
+        <div class="inventory-item" style="display:flex; justify-content:space-between; align-items:center; border: 1px solid ${p.has_conflict ? 'rgba(255,69,58,0.4)' : 'var(--glass-border)'};">
+            <div class="inv-info" style="flex:1; cursor:pointer;" onclick="editDraft(${p.id})">
+                ${conflictBadge}
+                <h4 style="color:var(--luxury-gold); margin-bottom:5px;">${p.name}</h4>
+                <p style="font-weight:bold; font-size:12px;">${p.price.toLocaleString()} so'm <span style="color:gray; font-size:10px; margin-left:10px; background:rgba(255,255,255,0.1); padding:2px 5px; border-radius:5px;">${firstCat}</span></p>
+            </div>
+            <div class="inv-controls" style="display:flex; gap:12px; align-items:center; padding-left:10px;">
+                <span style="font-size:22px; cursor:pointer;" onclick="editDraft(${p.id})">✏️</span>
+                <span style="font-size:22px; cursor:pointer; color:#ff453a; filter: grayscale(0.2);" onclick="deleteDraft(${p.id}, ${p.has_conflict ? 'true' : 'false'})">🗑️</span>
+            </div>
+        </div>
+        `;
+    }).join('');
+};
+
+window.editDraft = (id) => {
+    document.getElementById('adminDraftsModal').style.display = 'none';
+    openProduct(id);
+    setTimeout(() => { let editBtn = document.getElementById('pm-edit-btn'); if (editBtn) editBtn.click(); }, 100);
+};
+
+window.deleteDraft = (id, hasConflict) => {
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm(hasConflict ? "Yangi narxni bekor qilib, eskisini tiklaymizmi?" : "Bu qoralamani o'chirasizmi?", function(ok) {
+            if(ok) processDraftDeletion(id, hasConflict);
+        });
+    } else {
+        if(confirm("Bu qoralamani o'chirasizmi?")) processDraftDeletion(id, hasConflict);
+    }
+};
+
+window.processDraftDeletion = (id, hasConflict) => {
+    let draftIndex = productsDB.findIndex(p => p.id === id);
+    let draftName = "";
+    if(draftIndex !== -1) {
+        draftName = productsDB[draftIndex].name.toLowerCase();
+        productsDB.splice(draftIndex, 1);
+    }
+    
+    if (hasConflict && draftName) {
+        let oldIndex = productsDB.findIndex(p => p.name.toLowerCase() === draftName && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
+        if (oldIndex !== -1) {
+            delete productsDB[oldIndex].is_draft;
+            productsDB[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+        }
+    }
+    
+    db.ref('products').set(productsDB).then(() => {
+        showToast(hasConflict ? "O'chirildi va eskisi tiklandi!" : "Qoralama o'chirildi!");
+        filterAdminDrafts(); // Oynadagi tovarlarni yangilash
+        
+        // Agar papka bo'shab qolgan bo'lsa, avtomat orqaga qaytarish
+        let draftsInFolder = productsDB.filter(p => p.is_draft === true && (p.batch_id || "Boshqalar") === window.currentDraftFolder);
+        if(draftsInFolder.length === 0) backToFolders();
     });
 };
     
