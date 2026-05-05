@@ -319,46 +319,15 @@
             -webkit-backdrop-filter: blur(25px) saturate(200%) !important;
         }
 
-       /* 💡 NEON & GLOW (Bosganda yonish) va 3D PARALLAX */
-.luxury-card {
-    background: rgba(30, 30, 35, 0.6);
-    border: 1px solid var(--glass-border);
-    border-radius: 18px;
-    overflow: hidden;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-    cursor: pointer;
-    backdrop-filter: blur(10px);
-    /* 3D uchun kerakli xususiyatlar */
-    transform-style: preserve-3d;
-    transform: perspective(1000px);
-    transition: all 0.3s ease, box-shadow 0.3s ease;
-}
-
-.luxury-card:active {
-    box-shadow: 0 0 25px rgba(212, 175, 55, 0.5), inset 0 0 15px rgba(212, 175, 55, 0.2);
-    border-color: var(--luxury-gold);
-    transform: perspective(1000px) scale(0.96) !important; /* Tilt bilan urishib qolmasligi uchun */
-}
-
-/* Ichki elementlarni oldinga chiqarish (3D effekt siri shunda) */
-.luxury-card .img-wrap {
-    transform: translateZ(40px); /* Rasmni 40px oldinga suradi */
-    /* qolgan kodingiz o'z holicha qoladi */
-    width: 100%; padding-top: 100%; position: relative; background: #f8f8f8; border-bottom: 1px solid rgba(0,0,0,0.1);
-}
-
-.luxury-card .info {
-    transform: translateZ(30px); /* Matn qismini 30px oldinga suradi */
-    padding: 12px; display: flex; flex-direction: column; flex: 1;
-}
-
-.luxury-card .badge, 
-.luxury-card .btn-wishlist {
-    transform: translateZ(50px); /* Eng muhim elementlar eng oldinda */
-}
+        /* 💡 NEON & GLOW (Bosganda yonish) */
+        .luxury-card {
+            transition: all 0.3s ease, box-shadow 0.3s ease;
+            transform-style: preserve-3d;
+        }
+        .luxury-card:active {
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.5), inset 0 0 15px rgba(212, 175, 55, 0.2);
+            border-color: var(--luxury-gold);
+        }
         
         /* 💀 SKELETON LOADING (Yuklanish) */
         .skeleton {
@@ -1471,17 +1440,13 @@ window.addEditSizeField = () => {
     function renderProducts() {
         let hc = document.getElementById('home-products'); if(hc) { let hi = displayDB.slice(0, limitCount); hc.innerHTML = hi.map(x => cardHTML(x)).join(''); }
         document.querySelectorAll('.items-grid').forEach(c => { let id = c.id; if(id.endsWith('-motor') || id.endsWith('-xadavoy') || id.endsWith('-tashqi')) { let items = displayDB.filter(x => x.category === id || (x.categories && x.categories.includes(id))); c.innerHTML = items.map(x => cardHTML(x)).join(''); } });
-      // 🌟 3D PARALLAX EFFEKTINI YOQISH
-if (typeof VanillaTilt !== 'undefined') {
-    VanillaTilt.init(document.querySelectorAll(".luxury-card"), {
-        max: 15,              // Maksimal qiyshayish burchagi (12 dan 15 ga oshirdik)
-        speed: 400,           // Harakat tezligi
-        glare: true,          // Yaltirash effekti
-        "max-glare": 0.4,     // Yaltirash kuchini ozgina oshirdik
-        scale: 1.02,          // Bosganda ozgina kattalashishi (premium his beradi)
-        gyroscope: false      // Telegram baribir ruxsat bermaydi, buni o'chirib qo'ygan ma'qul
-    });
-}
+        // 🌟 3D PARALLAX EFFEKTINI YOQISH
+    if (typeof VanillaTilt !== 'undefined') {
+        VanillaTilt.init(document.querySelectorAll(".luxury-card"), {
+            max: 12, speed: 400, glare: true, "max-glare": 0.3, scale: 0.98
+        });
+    }
+    }
 function addToCartQuick(e, id) { 
     e.stopPropagation(); 
     let p = productsDB.find(x => x.id == id);
@@ -1720,18 +1685,7 @@ window.searchProducts = () => {
         if (filt.length === 0) {
             r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><p>Kechirasiz, hech narsa topilmadi. Boshqacha yozib ko'ring.</p></div>`;
         } else {
-            r.innerHTML = filt.map(x => `<div class="search-item" onclick="openProduct(${x.id})"><img src="${x.img}" onload="this.style.opacity=1"><div class="search-info"><h4>${x.name}</h4><p class="price">${x.price.toLocaleString()} so'm</p></div><button class="btn-add-cart" onclick="addToCartQuick(event, ${x.id})" style="position:relative; right:0; bottom:0; width:40px; height:40px; border-radius:12px;"> <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div>`).join('');         
-        if (typeof VanillaTilt !== 'undefined') {
-        setTimeout(() => {
-            VanillaTilt.init(document.querySelectorAll("#search-results .search-item"), {
-                max: 10,
-                speed: 300,
-                glare: true,
-                "max-glare": 0.2
-            });
-        }, 100); // 100 millisoniya kutib, keyin 3D ni ulaydi (brauzer chizib olishiga ulgurishi uchun)
-    }
-}
+            r.innerHTML = filt.map(x => `<div class="search-item" onclick="openProduct(${x.id})"><img src="${x.img}" onload="this.style.opacity=1"><div class="search-info"><h4>${x.name}</h4><p class="price">${x.price.toLocaleString()} so'm</p></div><button class="btn-add-cart" onclick="addToCartQuick(event, ${x.id})" style="position:relative; right:0; bottom:0; width:40px; height:40px; border-radius:12px;"> <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div>`).join('');
         }
     } else { 
         qc.style.display = 'flex'; 
