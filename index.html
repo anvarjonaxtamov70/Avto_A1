@@ -921,23 +921,6 @@
             </div>
     </div>
 </div>
-    <div class="floating-btn" id="ai-chat-btn" onclick="openAiChat()" style="display:flex; bottom: 80px; right: 15px; background: linear-gradient(135deg, #007aff, #005bb5); box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4); z-index: 1400;">
-    <span style="font-size: 24px;">🤖</span>
-</div>
-
-<div class="floating-btn" id="ai-chat-btn" onclick="openAiChat()" style="display:flex; bottom: 80px; right: 15px; background: linear-gradient(135deg, #007aff, #005bb5); box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4); z-index: 1400;">
-    <span style="font-size: 24px;">🤖</span>
-</div>
-
-<div class="modal-standard ai-chat-modal" id="aiChatModal" style="z-index: 4000; display: none; flex-direction: column;">
-    <div class="ai-chat-header" style="padding: 15px 20px; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid rgba(212, 175, 55, 0.1); display: flex; align-items: center; justify-content: space-between;">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div style="width:10px; height:10px; background:#30d158; border-radius:50%; box-shadow: 0 0 10px #30d158;"></div>
-            <h2 style="margin:0; font-size:18px; color:var(--luxury-gold); font-weight:800;">Avto_A1 Shogirdi</h2>
-        </div>
-        <button class="close-btn" onclick="closeModal()" style="background:none; border:none; color:white; font-size:24px; cursor:pointer;">×</button>
-    </div>
-
     <div id="ai-chat-box" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; padding-bottom: 100px;">
         </div>
 
@@ -949,10 +932,6 @@
     </div>
 </div>
 </div>
-    <div class="floating-btn" id="ai-chat-btn" onclick="openAiChat()" style="display:flex; bottom: 80px; right: 15px; background: linear-gradient(135deg, #007aff, #005bb5); box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4); z-index: 1400;">
-    <span style="font-size: 24px;">🤖</span>
-</div>
-
 <div class="modal-standard" id="aiChatModal" style="z-index: 4000;">
     <div class="modal-header">
         <h2 style="color: #007aff;">🤖 AI Usta</h2>
@@ -1142,47 +1121,6 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
         }
     function closeCropModal() { closeModal(); if(currentCropper) currentCropper.destroy(); }
 
-function saveNewProduct() {
-    let n = document.getElementById('add-name').value.trim();
-    let p = parseInt(document.getElementById('add-price').value);
-    let pType = document.getElementById('admin-prod-type').value; // 'oddiy' yoki 'razmerli'
-
-    // 3 ta rasmni o'qish
-    let img1 = document.getElementById('add-img-url').value;
-    let img2 = document.getElementById('add-img-url2') ? document.getElementById('add-img-url2').value : "";
-    let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
-
-    let imagesArr = [];
-    if(img1) imagesArr.push(img1);
-    if(img2) imagesArr.push(img2);
-    if(img3) imagesArr.push(img3);
-
-    let descVal = document.getElementById('add-desc') ? document.getElementById('add-desc').value.trim() : "";
-    if(!descVal) descVal = "Tavsif kiritilmagan";
-
-    let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
-    // Har ikkala holatda ham TURI (Motor/Xadavoy) tanlanishi shart!
-    let sTyps = Array.from(document.querySelectorAll('#add-product-wrapper .type-chip.selected')).map(c => c.getAttribute('data-val'));
-
-    let newProduct = {
-        id: newId,
-        name: n,
-        desc: descVal,
-        price: p,
-        img: imagesArr[0],
-        images: imagesArr,
-        product_type: pType 
-    };
-
-    if (pType === 'oddiy') {
-        let st = parseInt(document.getElementById('add-stock').value) || 0;
-        let sMods = Array.from(document.querySelectorAll('#add-product-wrapper .model-chip.selected')).map(c => c.getAttribute('data-val'));
-
-        if(!n || !p || imagesArr.length === 0 || sMods.length === 0 || sTyps.length === 0) {
-            showToast("Ma'lumotlar, rasm yoki kategoriya chala (Oddiy tovar)!", "warning");
-            return;
-        }
-
         let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
 
         newProduct.stock = st;
@@ -1255,14 +1193,6 @@ function saveNewProduct() {
                     <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
                 </div>`;
         }
-
-        // Rasmlarni tozalash
-        document.getElementById('add-img-preview').style.display = 'none'; document.getElementById('add-img-url').value = '';
-        if(document.getElementById('add-img-preview2')) { document.getElementById('add-img-preview2').style.display = 'none'; document.getElementById('add-img-url2').value = ''; }
-        if(document.getElementById('add-img-preview3')) { document.getElementById('add-img-preview3').style.display = 'none'; document.getElementById('add-img-url3').value = ''; }
-
-        document.querySelectorAll('#add-product-wrapper .cat-chip').forEach(c => c.classList.remove('selected'));
-    });
 }
 
 
@@ -4152,12 +4082,14 @@ window.sendAiBulk = (btn) => {
     btn.innerHTML = "⏳ Shogird o'qiyapti...";
     btn.disabled = true;
 
-    db.ref('ai_bulk_requests/' + currentUser).set({
-        raw_text: text,
-        status: "pending",
-        time: Date.now(),
-        needs_processing: true
-    }).then(() => {
+db.ref('ai_bulk_requests/' + currentUser).set({
+    raw_text: text,
+    status: "pending",
+    time: Date.now(),
+    needs_processing: true,
+    usd_rate: 12100,   // Default kurs
+    markup_pct: 15      // Default ustama
+}).then(() => {
         showToast("✅ Ro'yxat muvaffaqiyatli topshirildi!");
         closeModal();
         document.getElementById('ai-bulk-text').value = '';
