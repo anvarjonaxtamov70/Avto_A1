@@ -931,7 +931,6 @@
         </button>
     </div>
 </div>
-</div>
 <div class="modal-standard" id="aiChatModal" style="z-index: 4000;">
     <div class="modal-header">
         <h2 style="color: #007aff;">🤖 AI Usta</h2>
@@ -1120,83 +1119,6 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
             }
         }
     function closeCropModal() { closeModal(); if(currentCropper) currentCropper.destroy(); }
-
-        let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
-
-        newProduct.stock = st;
-        newProduct.category = sCats[0];
-        newProduct.categories = sCats;
-
-    } else {
-        // RAZMERLI TOVAR MANTIQI
-        let brand = document.getElementById('admin-prod-brand').value;
-        let model = document.getElementById('admin-prod-model') ? document.getElementById('admin-prod-model').value : "";
-
-        if(!n || !p || imagesArr.length === 0 || !brand || sTyps.length === 0) {
-            showToast("Ma'lumotlar, marka yoki 2. TURI (Motor/Xadavoy) chala!", "warning");
-            return;
-        }
-
-        let sizes = [];
-        let totalStock = 0;
-        document.querySelectorAll('#admin-sizes-container .size-input-row').forEach(row => {
-            let sName = row.querySelector('.size-name').value.trim();
-            let sStock = parseInt(row.querySelector('.size-stock').value) || 0;
-            if(sName) {
-                sizes.push({ size: sName, stock: sStock });
-                totalStock += sStock;
-            }
-        });
-
-        if(sizes.length === 0) {
-            showToast("Kamida 1 ta razmer kiriting!", "warning");
-            return;
-        }
-
-        // Kategoriyalarni yig'ish (Katalogda ko'rinishi uchun)
-        let sCats = [];
-        if (brand === 'gaz') {
-            // GAZ bo'lsa barcha GAZ mashinalariga tushadi
-            let gazModels = ['gazel-biznes', 'gazel-next', 'gazel-eski', 'volga-2401', 'volga-2410', 'volga-3110', 'volga-31105', 'volga-31029', 'sobol'];
-            gazModels.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
-        } else {
-            // Daewoo, Chevy yoki UAZ bo'lsa, tanlangan modelga tushadi
-            if(!model) { showToast("Mashina modelini tanlang!", "warning"); return; }
-            let fullModel = `${brand}-${model}`;
-            sTyps.forEach(t => { sCats.push(`${fullModel}-${t}`); });
-        }
-
-        newProduct.brand = brand;
-        newProduct.model = model;
-        newProduct.sizes = sizes;
-        newProduct.stock = totalStock; // Asosiy qoldiq sifatida jami razmerlar yig'indisi saqlanadi
-        newProduct.category = sCats[0];
-        newProduct.categories = sCats;
-    }
-
-    productsDB.push(newProduct);
-
-    db.ref('products').set(productsDB).then(() => {
-        showToast("Saqlandi!");
-        closeModal();
-        document.getElementById('add-name').value = '';
-        document.getElementById('add-price').value = '';
-        if(document.getElementById('add-stock')) document.getElementById('add-stock').value = '10';
-        if(document.getElementById('add-desc')) document.getElementById('add-desc').value = '';
-        
-        if(document.getElementById('admin-prod-brand')) document.getElementById('admin-prod-brand').value = '';
-        if(document.getElementById('admin-sizes-container')) {
-            document.getElementById('admin-sizes-container').innerHTML = `
-                <div class="size-input-row" style="display:flex; gap:8px; margin-bottom:8px;">
-                    <input type="text" placeholder="Razmer (mas. 92.5)" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-name">
-                    <input type="number" placeholder="Soni" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-stock">
-                    <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
-                </div>`;
-        }
-}
-
-
-
     function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
 
     function openAdminInventory() {
@@ -3674,7 +3596,7 @@ window.saveNewProduct = function() {
     let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
     let imagesArr = [img1, img2, img3].filter(u => u);
     let descVal = document.getElementById('add-desc').value.trim() || "Tavsif kiritilmagan";
-    let sTyps = Array.from(document.querySelectorAll('#add-product-wrapper .type-chip.selected')).map(c => c.getAttribute('data-val'));
+    let sTyps = Array.from(document.querySelectorAll('#addProductModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
 
     if (!n || !p || imagesArr.length === 0) { showToast("Ism, narx va kamida 1 rasm kerak!", "warning"); return; }
 
@@ -3683,7 +3605,7 @@ window.saveNewProduct = function() {
 
     if (pType === 'oddiy') {
         let st = parseInt(document.getElementById('add-stock').value) || 0;
-        let sMods = Array.from(document.querySelectorAll('#add-product-wrapper .model-chip.selected')).map(c => c.getAttribute('data-val'));
+        let sMods = Array.from(document.querySelectorAll('#addProductModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
         if (sMods.length === 0 || sTyps.length === 0) { showToast("Mashina va turi tanlang!", "warning"); return; }
         let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
         newProduct.stock = st; newProduct.category = sCats[0]; newProduct.categories = sCats;
