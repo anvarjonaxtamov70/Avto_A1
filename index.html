@@ -880,14 +880,27 @@
         <h2 style="color: #007aff;">🤖 Shogirdga ro'yxat</h2>
         <button class="close-btn" onclick="closeModal()">×</button>
     </div>
+    
+    <div style="display:flex; gap:10px; margin-bottom:15px; background: rgba(0,122,255,0.05); padding: 15px; border-radius: 12px; border: 1px dashed #007aff;">
+        <div style="flex:1;">
+            <span class="luxury-input-label" style="margin-top:0; color:#007aff;">💵 DOLLAR KURSI</span>
+            <input type="number" id="ai-bulk-usd-rate" class="search-box" value="12600" style="background: rgba(0,0,0,0.5);">
+        </div>
+        <div style="flex:1;">
+            <span class="luxury-input-label" style="margin-top:0; color:#007aff;">📈 USTAMA (%)</span>
+            <input type="number" id="ai-bulk-markup" class="search-box" value="25" style="background: rgba(0,0,0,0.5);">
+        </div>
+    </div>
+
     <p style="font-size: 13px; color: gray; line-height: 1.5; margin-bottom: 15px;">
         Zapchastlar ro'yxatini tashlang. AI o'zi tahlil qilib, chiroyli tavsif yozib <b>"Qoralamalar"</b> ga taxlab qo'yadi.
     </p>
-    <textarea id="ai-bulk-text" rows="8" placeholder="Masalan:&#10;Damas kalotka 90000&#10;Cobalt amortizator 450000" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(0, 122, 255, 0.5); border-radius: 12px; padding: 15px; color: white; outline: none; resize: none; font-family: inherit; font-size: 14px; box-sizing: border-box; margin-bottom: 15px;"></textarea>
+    <textarea id="ai-bulk-text" rows="8" placeholder="Masalan:&#10;Damas kalotka - 15$&#10;Cobalt amortizator - 45$" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(0, 122, 255, 0.5); border-radius: 12px; padding: 15px; color: white; outline: none; resize: none; font-family: inherit; font-size: 14px; box-sizing: border-box; margin-bottom: 15px;"></textarea>
 
     <button class="btn-checkout" onclick="sendAiBulk(this)" style="background: linear-gradient(135deg, #007aff, #005bb5); color: white; font-weight: bold; font-size: 16px; border-radius: 12px; padding: 15px; width: 100%; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);">
         Ro'yxatni topshirish
     </button>
+</div>
 </div>
 <div class="modal-standard" id="adminDraftsModal" style="z-index: 3000; display: none;">
     <div class="modal-header">
@@ -4000,18 +4013,22 @@ window.sendAiBulk = (btn) => {
     let text = document.getElementById('ai-bulk-text').value.trim();
     if(!text) { showToast("Iltimos, oldin ro'yxatni yozing!", "warning"); return; }
     
+    // Foydalanuvchi yozgan kurs va foizni olamiz
+    let usdRate = parseFloat(document.getElementById('ai-bulk-usd-rate').value) || 12600;
+    let markup = parseFloat(document.getElementById('ai-bulk-markup').value) || 25;
+
     let oldText = btn.innerHTML;
     btn.innerHTML = "⏳ Shogird o'qiyapti...";
     btn.disabled = true;
 
-db.ref('ai_bulk_requests/' + currentUser).set({
-    raw_text: text,
-    status: "pending",
-    time: Date.now(),
-    needs_processing: true,
-    usd_rate: 12100,   // Default kurs
-    markup_pct: 15      // Default ustama
-}).then(() => {
+    db.ref('ai_bulk_requests/' + currentUser).set({
+        raw_text: text,
+        status: "pending",
+        time: Date.now(),
+        needs_processing: true,
+        usd_rate: usdRate,     // AI shundan foydalanadi
+        markup_pct: markup     // AI shundan foydalanadi
+    }).then(() => {
         showToast("✅ Ro'yxat muvaffaqiyatli topshirildi!");
         closeModal();
         document.getElementById('ai-bulk-text').value = '';
