@@ -4143,11 +4143,18 @@ window.selectOrigin = (el, type) => {
     el.classList.add('selected');
 };
 
-// Asosiy AI Generator
+// Asosiy AI Generator (Rasm ko'radigan qilingan)
 window.generateAiDescription = (type) => {
     let nameInput = document.getElementById(`${type}-name`).value.trim();
     if(!nameInput) {
         showToast("Avval tepaga tovar nomini yozing!", "warning");
+        return;
+    }
+    
+    // 📸 1. RASM YUKLANGANINI TEKSHIRAMIZ
+    let imgUrl = document.getElementById(`${type}-img-url`).value;
+    if(!imgUrl) {
+        showToast("Avval rasmni yuklang! Shogird rasmni ko'rib aniq yozadi.", "warning");
         return;
     }
     
@@ -4157,14 +4164,15 @@ window.generateAiDescription = (type) => {
     
     let descBox = document.getElementById(`${type}-desc`);
     let originalText = descBox.value;
-    descBox.value = "⏳ AI marketing menejeri o'ylamoqda... Kuting...";
+    descBox.value = "👀 AI rasmni diqqat bilan o'rganmoqda... Kuting...";
     
-    // Firebase orqali Pythonga vazifa beramiz
+    // Firebase orqali Pythonga vazifa beramiz (Rasm URL si bilan)
     let taskId = Date.now().toString();
     db.ref('ai_admin_tasks/' + taskId).set({
         action: "generate_desc",
         product_name: nameInput,
-        origin: origin, // O'sha tanlangan davlat yuborilmoqda
+        origin: origin, 
+        image_url: imgUrl, // YANGLIK: Rasm silkasi Pythonga ketdi
         needs_processing: true
     });
     
@@ -4173,11 +4181,11 @@ window.generateAiDescription = (type) => {
     ref.on('value', snap => {
         let data = snap.val();
         if(data && data.result) {
-            descBox.value = data.result; // AI yozgan zo'r matn
+            descBox.value = data.result; 
             ref.off('value'); 
             db.ref('ai_admin_tasks/' + taskId).remove();
             if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            showToast("✨ Sotuvni oshiradigan ta'rif tayyor!", "success");
+            showToast("✨ Shogird rasmni ko'rib yozib berdi!", "success");
         } else if (data && data.error) {
             descBox.value = originalText;
             ref.off('value');
