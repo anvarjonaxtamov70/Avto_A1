@@ -6,6 +6,7 @@
     <title>Avto A1 Shop</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
@@ -311,6 +312,44 @@
     padding: 20px !important;
     border-top: 1px solid rgba(212, 175, 55, 0.1) !important;
 }
+        /* 🪞 ADVANCED GLASSMORPHISM (Oynali fonlar) */
+        .bottom-nav, .ai-input-container, .pm-sticky-bar, .modal-header {
+            background: rgba(15, 15, 17, 0.75) !important;
+            backdrop-filter: blur(25px) saturate(200%) !important;
+            -webkit-backdrop-filter: blur(25px) saturate(200%) !important;
+        }
+
+        /* 💡 NEON & GLOW (Bosganda yonish) */
+        .luxury-card {
+            transition: all 0.3s ease, box-shadow 0.3s ease;
+            transform-style: preserve-3d;
+        }
+        .luxury-card:active {
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.5), inset 0 0 15px rgba(212, 175, 55, 0.2);
+            border-color: var(--luxury-gold);
+        }
+        
+        /* 💀 SKELETON LOADING (Yuklanish) */
+        .skeleton {
+            background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(212,175,55,0.1) 50%, rgba(255,255,255,0.02) 75%);
+            background-size: 400% 100%;
+            animation: skeleton-loading 1.5s infinite ease-in-out;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        @keyframes skeleton-loading {
+            0% { background-position: 100% 50%; }
+            100% { background-position: 0 50%; }
+        }
+
+        /* 🛍️ CART PROGRESS BAR */
+        .cart-progress-container {
+            width: 100%; background: rgba(255,255,255,0.1); border-radius: 10px; height: 10px; margin: 10px 0 15px; overflow: hidden; position: relative; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .cart-progress-bar {
+            height: 100%; background: linear-gradient(90deg, #ff453a, #ff9500, #30d158); width: 0%; transition: width 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .cart-progress-text { font-size: 12px; font-weight: 800; text-align: center; margin-bottom: 8px; letter-spacing: 0.5px; transition: 0.3s; }
     </style>
 </head>
 <body>
@@ -343,7 +382,12 @@
     <div id="loading-text">Yuklanmoqda...</div>
     
     <div id="content-area" class="hidden">
-        <div id="main-menu"><div class="section-title">Ommabop tovarlar</div><div id="home-products" class="items-grid"></div></div>
+        <div id="main-menu"><div class="section-title">Ommabop tovarlar</div><div id="home-products" class="items-grid">
+    <div class="skeleton" style="height: 180px;"></div>
+    <div class="skeleton" style="height: 180px;"></div>
+    <div class="skeleton" style="height: 180px;"></div>
+    <div class="skeleton" style="height: 180px;"></div>
+</div></div>
         
         <div id="katalog-menu" class="hidden" style="padding: 0 20px;">
             <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 15px;">Mashina markasini tanlang</div>
@@ -587,6 +631,12 @@
 
 <div class="modal-standard" id="cartModal">
     <div class="modal-header"><h2>🛒 Savat</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    
+    <div id="cart-progress-wrap" style="display:none; padding: 0 5px;">
+        <div class="cart-progress-text" id="cart-progress-msg">Yetkazib berish bepul bo'lishiga: 150,000 so'm qoldi</div>
+        <div class="cart-progress-container"><div class="cart-progress-bar" id="cart-progress-bar"></div></div>
+    </div>
+
     <div id="cart-items-container" style="flex:1; overflow-y:auto; border-bottom: 1px solid var(--glass-border); padding-bottom: 10px;"></div>
     <div style="padding:20px 0; font-size: 16px; font-weight: 500;">Jami: <span id="cart-total-sum" style="color:var(--luxury-gold); font-weight: 800; float: right; font-size: 20px;">0 so'm</span></div>
     <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openPaymentModal()">Buyurtma</button>
@@ -1390,6 +1440,12 @@ window.addEditSizeField = () => {
     function renderProducts() {
         let hc = document.getElementById('home-products'); if(hc) { let hi = displayDB.slice(0, limitCount); hc.innerHTML = hi.map(x => cardHTML(x)).join(''); }
         document.querySelectorAll('.items-grid').forEach(c => { let id = c.id; if(id.endsWith('-motor') || id.endsWith('-xadavoy') || id.endsWith('-tashqi')) { let items = displayDB.filter(x => x.category === id || (x.categories && x.categories.includes(id))); c.innerHTML = items.map(x => cardHTML(x)).join(''); } });
+        // 🌟 3D PARALLAX EFFEKTINI YOQISH
+    if (typeof VanillaTilt !== 'undefined') {
+        VanillaTilt.init(document.querySelectorAll(".luxury-card"), {
+            max: 12, speed: 400, glare: true, "max-glare": 0.3, scale: 0.98
+        });
+    }
     }
 function addToCartQuick(e, id) { 
     e.stopPropagation(); 
@@ -1688,6 +1744,34 @@ window.clearAppCache = () => {
         } 
         let tSum = document.getElementById('cart-total-sum');
         if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+        // 🌟 PROGRESS BAR HISOB-KITOBI
+    let pWrap = document.getElementById('cart-progress-wrap');
+    let pBar = document.getElementById('cart-progress-bar');
+    let pMsg = document.getElementById('cart-progress-msg');
+    
+    if(pWrap && pBar && pMsg) {
+        if(t > 0) {
+            pWrap.style.display = 'block';
+            let target = 150000;
+            let percent = (t / target) * 100;
+            if(percent >= 100) {
+                pBar.style.width = '100%';
+                pBar.style.background = '#30d158';
+                pBar.style.boxShadow = '0 0 15px #30d158';
+                pMsg.innerHTML = '🎉 Tabriklaymiz! Yetkazib berish <b>BEPUL</b>!';
+                pMsg.style.color = '#30d158';
+                if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            } else {
+                pBar.style.width = percent + '%';
+                pBar.style.background = 'linear-gradient(90deg, #ff453a, #ff9500)';
+                pBar.style.boxShadow = 'none';
+                pMsg.innerHTML = `Dostavka bepul bo'lishi uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
+                pMsg.style.color = 'var(--luxury-gold)';
+            }
+        } else {
+            pWrap.style.display = 'none';
+        }
+    }
     }
 
     function chg(fullId, d) { 
@@ -3245,13 +3329,51 @@ if (!window._chartJsLoaded) {
 }
 
 let salesChartInstance = null;
-
+window.animateValue = (id, end) => {
+    let obj = document.getElementById(id);
+    if(!obj) return;
+    let start = 0; let duration = 1200; let startTime = null;
+    function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        let progress = Math.min((timestamp - startTime) / duration, 1);
+        obj.innerHTML = Math.floor(progress * end).toLocaleString() + " so'm";
+        if (progress < 1) { window.requestAnimationFrame(step); } else { obj.innerHTML = end.toLocaleString() + " so'm"; }
+    }
+    window.requestAnimationFrame(step);
+};
 window.openAdminStats = () => {
     document.getElementById('adminModal').style.display = 'none';
     let sM = document.getElementById('adminStatsModal');
     sM.style.display = 'flex'; activeModal = 'adminStatsModal'; window.history.replaceState({ modal: 'adminStatsModal' }, "");
     let c = document.getElementById('admin-stats-content');
-    c.innerHTML = '<p style="text-align:center; margin-top:30px; color:var(--luxury-gold);">Yuklanmoqda...</p>';
+   c.innerHTML = `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom: 15px;">
+                    <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                        <div style="font-size:26px; margin-bottom:5px;">📈</div>
+                        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi foyda</div>
+                        <div id="admin-today-rev" style="font-size:14px; font-weight:800; color:#34c759; margin-top:5px;">0 so'm</div>
+                    </div>
+                    <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                        <div style="font-size:26px; margin-bottom:5px;">👥</div>
+                        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami Mijozlar</div>
+                        <div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${totalCustomers} kishi</div>
+                    </div>
+                </div>
+                
+                <div class="luxury-card" style="padding:20px; display:block; margin-bottom:25px; text-align:center; border: 1px solid rgba(212, 175, 55, 0.3);">
+                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy Sof Daromad</div>
+                    <div id="admin-total-rev" style="font-size:26px; font-weight:800; color:var(--luxury-gold);">0 so'm</div>
+                    <div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilgan buyurtmalar)</div>
+                </div>
+
+                <h3 style="font-size:16px; margin-bottom:15px; color:white; display:flex; align-items:center; gap:8px;">🏆 Xit Savdolar (Top 5)</h3>
+                ${topHtml}
+            `;
+            
+            setTimeout(() => {
+                window.animateValue('admin-today-rev', todayRevenue);
+                window.animateValue('admin-total-rev', totalRevenue);
+            }, 100);
 
     db.ref('users').once('value', (s) => {
         let totalRevenue = 0, todayRevenue = 0, totalCustomers = 0; let productSales = {};
