@@ -1070,6 +1070,7 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
         saveLocalWishlist();
         renderProducts(); // Asosiy sahifadagi yurakchalarni yangilash
         if (historyStack[historyStack.length - 1] === 'wishlist-section') renderWishlist(); // Agar saqlanganlar bo'limida bo'lsa
+        
     }
 
     function showWishlist() {
@@ -2851,28 +2852,7 @@ window.addToCartWithOptions = (finalId) => {
     showToast('Savatda!'); 
 };
 
-window.renderCartItems = () => {
-    let c = document.getElementById('cart-items-container'); 
-    let b = document.getElementById('main-checkout-btn'); 
-    let t = 0; 
-    c.innerHTML = '';
-    if(Object.keys(cart).length === 0) { 
-        c.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; 
-        if(b) b.style.display = 'none'; 
-    } else {
-        for(let fullId in cart) { 
-            let [baseId, carOpt] = String(fullId).split('||');
-            let p = productsDB.find(x => x.id == baseId); 
-            if(!p) continue; 
-            t += p.price * cart[fullId]; 
-            let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
-            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[fullId]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${fullId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[fullId]}</span><button onclick="chg('${fullId}',1)">+</button></div></div>`; 
-        } 
-        if(b) b.style.display = 'block';
-    } 
-    let tSum = document.getElementById('cart-total-sum');
-    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
-};
+
 
 window.chg = (fullId, d) => { 
     let [baseId, carOpt] = String(fullId).split('||');
@@ -3024,6 +3004,29 @@ window.renderCartItems = () => {
     } 
     let tSum = document.getElementById('cart-total-sum');
     if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+    let pWrap = document.getElementById('cart-progress-wrap');
+    let pBar = document.getElementById('cart-progress-bar');
+    let pMsg = document.getElementById('cart-progress-msg');
+    if(pWrap && pBar && pMsg) {
+        if(t > 0) {
+            pWrap.style.display = 'block';
+            let target = 150000;
+            let percent = (t / target) * 100;
+            if(percent >= 100) {
+                pBar.style.width = '100%';
+                pBar.style.background = '#30d158';
+                pMsg.innerHTML = '🎉 Yetkazib berish BEPUL!';
+                pMsg.style.color = '#30d158';
+            } else {
+                pBar.style.width = percent + '%';
+                pBar.style.background = 'linear-gradient(90deg, #ff453a, #ff9500)';
+                pMsg.innerHTML = `Bepul bo'lishi uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
+                pMsg.style.color = 'var(--luxury-gold)';
+            }
+        } else {
+            pWrap.style.display = 'none';
+        }
+    }
 };
 
 window.chg = (safeId, d) => { 
