@@ -555,6 +555,7 @@
     </div>
     <div class="pm-info-section">
         <h2 id="pm-title" class="pm-title"></h2>
+        <div id="pm-unit-badge" style="display: inline-block; background: rgba(212, 175, 55, 0.15); color: var(--luxury-gold); padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; margin-bottom: 15px; border: 1px solid rgba(212, 175, 55, 0.3);"></div>
         <div id="pm-stock" class="pm-stock-info"></div>
         <div id="pm-desc" class="pm-desc"></div>
         <div id="pm-review-section" style="margin-top: 20px; margin-bottom: 20px;">
@@ -1543,7 +1544,22 @@ function openProduct(id) {
     }
     sliderWrapper.scrollLeft = 0;
 
-    document.getElementById('pm-title').innerText = p.name; 
+   document.getElementById('pm-title').innerText = p.name; 
+    
+    // YANGLIK: Unit (dona/komplekt) ni ekranga chiqarish
+    let unitBadge = document.getElementById('pm-unit-badge');
+    if (p.unit === 'komplekt') {
+        unitBadge.innerHTML = '🧰 Komplekt (Nabor) narxi';
+        unitBadge.style.color = '#30d158'; // Yashil rangda ajralib turadi
+        unitBadge.style.borderColor = 'rgba(48, 209, 88, 0.3)';
+        unitBadge.style.background = 'rgba(48, 209, 88, 0.1)';
+    } else {
+        unitBadge.innerHTML = '📦 1 dona uchun narx';
+        unitBadge.style.color = 'var(--luxury-gold)'; // Tilla rangda
+        unitBadge.style.borderColor = 'rgba(212, 175, 55, 0.3)';
+        unitBadge.style.background = 'rgba(212, 175, 55, 0.15)';
+    }
+    
     document.getElementById('pm-desc').innerText = p.desc || "Tavsif kiritilmagan"; 
     document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} so'm`;
     
