@@ -3702,7 +3702,7 @@ window.openEditModal = function(e, directId = null) {
     tg.BackButton.show();
     updateBtns();
 };
-
+    
 window.saveEditProduct = function() {
     let id = parseInt(document.getElementById('edit-id').value);
     let n = document.getElementById('edit-name').value.trim();
@@ -3710,48 +3710,67 @@ window.saveEditProduct = function() {
     
     let unitEl = document.getElementById('edit-unit');
     let pUnit = unitEl ? unitEl.value : 'dona';
+    
     let descEl = document.getElementById('edit-desc');
     let d = descEl ? descEl.value.trim() : "Tavsif kiritilmagan";
     
-    // YANGLIK: Dinamik Brand va Modelni inputdan o'qiymiz!
-    let p_brand = document.getElementById('edit-prod-brand').value.trim();
-    let p_model = document.getElementById('edit-prod-model').value.trim();
+    // YANGLIK: Qutichadagi Brand va Modelni xavfsiz o'qiymiz
+    let brandEl = document.getElementById('edit-prod-brand');
+    let p_brand = brandEl ? brandEl.value.trim() : "Umumiy";
+    
+    let modelEl = document.getElementById('edit-prod-model');
+    let p_model = modelEl ? modelEl.value.trim() : "Umumiy";
     
     let img1 = document.getElementById('edit-img-url') ? document.getElementById('edit-img-url').value : "";
     let img2 = document.getElementById('edit-img-url2') ? document.getElementById('edit-img-url2').value : "";
     let imagesArr = [img1, img2].filter(u => u !== "");
 
+    // Tekshiruvlar
     if (!n || !p || imagesArr.length === 0) { 
-        showToast("Ism, narx va rasm kerak!", "warning"); return; 
+        showToast("Ism, narx va rasm kerak!", "warning"); 
+        return; 
     }
     if (!p_brand || !p_model) { 
-        showToast("Brand va Mashina modelini yozing!", "warning"); return; 
+        showToast("Brand va Mashina modelini yozing!", "warning"); 
+        return; 
     }
 
-    // Dinamik kategoriya yaratamiz (Masalan: daewoo-matiz)
+    // Yangi Dinamik kategoriya yaratamiz (Masalan: daewoo-matiz)
     let dynamicCategory = `${p_brand}-${p_model}`.toLowerCase().replace(/\s+/g, '-');
     
     let idx = productsDB.findIndex(x => x.id === id);
     if (idx !== -1) {
         productsDB[idx] = { 
             ...productsDB[idx], 
-            name: n, price: p, unit: pUnit, desc: d, 
+            name: n, 
+            price: p, 
+            unit: pUnit, 
+            desc: d, 
             brand: p_brand,                 // <--- Bazaga yozamiz
             model: p_model,                 // <--- Bazaga yozamiz
             category: dynamicCategory,      // <--- Yangi kategoriya!
             categories: [dynamicCategory], 
-            img: imagesArr[0], images: imagesArr 
+            img: imagesArr[0], 
+            images: imagesArr 
         };
 
         let stockEl = document.getElementById('edit-stock');
         productsDB[idx].stock = stockEl ? (parseInt(stockEl.value) || 0) : 10;
+        
+        // Qoralamadan tozalab, haqiqiy tovarlarga o'tkazamiz
         delete productsDB[idx].is_draft; 
         
         db.ref('products').set(productsDB).then(() => {
             showToast("✅ Yangilandi!");
             renderProducts();
-            document.getElementById('editModal').style.display = 'none';
-            document.getElementById('productModal').style.display = 'none';
+            
+            // Oynalarni yopish
+            let editModal = document.getElementById('editModal');
+            if(editModal) editModal.style.display = 'none';
+            
+            let prodModal = document.getElementById('productModal');
+            if(prodModal) prodModal.style.display = 'none';
+            
             document.body.style.overflow = '';
             activeModal = null;
             if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.hide();
@@ -3759,6 +3778,7 @@ window.saveEditProduct = function() {
         });
     }
 };
+
 
 // ✅ TUZATILGAN: Yangi tovar saqlash
 window.saveNewProduct = function() {
