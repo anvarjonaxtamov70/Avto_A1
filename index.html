@@ -1537,20 +1537,38 @@ function addToCartQuick(e, id) {
     addToCartWithOptions(finalId);
 }
     
-   function cardHTML(p) { 
-        let st = p.stock !== undefined ? p.stock : 10;
-        let bH = ''; 
-        if(st <= 0) bH = '<div class="badge" style="background:gray;">Tugagan</div>';
-        else if(p.badge === 'hot') bH = '<div class="badge hot">🔥 Top</div>'; 
-        else if(p.badge === 'new') bH = '<div class="badge new">✨ Yangi</div>'; 
-        let oosStyle = st <= 0 ? 'filter: grayscale(1); opacity:0.7;' : '';
-        
-        // YURAKCHA QISMI
-        let isFav = wishlist.includes(p.id) ? 'active' : '';
-        let heartBtn = `<div class="btn-wishlist ${isFav}" onclick="toggleWishlist(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>`;
-        
-        return `<div class="luxury-card" onclick="openProduct(${p.id})">${bH}${heartBtn}<div class="img-wrap" style="${oosStyle}"><img src="${p.img}" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/150?text=Rasm+yoq'; this.style.opacity=1;"></div><div class="info"><h4>${p.name}</h4><div class="price-row"><div class="price">${p.price.toLocaleString()} so'm</div><button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div></div></div>`; 
-    }
+function cardHTML(p) { 
+    let st = p.stock !== undefined ? p.stock : 10;
+    let bH = ''; 
+    if(st <= 0) bH = '<div class="badge" style="background:gray;">Tugagan</div>';
+    else if(p.badge === 'hot') bH = '<div class="badge hot">🔥 Top</div>'; 
+    else if(p.badge === 'new') bH = '<div class="badge new">✨ Yangi</div>'; 
+    let oosStyle = st <= 0 ? 'filter: grayscale(1); opacity:0.7;' : '';
+    
+    // · belgisi bo'yicha ajratish
+    let nameParts = p.name.split('  ·  ');
+    let mainName = nameParts[0].trim();
+    let carHint = nameParts[1] 
+        ? `<span class="car-hint">· ${nameParts[1].trim()}</span>` 
+        : '';
+    
+    let isFav = wishlist.includes(p.id) ? 'active' : '';
+    let heartBtn = `<div class="btn-wishlist ${isFav}" onclick="toggleWishlist(event, ${p.id})">...</div>`;
+    
+    return `<div class="luxury-card" onclick="openProduct(${p.id})">
+        ${bH}${heartBtn}
+        <div class="img-wrap" style="${oosStyle}">
+            <img src="${p.img}" onload="this.style.opacity=1" ...>
+        </div>
+        <div class="info">
+            <h4>${mainName}${carHint}</h4>
+            <div class="price-row">
+                <div class="price">${p.price.toLocaleString()} so'm</div>
+                <button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})">...</button>
+            </div>
+        </div>
+    </div>`; 
+}
 
 function openProduct(id) {
     let p = productsDB.find(x => x.id == id); if(!p) return;
@@ -1770,9 +1788,24 @@ window.searchProducts = () => {
         
         if (filt.length === 0) {
             r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><p>Kechirasiz, hech narsa topilmadi. Boshqacha yozib ko'ring.</p></div>`;
-        } else {
-            r.innerHTML = filt.map(x => `<div class="search-item" onclick="openProduct(${x.id})"><img src="${x.img}" onload="this.style.opacity=1"><div class="search-info"><h4>${mn}${ch}</h4><p class="price">${x.price.toLocaleString()} so'm</p></div><button class="btn-add-cart" onclick="addToCartQuick(event, ${x.id})" style="position:relative; right:0; bottom:0; width:40px; height:40px; border-radius:12px;"> <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button></div>`).join('');
-        }
+       } else {
+    r.innerHTML = filt.map(x => {
+        let np = x.name.split('  ·  ');
+        let mn = np[0] ? np[0].trim() : x.name;
+        let ch = np[1] ? `<span class="car-hint">· ${np[1].trim()}</span>` : '';
+        return `<div class="search-item" onclick="openProduct(${x.id})">
+            <img src="${x.img}" onload="this.style.opacity=1">
+            <div class="search-info">
+                <h4>${mn}${ch}</h4>
+                <p class="price">${x.price.toLocaleString()} so'm</p>
+            </div>
+            <button class="btn-add-cart" onclick="addToCartQuick(event, ${x.id})" 
+                style="position:relative; right:0; bottom:0; width:40px; height:40px; border-radius:12px;">
+                <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            </button>
+        </div>`;
+    }).join('');
+}
     } else { 
         qc.style.display = 'flex'; 
         r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><p>Zapchast nomini yozing...</p></div>`; 
@@ -3834,6 +3867,7 @@ window.saveEditProduct = function() {
         
         db.ref('products').set(productsDB).then(() => {
             showToast("✅ Yangilandi!");
+            displayDB = productsDB.filter(p => !p.is_draft);
             renderProducts();
             
             // Oynalarni to'g'ri va xatosiz yopish
@@ -3898,6 +3932,7 @@ window.saveNewProduct = function() {
     productsDB.push(newProduct);
     db.ref('products').set(productsDB).then(() => {
         showToast("✅ Saqlandi!");
+            displayDB = productsDB.filter(p => !p.is_draft);
         // Formni tozalash
         ['add-name','add-desc'].forEach(id => { let el = document.getElementById(id); if(el) el.value = ''; });
         ['add-price','add-stock'].forEach(id => { let el = document.getElementById(id); if(el) el.value = id === 'add-stock' ? '10' : ''; });
