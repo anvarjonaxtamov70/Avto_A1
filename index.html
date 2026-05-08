@@ -809,10 +809,6 @@
     <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
         <span class="cat-chip model-chip" data-val="uaz-patriot" onclick="toggleChip(this)">Patriot</span><span class="cat-chip model-chip" data-val="uaz-hunter" onclick="toggleChip(this)">Hunter</span>
     </div>
-    <span class="luxury-input-label">2. TURI</span>
-    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 12px; margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 8px;">
-        <span class="cat-chip type-chip" data-val="motor" onclick="toggleChip(this)">⚙️ Motor</span><span class="cat-chip type-chip" data-val="xadavoy" onclick="toggleChip(this)">🛠️ Xadavoy</span><span class="cat-chip type-chip" data-val="tashqi" onclick="toggleChip(this)">🚘 Tashqi</span>
-    </div>
    <div style="display: flex; flex-direction: column; gap: 10px;">
          <div style="display: flex; flex-direction: column; gap: 10px;">
          <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -961,10 +957,7 @@
         <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
             <span class="cat-chip model-chip" data-val="uaz-patriot" onclick="toggleChip(this)">Patriot</span><span class="cat-chip model-chip" data-val="uaz-hunter" onclick="toggleChip(this)">Hunter</span>
         </div>
-        <span class="luxury-input-label">2. TURI</span>
-        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 12px; margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 8px;">
-            <span class="cat-chip type-chip" data-val="motor" onclick="toggleChip(this)">⚙️ Motor</span><span class="cat-chip type-chip" data-val="xadavoy" onclick="toggleChip(this)">🛠️ Xadavoy</span><span class="cat-chip type-chip" data-val="tashqi" onclick="toggleChip(this)">🚘 Tashqi</span>
-        </div>
+   
 <button class="btn-checkout" onclick="saveNewProduct()">BAZAGA SAQLASH</button>
 </div>
 
@@ -1403,7 +1396,7 @@ function saveEditProduct() {
     if(img3) imagesArr.push(img3);
 
     let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val')); 
-    let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
+   
     
     if(!n || !p || imagesArr.length === 0 || sMods.length === 0 || sTyps.length === 0) { 
         showToast("Ma'lumot, rasm yoki kategoriya chala!", "warning"); 
@@ -1569,9 +1562,25 @@ window.addEditSizeField = () => {
     setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
     let limitCount = 12; window.addEventListener('scroll', () => { if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 150) { if (limitCount < productsDB.length) { limitCount += 12; renderProducts(); } } });
 
-    function renderProducts() {
-        let hc = document.getElementById('home-products'); if(hc) { let hi = displayDB.slice(0, limitCount); hc.innerHTML = hi.map(x => cardHTML(x)).join(''); }
-        document.querySelectorAll('.items-grid').forEach(c => { let id = c.id; if(id.endsWith('-motor') || id.endsWith('-xadavoy') || id.endsWith('-tashqi')) { let items = displayDB.filter(x => x.category === id || (x.categories && x.categories.includes(id))); c.innerHTML = items.map(x => cardHTML(x)).join(''); } });
+function renderProducts() {
+        let hc = document.getElementById('home-products'); 
+        if(hc) { let hi = displayDB.slice(0, limitCount); hc.innerHTML = hi.map(x => cardHTML(x)).join(''); }
+        
+        // Katalog papkalariga tovarlarni chizish (Motor/Xadavoy bekor qilindi)
+        document.querySelectorAll('.items-grid').forEach(c => { 
+            let id = c.id; 
+            if(id.endsWith('-parts')) { 
+                // "gazel-biznes-parts" degan ID dan "-parts" ni olib tashlaymiz
+                let catName = id.replace('-parts', ''); 
+                let items = displayDB.filter(x => x.category === catName || (x.categories && x.categories.includes(catName))); 
+                
+                if(items.length > 0) {
+                    c.innerHTML = items.map(x => cardHTML(x)).join(''); 
+                } else {
+                    c.innerHTML = `<div style="grid-column: span 2; text-align: center; color: gray; padding: 30px 10px;">Bu mashina uchun hali tovarlar kiritilmagan.</div>`;
+                }
+            } 
+        });
     }
 function addToCartQuick(e, id) { 
     e.stopPropagation(); 
@@ -1795,26 +1804,36 @@ function openProduct(id) {
 // 🔍 AQLLI QIDIRUV (XATOLARNI KECHIRUVCHI) VA KESH
 // =====================================
 
+// =====================================
+// 🔍 AQLLI QIDIRUV VA KATALOGGA YO'NALTIRISH
+// =====================================
 window.searchProducts = () => {
     let qRaw = document.getElementById('searchInput').value.toLowerCase().trim();
     
-    // 🧠 Sinonimlar va xatolar lug'ati (Istaganingizcha ko'paytiring)
     const synonyms = {
-        "porshun": "porshen", "porshin": "porshen",
-        "kolca": "kolsa", "xalqa": "kolsa", "kalso": "kolsa",
-        "kalodka": "kalotka", "kolodka": "kalotka", "kalotki": "kalotka",
-        "amartizator": "amortizator", "amartiza": "amortizator",
-        "mator": "motor", "matar": "motor",
-        "galofka": "galovka", "qopqoq": "galovka",
-        "apora": "opora",
-        "xadavoy": "xodovoy", "xadovoy": "xodovoy",
-        "rul": "rul", "rulovoy": "rul",
-        "fara": "fara", "chirol": "fara", "chiroq": "fara"
+        "porshun": "porshen", "porshin": "porshen", "kolca": "kolsa", "xalqa": "kolsa", "kalso": "kolsa",
+        "kalodka": "kalotka", "kolodka": "kalotka", "kalotki": "kalotka", "amartizator": "amortizator", 
+        "mator": "motor", "galofka": "galovka", "apora": "opora", "xadavoy": "xodovoy", "xadovoy": "xodovoy", 
+        "rul": "rul", "fara": "fara", "chirol": "fara"
     };
     
-    // Kiritilgan so'z lug'atda bo'lsa to'g'risiga almashtiradi, bo'lmasa o'zini qoldiradi
-    let q = synonyms[qRaw] || qRaw; 
+    // Mashina nomlarini katalog papkasiga ulovchi lug'at
+    const carModelsIndex = {
+        "cobalt": { name: "Chevrolet Cobalt", id: "chevy-cobalt-parts", img: "https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" },
+        "kobalt": { name: "Chevrolet Cobalt", id: "chevy-cobalt-parts", img: "https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" },
+        "spark": { name: "Chevrolet Spark", id: "chevy-spark-parts", img: "https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" },
+        "gentra": { name: "Chevrolet Gentra", id: "chevy-gentra-parts", img: "https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" },
+        "lacetti": { name: "Chevrolet Lacetti", id: "chevy-lacetti-parts", img: "https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" },
+        "laseti": { name: "Chevrolet Lacetti", id: "chevy-lacetti-parts", img: "https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" },
+        "malibu": { name: "Chevrolet Malibu", id: "chevy-malibu2-parts", img: "https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" },
+        "damas": { name: "Chevrolet Damas", id: "chevy-damas-parts", img: "https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" },
+        "nexia": { name: "Daewoo / Chevy Nexia", id: "chevy-nexia3-parts", img: "https://i.postimg.cc/7Y4dS02Y/Daewoo-logo.png" },
+        "matiz": { name: "Daewoo Matiz", id: "daewoo-matiz-parts", img: "https://i.postimg.cc/7Y4dS02Y/Daewoo-logo.png" },
+        "gazel": { name: "GAZ Gazel", id: "gazel-biznes-parts", img: "https://i.postimg.cc/VLj18zjV/orig-(4).png" },
+        "volga": { name: "GAZ Volga", id: "volga-31105-parts", img: "https://i.postimg.cc/VLj18zjV/orig-(4).png" }
+    };
     
+    let q = synonyms[qRaw] || qRaw; 
     let r = document.getElementById('search-results'); 
     let c = document.getElementById('content-area'); 
     let cb = document.getElementById('clearSearchBtn'); 
@@ -1833,48 +1852,57 @@ window.searchProducts = () => {
         qc.classList.remove('hidden');
         if(bn) bn.style.display = 'none'; 
         tg.BackButton.show(); 
-        document.getElementById('back-btn').style.display = 'flex'; 
+        let bb = document.getElementById('back-btn'); if(bb) bb.style.display = 'flex'; 
     }
     
     if (qRaw.length > 0) {
         qc.style.display = 'none'; 
-        
-            // Kengaytirilgan izlash: endi tovar nomi, markasi yoki TAVSIFI (desc) ichidan ham qidiradi
+        let htmlResult = '';
+
+        // 🚀 AQLLI TIZIM: Agar so'z mashina nomi bo'lsa, maxsus KATALOG tugmasini chiqaramiz
+        for(let key in carModelsIndex) {
+            if(q.includes(key) || key.includes(q)) {
+                let carInfo = carModelsIndex[key];
+                htmlResult += `
+                <div class="search-item" onclick="exitSearch(); showSection('${carInfo.id}')" style="background: rgba(212, 175, 55, 0.15); border: 1px solid var(--luxury-gold); margin-bottom: 10px;">
+                    <img src="${carInfo.img}" style="background:transparent; border-radius:8px; padding:2px;">
+                    <div class="search-info">
+                        <h4 style="color:var(--luxury-gold); font-size:15px; margin:0 0 4px;">🚘 ${carInfo.name}</h4>
+                        <p style="color:white; font-size:11px; margin:0; opacity:0.8;">Barcha zapchastlarni ko'rish ➔</p>
+                    </div>
+                </div>`;
+                break; // Bitta topilsa yetarli
+            }
+        }
+
         let filt = productsDB.filter(x => {
-            if (x.is_draft) return false; // <--- Qoralamalarni qidiruvdan butunlay yashiramiz!
-            
+            if (x.is_draft) return false; 
             let n = x.name ? x.name.toLowerCase() : "";
-            let car = x.car ? x.car.toLowerCase() : "";
             let desc = x.desc ? x.desc.toLowerCase() : "";
-            let np = x.name.split('·');
-        let mn = np[0] ? np[0].trim() : x.name;
-        let ch = np[1] ? `<span class="car-hint">· ${np[1].trim()}</span>` : '';
-            return n.includes(q) || car.includes(q) || desc.includes(q);
+            let cat = (x.categories || []).join(' ').toLowerCase();
+            return n.includes(q) || desc.includes(q) || cat.includes(q);
         });
         
-        if (filt.length === 0) {
-            r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><p>Kechirasiz, hech narsa topilmadi. Boshqacha yozib ko'ring.</p></div>`;
-       } else {
-    r.innerHTML = filt.map(x => {
-        let np = x.name.split('  ·  ');
-        let mn = np[0] ? np[0].trim() : x.name;
-        let ch = np[1] ? `<span class="car-hint">· ${np[1].trim()}</span>` : '';
-        return `<div class="search-item" onclick="openProduct(${x.id})">
-            <img src="${x.img}" onload="this.style.opacity=1">
-            <div class="search-info">
-                <h4>${mn}${ch}</h4>
-                <p class="price">${x.price.toLocaleString()} so'm</p>
-            </div>
-            <button class="btn-add-cart" onclick="addToCartQuick(event, ${x.id})" 
-                style="position:relative; right:0; bottom:0; width:40px; height:40px; border-radius:12px;">
-                <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
-            </button>
-        </div>`;
-    }).join('');
-}
+        if (filt.length === 0 && htmlResult === '') {
+            r.innerHTML = `<div class="empty-search"><p>Kechirasiz, hech narsa topilmadi.</p></div>`;
+        } else {
+            // Topilgan tovarlarni qatorga qo'shamiz
+            htmlResult += filt.map(x => {
+                let np = x.name.split('·');
+                let mn = np[0] ? np[0].trim() : x.name;
+                return `<div class="search-item" onclick="openProduct(${x.id})">
+                    <img src="${x.img}" onload="this.style.opacity=1">
+                    <div class="search-info">
+                        <h4>${mn}</h4>
+                        <p class="price">${x.price.toLocaleString()} so'm</p>
+                    </div>
+                </div>`;
+            }).join('');
+            r.innerHTML = htmlResult;
+        }
     } else { 
         qc.style.display = 'flex'; 
-        r.innerHTML = `<div class="empty-search"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><p>Zapchast nomini yozing...</p></div>`; 
+        r.innerHTML = `<div class="empty-search"><p>Zapchast yoki mashina nomini yozing...</p></div>`; 
     }
 };
 
@@ -3973,10 +4001,9 @@ window.saveEditProduct = function(keepDraft = false) {
         });
     }
 };
-// ✅ TUZATILGAN: Yangi tovar saqlash
 window.saveNewProduct = function() {
     let n = document.getElementById('add-name').value.trim();
-    let p = parseInt(document.getElementById('add-price').value);
+    let p = parseInt(document.getElementById('add-price').value) || 0;
     let pUnit = document.getElementById('add-unit').value;
     let pType = document.getElementById('admin-prod-type').value;
     let img1 = document.getElementById('add-img-url').value;
@@ -3984,7 +4011,8 @@ window.saveNewProduct = function() {
     let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
     let imagesArr = [img1, img2, img3].filter(u => u);
     let descVal = document.getElementById('add-desc').value.trim() || "Tavsif kiritilmagan";
-    let sTyps = Array.from(document.querySelectorAll('#addProductModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
+
+    let sMods = Array.from(document.querySelectorAll('#addProductModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
 
     if (!n || !p || imagesArr.length === 0) { showToast("Ism, narx va kamida 1 rasm kerak!", "warning"); return; }
 
@@ -3993,14 +4021,12 @@ window.saveNewProduct = function() {
 
     if (pType === 'oddiy') {
         let st = parseInt(document.getElementById('add-stock').value) || 0;
-        let sMods = Array.from(document.querySelectorAll('#addProductModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
-        if (sMods.length === 0 || sTyps.length === 0) { showToast("Mashina va turi tanlang!", "warning"); return; }
-        let sCats = []; sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
-        newProduct.stock = st; newProduct.category = sCats[0]; newProduct.categories = sCats;
+        if (sMods.length === 0) { showToast("Mashina rusumini tanlang!", "warning"); return; }
+        newProduct.stock = st; newProduct.category = sMods[0]; newProduct.categories = sMods;
     } else {
         let brand = document.getElementById('admin-prod-brand').value;
         let model = document.getElementById('admin-prod-model') ? document.getElementById('admin-prod-model').value : "";
-        if (!brand || sTyps.length === 0) { showToast("Marka va turi tanlang!", "warning"); return; }
+        
         let sizes = [];
         document.querySelectorAll('#admin-sizes-container .size-input-row').forEach(row => {
             let sName = row.querySelector('.size-name').value.trim();
@@ -4008,12 +4034,13 @@ window.saveNewProduct = function() {
             if (sName) sizes.push({ size: sName, stock: sStock });
         });
         if (sizes.length === 0) { showToast("Kamida 1 razmer kiriting!", "warning"); return; }
+        
         let sCats = [];
         if (brand === 'gaz') {
-            ['gazel-biznes','gazel-next','gazel-eski','volga-2401','volga-2410','volga-3110','volga-31105','volga-31029','sobol'].forEach(m => { sTyps.forEach(t => sCats.push(`${m}-${t}`)); });
+            sCats = ['gazel-biznes','gazel-next','gazel-eski','volga-2401','volga-2410','volga-3110','volga-31105','volga-31029','sobol'];
         } else {
             if (!model) { showToast("Modelni tanlang!", "warning"); return; }
-            sTyps.forEach(t => sCats.push(`${brand}-${model}-${t}`));
+            sCats.push(`${brand}-${model}`);
         }
         newProduct.brand = brand; newProduct.model = model; newProduct.sizes = sizes;
         newProduct.stock = sizes.reduce((s, x) => s + x.stock, 0);
@@ -4023,15 +4050,8 @@ window.saveNewProduct = function() {
     productsDB.push(newProduct);
     db.ref('products').set(productsDB).then(() => {
         showToast("✅ Saqlandi!");
-            displayDB = productsDB.filter(p => !p.is_draft);
-        // Formni tozalash
-        ['add-name','add-desc'].forEach(id => { let el = document.getElementById(id); if(el) el.value = ''; });
-        ['add-price','add-stock'].forEach(id => { let el = document.getElementById(id); if(el) el.value = id === 'add-stock' ? '10' : ''; });
-        ['add-img-url','add-img-url2','add-img-url3'].forEach(id => { let el = document.getElementById(id); if(el) el.value = ''; });
-        let elU = document.getElementById('add-unit'); if(elU) elU.value = 'dona';
-        let pb = document.getElementById('add-img-previews'); if (pb) pb.innerHTML = '';
-        document.querySelectorAll('#add-product-wrapper .cat-chip').forEach(c => c.classList.remove('selected'));
-        // ✅ Yangi tovar modali yopiladi va Admin panelga qaytiladi
+        displayDB = productsDB.filter(p => !p.is_draft);
+        renderProducts();
         closeModal(); 
     });
 };
