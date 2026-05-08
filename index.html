@@ -12,378 +12,214 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
 :root {
-            --primary-blue: #0A84FF; /* Professional Apple Blue */
-            --luxury-gold: #D4AF37;
-            --bg-dark: #000000;      /* Mutlaq qora, batareya tejaydi va toza ko'rinadi */
-            --card-bg: #151515;      /* Kartochkalar uchun to'q kulrang */
-            --border-subtle: #262628;/* Juda ingichka, sezilar-sezilmas chiziq */
-            --text-main: #FFFFFF;
-            --text-muted: #8E8E93;
-            --accent-green: #32D74B;
-            --accent-red: #FF453A;
+            /* 🔵 YANGI OCH KO'K VA HAQIQIY SAVDO RANGLARI */
+            --primary-blue: #007AFF;      /* Asosiy ko'k rang */
+            --light-blue: #E5F0FF;        /* Fonlar uchun ochiq havorang */
+            --bg-main: #F4F5F7;           /* Ilovaning asosiy orqa foni (och kulrang) */
+            --card-bg: #FFFFFF;           /* Kartochkalar top-toza oq */
+            --text-main: #1C1C1E;         /* To'q qora matn */
+            --text-muted: #8E8E93;        /* Ochiq kulrang matn */
+            --border-color: #E5E5EA;      /* Yumshoq chegaralar */
+            --accent-red: #FF3B30;
+            --accent-green: #34C759;
+            --accent-orange: #FF9500;
+            
+            /* JS kodlar buzilmasligi uchun eski nomlarni avtomat yangi ranglarga ulaymiz */
+            --luxury-gold: var(--primary-blue);
+            --bg-dark: var(--bg-main);
+            --glass-border: var(--border-color);
         }
-        body { font-family: 'Montserrat', sans-serif; margin: 0; padding: 0; color: var(--text-main); background: var(--bg-dark); min-height: 100vh; padding-bottom: 120px; overflow-x: hidden; }
+
+        body { font-family: 'Montserrat', sans-serif; margin: 0; padding: 0; color: var(--text-main); background: var(--bg-main); min-height: 100vh; padding-bottom: 120px; overflow-x: hidden; }
         .container { padding: 15px 0; max-width: 500px; margin: 0 auto; overflow-x: hidden; }
         .hidden { display: none !important; }
         
-        /* Tepa qism: Qidiruv va Banner */
-        .search-input-container { position: relative; width: calc(100% - 32px); margin: 10px 16px 20px; }
-        .search-box { width: 100%; padding: 16px 45px 16px 20px; border-radius: 16px; border: 1px solid var(--border-subtle); background: var(--card-bg); color: var(--text-main); outline: none; box-sizing: border-box; font-size: 15px; font-weight: 500; transition: 0.2s; }
-        .search-box:focus { border-color: var(--primary-blue); background: #1c1c1e; }
-        .search-box::placeholder { color: var(--text-muted); }
-        .section-title { padding: 0 16px; margin: 25px 0 15px; color: var(--text-main); font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+        /* 📱 KIRISH VA HEADER */
+        #welcome-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--card-bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transition: opacity 0.5s; }
+        #welcome-screen h1 { font-size: 28px; font-weight: 800; margin-bottom: 10px; color: var(--primary-blue); }
+        #welcome-screen p { color: var(--text-muted); font-weight: 500; }
+        .header { text-align: center; padding: 10px 20px 20px; }
+        .header h1 { font-size: 26px; font-weight: 800; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-main); }
+        .verify-icon { background: var(--primary-blue); border-radius: 50%; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+        .verify-icon svg { width: 10px; height: 10px; fill: white; }
+        .header p { font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-top: 5px; }
+        
+        /* 🔍 QIDIRUV VA BANNER */
+        .slider-container { width: calc(100% - 32px); margin: 0 16px 20px; overflow: hidden; border-radius: 16px; background: var(--card-bg); box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+        .slider { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
+        .slider::-webkit-scrollbar { display: none; }
+        .slider img { flex: 0 0 100%; width: 100%; height: 160px; object-fit: cover; scroll-snap-align: start; }
+        
+        .search-input-container { position: relative; width: calc(100% - 32px); margin: 0 16px 15px; }
+        .search-box { width: 100%; padding: 14px 40px 14px 20px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); outline: none; box-sizing: border-box; font-size: 15px; transition: 0.3s; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        .search-box:focus { border-color: var(--primary-blue); box-shadow: 0 4px 15px rgba(0, 122, 255, 0.15); }
+        .search-box::placeholder { color: #A0A0A5; }
+        
+        .clear-search-btn { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: #E5E5EA; border: none; color: #8E8E93; width: 24px; height: 24px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; opacity: 0; pointer-events: none; transition: 0.2s; }
+        .clear-search-btn.show { opacity: 1; pointer-events: auto; }
+        
+        .quick-chips { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 5px; scrollbar-width: none; margin-bottom: 15px; }
+        .quick-chips::-webkit-scrollbar { display: none; }
+        .chip { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 8px 14px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        .chip:active, .chip.selected { border-color: var(--primary-blue); background: var(--light-blue); color: var(--primary-blue); }
 
-        /* 🔥 YANGI DIZAYN: GORIZONTAL KARTOCHKALAR */
+        .section-title { width: 100%; text-align: left; padding: 0 16px; margin: 10px 0 15px; color: var(--text-main); font-size: 18px; font-weight: 800; }
+        
+        /* 🛍️ GORIZONTAL TOVAR KARTOCHKALARI (JS ni o'zgartirmasdan) */
         .items-grid { display: flex; flex-direction: column; gap: 12px; padding: 0 16px; }
+        .luxury-card { display: flex; flex-direction: row; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 12px; align-items: center; gap: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); cursor: pointer; transition: 0.15s ease; position: relative; }
+        .luxury-card:active { transform: scale(0.97); border-color: var(--primary-blue); background: #F8FBFF; }
         
-        .pro-list-card {
-            display: flex;
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 12px;
-            gap: 15px;
-            border: 1px solid var(--border-subtle);
-            align-items: center;
-            transition: transform 0.15s ease, background 0.15s ease;
-        }
-        .pro-list-card:active { transform: scale(0.97); background: #1c1c1e; }
+        .luxury-card .img-wrap { width: 85px; height: 85px; flex-shrink: 0; background: #F9F9F9; border-radius: 12px; padding: 6px; position: relative; border-bottom: none; display: flex; align-items: center; justify-content: center; }
+        .luxury-card .img-wrap img { width: 100%; height: 100%; object-fit: contain; position: relative; padding: 0; }
         
-        .pro-img-box {
-            width: 85px;
-            height: 85px;
-            background: #ffffff;
-            border-radius: 12px;
-            padding: 6px;
-            flex-shrink: 0;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .pro-img-box img { width: 100%; height: 100%; object-fit: contain; }
+        .luxury-card .info { padding: 0; flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; height: 85px; background: transparent; }
+        .luxury-card h4 { font-size: 14px; font-weight: 600; margin: 0 0 4px 0; color: var(--text-main); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+        .car-hint { font-size: 11px; font-weight: 500; color: var(--text-muted); display: block; margin-top: 2px; }
         
-        .pro-info {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            height: 85px;
-            min-width: 0; /* Text toshib ketmasligi uchun */
-        }
-        .pro-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-main);
-            margin: 0 0 4px 0;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            line-height: 1.3;
-        }
-        .pro-car-tag { font-size: 12px; color: var(--text-muted); margin-bottom: auto; }
+        .luxury-card .price-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; }
+        .luxury-card .price { font-size: 16px; font-weight: 800; color: var(--text-main); margin: 0; letter-spacing: -0.3px; }
         
-        .pro-price-row { display: flex; justify-content: space-between; align-items: flex-end; }
-        .pro-price { font-size: 16px; font-weight: 800; color: var(--text-main); letter-spacing: -0.3px; }
-        
-        /* Chiroyli va sodda qo'shish tugmasi */
-        .pro-add-btn {
-            background: rgba(10, 132, 255, 0.1);
-            color: var(--primary-blue);
-            border: none;
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
-            font-size: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        .pro-add-btn:active { background: var(--primary-blue); color: #fff; transform: scale(0.9); }
-        .pm-img-header { background: #ffffff; width: 100%; height: 380px; position: relative; border-radius: 0 0 24px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .pm-img-header img { width: 100%; height: 100%; object-fit: contain; padding: 25px; box-sizing: border-box; opacity: 0; transition: opacity 0.5s ease; }
-        .pm-close-btn { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.5); border: none; color: white; width: 44px; height: 44px; border-radius: 50%; font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(5px); z-index: 10; }
-        .pm-edit-icon { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2); width: 44px; height: 44px; border-radius: 50%; font-size: 18px; display: none; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(5px); z-index: 10; }
-        .pm-info-section { padding: 20px 20px 100px; }
-        .pm-title { font-size: 22px; font-weight: 700; margin: 0 0 5px; color: var(--text-main); line-height: 1.3; }
-        .pm-stock-info { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
-        .pm-desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 25px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; }
-        .pm-similar-wrapper { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 15px; scrollbar-width: none; }
-        .similar-card { flex: 0 0 130px; background: var(--card-bg); border-radius: 12px; overflow: hidden; text-align: left; cursor: pointer; border: 1px solid var(--glass-border); }
-        .similar-card .img-wrap { width: 100%; padding-top: 100%; position: relative; background: #fff; }
-        .similar-card .img-wrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; padding: 8px; box-sizing: border-box; opacity: 0; transition: opacity 0.5s ease; }
-        .similar-card h4 { font-size: 11px; margin: 8px 8px 4px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .similar-card .price { font-size: 13px; font-weight: 700; color: var(--luxury-gold); margin: 0 8px 8px; }
-        .pm-sticky-bar { position: sticky; bottom: 0; left: 0; width: 100%; background: rgba(28, 28, 30, 0.95); backdrop-filter: blur(15px); border-top: 1px solid var(--glass-border); padding: 15px 20px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; z-index: 2001; }
-        .pm-sticky-price-wrap { display: flex; flex-direction: column; }
-        .pm-sticky-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
-        .pm-sticky-price { font-size: 22px; font-weight: 800; color: var(--luxury-gold); }
-        .pm-sticky-btn { position: relative; overflow: hidden; background: linear-gradient(135deg, #e5c07b, #c5a028); color: #000; border: none; padding: 14px 28px; border-radius: 14px; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 4px 15px rgba(229, 192, 123, 0.4); transition: 0.3s; }
-        .pm-sticky-btn:active { transform: scale(0.95); }
-        .pm-sticky-btn:disabled { background: #333; color: #888; box-shadow: none; cursor: not-allowed; }
-        .modal-standard { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto; padding-bottom: 100px; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        .modal-header h2 { margin: 0; font-size: 22px; }
-        .close-btn { background: rgba(255,255,255,0.1); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; }
-        .btn-checkout { background: var(--luxury-gold); color: #000; border: none; width: 100%; padding: 18px; border-radius: 16px; font-weight: 700; font-size: 16px; margin-top: auto; cursor: pointer; transition: 0.2s; }
-        .btn-checkout:active { transform: scale(0.98); opacity: 0.9; }
-        .cart-row { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 16px; margin-bottom: 12px; border: 1px solid var(--glass-border); }
-        .cart-row img { width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff; opacity: 0; transition: opacity 0.5s ease; }
-        .cart-info { flex: 1; }
-        .cart-info h4 { margin: 0 0 6px 0; font-size: 14px; font-weight: 600; color: #fff; }
-        .cart-controls { display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 12px; }
-        .cart-controls button { background: rgba(255,255,255,0.1); border: none; color: white; width: 32px; height: 32px; border-radius: 8px; font-weight: 500; font-size: 18px; cursor: pointer; }
-        .status-badge { padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: bold; color: #fff; text-transform: uppercase; letter-spacing: 1px; }
-        .st-kutilmoqda { background: #ffcc00; color: #000; }
-        .st-qabul { background: #007aff; }
-        .st-yolda { background: #ff9500; }
-        .st-yetkazildi { background: #34c759; }
-        .profile-header { display: flex; align-items: center; gap: 15px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 20px; border: 1px solid var(--glass-border); margin-bottom: 20px; }
-        .profile-avatar { width: 60px; height: 60px; background: var(--luxury-gold); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; font-weight: bold; color: #000; text-transform: uppercase; }
-        .profile-info h3 { margin: 0 0 5px 0; font-size: 18px; }
-        .profile-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
-        .profile-menu-item { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; background: rgba(255,255,255,0.03); border-radius: 16px; margin-bottom: 10px; border: 1px solid var(--glass-border); cursor: pointer; transition: 0.2s; }
-        .profile-menu-item:active { transform: scale(0.98); background: rgba(255,255,255,0.08); }
-        .profile-menu-item .left { display: flex; align-items: center; gap: 15px; font-weight: 600; font-size: 15px; }
-        .profile-menu-item svg { width: 22px; height: 22px; fill: var(--luxury-gold); }
-        .bottom-nav { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); width: calc(100% - 30px); max-width: 450px; background: rgba(28, 28, 30, 0.9); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; padding: 10px 5px; backdrop-filter: blur(20px); z-index: 1500; transition: opacity 0.3s ease; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); cursor: pointer; flex: 1; position: relative; }
-        .nav-item.active { color: var(--luxury-gold); }
+        /* + QO'SHISH TUGMASI (HAVORANG) */
+        .btn-add-cart { background: var(--light-blue); border: none; color: var(--primary-blue); width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; z-index: 5; font-size: 20px; font-weight: bold; }
+        .btn-add-cart:active { background: var(--primary-blue); color: #fff; transform: scale(0.9); }
+        .btn-add-cart svg { display: none; } /* Eski ikonkani yashiramiz */
+        .btn-add-cart::after { content: "+"; } /* Yangi oddiy plyus yozamiz */
+
+        .badge { position: absolute; top: 0; left: 0; padding: 4px 8px; border-top-left-radius: 12px; border-bottom-right-radius: 12px; font-size: 10px; font-weight: 800; color: white; z-index: 2; background: var(--accent-red); }
+        .badge.new { background: var(--primary-blue); }
+
+        /* 📁 KATALOG VA BREND TUGMALARI */
+        .neon-brand-card { display: flex; align-items: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 12px 16px; margin: 0 16px 12px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: 0.2s; }
+        .neon-brand-card:active { background: var(--light-blue); border-color: var(--primary-blue); }
+        .neon-logo { width: 45px; height: 45px; border-radius: 10px; padding: 5px; background: #F9F9F9; margin-right: 15px; border: 1px solid var(--border-color); display: flex; justify-content: center; align-items: center;}
+        .neon-logo img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+        .neon-brand-card h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-main); flex: 1; }
+        .neon-arrow { color: #C7C7CC; font-size: 20px; font-weight: bold; }
+
+        .luxury-model-item { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 10px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: 0.2s; }
+        .luxury-model-item:active { background: var(--light-blue); border-color: var(--primary-blue); }
+        .luxury-model-item h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-main); }
+        .luxury-model-arrow { color: #C7C7CC; font-size: 18px; }
+
+        /* ⬇️ PASTKI MENYU (OQ) */
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--card-bg); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; padding: 10px 0 25px 0; z-index: 1500; box-shadow: 0 -4px 20px rgba(0,0,0,0.05); }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); cursor: pointer; flex: 1; position: relative; transition: 0.2s; }
+        .nav-item.active { color: var(--primary-blue); }
         .nav-item svg { width: 24px; height: 24px; fill: currentColor; }
         .nav-item span { font-size: 10px; font-weight: 600; }
-        .nav-badge { position: absolute; top: -5px; right: 15px; background: var(--accent-red); color: white; font-size: 10px; font-weight: bold; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease; }
-        .nav-badge.show { opacity: 1; }
-        .nav-badge.pulse { animation: badgePulse 0.4s ease-out; }
-        @keyframes badgePulse { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
-        .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .toast { background: rgba(40, 40, 45, 0.95); border-left: 4px solid var(--accent-green); color: white; padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.4); display: flex; align-items: center; gap: 10px; }
-        #loading-text { text-align: center; padding: 40px; color: var(--luxury-gold); font-weight: 600; font-size: 16px; letter-spacing: 1px; }
-        .order-loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(10px); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-        .order-loading-overlay.active { opacity: 1; pointer-events: auto; }
-        .hourglass { display: inline-block; position: relative; width: 80px; height: 80px; }
-        .hourglass:after { content: " "; display: block; border-radius: 50%; width: 0; height: 0; margin: 8px; box-sizing: border-box; border: 32px solid var(--luxury-gold); border-color: var(--luxury-gold) transparent var(--luxury-gold) transparent; animation: hourglass-anim 1.2s infinite; }
-        @keyframes hourglass-anim { 0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19); } 50% { transform: rotate(900deg); animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1); } 100% { transform: rotate(1800deg); } }
-        .order-loading-text { margin-top: 20px; color: var(--luxury-gold); font-size: 16px; font-weight: 600; letter-spacing: 1px; animation: pulse-text 1.5s infinite; }
-        @keyframes pulse-text { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .luxury-input-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; margin-top: 15px; display: block; font-weight: 600; letter-spacing: 1px; }
-        .cat-chip { display: inline-block; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); padding: 8px 12px; border-radius: 8px; font-size: 12px; margin: 4px; cursor: pointer; color: var(--text-main); transition: 0.2s; }
-        .cat-chip.selected { background: rgba(212, 175, 55, 0.2); border-color: var(--luxury-gold); color: var(--luxury-gold); font-weight: bold; }
-        .rating-stars { display: flex; justify-content: center; gap: 10px; margin: 15px 0; }
-        .rating-stars span { font-size: 40px; color: rgba(255,255,255,0.1); cursor: pointer; transition: color 0.2s; }
-        .rating-stars span.active { color: var(--luxury-gold); }
-        .neon-brand-card { display: flex; align-items: center; background: #151515; border-left: 4px solid var(--luxury-gold); border-radius: 12px; padding: 12px 20px; margin: 0 0 15px 0; cursor: pointer; transition: 0.3s; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); }
-        .neon-brand-card:active { background: #1c1c1e; box-shadow: 0 0 15px rgba(212, 175, 55, 0.3), inset 0 0 0 1px var(--luxury-gold); transform: translateX(5px); }
-        .neon-logo { width: 45px; height: 45px; background: transparent; border-radius: 8px; padding: 0; margin-right: 15px; }
-        .neon-logo img { width: 100%; height: 100%; object-fit: contain; }
-        .neon-brand-card h3 { margin: 0; font-size: 18px; font-weight: 700; color: #fff; flex: 1; text-transform: uppercase; }
-        .neon-arrow { color: var(--luxury-gold); font-size: 20px; font-weight: bold; }
-        .luxury-model-item { display: flex; align-items: center; justify-content: space-between; background: #151515; border-left: 3px solid var(--luxury-gold); border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; cursor: pointer; transition: 0.3s; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); }
-        .luxury-model-item:active { background: rgba(212, 175, 55, 0.1); transform: scale(0.98); }
-        .luxury-model-item h3 { margin: 0; font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
-        .luxury-model-arrow { color: var(--luxury-gold); font-size: 20px; font-weight: bold; }
-        .inventory-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px; margin-bottom: 8px; }
-        .inv-info h4 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
-        .inv-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
-        .inv-controls { display: flex; align-items: center; gap: 8px; }
-        .inv-input { width: 50px; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--luxury-gold); color: white; border-radius: 8px; text-align: center; font-weight: bold; outline: none; }
-        .inv-btn { background: var(--luxury-gold); border: none; padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .btn-wishlist { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; background: rgba(0,0,0,0.4); backdrop-filter: blur(5px); border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10; cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.1); }
-        .btn-wishlist:active { transform: scale(0.9); }
-        .btn-wishlist svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; transition: 0.3s; }
-        .btn-wishlist.active svg { fill: #ff453a; stroke: #ff453a; }
-        /* Admin Panel Grid Dizayni */
-        .admin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; }
-        .admin-card { background: rgba(30, 30, 35, 0.6); border: 1px solid var(--glass-border); border-radius: 18px; padding: 25px 10px; text-align: center; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        .admin-card:active { transform: scale(0.95); background: rgba(255,255,255,0.08); }
-        .admin-card .a-icon { font-size: 32px; margin-bottom: 12px; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5)); }
-        .admin-card h3 { margin: 0 0 5px 0; font-size: 13px; font-weight: 700; color: var(--text-main); text-transform: uppercase; letter-spacing: 1px; }
-        .admin-card p { margin: 0; font-size: 11px; color: var(--text-muted); }
-        .admin-card.gold-dashed { border: 1px dashed var(--luxury-gold); background: rgba(212, 175, 55, 0.05); }
-        .admin-card.gold-dashed:active { background: rgba(212, 175, 55, 0.15); }
-        /* Tovar ichidagi rasm slideri */
-        .pm-slider-container { width: 100%; height: 100%; position: relative; overflow: hidden; }
-        .pm-slider { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; width: 100%; height: 100%; scroll-behavior: smooth; }
-        .pm-slider::-webkit-scrollbar { display: none; }
-        .pm-slider img { flex: 0 0 100%; width: 100%; height: 100%; object-fit: contain; scroll-snap-align: start; padding: 25px; box-sizing: border-box; }
-        .pm-slider-dots { position: absolute; bottom: 15px; left: 0; width: 100%; display: flex; justify-content: center; gap: 8px; z-index: 10; }
-        .pm-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,0,0,0.3); transition: 0.3s; }
-        .pm-dot.active { background: var(--luxury-gold); width: 20px; border-radius: 4px; }
-                /* Yulduz baholash */
-        #review-stars span {
-            font-size: 32px;
-            color: rgba(255,255,255,0.15);
-            cursor: pointer;
-            transition: color 0.15s, transform 0.1s;
-            display: inline-block;
-        }
-        #review-stars span:hover,
-        #review-stars span.active {
-            color: var(--luxury-gold);
-            transform: scale(1.1);
-        }
-        /* Izoh kartochkasi */
-        .review-card {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 10px;
-        }
-        .review-card .r-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
-        }
-        .review-card .r-name {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-main);
-        }
-        .review-card .r-stars {
-            font-size: 13px;
-            color: var(--luxury-gold);
-            letter-spacing: 1px;
-        }
-        .review-card .r-text {
-            font-size: 12px;
-            color: var(--text-muted);
-            line-height: 1.5;
-        }
-        .review-card .r-date {
-            font-size: 10px;
-            color: rgba(255,255,255,0.25);
-            margin-top: 5px;
-        }
-        /* Karta ustidagi reyting ko'rinishi */
-        .card-rating {
-            font-size: 10px;
-            color: var(--luxury-gold);
-            margin-top: 2px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-        /* Grafik tugmalari */
-        .chart-btn-active {
-            border-color: var(--luxury-gold) !important;
-            background: rgba(212,175,55,0.2) !important;
-            color: var(--luxury-gold) !important;
-        }
-/* 💎 LUXURY AI CHAT REDESIGN */
-.ai-chat-modal {
-    background: linear-gradient(180deg, #0f0f11 0%, #050505 100%) !important;
-    border: 1px solid rgba(212, 175, 55, 0.15) !important;
-}
+        .nav-badge { position: absolute; top: -5px; right: calc(50% - 15px); background: var(--accent-red); color: white; font-size: 10px; font-weight: bold; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 
-#ai-chat-box {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 20px;
-    background-image: radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.03) 0%, transparent 100%);
-}
-
-/* Robot/Shogird pufakchasi */
-.msg-bot {
-    align-self: flex-start;
-    max-width: 85%;
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(10px);
-    padding: 12px 16px;
-    border-radius: 18px 18px 18px 4px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    color: #e0e0e0;
-    font-size: 14px;
-    line-height: 1.5;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-}
-
-/* Mijoz pufakchasi */
-.msg-user {
-    align-self: flex-end;
-    max-width: 85%;
-    background: linear-gradient(135deg, #D4AF37 0%, #b08d26 100%);
-    padding: 10px 16px;
-    border-radius: 18px 18px 4px 18px;
-    color: #000;
-    font-size: 14px;
-    font-weight: 600;
-    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);
-}
-
-/* Tovar kartochkasi (Chat ichida) */
-.ai-pro-card {
-    background: #161618 !important;
-    border: 1px solid rgba(212, 175, 55, 0.3) !important;
-    border-radius: 14px;
-    padding: 10px;
-    margin-top: 10px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    transition: 0.3s;
-}
-
-.ai-pro-card:active {
-    transform: scale(0.95);
-    background: #1c1c1e !important;
-}
-
-/* Input qismi zamonaviy */
-.ai-input-container {
-    background: rgba(15, 15, 17, 0.98) !important;
-    padding: 20px !important;
-    border-top: 1px solid rgba(212, 175, 55, 0.1) !important;
-}
-        /* 🪞 ADVANCED GLASSMORPHISM (Oynali fonlar) */
-        .bottom-nav, .ai-input-container, .pm-sticky-bar, .modal-header {
-            background: rgba(15, 15, 17, 0.75) !important;
-            backdrop-filter: blur(25px) saturate(200%) !important;
-            -webkit-backdrop-filter: blur(25px) saturate(200%) !important;
-        }
-
-        /* 💡 NEON & GLOW (Bosganda yonish) */
-        .luxury-card {
-             transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-        .luxury-card:active {
-            box-shadow: 0 0 25px rgba(212, 175, 55, 0.5), inset 0 0 15px rgba(212, 175, 55, 0.2);
-            border-color: var(--luxury-gold);
-        }
+        /* 📦 MODAL OYNALAR VA TOVAR SAHIFASI */
+        .modal-standard, #productModal { background: var(--bg-main); color: var(--text-main); position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000; display: none; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto; padding-bottom: 100px; }
+        #productModal { padding: 0; }
+        .pm-img-header { background: #FFFFFF; width: 100%; height: 350px; position: relative; border-bottom: 1px solid var(--border-color); border-radius: 0 0 24px 24px; box-shadow: 0 10px 20px rgba(0,0,0,0.03); }
+        .pm-img-header img { width: 100%; height: 100%; object-fit: contain; padding: 25px; box-sizing: border-box; opacity: 0; transition: opacity 0.5s ease; }
+        .pm-close-btn, .close-btn { background: #F4F5F7; color: var(--text-main); border: 1px solid var(--border-color); width: 36px; height: 36px; border-radius: 50%; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+        .pm-close-btn { position: absolute; top: 20px; left: 20px; z-index: 10; }
+        .pm-edit-icon { position: absolute; top: 20px; right: 20px; background: var(--light-blue); color: var(--primary-blue); border: none; width: 44px; height: 44px; border-radius: 50%; font-size: 18px; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 10; }
+        .pm-info-section { padding: 20px 20px 100px; }
+        .pm-title { font-size: 22px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; line-height: 1.3; }
+        .pm-stock-info { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+        .pm-desc { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-muted); padding: 15px; border-radius: 14px; font-size: 14px; line-height: 1.6; margin-bottom: 25px; }
         
-        /* 💀 SKELETON LOADING (Yuklanish) */
+        /* TO'LOV TUGMASI (KATTA KO'K) */
+        .pm-sticky-bar { position: sticky; bottom: 0; left: 0; width: 100%; background: var(--card-bg); border-top: 1px solid var(--border-color); box-shadow: 0 -4px 20px rgba(0,0,0,0.05); padding: 15px 20px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; z-index: 2001; }
+        .pm-sticky-price-wrap { display: flex; flex-direction: column; }
+        .pm-sticky-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+        .pm-sticky-price { color: var(--text-main); font-weight: 800; font-size: 22px; }
+        .pm-sticky-btn, .btn-checkout { background: var(--primary-blue); color: #fff; border: none; padding: 16px 28px; border-radius: 14px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3); cursor: pointer; transition: 0.2s; }
+        .btn-checkout { width: 100%; margin-top: auto; }
+        .pm-sticky-btn:active, .btn-checkout:active { background: #005BB5; transform: scale(0.98); }
+        .pm-sticky-btn:disabled { background: #E5E5EA; color: #8E8E93; box-shadow: none; cursor: not-allowed; }
+
+        /* Yordamchi Oynalar (Savat, Profil) */
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: transparent !important; backdrop-filter: none !important; }
+        .modal-header h2 { margin: 0; font-size: 22px; color: var(--text-main); font-weight: 800; }
+        
+        .cart-row { display: flex; align-items: center; gap: 15px; background: var(--card-bg); border: 1px solid var(--border-color); padding: 12px; border-radius: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+        .cart-row img { width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #F9F9F9; opacity: 0; transition: opacity 0.5s ease; }
+        .cart-info { flex: 1; }
+        .cart-info h4 { margin: 0 0 6px 0; font-size: 14px; font-weight: 600; color: var(--text-main); }
+        .cart-controls { display: flex; align-items: center; gap: 12px; background: var(--bg-main); padding: 6px; border-radius: 12px; border: 1px solid var(--border-color); }
+        .cart-controls button { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); width: 32px; height: 32px; border-radius: 8px; font-weight: 500; font-size: 18px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        
+        .status-badge { padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: bold; color: #fff; text-transform: uppercase; letter-spacing: 1px; }
+        .st-kutilmoqda { background: #FF9500; color: #fff; }
+        .st-qabul { background: var(--primary-blue); }
+        .st-yolda { background: #5856D6; }
+        .st-yetkazildi { background: var(--accent-green); }
+
+        .profile-header { display: flex; align-items: center; gap: 15px; padding: 20px; background: var(--card-bg); border-radius: 20px; border: 1px solid var(--border-color); margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+        .profile-avatar { width: 60px; height: 60px; background: var(--light-blue); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; font-weight: bold; color: var(--primary-blue); text-transform: uppercase; }
+        .profile-info h3 { margin: 0 0 5px 0; font-size: 18px; color: var(--text-main); }
+        .profile-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
+        .profile-menu-item { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; background: var(--card-bg); border-radius: 16px; margin-bottom: 10px; border: 1px solid var(--border-color); cursor: pointer; transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        .profile-menu-item:active { transform: scale(0.98); background: var(--bg-main); }
+        .profile-menu-item .left { display: flex; align-items: center; gap: 15px; font-weight: 600; font-size: 15px; color: var(--text-main); }
+        .profile-menu-item svg { width: 22px; height: 22px; fill: var(--primary-blue); }
+
+        /* 💀 SKELETON (YUKLANISH) OCH KULRANGDA */
         .skeleton {
-            background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(212,175,55,0.1) 50%, rgba(255,255,255,0.02) 75%);
+            background: linear-gradient(90deg, #E5E5EA 25%, #F4F5F7 50%, #E5E5EA 75%);
             background-size: 400% 100%;
             animation: skeleton-loading 1.5s infinite ease-in-out;
-            border-radius: 18px;
-            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
         }
-        @keyframes skeleton-loading {
-            0% { background-position: 100% 50%; }
-            100% { background-position: 0 50%; }
-        }
+        @keyframes skeleton-loading { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 
-        /* 🛍️ CART PROGRESS BAR */
-        .cart-progress-container {
-            width: 100%; background: rgba(255,255,255,0.1); border-radius: 10px; height: 10px; margin: 10px 0 15px; overflow: hidden; position: relative; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
-        }
-        .cart-progress-bar {
-            height: 100%; background: linear-gradient(90deg, #ff453a, #ff9500, #30d158); width: 0%; transition: width 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
-        }
-        .cart-progress-text { font-size: 12px; font-weight: 800; text-align: center; margin-bottom: 8px; letter-spacing: 0.5px; transition: 0.3s; }
-        /* Mashina nomi — ingichka, kulrang */
-.car-hint {
-    font-size: 10px;
-    font-weight: 400;
-    color: var(--text-muted);
-    letter-spacing: 0.3px;
-    display: block;
-    margin-top: 2px;
-    opacity: 0.75;
-}
+        /* 🤖 AI CHAT (TOZA VA YORUG' DIZAYN) */
+        .ai-chat-modal { background: var(--bg-main) !important; border: none !important; }
+        #ai-chat-box { display: flex; flex-direction: column; gap: 12px; padding: 20px; background: transparent; }
+        
+        .msg-bot { align-self: flex-start; max-width: 85%; background: var(--card-bg); padding: 12px 16px; border-radius: 18px 18px 18px 4px; border: 1px solid var(--border-color); color: var(--text-main); font-size: 14px; line-height: 1.5; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .msg-user { align-self: flex-end; max-width: 85%; background: var(--primary-blue); padding: 10px 16px; border-radius: 18px 18px 4px 18px; color: #fff; font-size: 14px; font-weight: 600; box-shadow: 0 4px 15px rgba(0, 122, 255, 0.2); }
+        .ai-input-container { background: var(--card-bg) !important; border-top: 1px solid var(--border-color) !important; padding: 15px 20px !important; }
+
+        /* Admin Grid va Boshqalar */
+        .admin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; }
+        .admin-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; padding: 25px 10px; text-align: center; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+        .admin-card:active { transform: scale(0.95); background: var(--bg-main); }
+        .admin-card .a-icon { font-size: 32px; margin-bottom: 12px; }
+        .admin-card h3 { margin: 0 0 5px 0; font-size: 13px; font-weight: 700; color: var(--text-main); text-transform: uppercase; letter-spacing: 1px; }
+        .admin-card p { margin: 0; font-size: 11px; color: var(--text-muted); }
+        
+        .floating-btn { position: fixed; width: 44px; height: 44px; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #back-btn { left: 15px; top: 15px; display: none; }
+        #back-btn svg { fill: var(--text-main); }
+
+        .search-list { display: flex; flex-direction: column; gap: 12px; padding: 0 16px; margin-bottom: 30px; }
+        .search-item { display: flex; align-items: center; gap: 15px; background: var(--card-bg); padding: 12px; border-radius: 16px; border: 1px solid var(--border-color); text-align: left; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+        .search-item:active { transform: scale(0.97); border-color: var(--primary-blue); }
+        .search-item img { width: 65px; height: 65px; border-radius: 12px; object-fit: contain; background-color: #F9F9F9; padding: 5px; opacity: 0; transition: opacity 0.5s ease; border: 1px solid var(--border-color); }
+        .search-info { flex: 1; }
+        .search-info h4 { margin: 0 0 5px 0; font-size: 14px; font-weight: 600; color: var(--text-main); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .search-info .price { color: var(--text-main); font-weight: 800; font-size: 15px; margin: 0; }
+        
+        .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast { background: #333333; border-left: 4px solid var(--accent-green); color: white; padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px; }
+        
+        .order-loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .order-loading-overlay.active { opacity: 1; pointer-events: auto; }
+        .order-loading-text { margin-top: 20px; color: var(--primary-blue); font-size: 16px; font-weight: 600; letter-spacing: 1px; animation: pulse-text 1.5s infinite; }
+        
+        .luxury-input-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; margin-top: 15px; display: block; font-weight: 600; letter-spacing: 1px; }
+        .cat-chip { display: inline-block; background: var(--card-bg); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px; font-size: 12px; margin: 4px; cursor: pointer; color: var(--text-main); transition: 0.2s; }
+        .cat-chip.selected { background: var(--light-blue); border-color: var(--primary-blue); color: var(--primary-blue); font-weight: bold; }
+        
+        /* Progress bar */
+        .cart-progress-container { width: 100%; background: #E5E5EA; border-radius: 10px; height: 10px; margin: 10px 0 15px; overflow: hidden; position: relative; }
+        .cart-progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary-blue), #34C759); width: 0%; transition: width 0.6s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        .cart-progress-text { font-size: 12px; font-weight: 800; text-align: center; margin-bottom: 8px; transition: 0.3s; color: var(--text-main); }
+        
+        /* Similar cards (Horizontal slider inside product) */
+        .pm-similar-wrapper { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 15px; scrollbar-width: none; }
+        .similar-card { flex: 0 0 130px; background: var(--card-bg); border-radius: 12px; overflow: hidden; text-align: left; cursor: pointer; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+        .similar-card .img-wrap { width: 100%; padding-top: 100%; position: relative; background: #F9F9F9; }
+        .similar-card .img-wrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; padding: 8px; box-sizing: border-box; }
+        .similar-card h4 { font-size: 11px; margin: 8px 8px 4px; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .similar-card .price { font-size: 13px; font-weight: 800; color: var(--text-main); margin: 0 8px 8px; }
     </style>
 </head>
 <body>
