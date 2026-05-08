@@ -674,7 +674,10 @@
 </div>
 
 <div class="modal-standard" id="editModal">
-    <div class="modal-header"><h2 style="color: #30d158;">✏️ Tahrirlash</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-header">
+        <h2 style="color: #30d158;">✏️ Tahrirlash</h2>
+        <button class="close-btn" onclick="closeEditGoBack()" style="font-size: 24px;">←</button>
+    </div>
     <input type="hidden" id="edit-id">
     <span class="luxury-input-label">NOMI</span><input type="text" id="edit-name" class="search-box" style="margin-bottom: 15px;">
     <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="edit-price" class="search-box" style="margin-bottom: 15px;">
@@ -763,9 +766,13 @@
     <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 12px; margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 8px;">
         <span class="cat-chip type-chip" data-val="motor" onclick="toggleChip(this)">⚙️ Motor</span><span class="cat-chip type-chip" data-val="xadavoy" onclick="toggleChip(this)">🛠️ Xadavoy</span><span class="cat-chip type-chip" data-val="tashqi" onclick="toggleChip(this)">🚘 Tashqi</span>
     </div>
-    <div style="display: flex; gap: 10px;"><button class="btn-checkout" style="background: #ff453a; color: white; width: 30%;" onclick="deleteProduct()">O'CHIR</button><button class="btn-checkout" style="width: 70%;" onclick="saveEditProduct()">SAQLASH</button></div>
-</div>
-<div class="modal-standard" id="adminModal">
+   <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-checkout" style="background: #333; color: white; flex: 1; border: 1px solid var(--luxury-gold); font-size: 13px;" onclick="saveEditProduct(true)">⏳ Hozircha saqlash</button>
+            <button class="btn-checkout" style="flex: 1; font-size: 13px;" onclick="saveEditProduct(false)">✅ Mijozlarga chiqarish</button>
+        </div>
+        <button class="btn-checkout" style="background: rgba(255, 69, 58, 0.1); color: var(--accent-red); border: 1px solid var(--accent-red); font-size: 14px;" onclick="deleteProduct()">🗑 O'chirish</button>
+    </div>
     <div class="modal-header"><h2 style="color: #ff453a;">⚙️ Admin Panel</h2><button class="close-btn" onclick="closeModal()">×</button></div>
     <div class="admin-grid">
         <div class="admin-card" onclick="openAdminOrders()">
@@ -3775,46 +3782,71 @@ window.openEditModal = function(e, directId = null) {
     updateBtns();
 };
 
-window.saveEditProduct = function() {
+
+window.closeEditGoBack = () => {
+    document.getElementById('editModal').style.display = 'none';
+    
+    let draftsModal = document.getElementById('adminDraftsModal');
+    // Agar Qoralamalar (Draft) ichidan kirgan bo'lsak, srazi o'shanga qaytadi
+    if (draftsModal && window.currentDraftFolder !== undefined) {
+        document.getElementById('productModal').style.display = 'none';
+        draftsModal.style.display = 'flex';
+        activeModal = 'adminDraftsModal';
+        window.history.go(-2); // Tarixda orqaga
+    } else {
+        // Oddiy do'kon vitrinasidan kirgan bo'lsak, tovar oynasiga qaytadi
+        document.getElementById('productModal').style.display = 'flex';
+        activeModal = 'productModal';
+        window.history.back();
+    }
+    updateBtns();
+};
+    
+window.saveEditProduct = function(keepDraft = false) {
     let id = parseInt(document.getElementById('edit-id').value);
     let n = document.getElementById('edit-name').value.trim();
-    let p = parseInt(document.getElementById('edit-price').value);
+    let p = parseInt(document.getElementById('edit-price').value) || 0;
     
-    // 1. O'lchov birligini xavfsiz o'qish (Agar HTMLda yo'q bo'lsa, xato bermaydi)
     let unitEl = document.getElementById('edit-unit');
     let pUnit = unitEl ? unitEl.value : 'dona';
     
-    // 2. Tavsifni xavfsiz o'qish
     let descEl = document.getElementById('edit-desc');
     let d = descEl ? descEl.value.trim() : "Tavsif kiritilmagan";
     
     let pType = document.getElementById('edit-prod-type').value;
     
-    // 3. Rasmlarni xavfsiz o'qish (Agar adashib o'chib ketgan bo'lsa ham ishlaydi)
     let img1El = document.getElementById('edit-img-url');
     let img1 = img1El ? img1El.value : "";
     let img2El = document.getElementById('edit-img-url2');
     let img2 = img2El ? img2El.value : "";
     let img3El = document.getElementById('edit-img-url3');
     let img3 = img3El ? img3El.value : "";
-    
     let imagesArr = [img1, img2, img3].filter(u => u !== "");
-
-    if (!n || !p || imagesArr.length === 0) { 
-        showToast("Ism, narx va kamida 1 ta rasm kerak!", "warning"); 
-        return; 
-    }
 
     let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
     let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
-    
-    if (sMods.length === 0 || sTyps.length === 0) { 
-        showToast("Mashina va turi tanlang!", "warning"); 
-        return; 
+
+    // 🛑 QAT'IY TEKSHIRUV: Faqat "Mijozlarga chiqarish" bosilganda tekshiradi
+    if (!keepDraft) {
+        if (!n || !p || imagesArr.length === 0) { 
+            showToast("Ism, narx va kamida 1 ta rasm kerak!", "warning"); 
+            return; 
+        }
+        if (pType === 'oddiy' && (sMods.length === 0 || sTyps.length === 0)) { 
+            showToast("Mashina va turi tanlang!", "warning"); 
+            return; 
+        }
+    } else {
+        // Hozircha saqlash bosilganda faqat ism bo'lsa yetarli
+        if (!n) { showToast("Tovarga hech bo'lmasa ism yozing!", "warning"); return; }
     }
 
     let sCats = []; 
-    sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
+    if(sMods.length > 0 && sTyps.length > 0) {
+        sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
+    } else {
+        sCats = ["umumiy"]; // Qoralama bo'lsa, vaqtincha umumiyga tushadi
+    }
     
     let idx = productsDB.findIndex(x => x.id === id);
 
@@ -3825,7 +3857,7 @@ window.saveEditProduct = function() {
             price: p, 
             unit: pUnit, 
             desc: d, 
-            img: imagesArr[0], 
+            img: imagesArr[0] || "", 
             images: imagesArr, 
             categories: sCats, 
             category: sCats[0], 
@@ -3852,7 +3884,7 @@ window.saveEditProduct = function() {
                 if (sName) sizes.push({ size: sName, stock: sStock });
             });
             
-            if (sizes.length === 0) { 
+            if (!keepDraft && sizes.length === 0) { 
                 showToast("Kamida 1 razmer kiriting!", "warning"); 
                 return; 
             }
@@ -3863,25 +3895,25 @@ window.saveEditProduct = function() {
             productsDB[idx].stock = sizes.reduce((s, x) => s + x.stock, 0);
         }
 
-        delete productsDB[idx].is_draft; // Qoralamadan tozalab, mijozga ko'rsatamiz
+        // ASOSIY MANTIQ: Qoralama yoki Ommaviy ekanini hal qilish
+        if (!keepDraft) {
+            delete productsDB[idx].is_draft; // Qoralamadan tozalab, mijozga ko'rsatamiz
+        } else {
+            productsDB[idx].is_draft = true; // Qoralama bo'lib sirli saqlanadi
+        }
         
-        db.ref('products').set(productsDB).then(() => {
-            showToast("✅ Yangilandi!");
+db.ref('products').set(productsDB).then(() => {
+            showToast(keepDraft ? "⏳ Qoralama saqlandi!" : "✅ Mijozlarga chiqarildi!", "success");
+            
             displayDB = productsDB.filter(p => !p.is_draft);
             renderProducts();
+            if(typeof filterAdminDrafts === 'function') filterAdminDrafts();
             
-            // Oynalarni to'g'ri va xatosiz yopish
-            document.getElementById('editModal').style.display = 'none';
-            document.getElementById('productModal').style.display = 'none';
-            document.body.style.overflow = '';
-            activeModal = null;
-            if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.hide();
-            updateBtns();
-            historyStack = ['main-menu'];
+            // 🛑 BOSH MENUGA SAKRASH TO'XTATILDI, FAQAT BITTA ORQAGA QAYTADI
+            closeEditGoBack();
         });
     }
 };
-
 // ✅ TUZATILGAN: Yangi tovar saqlash
 window.saveNewProduct = function() {
     let n = document.getElementById('add-name').value.trim();
