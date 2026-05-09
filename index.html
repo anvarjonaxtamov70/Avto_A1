@@ -1309,49 +1309,54 @@
     // ==========================================
 // 🧠 EGIZAK TIZIM: TELEGRAM VA APK NI TANISH (TUZATILGAN)
 // ==========================================
-let currentUser = null;
+currentUser = null;
 
 function checkUserLogin() {
     let loginScreen = document.getElementById('login-screen');
     if (!loginScreen) return;
 
-    // 1. Botdan URL orqali kelgan ma'lumotlarni o'qiymiz (Python botingiz yuborgani)
     let urlParams = new URLSearchParams(window.location.search);
     let urlName = urlParams.get('name');
     let urlPhone = urlParams.get('phone');
     
-    // 2. Telegram ob'ektini xavfsiz chaqiramiz (Xato bermasligi uchun)
     let tgApp = (typeof window.Telegram !== 'undefined') ? window.Telegram.WebApp : null;
 
     if (tgApp && tgApp.initDataUnsafe && tgApp.initDataUnsafe.user) {
-        // A. Telegram ichidan kirdi (Avtomat taniymiz)
-        currentUser = {
-            id: tgApp.initDataUnsafe.user.id,
-            name: tgApp.initDataUnsafe.user.first_name,
-            is_telegram: true
-        };
+        // ✅ Telegram ichidan
+        currentUser = tgApp.initDataUnsafe.user.id;
+        userName = tgApp.initDataUnsafe.user.first_name || "Mijoz";
+        myProfile.name = userName;
         loginScreen.classList.add('hidden');
         
     } else if (urlName) {
-        // B. Telegram bot tugmasi orqali kirdi (URL ma'lumotlari)
-        currentUser = {
-            id: "tg_user", 
-            name: urlName,
-            phone: urlPhone || "",
-            is_telegram: true
-        };
+        // ✅ Bot tugmasi orqali
+        currentUser = "tg_url_" + Date.now();
+        userName = urlName;
+        myProfile.name = urlName;
+        myProfile.phone = urlPhone || "";
         loginScreen.classList.add('hidden');
         
     } else {
-        // C. APK yoki Brauzerdan kirdi (Telegram yo'q)
+        // ✅ APK / Brauzer
         let savedUser = localStorage.getItem('avto_a1_user');
         if (savedUser) {
-            currentUser = JSON.parse(savedUser); // Oldin kirgan, taniymiz
-            loginScreen.classList.add('hidden');
+            try {
+                let parsed = JSON.parse(savedUser);
+                currentUser = parsed.id;        // ← faqat ID
+                userName = parsed.name || "Mijoz";
+                myProfile.name = parsed.name || "Mijoz";
+                myProfile.phone = parsed.phone || "";
+                loginScreen.classList.add('hidden');
+            } catch(e) {
+                localStorage.removeItem('avto_a1_user');
+                loginScreen.classList.remove('hidden');
+            }
         } else {
-            loginScreen.classList.remove('hidden'); // Yangi odam, login so'raymiz
+            loginScreen.classList.remove('hidden');
         }
     }
+    
+    updateProfileUI(); // ← Har doim chaqirilsin
 }
 
 // Mijoz o'z qo'li bilan ro'yxatdan o'tganda (APK uchun)
@@ -1364,11 +1369,19 @@ window.manualLogin = function() {
         return; 
     }
     
+    // ✅ TO'G'RI: currentUser faqat ID (string)
     let fakeId = "apk_" + phoneVal.replace(/[^0-9]/g, '');
-    currentUser = { id: fakeId, name: nameVal, phone: phoneVal, is_telegram: false };
+    currentUser = fakeId;           // ← faqat ID
+    userName = nameVal;             // ← ismni alohida
+    myProfile.name = nameVal;
+    myProfile.phone = phoneVal;
     
-    localStorage.setItem('avto_a1_user', JSON.stringify(currentUser));
+    localStorage.setItem('avto_a1_user', JSON.stringify({ 
+        id: fakeId, name: nameVal, phone: phoneVal 
+    }));
+    
     document.getElementById('login-screen').classList.add('hidden');
+    updateProfileUI();
     showToast("Tizimga muvaffaqiyatli kirdingiz!", "success");
 };
 
