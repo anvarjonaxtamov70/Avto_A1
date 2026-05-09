@@ -3888,6 +3888,9 @@ window.closeEditGoBack = () => {
     updateBtns();
 };
     
+// =====================================
+// 1. TAHRIRLASH (EDIT) FUNKSIYASI
+// =====================================
 window.saveEditProduct = function(keepDraft = false) {
     let id = parseInt(document.getElementById('edit-id').value);
     let n = document.getElementById('edit-name').value.trim();
@@ -3909,30 +3912,23 @@ window.saveEditProduct = function(keepDraft = false) {
     let img3 = img3El ? img3El.value : "";
     let imagesArr = [img1, img2, img3].filter(u => u !== "");
 
+    // Faqat mashinani o'qiymiz (Motor/xadavoy turi olib tashlangan)
     let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
-    let sTyps = Array.from(document.querySelectorAll('#editModal .type-chip.selected')).map(c => c.getAttribute('data-val'));
 
-    // 🛑 QAT'IY TEKSHIRUV: Faqat "Mijozlarga chiqarish" bosilganda tekshiradi
     if (!keepDraft) {
         if (!n || !p || imagesArr.length === 0) { 
             showToast("Ism, narx va kamida 1 ta rasm kerak!", "warning"); 
             return; 
         }
-        if (pType === 'oddiy' && (sMods.length === 0 || sTyps.length === 0)) { 
-            showToast("Mashina va turi tanlang!", "warning"); 
+        if (pType === 'oddiy' && sMods.length === 0) { 
+            showToast("Mashina rusumini tanlang!", "warning"); 
             return; 
         }
     } else {
-        // Hozircha saqlash bosilganda faqat ism bo'lsa yetarli
         if (!n) { showToast("Tovarga hech bo'lmasa ism yozing!", "warning"); return; }
     }
 
-    let sCats = []; 
-    if(sMods.length > 0 && sTyps.length > 0) {
-        sMods.forEach(m => { sTyps.forEach(t => { sCats.push(`${m}-${t}`); }); });
-    } else {
-        sCats = ["umumiy"]; // Qoralama bo'lsa, vaqtincha umumiyga tushadi
-    }
+    let sCats = sMods.length > 0 ? sMods : ["umumiy"];
     
     let idx = productsDB.findIndex(x => x.id === id);
 
@@ -3981,25 +3977,24 @@ window.saveEditProduct = function(keepDraft = false) {
             productsDB[idx].stock = sizes.reduce((s, x) => s + x.stock, 0);
         }
 
-        // ASOSIY MANTIQ: Qoralama yoki Ommaviy ekanini hal qilish
         if (!keepDraft) {
-            delete productsDB[idx].is_draft; // Qoralamadan tozalab, mijozga ko'rsatamiz
+            delete productsDB[idx].is_draft; 
         } else {
-            productsDB[idx].is_draft = true; // Qoralama bo'lib sirli saqlanadi
+            productsDB[idx].is_draft = true; 
         }
         
         db.ref('products').set(productsDB).then(() => {
             showToast(keepDraft ? "⏳ Qoralama saqlandi!" : "✅ Mijozlarga chiqarildi!", "success");
-            
             displayDB = productsDB.filter(p => !p.is_draft);
             renderProducts();
             if(typeof filterAdminDrafts === 'function') filterAdminDrafts();
-            
-            // 🛑 BOSH MENUGA SAKRASH TO'XTATILDI, FAQAT BITTA ORQAGA QAYTADI
             closeEditGoBack();
         });
     }
 };
+// =====================================
+// 2. YANGI TOVAR QO'SHISH (ADD) FUNKSIYASI
+// =====================================
 window.saveNewProduct = function() {
     let n = document.getElementById('add-name').value.trim();
     let p = parseInt(document.getElementById('add-price').value) || 0;
@@ -4021,7 +4016,10 @@ window.saveNewProduct = function() {
     if (pType === 'oddiy') {
         let st = parseInt(document.getElementById('add-stock').value) || 0;
         if (sMods.length === 0) { showToast("Mashina rusumini tanlang!", "warning"); return; }
-        newProduct.stock = st; newProduct.category = sMods[0]; newProduct.categories = sMods;
+        
+        newProduct.stock = st; 
+        newProduct.category = sMods[0]; 
+        newProduct.categories = sMods;
     } else {
         let brand = document.getElementById('admin-prod-brand').value;
         let model = document.getElementById('admin-prod-model') ? document.getElementById('admin-prod-model').value : "";
