@@ -1307,37 +1307,54 @@
 <script>
     let tg = window.Telegram.WebApp;
     // ==========================================
-// 🧠 EGIZAK TIZIM: TELEGRAM VA APK NI TANISH
+// 🧠 EGIZAK TIZIM: TELEGRAM VA APK NI TANISH (TUZATILGAN)
 // ==========================================
 let currentUser = null;
 
-// Dastur yonganda mijozni tekshiramiz
 function checkUserLogin() {
     let loginScreen = document.getElementById('login-screen');
+    if (!loginScreen) return;
+
+    // 1. Botdan URL orqali kelgan ma'lumotlarni o'qiymiz (Python botingiz yuborgani)
+    let urlParams = new URLSearchParams(window.location.search);
+    let urlName = urlParams.get('name');
+    let urlPhone = urlParams.get('phone');
     
-    // 1. Mijoz Telegram orqali kirdimi? (Hech narsa so'ramaymiz)
-    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+    // 2. Telegram ob'ektini xavfsiz chaqiramiz (Xato bermasligi uchun)
+    let tgApp = (typeof window.Telegram !== 'undefined') ? window.Telegram.WebApp : null;
+
+    if (tgApp && tgApp.initDataUnsafe && tgApp.initDataUnsafe.user) {
+        // A. Telegram ichidan kirdi (Avtomat taniymiz)
         currentUser = {
-            id: tg.initDataUnsafe.user.id,
-            name: tg.initDataUnsafe.user.first_name,
-            username: tg.initDataUnsafe.user.username || "",
+            id: tgApp.initDataUnsafe.user.id,
+            name: tgApp.initDataUnsafe.user.first_name,
             is_telegram: true
         };
-        loginScreen.classList.add('hidden'); // Oynani yashiramiz
+        loginScreen.classList.add('hidden');
+        
+    } else if (urlName) {
+        // B. Telegram bot tugmasi orqali kirdi (URL ma'lumotlari)
+        currentUser = {
+            id: "tg_user", 
+            name: urlName,
+            phone: urlPhone || "",
+            is_telegram: true
+        };
+        loginScreen.classList.add('hidden');
+        
     } else {
-        // 2. Mijoz APK (Veb) orqali kirdi. Oldin ro'yxatdan o'tganmi?
+        // C. APK yoki Brauzerdan kirdi (Telegram yo'q)
         let savedUser = localStorage.getItem('avto_a1_user');
         if (savedUser) {
-            currentUser = JSON.parse(savedUser); // Ha, taniymiz, o'tkazamiz
+            currentUser = JSON.parse(savedUser); // Oldin kirgan, taniymiz
             loginScreen.classList.add('hidden');
         } else {
-            // 3. Birinchi marta APK dan kiryapti. Loginni ko'rsatamiz!
-            loginScreen.classList.remove('hidden');
+            loginScreen.classList.remove('hidden'); // Yangi odam, login so'raymiz
         }
     }
 }
 
-// Mijoz ro'yxatdan o'tish tugmasini bosganda
+// Mijoz o'z qo'li bilan ro'yxatdan o'tganda (APK uchun)
 window.manualLogin = function() {
     let nameVal = document.getElementById('login-name').value.trim();
     let phoneVal = document.getElementById('login-phone').value.trim();
@@ -1347,27 +1364,17 @@ window.manualLogin = function() {
         return; 
     }
     
-    // Raqamdan maxsus ID yasaymiz (Masalan: apk_998901234567)
     let fakeId = "apk_" + phoneVal.replace(/[^0-9]/g, '');
+    currentUser = { id: fakeId, name: nameVal, phone: phoneVal, is_telegram: false };
     
-    currentUser = { 
-        id: fakeId, 
-        name: nameVal, 
-        phone: phoneVal, 
-        is_telegram: false 
-    };
-    
-    // Telefon xotirasiga saqlab qo'yamiz (Kiyingi safar so'ramaydi)
     localStorage.setItem('avto_a1_user', JSON.stringify(currentUser));
-    
-    // Oynani yopib, dasturga ruxsat beramiz
     document.getElementById('login-screen').classList.add('hidden');
     showToast("Tizimga muvaffaqiyatli kirdingiz!", "success");
 };
 
-// Dastur yuklanganda albatta tekshirishni ishga tushiramiz:
+// Dastur yuklanganda Telegram ma'lumoti yetib kelishi uchun 0.3 soniya kutib ishga tushiramiz!
 window.addEventListener('DOMContentLoaded', () => {
-    checkUserLogin();
+    setTimeout(checkUserLogin, 300);
 });
     tg.expand();
     const ADMIN_IDS = [5105291033, 483425630];
