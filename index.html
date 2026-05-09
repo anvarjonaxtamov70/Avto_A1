@@ -1305,133 +1305,132 @@
 </div>
     
 <script>
-window.currentUser = null;
-let tg = window.Telegram.WebApp;
-tg.expand(); 
-
-function checkUserLogin() {
-    let loginScreen = document.getElementById('login-screen');
-    if (!loginScreen) return;
-
-    let urlParams = new URLSearchParams(window.location.search);
-    let urlName = urlParams.get('name');
-    let urlPhone = urlParams.get('phone');
-    
-    let tgApp = (typeof window.Telegram !== 'undefined') ? window.Telegram.WebApp : null;
-
-    if (tgApp && tgApp.initDataUnsafe && tgApp.initDataUnsafe.user) {
-    window.currentUser = tgApp.initDataUnsafe.user.id;
-        // ✅ Telegram ichidan
-        currentUser = parseInt(tgApp.initDataUnsafe.user.id);
-        userName = tgApp.initDataUnsafe.user.first_name || "Mijoz";
-        myProfile.name = userName;
-        loginScreen.classList.add('hidden');
-        
-    } else if (urlName) {
-        // ✅ Bot tugmasi orqali
-        currentUser = "tg_url_" + Date.now();
-        userName = urlName;
-        myProfile.name = urlName;
-        myProfile.phone = urlPhone || "";
-        loginScreen.classList.add('hidden');
-        
-    } else {
-        // ✅ APK / Brauzer
-        let savedUser = localStorage.getItem('avto_a1_user');
-        if (savedUser) {
-            try {
-                let parsed = JSON.parse(savedUser);
-                currentUser = parsed.id;        // ← faqat ID
-                userName = parsed.name || "Mijoz";
-                myProfile.name = parsed.name || "Mijoz";
-                myProfile.phone = parsed.phone || "";
-                loginScreen.classList.add('hidden');
-            } catch(e) {
-                localStorage.removeItem('avto_a1_user');
-                loginScreen.classList.remove('hidden');
-            }
-        } else {
-            loginScreen.classList.remove('hidden');
-        }
-    }
-    
-    updateProfileUI(); // ← Har doim chaqirilsin
-}
-
-// Mijoz o'z qo'li bilan ro'yxatdan o'tganda (APK uchun)
-window.manualLogin = function() {
-    let nameVal = document.getElementById('login-name').value.trim();
-    let phoneVal = document.getElementById('login-phone').value.trim();
-    
-    if(!nameVal || phoneVal.length < 9) { 
-        showToast("Ism va telefon raqamni to'liq kiriting!", "warning"); 
-        return; 
-    }
-    
-    // ✅ TO'G'RI: currentUser faqat ID (string)
-    let fakeId = "apk_" + phoneVal.replace(/[^0-9]/g, '');
-    currentUser = fakeId;           // ← faqat ID
-    userName = nameVal;             // ← ismni alohida
-    myProfile.name = nameVal;
-    myProfile.phone = phoneVal;
-    
-    localStorage.setItem('avto_a1_user', JSON.stringify({ 
-        id: fakeId, name: nameVal, phone: phoneVal 
-    }));
-    
-    document.getElementById('login-screen').classList.add('hidden');
-    updateProfileUI();
-    showToast("Tizimga muvaffaqiyatli kirdingiz!", "success");
-};
-
-// Dastur yuklanganda Telegram ma'lumoti yetib kelishi uchun 0.3 soniya kutib ishga tushiramiz!
-window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(checkUserLogin, 400);
-});
+    window.currentUser = null;
+    let tg = window.Telegram.WebApp;
     tg.expand();
+
     const ADMIN_IDS = [5105291033, 483425630];
     const ADMIN_ID = ADMIN_IDS[0];
     const BOT_TOKEN = "8503892855:AAHfonB_EV_5cJbrMbxlUHudLPF2dmmYpEU";
     const IMGBB_API_KEY = "ce514c623c419c594bde769bad36c8bc";
     const firebaseConfig = { databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/" };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+    const db = firebase.database();
 
-    // QIRQIB OLINGAN KODNI SHU YERGA TASHLAYSIZ:
-    let currentCropper = null, currentTargetInput = "";
-    let userName = tg.initDataUnsafe?.user?.first_name || "Mijoz";
-    if (currentUser) {
-        let userObj = tg.initDataUnsafe.user;
-        db.ref('users/' + currentUser + '/profile').update({
-            uid: currentUser,
-            username: userObj.username ? "@" + userObj.username : "Yo'q",
-            firstName: userObj.first_name || "",
-            lastName: userObj.last_name || ""
-        });
-    }
-
-    // Buyog'i o'z o'rnida davom etaveradi:
-    let tgUsername = tg.initDataUnsafe?.user?.username ? '@'+tg.initDataUnsafe.user.username : "Yo'q";
+    let currentCropper = null, currentTargetInput = "";
+    
+    // =====================================
+    // 🧠 1. MIJOZNI DASTLABKI TANISH (Kutmasdan darhol o'qiydi)
+    // =====================================
+    let tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
     const urlParams = new URLSearchParams(window.location.search);
-    let botPhone = urlParams.get('phone') ? decodeURIComponent(urlParams.get('phone')) : "";
-    let botName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : userName;
+    let urlName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
+    let urlPhone = urlParams.get('phone') ? decodeURIComponent(urlParams.get('phone')) : "";
     let botRegion = urlParams.get('region') ? decodeURIComponent(urlParams.get('region')) : "Noma'lum";
 
-   if (ADMIN_IDS.includes(currentUser)) { let adminBtn = document.getElementById('nav-admin'); if(adminBtn) adminBtn.classList.remove('hidden'); }
+    let userName = "Mijoz";
+    let isFromTelegram = false;
+
+    if (tgUser) {
+        window.currentUser = parseInt(tgUser.id);
+        userName = tgUser.first_name || "Mijoz";
+        isFromTelegram = true;
+    } else if (urlName) {
+        window.currentUser = "tg_url_" + Date.now();
+        userName = urlName;
+        isFromTelegram = true;
+    } else {
+        let savedUser = localStorage.getItem('avto_a1_user');
+        if (savedUser) {
+            try {
+                let parsed = JSON.parse(savedUser);
+                window.currentUser = parsed.id;
+                userName = parsed.name || "Mijoz";
+                urlPhone = parsed.phone || "";
+            } catch(e) { localStorage.removeItem('avto_a1_user'); }
+        }
+    }
+
+    // =====================================
+    // 📦 2. BAZA VA O'ZGARUVCHILAR
+    // =====================================
     let cart = {}; try { cart = JSON.parse(localStorage.getItem('avto_cart')) || {}; } catch(e) { localStorage.removeItem('avto_cart'); }
-    let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, myOrders = [], wishlist = [], myProfile = { name: botName, phone: botPhone, address: "" }, isDataLoaded = false;
-    
-    function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
-    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">❌ Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
-function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; }
-    updateProfileUI();
-    if (currentUser) {
-        db.ref('users/' + currentUser).on('value', (snap) => {
-      if (snap.exists()) {
-                let data = snap.val(); cart = data.cart || {}; myOrders = data.orders || []; wishlist = data.wishlist || [];
+    let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, myOrders = [], wishlist = [], isDataLoaded = false;
+    let myProfile = { name: userName, phone: urlPhone, address: botRegion !== "Noma'lum" ? botRegion : "" };
+
+    // =====================================
+    // 🔐 3. EKRANNI (LOGIN) SOZLASh
+    // =====================================
+    function checkUserLogin() {
+        let loginScreen = document.getElementById('login-screen');
+        if (!loginScreen) return;
+        
+        if (window.currentUser) {
+            loginScreen.classList.add('hidden');
+            initUserData(); // Login bor, srazi bazani o'qishga ruxsat beramiz
+        } else {
+            loginScreen.classList.remove('hidden');
+        }
+        updateProfileUI();
+    }
+
+    window.manualLogin = function() {
+        let nameVal = document.getElementById('login-name').value.trim();
+        let phoneVal = document.getElementById('login-phone').value.trim();
+        
+        if(!nameVal || phoneVal.length < 9) { showToast("Ism va telefon raqamni to'liq kiriting!", "warning"); return; }
+        
+        let fakeId = "apk_" + phoneVal.replace(/[^0-9]/g, '');
+        window.currentUser = fakeId;
+        myProfile.name = nameVal;
+        myProfile.phone = phoneVal;
+        
+        localStorage.setItem('avto_a1_user', JSON.stringify({ id: fakeId, name: nameVal, phone: phoneVal }));
+        document.getElementById('login-screen').classList.add('hidden');
+        
+        updateProfileUI();
+        showToast("Tizimga muvaffaqiyatli kirdingiz!", "success");
+        initUserData(); // Mijoz qo'lda kirgandan keyin ruxsat beramiz
+    };
+
+    // DARHOL TEKSHIRAMIZ
+    checkUserLogin();
+
+    // =====================================
+    // ⚙️ 4. ADMIN TUGMASI VA FIREBASE YUKLASH
+    // =====================================
+    function initUserData() {
+        // 1. Admin tekshiruvi (Mijoz topilgandan keyin)
+        if (ADMIN_IDS.includes(window.currentUser) || ADMIN_IDS.includes(parseInt(window.currentUser))) { 
+            let adminBtn = document.getElementById('nav-admin'); 
+            if(adminBtn) adminBtn.classList.remove('hidden'); 
+        }
+
+        // 2. Telegramdagi ma'lumotlarni bazaga yozish
+        if (isFromTelegram && tgUser) {
+            db.ref('users/' + window.currentUser + '/profile').update({
+                uid: window.currentUser,
+                username: tgUser.username ? "@" + tgUser.username : "Yo'q",
+                firstName: tgUser.first_name || "",
+                lastName: tgUser.last_name || ""
+            });
+        }
+
+        // 3. Savat va Tarixni tortib olish
+        db.ref('users/' + window.currentUser).on('value', (snap) => {
+            if (snap.exists()) {
+                let data = snap.val(); 
+                cart = data.cart || {}; 
+                myOrders = data.orders || []; 
+                wishlist = data.wishlist || [];
                 if(data.profile) { myProfile = data.profile; updateProfileUI(); }
-                    if(!isDataLoaded) { updateCartBadge(); if(activeModal === 'cartModal') renderCartItems(); if(activeModal === 'my-orders-section') renderMyOrders(); isDataLoaded = true; }
-                   else {
+                
+                if(!isDataLoaded) { 
+                    updateCartBadge(); 
+                    if(activeModal === 'cartModal') renderCartItems(); 
+                    if(activeModal === 'my-orders-section') renderMyOrders(); 
+                    isDataLoaded = true; 
+                } else {
                     setTimeout(() => {
                         if(activeModal === 'my-orders-section') renderMyOrders();
                         if(activeModal === 'orderDetailModal' && typeof renderChatMessages === 'function') renderChatMessages();
@@ -1440,6 +1439,10 @@ function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getEle
             }
         });
     }
+
+    function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
+    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">❌ Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
+    function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; }
 
     function saveLocalCart() { localStorage.setItem('avto_cart', JSON.stringify(cart)); if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
     function saveLocalWishlist() { if (currentUser) db.ref('users/' + currentUser + '/wishlist').set(wishlist); }
