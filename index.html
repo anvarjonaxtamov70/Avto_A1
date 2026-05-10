@@ -8,7 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <script src="https://unpkg.com/@dotlottie/player-component@latest/dist/dotlottie-player.mjs" type="module"></script>
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -5451,49 +5451,51 @@ window.toggleChip = function(el) {
         el.classList.toggle('selected');
     }
 };    
-
-// 🥇 BARCHA ESKI KODLARNI O'LDIRADIGAN YAKUNIY SAVAT FUNKSIYASI
 window.renderCartItems = () => {
     let c = document.getElementById('cart-items-container'); 
     let b = document.getElementById('main-checkout-btn'); 
-    let footer = document.getElementById('cart-total-footer'); // Jami qatori
+    let footer = document.getElementById('cart-total-footer'); // "Jami" qatori ID si
     let pWrap = document.getElementById('cart-progress-wrap');
     let t = 0; 
     
-    if(!c) return; // Xatolikdan himoya
+    if(!c) return; 
     c.innerHTML = '';
     
-    // 1. AGAR SAVAT BO'SH BO'LSA
+    // 1. AGAR SAVAT BO'SH BO'LSA (Bu bo'lim hamma telefonda ishlaydigan qilindi)
     if(!cart || Object.keys(cart).length === 0) { 
         c.innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px 20px; text-align:center;">
-            <dotlottie-player 
-                src="https://lottie.host/80169460-2615-4672-969c-7517c2a71d07/vF1V6vKofE.json" 
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 30px 20px; text-align:center;">
+            <lottie-player 
+                src="https://lottie.host/f8d839da-6804-4c07-ba79-a1b415e9858c/YvBfS4O58k.json?t=${Date.now()}" 
                 background="transparent" 
                 speed="1" 
-                style="width: 180px; height: 180px;" 
+                style="width: 200px; height: 200px; margin-bottom: -15px;" 
                 loop 
                 autoplay>
-            </dotlottie-player>
+            </lottie-player>
             
-            <h3 style="color: #fff; margin: 10px 0 8px 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">Savatingiz bo'm-bo'sh</h3>
-            <p style="color: gray; font-size: 14px; margin: 0 0 30px 0; line-height: 1.6;">Hozircha hech narsa tanlamadingiz.<br>Katalogda ajoyib zapchastlar bor!</p>
+            <h3 style="color: #fff; margin: 0 0 8px 0; font-size: 20px; font-weight: 800;">Savatingiz bo'p-bo'sh</h3>
+            <p style="color: gray; font-size: 14px; margin: 0 0 25px 0; line-height: 1.5; max-width: 250px;">Hozircha hech narsa tanlamadingiz.<br>Katalogda siz qidirgan zapchastlar bor!</p>
             
             <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1.5px solid var(--luxury-gold); padding: 15px 35px; border-radius: 16px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.3s; box-shadow: 0 8px 15px rgba(0,0,0,0.3);">
                 🛍️ TOVARLARNI KO'RISH
             </button>
         </div>`; 
         
+        // Pastki tugmalar va matematikani yashiramiz
         if(b) b.style.display = 'none'; 
-        if(footer) footer.style.display = 'none'; // Jami qatorini yashirish
+        if(footer) footer.style.display = 'none'; 
         if(pWrap) pWrap.style.display = 'none';
         return; 
     } 
 
-    // 2. SAVATDA TOVAR BO'LSA
+    // 2. SAVATDA TOVAR BO'LSA - MATEMATIKA VA CHIZISH
     if(b) b.style.display = 'block';
-    if(footer) footer.style.display = 'block'; // Jami qatorini ko'rsatish
+    if(footer) footer.style.display = 'block'; 
     
+    // Matematikani har safar noldan hisoblaymiz (To'lov pasaymaslik xatosini to'g'irlash)
+    t = 0; 
+
     for(let safeId in cart) { 
         let [baseId, carOptRaw] = String(safeId).split('||');
         let p = productsDB.find(x => x.id == baseId); 
@@ -5501,7 +5503,7 @@ window.renderCartItems = () => {
         
         let qty = parseInt(cart[safeId]) || 0;
         let sum = p.price * qty;
-        t += sum; 
+        t += sum; // Jami summani hisoblaymiz
         
         let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
         let displayName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
@@ -5514,13 +5516,17 @@ window.renderCartItems = () => {
                 </div>
                 <div class="cart-controls">
                     <button onclick="chg('${safeId}',-1)">-</button>
-                    <span style="color:white; font-weight:bold; width:20px; text-align:center;">${qty}</span>
+                    <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
                     <button onclick="chg('${safeId}',1)">+</button>
                 </div>
             </div>`; 
     } 
     
-    // Bepul yetkazib berish progressi
+    // Jami summani ekranda yangilaymiz (Minus qilganda narx pasayishi uchun)
+    let tSum = document.getElementById('cart-total-sum');
+    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+
+    // Progress barni yangilash
     if(pWrap) {
         pWrap.style.display = 'block';
         let target = 150000;
@@ -5538,10 +5544,8 @@ window.renderCartItems = () => {
             }
         }
     }
-    
-    let tSum = document.getElementById('cart-total-sum');
-    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
 };
+
 // 🏠 OYNA TASHQARISIGA BOSGANDA YOPILISHI (Professional ergonomics)
 window.onclick = function(event) {
     const modals = ['productModal', 'cartModal', 'paymentModal', 'profileEditModal', 'contactModal'];
