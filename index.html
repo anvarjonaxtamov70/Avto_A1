@@ -1032,6 +1032,12 @@
             filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.2));
             margin-bottom: 10px;
         }
+        /* 🛒 100% ISHLAYDIGAN SAVAT ANIMATSIYASI */
+        @keyframes floatCart {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -1356,9 +1362,11 @@
     </div>
 
     <div id="cart-items-container" style="flex:1; overflow-y:auto; border-bottom: 1px solid var(--glass-border); padding-bottom: 10px;"></div>
-   <div id="cart-total-row" style="padding:20px 0; font-size: 16px; font-weight: 500;">
-    Jami: <span id="cart-total-sum" style="color:var(--luxury-gold); font-weight: 800; float: right; font-size: 20px;">0 so'm</span>
-</div>
+    
+    <div id="cart-total-footer" style="padding:20px 0; font-size: 16px; font-weight: 500;">
+        Jami: <span id="cart-total-sum" style="color:var(--luxury-gold); font-weight: 800; float: right; font-size: 20px;">0 so'm</span>
+    </div>
+    
     <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openPaymentModal()">Buyurtma</button>
 </div>
 
@@ -5454,48 +5462,37 @@ window.toggleChip = function(el) {
 window.renderCartItems = () => {
     let c = document.getElementById('cart-items-container'); 
     let b = document.getElementById('main-checkout-btn'); 
-    let footer = document.getElementById('cart-total-footer'); // "Jami" qatori ID si
+    let footer = document.getElementById('cart-total-footer'); 
     let pWrap = document.getElementById('cart-progress-wrap');
     let t = 0; 
     
     if(!c) return; 
     c.innerHTML = '';
     
-    // 1. AGAR SAVAT BO'SH BO'LSA (Bu bo'lim hamma telefonda ishlaydigan qilindi)
+    // 1. SAVAT BO'SH BO'LSA
     if(!cart || Object.keys(cart).length === 0) { 
         c.innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 30px 20px; text-align:center;">
-            <lottie-player 
-                src="https://lottie.host/f8d839da-6804-4c07-ba79-a1b415e9858c/YvBfS4O58k.json?t=${Date.now()}" 
-                background="transparent" 
-                speed="1" 
-                style="width: 200px; height: 200px; margin-bottom: -15px;" 
-                loop 
-                autoplay>
-            </lottie-player>
-            
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 50px 20px; text-align:center;">
+            <div style="font-size: 80px; animation: floatCart 2s ease-in-out infinite; filter: drop-shadow(0 15px 15px rgba(212,175,55,0.3)); margin-bottom: 20px;">🛒</div>
             <h3 style="color: #fff; margin: 0 0 8px 0; font-size: 20px; font-weight: 800;">Savatingiz bo'p-bo'sh</h3>
-            <p style="color: gray; font-size: 14px; margin: 0 0 25px 0; line-height: 1.5; max-width: 250px;">Hozircha hech narsa tanlamadingiz.<br>Katalogda siz qidirgan zapchastlar bor!</p>
-            
-            <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1.5px solid var(--luxury-gold); padding: 15px 35px; border-radius: 16px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.3s; box-shadow: 0 8px 15px rgba(0,0,0,0.3);">
+            <p style="color: gray; font-size: 14px; margin: 0 0 25px 0; line-height: 1.5;">Hozircha hech narsa tanlamadingiz.<br>Katalogda ajoyib zapchastlar bor!</p>
+            <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); padding: 14px 35px; border-radius: 16px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.3s; box-shadow: 0 8px 15px rgba(0,0,0,0.3);">
                 🛍️ TOVARLARNI KO'RISH
             </button>
         </div>`; 
         
-        // Pastki tugmalar va matematikani yashiramiz
+        // Pastki tugmalarni 100% yashirish
         if(b) b.style.display = 'none'; 
         if(footer) footer.style.display = 'none'; 
         if(pWrap) pWrap.style.display = 'none';
         return; 
     } 
 
-    // 2. SAVATDA TOVAR BO'LSA - MATEMATIKA VA CHIZISH
+    // 2. SAVATDA NARSALAR BO'LSA
     if(b) b.style.display = 'block';
     if(footer) footer.style.display = 'block'; 
     
-    // Matematikani har safar noldan hisoblaymiz (To'lov pasaymaslik xatosini to'g'irlash)
     t = 0; 
-
     for(let safeId in cart) { 
         let [baseId, carOptRaw] = String(safeId).split('||');
         let p = productsDB.find(x => x.id == baseId); 
@@ -5503,7 +5500,7 @@ window.renderCartItems = () => {
         
         let qty = parseInt(cart[safeId]) || 0;
         let sum = p.price * qty;
-        t += sum; // Jami summani hisoblaymiz
+        t += sum; 
         
         let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
         let displayName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
@@ -5522,11 +5519,9 @@ window.renderCartItems = () => {
             </div>`; 
     } 
     
-    // Jami summani ekranda yangilaymiz (Minus qilganda narx pasayishi uchun)
     let tSum = document.getElementById('cart-total-sum');
     if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
 
-    // Progress barni yangilash
     if(pWrap) {
         pWrap.style.display = 'block';
         let target = 150000;
