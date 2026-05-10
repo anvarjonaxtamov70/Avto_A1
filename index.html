@@ -8,6 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://unpkg.com/@dotlottie/player-component@latest/dist/dotlottie-player.mjs" type="module"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -1026,6 +1027,10 @@
             background: rgba(255, 255, 255, 0.15);
             border-radius: 10px;
             z-index: 2001;
+        }
+        dotlottie-player {
+            filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.2));
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -5452,22 +5457,23 @@ window.renderCartItems = () => {
     let t = 0; 
     c.innerHTML = '';
     
-    // SAVAT BO'SH BO'LGANIDAGI PREMIUM DIZAYN
-    if(Object.keys(cart).length === 0) { 
+if(Object.keys(cart).length === 0) { 
         c.innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 60px 20px; text-align:center;">
-            <div style="font-size: 70px; margin-bottom: 15px; filter: drop-shadow(0 10px 15px rgba(212,175,55,0.2));">🛒</div>
-            <h3 style="color: #fff; margin: 0 0 8px 0; font-size: 18px; font-weight: 800;">Savatingiz bo'p-bo'sh</h3>
-            <p style="color: gray; font-size: 13px; margin: 0 0 25px 0; line-height: 1.5;">Hozircha hech narsa qo'shmadingiz.<br>Kerakli zapchastlarni katalogdan toping.</p>
-            <button onclick="closeModal(); showCatalog();" style="background: rgba(212, 175, 55, 0.1); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); padding: 14px 30px; border-radius: 14px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.2s; box-shadow: inset 0 0 10px rgba(212, 175, 55, 0.05);">
-                Katalogga o'tish
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px 20px; text-align:center;">
+            <dotlottie-player src="https://lottie.host/80169460-2615-4672-969c-7517c2a71d07/vF1V6vKofE.json" background="transparent" speed="1" style="width: 200px; height: 200px;" loop autoplay></dotlottie-player>
+            
+            <h3 style="color: #fff; margin: -20px 0 8px 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">Savatingiz bo'm-bo'sh</h3>
+            <p style="color: gray; font-size: 14px; margin: 0 0 30px 0; line-height: 1.6; max-width: 250px;">Siz hali hech narsa tanlamadingiz. Do'konimizda juda ko'p qiziqarli zapchastlar bor!</p>
+            
+            <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1.5px solid var(--luxury-gold); padding: 16px 40px; border-radius: 18px; font-weight: 800; font-size: 15px; cursor: pointer; transition: 0.3s; box-shadow: 0 10px 20px rgba(0,0,0,0.2);">
+                🛍️ TOVARLARNI KO'RISH
             </button>
         </div>`; 
         
         if(b) b.style.display = 'none'; 
         let pWrap = document.getElementById('cart-progress-wrap');
         if(pWrap) pWrap.style.display = 'none';
-        
+        return;     
     } else {
         for(let safeId in cart) { 
             let [baseId, carOptRaw] = String(safeId).split('||');
