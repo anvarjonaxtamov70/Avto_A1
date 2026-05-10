@@ -1356,7 +1356,9 @@
     </div>
 
     <div id="cart-items-container" style="flex:1; overflow-y:auto; border-bottom: 1px solid var(--glass-border); padding-bottom: 10px;"></div>
-    <div style="padding:20px 0; font-size: 16px; font-weight: 500;">Jami: <span id="cart-total-sum" style="color:var(--luxury-gold); font-weight: 800; float: right; font-size: 20px;">0 so'm</span></div>
+   <div id="cart-total-row" style="padding:20px 0; font-size: 16px; font-weight: 500;">
+    Jami: <span id="cart-total-sum" style="color:var(--luxury-gold); font-weight: 800; float: right; font-size: 20px;">0 so'm</span>
+</div>
     <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openPaymentModal()">Buyurtma</button>
 </div>
 
@@ -5454,27 +5456,32 @@ window.toggleChip = function(el) {
 window.renderCartItems = () => {
     let c = document.getElementById('cart-items-container'); 
     let b = document.getElementById('main-checkout-btn'); 
+    let totalRow = document.getElementById('cart-total-row'); // Pastdagi Jami qatori
+    let pWrap = document.getElementById('cart-progress-wrap');
     let t = 0; 
     c.innerHTML = '';
     
-if(Object.keys(cart).length === 0) { 
+    if(Object.keys(cart).length === 0) { 
+        // 🛍️ SAVAT BO'SH BO'LSA
         c.innerHTML = `
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px 20px; text-align:center;">
             <dotlottie-player src="https://lottie.host/80169460-2615-4672-969c-7517c2a71d07/vF1V6vKofE.json" background="transparent" speed="1" style="width: 200px; height: 200px;" loop autoplay></dotlottie-player>
-            
-            <h3 style="color: #fff; margin: -20px 0 8px 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">Savatingiz bo'm-bo'sh</h3>
-            <p style="color: gray; font-size: 14px; margin: 0 0 30px 0; line-height: 1.6; max-width: 250px;">Siz hali hech narsa tanlamadingiz. Do'konimizda juda ko'p qiziqarli zapchastlar bor!</p>
-            
-            <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1.5px solid var(--luxury-gold); padding: 16px 40px; border-radius: 18px; font-weight: 800; font-size: 15px; cursor: pointer; transition: 0.3s; box-shadow: 0 10px 20px rgba(0,0,0,0.2);">
+            <h3 style="color: #fff; margin: -10px 0 8px 0; font-size: 20px; font-weight: 800;">Savatingiz bo'm-bo'sh</h3>
+            <p style="color: gray; font-size: 14px; margin: 0 0 30px 0; line-height: 1.6;">Hali hech narsa tanlamadingiz. <br>Katalogda ajoyib zapchastlar bor!</p>
+            <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1.5px solid var(--luxury-gold); padding: 16px 40px; border-radius: 18px; font-weight: 800; font-size: 15px; cursor: pointer;">
                 🛍️ TOVARLARNI KO'RISH
             </button>
         </div>`; 
         
         if(b) b.style.display = 'none'; 
-        let pWrap = document.getElementById('cart-progress-wrap');
+        if(totalRow) totalRow.style.display = 'none'; // Jami yozuvini yashirish
         if(pWrap) pWrap.style.display = 'none';
-        return;     
+        return; 
     } else {
+        // 🛒 SAVATDA TOVAR BO'LSA
+        if(b) b.style.display = 'block';
+        if(totalRow) totalRow.style.display = 'block'; // Jami yozuvini ko'rsatish
+        
         for(let safeId in cart) { 
             let [baseId, carOptRaw] = String(safeId).split('||');
             let p = productsDB.find(x => x.id == baseId); 
@@ -5485,33 +5492,20 @@ if(Object.keys(cart).length === 0) {
             t += sum; 
             
             let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-            let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
+            let displayName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
             
             c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${safeId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${qty}</span><button onclick="chg('${safeId}',1)">+</button></div></div>`; 
         } 
-        if(b) b.style.display = 'block';
         
-        let pWrap = document.getElementById('cart-progress-wrap');
-        let pBar = document.getElementById('cart-progress-bar');
-        let pMsg = document.getElementById('cart-progress-msg');
-        
-        if(pWrap && pBar && pMsg) {
+        // Progress barni yangilash
+        if(pWrap) {
             pWrap.style.display = 'block';
             let target = 150000;
-            let percent = (t / target) * 100;
-            if(percent >= 100) {
-                pBar.style.width = '100%';
-                pBar.style.background = '#30d158';
-                pBar.style.boxShadow = '0 0 15px #30d158';
-                pMsg.innerHTML = '🎉 Tabriklaymiz! Yetkazib berish <b>BEPUL</b>!';
-                pMsg.style.color = '#30d158';
-            } else {
-                pBar.style.width = percent + '%';
-                pBar.style.background = 'linear-gradient(90deg, #ff453a, #ff9500)';
-                pBar.style.boxShadow = 'none';
-                pMsg.innerHTML = `Dostavka bepul bo'lishi uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
-                pMsg.style.color = 'var(--luxury-gold)';
-            }
+            let percent = Math.min((t / target) * 100, 100);
+            let pBar = document.getElementById('cart-progress-bar');
+            let pMsg = document.getElementById('cart-progress-msg');
+            if(pBar) pBar.style.width = percent + '%';
+            if(pMsg) pMsg.innerHTML = percent >= 100 ? '🎉 Dostavka <b>BEPUL</b>!' : `Bepul dostavka uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
         }
     } 
     
