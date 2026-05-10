@@ -5552,7 +5552,80 @@ window.onclick = function(event) {
         }
     });
 }
+// 🛠️ YAKUNIY VA XATOSIZ MATEMATIK HISOB-KITOB (JAMI NARXNI TO'G'RILASH)
 
+window.chg = (safeId, d) => { 
+    // 1. Savatda shu tovar borligini tekshiramiz
+    if (!cart[safeId]) cart[safeId] = 0;
+
+    // 2. Tovar bazasidan aslini topamiz (narxini bilish uchun)
+    let [baseId, carOptRaw] = String(safeId).split('||');
+    let p = productsDB.find(x => x.id == baseId);
+    if(!p) return;
+
+    // 3. Ombordagi qoldiqni aniqlaymiz
+    let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+    let stockLimit = 10;
+    if (p.product_type === 'razmerli' && p.sizes) {
+        let sizeObj = p.sizes.find(s => s.size === carOpt);
+        if(sizeObj) stockLimit = sizeObj.stock;
+    } else {
+        stockLimit = p.stock !== undefined ? p.stock : 10;
+    }
+
+    // 4. Sonini o'zgartiramiz
+    let currentQty = parseInt(cart[safeId]) || 0;
+    let newQty = currentQty + d;
+
+    // 5. Minusga o'tib ketmasligi va ombordan oshib ketmasligi nazorati
+    if (d > 0 && currentQty >= stockLimit) {
+        showToast("Omborda bunday ko'p emas", "warning");
+        return;
+    }
+
+    if (newQty <= 0) {
+        delete cart[safeId]; // 0 bo'lsa savatdan butunlay o'chiramiz
+    } else {
+        cart[safeId] = newQty;
+    }
+
+    // 6. MUHIM: Ma'lumotlarni saqlash va HAMMA joyni yangilash
+    saveLocalCart();      // Bazaga yozish
+    updateCartBadge();    // Pastki menyudagi qizil sonni yangilash
+    renderCartItems();    // SAVAT ICHIDAGI MATEMATIKANI QAYTADAN HISOBLASH
+};
+
+// Jami narxni hisoblashda xatolik bo'lmasligi uchun renderCartItems'ni ham yangilab qo'yamiz:
+const originalRender = window.renderCartItems;
+window.renderCartItems = () => {
+    let t = 0; // Jami summani nollaymiz
+    
+    // Har safar savatni boshidan aylantirib chiqamiz
+    for(let safeId in cart) {
+        let [baseId] = String(safeId).split('||');
+        let p = productsDB.find(x => x.id == baseId);
+        if(p) {
+            t += p.price * (parseInt(cart[safeId]) || 0);
+        }
+    }
+
+    // Eski render funksiyasini chaqiramiz (u ekranga chizadi)
+    if(typeof originalRender === 'function') originalRender();
+
+    // Jami summani ekranda majburlab yangilaymiz
+    let tSum = document.getElementById('cart-total-sum');
+    if(tSum) {
+        tSum.innerText = t.toLocaleString() + " so'm";
+    }
+    
+    // Agar savat bo'shab qolgan bo'lsa, pastki qismini yashirish
+    let footer = document.getElementById('cart-total-footer');
+    if(footer) {
+        footer.style.display = (Object.keys(cart).length === 0) ? 'none' : 'block';
+    }
+};
+
+    
     
 </script>    
 </body>    
