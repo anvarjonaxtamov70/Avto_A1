@@ -3585,12 +3585,14 @@ window.addToCartWithOptions = (finalId) => {
     showToast('Savatda!'); 
 };
 
+// 🚨 TO'LIQ VA XATOSIZ SAVAT FUNKSIYASI 🚨
 window.renderCartItems = () => {
     let c = document.getElementById('cart-items-container'); 
     let b = document.getElementById('main-checkout-btn'); 
     let t = 0; 
     c.innerHTML = '';
-   // SAVAT BO'SH BO'LGANIDAGI PREMIUM DIZAYN
+    
+    // SAVAT BO'SH BO'LGANIDAGI PREMIUM DIZAYN
     if(Object.keys(cart).length === 0) { 
         c.innerHTML = `
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 60px 20px; text-align:center;">
@@ -3608,16 +3610,24 @@ window.renderCartItems = () => {
         if(pWrap) pWrap.style.display = 'none';
         
     } else {
-        for(let fullId in cart) { 
-            let [baseId, carOpt] = String(fullId).split('||');
+        // TOVAR BORGANDAGI DIZAYN
+        for(let safeId in cart) { 
+            let [baseId, carOptRaw] = String(safeId).split('||');
             let p = productsDB.find(x => x.id == baseId); 
             if(!p) continue; 
-            t += p.price * cart[fullId]; 
+            
+            let qty = parseInt(cart[safeId]) || 0;
+            let sum = p.price * qty;
+            t += sum; 
+            
+            let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
             let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
-            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[fullId]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${fullId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[fullId]}</span><button onclick="chg('${fullId}',1)">+</button></div></div>`; 
+            
+            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${safeId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${qty}</span><button onclick="chg('${safeId}',1)">+</button></div></div>`; 
         } 
         if(b) b.style.display = 'block';
     } 
+    
     let tSum = document.getElementById('cart-total-sum');
     if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
 };
