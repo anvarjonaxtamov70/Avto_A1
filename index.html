@@ -997,6 +997,36 @@
             padding: 20px !important;
             margin-bottom: 12px !important;
         }
+        /* 🔄 BO'LIMLARARO SILLIQ O'TISH ANIMATSIYASI */
+        #content-area > div {
+            animation: fadeInSlide 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        @keyframes fadeInSlide {
+            from {
+                opacity: 0;
+                transform: translateY(15px); /* Pastdan tepaga ko'tarilib chiqadi */
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 📱 MODAL OYNALAR UCHUN "TAYOQCHA" (HANDLE) */
+        /* Bu mijozga oynani pastga tortib yopish mumkinligini eslatadi */
+        .modal-standard::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            z-index: 2001;
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -5482,7 +5512,16 @@ window.renderCartItems = () => {
     let tSum = document.getElementById('cart-total-sum');
     if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
 };
-
+// 🏠 OYNA TASHQARISIGA BOSGANDA YOPILISHI (Professional ergonomics)
+window.onclick = function(event) {
+    const modals = ['productModal', 'cartModal', 'paymentModal', 'profileEditModal', 'contactModal'];
+    modals.forEach(id => {
+        let m = document.getElementById(id);
+        if (event.target == m) {
+            closeModal();
+        }
+    });
+}
 
     
 </script>    
