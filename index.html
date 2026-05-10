@@ -3586,51 +3586,7 @@ window.addToCartWithOptions = (finalId) => {
 };
 
 // 🚨 TO'LIQ VA XATOSIZ SAVAT FUNKSIYASI 🚨
-window.renderCartItems = () => {
-    let c = document.getElementById('cart-items-container'); 
-    let b = document.getElementById('main-checkout-btn'); 
-    let t = 0; 
-    c.innerHTML = '';
-    
-    // SAVAT BO'SH BO'LGANIDAGI PREMIUM DIZAYN
-    if(Object.keys(cart).length === 0) { 
-        c.innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 60px 20px; text-align:center;">
-            <div style="font-size: 70px; margin-bottom: 15px; filter: drop-shadow(0 10px 15px rgba(212,175,55,0.2));">🛒</div>
-            <h3 style="color: #fff; margin: 0 0 8px 0; font-size: 18px; font-weight: 800;">Savatingiz bo'p-bo'sh</h3>
-            <p style="color: gray; font-size: 13px; margin: 0 0 25px 0; line-height: 1.5;">Hozircha hech narsa qo'shmadingiz.<br>Kerakli zapchastlarni katalogdan toping.</p>
-            <button onclick="closeModal(); showCatalog();" style="background: rgba(212, 175, 55, 0.1); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); padding: 14px 30px; border-radius: 14px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.2s; box-shadow: inset 0 0 10px rgba(212, 175, 55, 0.05);">
-                Katalogga o'tish
-            </button>
-        </div>`; 
-        
-        if(b) b.style.display = 'none'; 
-        
-        let pWrap = document.getElementById('cart-progress-wrap');
-        if(pWrap) pWrap.style.display = 'none';
-        
-    } else {
-        // TOVAR BORGANDAGI DIZAYN
-        for(let safeId in cart) { 
-            let [baseId, carOptRaw] = String(safeId).split('||');
-            let p = productsDB.find(x => x.id == baseId); 
-            if(!p) continue; 
-            
-            let qty = parseInt(cart[safeId]) || 0;
-            let sum = p.price * qty;
-            t += sum; 
-            
-            let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-            let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
-            
-            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${safeId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${qty}</span><button onclick="chg('${safeId}',1)">+</button></div></div>`; 
-        } 
-        if(b) b.style.display = 'block';
-    } 
-    
-    let tSum = document.getElementById('cart-total-sum');
-    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
-};
+
 
 window.chg = (fullId, d) => { 
     let [baseId, carOpt] = String(fullId).split('||');
@@ -3754,35 +3710,6 @@ window.addToCartWithOptions = (finalId) => {
     showToast('Savatda!'); 
 };
 
-window.renderCartItems = () => {
-    let c = document.getElementById('cart-items-container'); 
-    let b = document.getElementById('main-checkout-btn'); 
-    let t = 0; 
-    c.innerHTML = '';
-    if(Object.keys(cart).length === 0) { 
-        c.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; 
-        if(b) b.style.display = 'none'; 
-    } else {
-        for(let safeId in cart) { 
-            let [baseId, carOptRaw] = String(safeId).split('||');
-            let p = productsDB.find(x => x.id == baseId); 
-            if(!p) continue; 
-            
-            let qty = parseInt(cart[safeId]) || 0;
-            let sum = p.price * qty;
-            t += sum; 
-            
-            // Ekranga chiqarishda yana nuqtani tiklaymiz
-            let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-            let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
-            
-            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${safeId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${qty}</span><button onclick="chg('${safeId}',1)">+</button></div></div>`; 
-        } 
-        if(b) b.style.display = 'block';
-    } 
-    let tSum = document.getElementById('cart-total-sum');
-    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
-};
 
 window.chg = (safeId, d) => { 
     let [baseId, carOptRaw] = String(safeId).split('||');
@@ -5264,7 +5191,73 @@ window.toggleChip = function(el) {
     }
 };    
 
-
+// 🥇 BARCHA ESKI KODLARNI O'LDIRADIGAN YAKUNIY SAVAT FUNKSIYASI
+window.renderCartItems = () => {
+    let c = document.getElementById('cart-items-container'); 
+    let b = document.getElementById('main-checkout-btn'); 
+    let t = 0; 
+    c.innerHTML = '';
+    
+    // SAVAT BO'SH BO'LGANIDAGI PREMIUM DIZAYN
+    if(Object.keys(cart).length === 0) { 
+        c.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 60px 20px; text-align:center;">
+            <div style="font-size: 70px; margin-bottom: 15px; filter: drop-shadow(0 10px 15px rgba(212,175,55,0.2));">🛒</div>
+            <h3 style="color: #fff; margin: 0 0 8px 0; font-size: 18px; font-weight: 800;">Savatingiz bo'p-bo'sh</h3>
+            <p style="color: gray; font-size: 13px; margin: 0 0 25px 0; line-height: 1.5;">Hozircha hech narsa qo'shmadingiz.<br>Kerakli zapchastlarni katalogdan toping.</p>
+            <button onclick="closeModal(); showCatalog();" style="background: rgba(212, 175, 55, 0.1); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); padding: 14px 30px; border-radius: 14px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.2s; box-shadow: inset 0 0 10px rgba(212, 175, 55, 0.05);">
+                Katalogga o'tish
+            </button>
+        </div>`; 
+        
+        if(b) b.style.display = 'none'; 
+        let pWrap = document.getElementById('cart-progress-wrap');
+        if(pWrap) pWrap.style.display = 'none';
+        
+    } else {
+        for(let safeId in cart) { 
+            let [baseId, carOptRaw] = String(safeId).split('||');
+            let p = productsDB.find(x => x.id == baseId); 
+            if(!p) continue; 
+            
+            let qty = parseInt(cart[safeId]) || 0;
+            let sum = p.price * qty;
+            t += sum; 
+            
+            let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+            let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
+            
+            c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${safeId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${qty}</span><button onclick="chg('${safeId}',1)">+</button></div></div>`; 
+        } 
+        if(b) b.style.display = 'block';
+        
+        let pWrap = document.getElementById('cart-progress-wrap');
+        let pBar = document.getElementById('cart-progress-bar');
+        let pMsg = document.getElementById('cart-progress-msg');
+        
+        if(pWrap && pBar && pMsg) {
+            pWrap.style.display = 'block';
+            let target = 150000;
+            let percent = (t / target) * 100;
+            if(percent >= 100) {
+                pBar.style.width = '100%';
+                pBar.style.background = '#30d158';
+                pBar.style.boxShadow = '0 0 15px #30d158';
+                pMsg.innerHTML = '🎉 Tabriklaymiz! Yetkazib berish <b>BEPUL</b>!';
+                pMsg.style.color = '#30d158';
+            } else {
+                pBar.style.width = percent + '%';
+                pBar.style.background = 'linear-gradient(90deg, #ff453a, #ff9500)';
+                pBar.style.boxShadow = 'none';
+                pMsg.innerHTML = `Dostavka bepul bo'lishi uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
+                pMsg.style.color = 'var(--luxury-gold)';
+            }
+        }
+    } 
+    
+    let tSum = document.getElementById('cart-total-sum');
+    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+};
 
 
     
