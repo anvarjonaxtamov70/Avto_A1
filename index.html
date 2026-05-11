@@ -3007,17 +3007,47 @@ window.addEditSizeField = () => {
 
     window.history.replaceState({ section: 'main-menu' }, "");
     setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
-    let limitCount = 12; window.addEventListener('scroll', () => { if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 150) { if (limitCount < productsDB.length) { limitCount += 12; renderProducts(); } } });
+// =====================================
+    // 🔄 SILLIQ SKROLL VA TOVARLARNI YUKLASH (Muzlamaydigan versiya)
+    // =====================================
+    let limitCount = 12; 
 
-function renderProducts() {
+    window.addEventListener('scroll', () => { 
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 150) { 
+            // "productsDB" emas, "displayDB" qildik. Faqat ko'rinadiganlarni hisoblaydi
+            if (limitCount < displayDB.length) { 
+                let oldLimit = limitCount;
+                limitCount += 12; 
+                loadMoreProducts(oldLimit); // 👈 Asosiy sehr: Faqat yangilarini qo'shamiz!
+            } 
+        } 
+    });
+
+    // ➕ Faqatgina yangi kelgan tovarlarni pastga yopishtiruvchi motor
+    function loadMoreProducts(startIndex) {
         let hc = document.getElementById('home-products'); 
-        if(hc) { let hi = displayDB.slice(0, limitCount); hc.innerHTML = hi.map(x => cardHTML(x)).join(''); }
+        if(hc) { 
+            // Eski tovarlarni buzmaymiz, faqat yangi qismini (slice) qirqib olamiz
+            let newItems = displayDB.slice(startIndex, limitCount); 
+            if(newItems.length > 0) {
+                // innerHTML emas, insertAdjacentHTML orqali oxiriga ulab qo'yamiz!
+                hc.insertAdjacentHTML('beforeend', newItems.map(x => cardHTML(x)).join(''));
+            }
+        }
+    }
+
+    // Oynani birinchi marta ochgandagi yoki tovar yangilangandagi chizish
+    function renderProducts() {
+        let hc = document.getElementById('home-products'); 
+        if(hc) { 
+            let hi = displayDB.slice(0, limitCount); 
+            hc.innerHTML = hi.map(x => cardHTML(x)).join(''); 
+        }
         
-        // Katalog papkalariga tovarlarni chizish (Motor/Xadavoy bekor qilindi)
+        // Katalog papkalariga tovarlarni chizish
         document.querySelectorAll('.items-grid').forEach(c => { 
             let id = c.id; 
             if(id.endsWith('-parts')) { 
-                // "gazel-biznes-parts" degan ID dan "-parts" ni olib tashlaymiz
                 let catName = id.replace('-parts', ''); 
                 let items = displayDB.filter(x => x.category === catName || (x.categories && x.categories.includes(catName))); 
                 
