@@ -3786,63 +3786,87 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     function closeModal() { if(activeModal) window.history.back(); }
     function goHome() { if(activeModal) closeModal(); if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); } updateNav('nav-home'); }
 
-    window.addEventListener('popstate', function(e) {
-        if (activeModal) {
-            let current = activeModal;
-            document.getElementById(current).style.display = 'none';
-
-    // popstate ichida bu qismni toping:
-    if (current === 'adminChatModal') {
-        activeModal = 'adminOrdersModal';
-        document.getElementById('adminOrdersModal').style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-        updateBtns();
-        window.history.pushState({ modal: 'adminOrdersModal' }, "");
-    return;
-}
-
-            // 2. Agar Ichki Admin oynalaridan qaytayotgan bo'lsak -> Admin Panelga o'tamiz
-           if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal') {
-                activeModal = 'adminModal';
-                document.getElementById('adminModal').style.display = 'flex';
-                document.body.style.overflow = 'hidden';
+        // 🧭 MUKAMMAL NAVIGATSIYA VA OYNALARNI YOPISH XARITASI (Qotishlarga qarshi)
+        window.addEventListener('popstate', function(e) {
+            if (activeModal) {
+                let current = activeModal;
+                document.getElementById(current).style.display = 'none';
+    
+                // 1. Admin Chatdan -> Buyurtmalarga qaytish
+                if (current === 'adminChatModal') {
+                    activeModal = 'adminOrdersModal';
+                    document.getElementById('adminOrdersModal').style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    updateBtns();
+                    window.history.pushState({ modal: 'adminOrdersModal' }, "");
+                    return;
+                }
+    
+                // 2. Tahrirlash oynasidan -> Tovar yoki Qoralamalarga qaytish
+                if (current === 'editModal') {
+                    if (window.currentDraftFolder) {
+                        activeModal = 'adminDraftsModal';
+                        document.getElementById('adminDraftsModal').style.display = 'flex';
+                    } else {
+                        activeModal = 'productModal';
+                        document.getElementById('productModal').style.display = 'flex';
+                    }
+                    document.body.style.overflow = 'hidden';
+                    updateBtns();
+                    return;
+                }
+    
+                // 3. Maxsus Admin oynalaridan -> Admin Panelga qaytish (Tarixni tiklash kerak)
+                if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal' || current === 'adminDraftsModal') {
+                    activeModal = 'adminModal';
+                    document.getElementById('adminModal').style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    updateBtns();
+                    window.history.pushState({ modal: 'adminModal' }, ""); // Tarixni tiklaymiz    
+                    return;
+                }
+    
+                // 4. Qo'shish oynalaridan -> Admin Panelga qaytish (Faqatgina o'ziga qaytamiz)
+                if (current === 'addProductModal' || current === 'aiBulkModal') {
+                    activeModal = 'adminModal';
+                    document.getElementById('adminModal').style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    updateBtns();
+                    return;
+                }
+    
+                // Boshqa har qanday oyna butunlay yopiladi va Asosiy ekranga tushadi
+                document.body.style.overflow = '';
+                activeModal = null;
                 updateBtns();
-                window.history.pushState({ modal: 'adminModal' }, ""); // Tarixni tiklash    
+                
+                let cS = historyStack[historyStack.length - 1];
+                if(cS === 'profile-section') updateNav('nav-profile');
+                else if(cS === 'katalog-menu') updateNav('nav-catalog');
+                else if(cS === 'wishlist-section') updateNav('nav-wishlist');
+                else updateNav('nav-home');
                 return;
             }
-
-            // Boshqa har qanday oyna butunlay yopiladi
-            document.body.style.overflow = '';
-            activeModal = null;
-            updateBtns();
             
-            let cS = historyStack[historyStack.length - 1];
-            if(cS === 'profile-section') updateNav('nav-profile');
-            else if(cS === 'katalog-menu') updateNav('nav-catalog');
-            else if(cS === 'wishlist-section') updateNav('nav-wishlist');
-            else updateNav('nav-home');
-            return;
-        }
-        
-        if (searchActive) { exitSearch(); return; }
-        
-        if (historyStack.length > 1) {
-            historyStack.pop();
-            let pId = historyStack[historyStack.length - 1];
-            document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); });
-            document.getElementById(pId).classList.remove('hidden');
-            document.getElementById(pId).classList.add('animate-slide-up');
-            let sC = document.querySelector('.slider-container');
-            if(sC) sC.style.display = (pId === 'main-menu') ? 'block' : 'none';
-            if(pId === 'profile-section') updateNav('nav-profile');
-            else if(pId === 'katalog-menu') updateNav('nav-catalog');
-            else if(pId === 'wishlist-section') updateNav('nav-wishlist');
-            else updateNav('nav-home');
-            updateBtns();
-        } else {
-            tg.close();
-        }
-    });
+            if (searchActive) { exitSearch(); return; }
+            
+            if (historyStack.length > 1) {
+                historyStack.pop();
+                let pId = historyStack[historyStack.length - 1];
+                document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); });
+                document.getElementById(pId).classList.remove('hidden');
+                document.getElementById(pId).classList.add('animate-slide-up');
+                let sC = document.querySelector('.slider-container');
+                if(sC) sC.style.display = (pId === 'main-menu') ? 'block' : 'none';
+                if(pId === 'profile-section') updateNav('nav-profile');
+                else if(pId === 'katalog-menu') updateNav('nav-catalog');
+                else if(pId === 'wishlist-section') updateNav('nav-wishlist');
+                else updateNav('nav-home');
+                updateBtns();
+            } else {
+                tg.close();
+            }
+        });
 
     tg.onEvent('backButtonClicked', function() { window.history.back(); });
     function goBack() { window.history.back(); }
