@@ -1746,6 +1746,53 @@
             -webkit-overflow-scrolling: touch !important; /* iOS (iPhone) da qotib qolmasligi uchun */
             touch-action: pan-y !important; /* Faqatgina tepaga va pastga yurishga ruxsat */
         }
+        /* ================================================= */
+        /* 💎 1. YALTIROQ SHISHA (GLASS GLARE) */
+        /* ================================================= */
+        .luxury-card {
+            position: relative;
+            overflow: hidden !important;
+        }
+        /* Kartochkaga barmoq tekkanda nur "lip" etib o'tadi */
+        .luxury-card::after {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -100%;
+            width: 100%;
+            height: 200%;
+            background: linear-gradient(to right, transparent, rgba(212, 175, 55, 0.1), transparent);
+            transform: rotate(30deg);
+            transition: none;
+            pointer-events: none;
+        }
+        .luxury-card:active::after {
+            left: 150%;
+            transition: all 0.6s ease-in-out;
+        }
+
+        /* ================================================= */
+        /* 📐 2. AQLLI SARLAVHA (STICKY MORPH) */
+        /* ================================================= */
+        .header, .search-input-container {
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        /* Skroll qilingandagi holat */
+        body.scrolled .header {
+            padding: 5px 0;
+            transform: scale(0.85);
+            opacity: 0.7;
+        }
+        body.scrolled .search-input-container {
+            top: 5px !important;
+            width: calc(100% - 20px) !important;
+            transform: translateY(-5px);
+        }
+        body.scrolled .search-box {
+            background: rgba(15, 15, 17, 0.9) !important;
+            border-radius: 12px !important;
+            height: 45px;
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -6672,8 +6719,8 @@ window.renderCartItems = () => {
             </div>`; 
     } 
     
-    let tSum = document.getElementById('cart-total-sum');
-    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+// t - bu savatdagi jami summa o'zgaruvchisi
+animatePrice('cart-total-sum', t);
 
     if(pWrap) {
         pWrap.style.display = 'block';
@@ -6785,23 +6832,33 @@ document.addEventListener('click', function(e) {
 });
 
 // ===================================================
-// 📱 AQLLI MENYU VA AI TUGMASI (SKROLL HARAKATI)
+// 📱 HEADER MORPH VA MENYU NAZORATI (YANGI VERSIA)
 // ===================================================
-let lastScrollTop = 0;
-window.addEventListener("scroll", function() {
-    // Agar birorta oyna ochiq bo'lsa, hech narsa qilma
-    if (activeModal) return; 
+let lastScrollTop = 0; // Bu o'zgaruvchi tepada bir marta e'lon qilinishi shart
 
+window.addEventListener("scroll", function() {
     let st = window.pageYOffset || document.documentElement.scrollTop;
+    
+    // 📐 1. Tepani kichraytirish (Morphing)
+    // Agar ekranni 40px pastga tushirsak, tepa qism avtomat kichrayadi
+    if (st > 40) {
+        document.body.classList.add("scrolled");
+    } else {
+        document.body.classList.remove("scrolled");
+    }
+
+    // 📱 2. Menyu va AI tugmasi yashirinishi
+    if (activeModal) return; // Agar oyna ochiq bo'lsa, menyu qimirlamaydi
+    
     let bottomNav = document.querySelector('.bottom-nav');
-    let aiBtn = document.querySelector('.ai-luxury-btn'); // AI tugmasini ushlaymiz
+    let aiBtn = document.querySelector('.ai-luxury-btn');
 
     if (st > lastScrollTop && st > 50) {
-        // ⬇️ PASTGA SKROLL: Menyu pastga, AI tugmasi o'ngga yashirinadi
+        // PASTGA SKROLL: Menyu va AI tugmasi yashirinadi
         if(bottomNav) bottomNav.classList.add("nav-hidden");
         if(aiBtn) aiBtn.classList.add("ai-hidden");
     } else {
-        // ⬆️ TEPAGA SKROLL: Hammasi joyiga qaytadi
+        // TEPAGA SKROLL: Hammasi joyiga qaytadi
         if(bottomNav) bottomNav.classList.remove("nav-hidden");
         if(aiBtn) aiBtn.classList.remove("ai-hidden");
     }
@@ -6866,7 +6923,34 @@ window.exitSearch = () => {
     document.body.classList.remove('search-focused');
     if(typeof originalExitSearch === 'function') originalExitSearch();
 };
-
+// 🔢 RAQAMLARNI SILLIQ HISOB-KITOB QILUVCHI MOTOR
+window.animatePrice = (id, end) => {
+    let obj = document.getElementById(id);
+    if(!obj) return;
+    
+    // Hozirgi ekrandagi raqamni aniqlaymiz (so'm so'zini olib tashlab)
+    let start = parseInt(obj.innerText.replace(/[^0-9]/g, '')) || 0;
+    if(start === end) return; // Agar raqam o'zgarmagan bo'lsa, to'xtaymiz
+    
+    let duration = 800; // Animatsiya tezligi (800ms)
+    let startTime = null;
+    
+    function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        let progress = Math.min((timestamp - startTime) / duration, 1);
+        
+        // Matematik hisob: boshlang'ich va oxirgi raqam orasidagi yo'l
+        let current = Math.floor(progress * (end - start) + start);
+        
+        // Ekranga chiroyli qilib chiqaramiz
+        obj.innerHTML = current.toLocaleString() + " so'm";
+        
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        }
+    }
+    window.requestAnimationFrame(step);
+};
 
     
 </script>    
