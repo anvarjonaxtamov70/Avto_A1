@@ -2484,15 +2484,32 @@
     function saveLocalCart() { localStorage.setItem('avto_cart', JSON.stringify(cart)); if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
     function saveLocalWishlist() { if (currentUser) db.ref('users/' + currentUser + '/wishlist').set(wishlist); }
 
-    function toggleWishlist(e, id) {
-        if(e) e.stopPropagation();
-        let idx = wishlist.indexOf(id);
-        if(idx === -1) { wishlist.push(id); showToast("Saqlandi!", "success"); }
-        else { wishlist.splice(idx, 1); showToast("O'chirildi", "warning"); }
-        saveLocalWishlist();
-        renderProducts(); // Asosiy sahifadagi yurakchalarni yangilash
-        if (historyStack[historyStack.length - 1] === 'wishlist-section') renderWishlist(); // Agar saqlanganlar bo'limida bo'lsa
+    // ❤️ SAQLANGANLAR (WISHLIST) YANGLANGAN FUNKSIYASI
+function toggleWishlist(e, id) {
+    if(e) e.stopPropagation();
+    
+    let idx = wishlist.indexOf(id);
+    let btn = e ? e.currentTarget : null; // Bosilgan yurakchani o'zini ushlab olamiz
+
+    if(idx === -1) { 
+        wishlist.push(id); 
+        showToast("Saqlandi!", "success"); 
+        if(btn) btn.classList.add('active'); // Faqatgina shu yurakchani qizartiramiz
+    } else { 
+        wishlist.splice(idx, 1); 
+        showToast("O'chirildi", "warning"); 
+        if(btn) btn.classList.remove('active'); // Qizil rangni olib tashlaymiz
     }
+    
+    saveLocalWishlist();
+    
+    // 🛑 DASTURNI QOTIRADIGAN "renderProducts()" NI O'CHIRIB TASHLADIK
+    
+    // Agar mijoz aynan "Saqlanganlar" bo'limi ichida turib o'chirsa, o'shanda ro'yxatni yangilaymiz
+    if (historyStack[historyStack.length - 1] === 'wishlist-section') {
+        renderWishlist(); 
+    }
+}
 
     function showWishlist() {
         if(activeModal) closeModal();
