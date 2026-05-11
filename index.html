@@ -1493,6 +1493,32 @@
                 opacity: 0;
             }
         }
+        /* ================================================= */
+        /* 📱 2. AQLLI MENYU (SMART BOTTOM NAV) */
+        /* ================================================= */
+        .bottom-nav {
+            transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.4s ease !important;
+        }
+        .bottom-nav.nav-hidden {
+            transform: translate(-50%, 150%) !important; /* Ekranning pastiga sho'ng'iydi */
+            opacity: 0 !important;
+            pointer-events: none; /* Bosilmasligi uchun */
+        }
+
+        /* ================================================= */
+        /* 🎉 4. BAYRAMONA XARID (CONFETTI ANIMATSIYASI) */
+        /* ================================================= */
+        .confetti-piece {
+            position: fixed; top: -20px; z-index: 999999;
+            width: 10px; height: 20px; pointer-events: none;
+            border-radius: 4px;
+            animation: confetti-fall linear forwards;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        @keyframes confetti-fall {
+            0% { transform: translateY(0) rotate(0deg) rotateY(0deg) scale(1); opacity: 1; }
+            100% { transform: translateY(110vh) rotate(720deg) rotateY(360deg) scale(0.8); opacity: 0; }
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -4655,6 +4681,13 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             if(loadingOverlay) loadingOverlay.classList.remove('active'); 
             showToast("Qabul qilindi!");
             
+             shootConfetti();
+            
+            setTimeout(() => { 
+                if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
+                tg.close(); 
+            }, 2500); // Sal ko'proq kutamiz (2500ms), mijoz konfettini tomosha qilishi uchun!
+            
             setTimeout(() => { 
                 if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
                 tg.close(); 
@@ -6459,6 +6492,68 @@ document.addEventListener('click', function(e) {
     // Animatsiya tugagach, to'lqinni o'chiramiz
     setTimeout(() => circle.remove(), 600);
 });
+// ===================================================
+// 📱 AQLLI MENYU (SKROLL QILGANDA YASHIRINADI)
+// ===================================================
+let lastScrollTop = 0;
+window.addEventListener("scroll", function() {
+    // Agar birorta modal (tovar, savat, admin) ochiq bo'lsa, menyu qotib tursin
+    if (activeModal) return; 
+
+    let st = window.pageYOffset || document.documentElement.scrollTop;
+    let bottomNav = document.querySelector('.bottom-nav');
+    if (!bottomNav) return;
+
+    if (st > lastScrollTop && st > 50) {
+        // Pastga scroll qilyapti -> Menyuni yashiramiz
+        bottomNav.classList.add("nav-hidden");
+    } else {
+        // Tepaga scroll qilyapti -> Menyuni chiqaramiz
+        bottomNav.classList.remove("nav-hidden");
+    }
+    lastScrollTop = st <= 0 ? 0 : st;
+}, false);
+
+
+// ===================================================
+// 🎉 BAYRAMONA XARID (CONFETTI YOMG'IRI)
+// ===================================================
+window.shootConfetti = () => {
+    // Telefonni vibratsiya qildiramiz (Mijoz maza qiladi)
+    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    
+    // Tilla, ko'k, oq va yashil ranglar
+    const colors = ['#D4AF37', '#007aff', '#ffffff', '#30d158', '#e5c07b']; 
+    
+    // 70 ta bayram qog'ozi yog'diramiz
+    for (let i = 0; i < 70; i++) {
+        let conf = document.createElement('div');
+        conf.className = 'confetti-piece';
+        
+        // Ekranning har xil joyidan tushadi
+        conf.style.left = Math.random() * 100 + 'vw';
+        conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        // Ba'zilarini dumaloq, ba'zilarini uzun qog'oz qilamiz
+        if (Math.random() > 0.5) { 
+            conf.style.borderRadius = '50%'; 
+            conf.style.width = '12px'; 
+            conf.style.height = '12px'; 
+        }
+        
+        // Tushish tezligi va boshlanish vaqti har xil
+        conf.style.animationDuration = (Math.random() * 2 + 2) + 's';
+        conf.style.animationDelay = (Math.random() * 0.3) + 's';
+        
+        document.body.appendChild(conf);
+        
+        // Animatsiya tugagach, tozalab tashlaymiz (Telefon qotmasligi uchun)
+        setTimeout(() => conf.remove(), 4500);
+    }
+};
+
+
+
     
 </script>    
 </body>    
