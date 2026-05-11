@@ -4011,65 +4011,7 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
 window.adminOrdersLimit = 20;
 window.lastOrdersRef = null;
 
-window.renderAdminOrdersUI = (ordersArr) => {
-    let box = document.getElementById('admin-orders-render-box');
-    if(!box) return;
 
-    if (window.lastOrdersRef !== ordersArr) {
-        window.adminOrdersLimit = 20;
-        window.lastOrdersRef = ordersArr;
-    }
-
-    if(ordersArr.length === 0) { 
-        box.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Buyurtmalar topilmadi.</p>'; 
-        return; 
-    }
-    
-    let visibleOrders = ordersArr.slice(0, window.adminOrdersLimit);
-    
-    let html = visibleOrders.map(o => {
-        let unreadCount = 0;
-        if (o.messages) {
-            for (let i = o.messages.length - 1; i >= 0; i--) {
-                if (o.messages[i].sender === 'admin') break; 
-                if (o.messages[i].sender === 'mijoz') unreadCount++;
-            }
-        }
-        
-        let chatBtnStyle = unreadCount > 0 
-            ? `background:var(--accent-red); color:#fff; border:none; box-shadow: 0 0 10px rgba(255, 69, 58, 0.5);` 
-            : `background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.1);`;
-        let chatBtnText = unreadCount > 0 ? `💬 Chat (${unreadCount})` : `💬 Chat`;
-
-        let dName = o.customerName || o.uN || 'Ismsiz';
-        let dPhone = o.customerPhone || o.uP || 'Raqamsiz';
-        let dAddr = o.customerAddress && o.customerAddress !== "Kiritilmagan" ? `<br>📍 ${o.customerAddress}` : "";
-
-        return `
-        <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block; position:relative;">
-            ${unreadCount > 0 ? `<div style="position:absolute; top:-8px; right:-8px; background:var(--accent-red); color:white; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; box-shadow:0 4px 10px rgba(255,69,58,0.6); z-index:10;">${unreadCount}</div>` : ''}
-            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                <b style="color:var(--luxury-gold);">#${o.code||o.id}</b>
-                ${getStatusHTML(o.status||'kutilmoqda')}
-            </div>
-            <p style="margin:5px 0; font-size: 13px;">👤 ${dName}<br>📞 ${dPhone}${dAddr}</p>
-            <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px; font-size:16px;">💰 ${o.total.toLocaleString()} so'm</p>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button style="padding:10px; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; ${chatBtnStyle}" onclick="openAdminChat('${o.uI}', ${o.id})">${chatBtnText}</button>
-                ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
-                ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lda</button>` : ''}
-                ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazildi</button>` : ''}
-                ${o.status !== 'bekor_qilingan' ? `<button style="padding:10px; background:var(--accent-red); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor</button>` : ''}
-            </div>
-        </div>
-        `}).join(''); 
-        
-    if (window.adminOrdersLimit < ordersArr.length) {
-        html += `<div style="text-align:center; padding: 15px 0 30px; color: var(--luxury-gold); font-size: 12px; font-weight: bold; opacity: 0.7;">Pastga tushganda yana yuklanmoqda... ⏳</div>`;
-    }
-    
-    box.innerHTML = html;
-};
 
 window.filterAdminOrders = (status, btnElement) => {
     if(!window.allFetchedOrders) return;
@@ -4678,15 +4620,26 @@ window.showTrackedOrder = (o) => {
     openModal('orderDetailModal');
 };
 
+// =====================================
+// 📦 ADMIN: BUYURTMALAR RO'YXATI (ULTRA PREMIUM DIZAYN)
+// =====================================
 window.renderAdminOrdersUI = (ordersArr) => {
     let box = document.getElementById('admin-orders-render-box');
     if(!box) return;
+
+    if (window.lastOrdersRef !== ordersArr) {
+        window.adminOrdersLimit = 20;
+        window.lastOrdersRef = ordersArr;
+    }
+
     if(ordersArr.length === 0) { 
-        box.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Buyurtmalar topilmadi.</p>'; 
+        box.innerHTML = '<div style="text-align:center; padding: 40px; color:gray;"><div style="font-size:40px; margin-bottom:10px; opacity:0.5;">📭</div>Buyurtmalar topilmadi.</div>'; 
         return; 
     }
     
-    box.innerHTML = ordersArr.map(o => {
+    let visibleOrders = ordersArr.slice(0, window.adminOrdersLimit);
+    
+    let html = visibleOrders.map(o => {
         let unreadCount = 0;
         if (o.messages) {
             for (let i = o.messages.length - 1; i >= 0; i--) {
@@ -4695,48 +4648,97 @@ window.renderAdminOrdersUI = (ordersArr) => {
             }
         }
         
-        let chatBtnStyle = unreadCount > 0 
-            ? `background:var(--accent-red); color:#fff; border:none; box-shadow: 0 0 10px rgba(255, 69, 58, 0.5);` 
-            : `background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.1);`;
-        let chatBtnText = unreadCount > 0 ? `💬 Chat (${unreadCount})` : `💬 Chat`;
+        // Chat tugmasi dizayni
+        let chatBtnText = unreadCount > 0 
+            ? `💬 Chat <span style="background: white; color: var(--accent-red); padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 5px; font-weight: 900;">${unreadCount}</span>` 
+            : `💬 Chat`;
 
-        let dName = o.customerName || o.uN || 'Ismsiz';
+        let dName = o.customerName || o.uN || 'Ismsiz mijoz';
         let dPhone = o.customerPhone || o.uP || 'Raqamsiz';
-        let dAddr = o.customerAddress && o.customerAddress !== "Kiritilmagan" ? `<br>📍 ${o.customerAddress}` : "";
+        let dAddr = o.customerAddress && o.customerAddress !== "Kiritilmagan" ? o.customerAddress : '';
+
+        // Xarid qilingan tovarlarni chiroyli ro'yxat qilish
+        let itemsHtml = '';
+        if (o.items) {
+            itemsHtml = `<div style="background: rgba(0,0,0,0.3); border-radius: 14px; padding: 12px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.03); box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">`;
+            for(let pid in o.items) {
+                let [baseId, carOptRaw] = String(pid).split('||');
+                let p = productsDB.find(x => x.id == baseId);
+                if(p) {
+                    let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+                    let dNameItem = carOpt && carOpt !== "Universal" ? `${p.name} <span style="color:var(--luxury-gold); font-size:10px;">[${carOpt}]</span>` : p.name;
+                    itemsHtml += `
+                    <div style="display:flex; justify-content:space-between; font-size: 12px; margin-bottom: 8px; color: #d1d1d6; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 6px;">
+                        <span style="flex:1; line-height: 1.4;">▪️ ${dNameItem} <b style="color:#fff; margin-left:5px;">x${o.items[pid]}</b></span>
+                        <span style="color:var(--luxury-gold); font-weight:bold; white-space:nowrap; margin-left: 10px;">${(p.price * o.items[pid]).toLocaleString()} s</span>
+                    </div>`;
+                }
+            }
+            itemsHtml += `</div>`;
+        }
+
+        // Holatga qarab aqlli tugmalar yasash
+        let actionBtns = '';
+        if (o.status === 'kutilmoqda' || !o.status) {
+            actionBtns = `<button style="background: rgba(0,122,255,0.15); color: #007aff; border: 1px solid rgba(0,122,255,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">✅ Qabul qilish</button>`;
+        } else if (o.status === 'qabul') {
+            actionBtns = `<button style="background: rgba(255,149,0,0.15); color: #ff9500; border: 1px solid rgba(255,149,0,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">🚚 Yo'lga chiqarish</button>`;
+        } else if (o.status === 'yolda') {
+            actionBtns = `<button style="background: rgba(52,199,89,0.15); color: #30d158; border: 1px solid rgba(52,199,89,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">🏁 Yetkazildi</button>`;
+        }
+        
+        let cancelBtn = '';
+        if (o.status !== 'bekor_qilingan' && o.status !== 'yetkazildi') {
+            cancelBtn = `<button style="background: rgba(255,69,58,0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.3); padding: 12px; border-radius: 12px; flex: 0.5; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor</button>`;
+        }
 
         return `
-        <div class="luxury-card" style="margin-bottom:15px; padding: 15px; display:block; position:relative;">
-            ${unreadCount > 0 ? `<div style="position:absolute; top:-8px; right:-8px; background:var(--accent-red); color:white; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; box-shadow:0 4px 10px rgba(255,69,58,0.6); z-index:10;">${unreadCount}</div>` : ''}
+        <div class="luxury-card" style="margin-bottom: 20px; padding: 20px; display: block; border: 1px solid rgba(255,255,255,0.08); background: linear-gradient(145deg, #1c1c1e 0%, #121212 100%); border-radius: 22px; box-shadow: 0 8px 25px rgba(0,0,0,0.4);">
             
-            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                <b style="color:var(--luxury-gold);">#${o.code||o.id}</b>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
+                <div style="font-size: 16px; font-weight: 900; color: #fff; letter-spacing: 0.5px;">#${o.code||o.id}</div>
                 ${getStatusHTML(o.status||'kutilmoqda')}
             </div>
-            <p style="margin:5px 0; font-size: 13px;">👤 ${dName}<br>📞 ${dPhone}${dAddr}</p>
-                        <div style="margin:8px 0; padding:10px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px dashed rgba(255,255,255,0.1);">
-            ${o.items ? Object.keys(o.items).map(safeId => {
-                let baseId = String(safeId).split('||')[0];
-                let carOptRaw = String(safeId).split('||')[1] || '';
-                let carOpt = carOptRaw.replace(/_dot_/g, '.');
-                let prod = productsDB.find(x => x.id == baseId);
-                let pName = prod ? prod.name : '(o\'chirilgan tovar)';
-                let qty = o.items[safeId];
-                let price = prod ? (prod.price * qty).toLocaleString() : '?';
-                let optText = carOpt && carOpt !== 'Universal' ? ` [${carOpt}]` : '';
-                return `<div style="font-size:12px; color:#ddd; margin-bottom:4px;">▪️ ${pName}${optText} — ${qty} ta → <b style="color:var(--luxury-gold);">${price} so'm</b></div>`;
-            }).join('') : '<div style="color:gray;font-size:11px;">Tovar ma\'lumoti yo\'q</div>'}
-            </div>
-            <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px; font-size:16px;">💰 Jami: ${o.total.toLocaleString()} so'm</p>
             
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button style="padding:10px; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; ${chatBtnStyle}" onclick="openAdminChat('${o.uI}', ${o.id})">${chatBtnText}</button>
-                ${(o.status === 'kutilmoqda' || !o.status) ? `<button style="padding:10px; background:#007aff; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">Qabul</button>` : ''}
-                ${o.status === 'qabul' ? `<button style="padding:10px; background:#ff9500; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">Yo'lda</button>` : ''}
-                ${o.status === 'yolda' ? `<button style="padding:10px; background:#34c759; color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">Yetkazildi</button>` : ''}
-                ${o.status !== 'bekor_qilingan' ? `<button style="padding:10px; background:var(--accent-red); color:#fff; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; border:none;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor</button>` : ''}
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #fff;">
+                    <span style="background: rgba(255,255,255,0.05); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid rgba(255,255,255,0.05);">👤</span>
+                    ${dName}
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600;">
+                    <span style="background: rgba(0,122,255,0.1); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid rgba(0,122,255,0.2);">📞</span>
+                    <a href="tel:${dPhone.replace(/\s+/g, '')}" style="color: var(--primary-blue); text-decoration: none; letter-spacing: 0.5px;">${dPhone}</a>
+                </div>
+                ${dAddr ? `
+                <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: #a1a1a6; font-weight: 500;">
+                    <span style="background: rgba(255,255,255,0.05); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.05);">📍</span>
+                    <span style="margin-top: 6px; line-height: 1.5;">${dAddr}</span>
+                </div>` : ''}
+            </div>
+
+            ${itemsHtml}
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; background: rgba(212,175,55,0.05); padding: 12px 15px; border-radius: 14px; border: 1px solid rgba(212,175,55,0.2);">
+                <span style="font-size: 12px; color: var(--luxury-gold); text-transform: uppercase; font-weight: 800; opacity: 0.8;">Jami Summa</span>
+                <span style="font-size: 20px; font-weight: 900; color: var(--luxury-gold);">${o.total.toLocaleString()} so'm</span>
+            </div>
+            
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button style="background: ${unreadCount > 0 ? 'var(--accent-red)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${unreadCount > 0 ? 'var(--accent-red)' : 'rgba(255,255,255,0.1)'}; padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: ${unreadCount > 0 ? '0 4px 15px rgba(255,69,58,0.4)' : 'none'};" onclick="openAdminChat('${o.uI}', ${o.id})">
+                    ${chatBtnText}
+                </button>
+                ${actionBtns}
+                ${cancelBtn}
             </div>
         </div>
-        `}).join(''); 
+        `;
+    }).join(''); 
+        
+    if (window.adminOrdersLimit < ordersArr.length) {
+        html += `<div style="text-align:center; padding: 15px 0 30px; color: var(--luxury-gold); font-size: 12px; font-weight: bold; opacity: 0.7;">Pastga tushganda yana yuklanmoqda... ⏳</div>`;
+    }
+    
+    box.innerHTML = html;
 };
     
 // ===================================================
