@@ -4613,7 +4613,7 @@ window.getTimelineHTML = (status) => {
 // 📦 2. BUYURTMA ICHIGA KIRISH (KABINETDAN)
 // ==========================================
 window.openOrderDetails = (id) => { 
-    let o = myOrders.find(x => x.id === id); 
+     let o = myOrders.find(x => x.id == id);
     if(!o) return; 
     
     currentOpenOrderId = id; 
@@ -4713,7 +4713,20 @@ window.renderAdminOrdersUI = (ordersArr) => {
                 ${getStatusHTML(o.status||'kutilmoqda')}
             </div>
             <p style="margin:5px 0; font-size: 13px;">👤 ${dName}<br>📞 ${dPhone}${dAddr}</p>
-            <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px; font-size:16px;">💰 ${o.total.toLocaleString()} so'm</p>
+                        <div style="margin:8px 0; padding:10px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px dashed rgba(255,255,255,0.1);">
+            ${o.items ? Object.keys(o.items).map(safeId => {
+                let baseId = String(safeId).split('||')[0];
+                let carOptRaw = String(safeId).split('||')[1] || '';
+                let carOpt = carOptRaw.replace(/_dot_/g, '.');
+                let prod = productsDB.find(x => x.id == baseId);
+                let pName = prod ? prod.name : '(o\'chirilgan tovar)';
+                let qty = o.items[safeId];
+                let price = prod ? (prod.price * qty).toLocaleString() : '?';
+                let optText = carOpt && carOpt !== 'Universal' ? ` [${carOpt}]` : '';
+                return `<div style="font-size:12px; color:#ddd; margin-bottom:4px;">▪️ ${pName}${optText} — ${qty} ta → <b style="color:var(--luxury-gold);">${price} so'm</b></div>`;
+            }).join('') : '<div style="color:gray;font-size:11px;">Tovar ma\'lumoti yo\'q</div>'}
+            </div>
+            <p style="color:var(--luxury-gold); font-weight:bold; margin-bottom:15px; font-size:16px;">💰 Jami: ${o.total.toLocaleString()} so'm</p>
             
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button style="padding:10px; border-radius:8px; flex:1; font-weight:bold; cursor:pointer; ${chatBtnStyle}" onclick="openAdminChat('${o.uI}', ${o.id})">${chatBtnText}</button>
@@ -6156,9 +6169,9 @@ window.renderCartItems = () => {
         
         c.innerHTML += `
             <div class="cart-row">
-                <img src="${p.img}" style="cursor:pointer; width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onclick="openProduct(${baseId})" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/65?text=A1'">
+                <img src="${p.img}" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/65?text=A1'">
                 
-                <div class="cart-info" style="cursor:pointer;" onclick="openProduct(${baseId})">
+                <div class="cart-info">
                     <h4 style="line-height: 1.4;">${displayName}</h4>
                     <span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span>
                 </div>
