@@ -1358,6 +1358,52 @@
             transform: translateY(-50%) scale(1.1);
             filter: drop-shadow(0 0 5px var(--luxury-gold));
         }
+        /* ================================================= */
+        /* 🚀 1. UCHUVCHI TOVAR (FLY TO CART) ANIMATSIYASI */
+        /* ================================================= */
+        .flying-img {
+            position: fixed;
+            z-index: 99999;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--luxury-gold);
+            box-shadow: 0 10px 25px rgba(212, 175, 55, 0.6);
+            transition: all 0.7s cubic-bezier(0.25, 1, 0.25, 1);
+            pointer-events: none;
+        }
+        @keyframes cartBounce {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3) translateY(-5px); }
+            100% { transform: scale(1) translateY(0); }
+        }
+        .cart-bounce svg {
+            animation: cartBounce 0.4s ease;
+            fill: var(--luxury-gold) !important;
+            filter: drop-shadow(0 0 15px var(--luxury-gold));
+        }
+
+        /* ================================================= */
+        /* 🌊 2. KASKAD (STAGGERED FADE-IN) ANIMATSIYASI */
+        /* ================================================= */
+        @keyframes slideUpFade {
+            0% { opacity: 0; transform: translateY(40px) scale(0.95); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
+        .items-grid .luxury-card {
+            animation: slideUpFade 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) backwards;
+        }
+        /* Tovarlar ketma-ket chiqishi uchun taymerlar */
+        .items-grid .luxury-card:nth-child(1) { animation-delay: 0.05s; }
+        .items-grid .luxury-card:nth-child(2) { animation-delay: 0.10s; }
+        .items-grid .luxury-card:nth-child(3) { animation-delay: 0.15s; }
+        .items-grid .luxury-card:nth-child(4) { animation-delay: 0.20s; }
+        .items-grid .luxury-card:nth-child(5) { animation-delay: 0.25s; }
+        .items-grid .luxury-card:nth-child(6) { animation-delay: 0.30s; }
+        .items-grid .luxury-card:nth-child(7) { animation-delay: 0.35s; }
+        .items-grid .luxury-card:nth-child(8) { animation-delay: 0.40s; }
+        .items-grid .luxury-card:nth-child(9) { animation-delay: 0.45s; }
+        .items-grid .luxury-card:nth-child(10) { animation-delay: 0.50s; }
     </style>
 </head>
 <body ontouchstart="">
@@ -2739,10 +2785,9 @@ function renderProducts() {
         });
     }
 function addToCartQuick(e, id) { 
-    e.stopPropagation(); 
+    if(e) e.stopPropagation(); 
     let p = productsDB.find(x => x.id == id);
     
-    // RAZMERLI TOVAR BO'LSA - mahsulot sahifasiga yo'naltir
     if(p.product_type === 'razmerli') {
         showToast("Razmer tanlash uchun tovarni oching!", "warning");
         openProduct(id);
@@ -2753,11 +2798,14 @@ function addToCartQuick(e, id) {
     if(st <= 0) { showToast("Kechirasiz, bu tovar qolmagan", "warning"); return; }
     
     let totalInCart = 0;
-    for(let cid in cart) { if(cid.startsWith(id + "||")) totalInCart += cart[cid]; }
+    for(let cid in cart) { if(cid.startsWith(id + "||")) totalInCart += (parseInt(cart[cid]) || 0); }
     if(totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
     
     let finalId = id + "||Universal";
     addToCartWithOptions(finalId);
+    
+    // 🚀 ASOSIY OYNADA SAVATGA QO'SHGANDA UCHISH ANIMATSIYASI
+    if(e) flyToCartAnimation(e, p.img);
 }
     
 function cardHTML(p) { 
@@ -2819,18 +2867,17 @@ function openProduct(id) {
     }
     sliderWrapper.scrollLeft = 0;
 
-   document.getElementById('pm-title').innerText = p.name; 
+    document.getElementById('pm-title').innerText = p.name; 
     
-    // YANGLIK: Unit (dona/komplekt) ni ekranga chiqarish
     let unitBadge = document.getElementById('pm-unit-badge');
     if (p.unit === 'komplekt') {
         unitBadge.innerHTML = '🧰 Komplekt (Nabor) narxi';
-        unitBadge.style.color = '#30d158'; // Yashil rangda ajralib turadi
+        unitBadge.style.color = '#30d158';
         unitBadge.style.borderColor = 'rgba(48, 209, 88, 0.3)';
         unitBadge.style.background = 'rgba(48, 209, 88, 0.1)';
     } else {
         unitBadge.innerHTML = '📦 1 dona uchun narx';
-        unitBadge.style.color = 'var(--luxury-gold)'; // Tilla rangda
+        unitBadge.style.color = 'var(--luxury-gold)';
         unitBadge.style.borderColor = 'rgba(212, 175, 55, 0.3)';
         unitBadge.style.background = 'rgba(212, 175, 55, 0.15)';
     }
@@ -2841,11 +2888,8 @@ function openProduct(id) {
     let buyB = document.getElementById('pm-buy-btn');
     let sInf = document.getElementById('pm-stock');
     
-    // ==========================================
-    // YANGI MANTIQ: TOVAR TURIGA QARAB O'ZGARADI
-    // ==========================================
+    // RAZMERLI TOVAR
     if (p.product_type === 'razmerli' && p.sizes && p.sizes.length > 0) {
-        // 1. RAZMERLI TOVAR
         window.currentSelectedCar = p.sizes[0].size; 
         window.currentSelectedStock = p.sizes[0].stock;
         
@@ -2862,22 +2906,24 @@ function openProduct(id) {
         sInf.innerHTML = `<div id="dynamic-stock-info"></div>` + sizesHtml;
         updateDynamicStock(window.currentSelectedStock);
 
-        buyB.onclick = () => {
+        buyB.onclick = (e) => { // ⚠️ e qo'shildi
             if (window.currentSelectedStock <= 0) {
                 showToast("Bu razmerdan qolmagan!", "warning"); return;
             }
             let finalCartId = id + "||" + window.currentSelectedCar; 
             let totalInCart = 0;
-            for(let cid in cart) { if(cid.startsWith(id + "||" + window.currentSelectedCar)) totalInCart += cart[cid]; }
+            for(let cid in cart) { if(cid.startsWith(id + "||" + window.currentSelectedCar)) totalInCart += (parseInt(cart[cid]) || 0); }
             if(totalInCart >= window.currentSelectedStock){
                 showToast("Omborda bunday ko'p emas", "warning");
             } else {
                 addToCartWithOptions(finalCartId);
-                closeModal();
+                // 🚀 TOVAR OYNASIDAN SAVATGA UCHISH
+                if(e) flyToCartAnimation(e, imgs[0]);
+                setTimeout(() => closeModal(), 600); // Parvoz tugaguncha oynani kutib turish
             }
         };
     } else {
-        // 2. ODDIY TOVAR (Eski mantiq o'z holicha qoldi)
+        // ODDIY TOVAR
         let st = p.stock !== undefined ? p.stock : 10;
         let stockText = (currentUser === ADMIN_ID) ? `✅ Sotuvda bor: ${st} ta` : `✅ Sotuvda bor`;
         let stockHtml = st <= 0 
@@ -2916,12 +2962,17 @@ function openProduct(id) {
         sInf.innerHTML = stockHtml + modelsHtml;
         
         if(st > 0) {
-            buyB.onclick = () => {
+            buyB.onclick = (e) => { // ⚠️ e qo'shildi
                 let finalCartId = id + "||" + window.currentSelectedCar;
                 let totalInCart = 0;
-                for(let cid in cart) { if(cid.startsWith(id + "||")) totalInCart += cart[cid]; }
+                for(let cid in cart) { if(cid.startsWith(id + "||")) totalInCart += (parseInt(cart[cid]) || 0); }
                 if(totalInCart >= st){ showToast("Omborda bunday ko'p emas", "warning"); } 
-                else { addToCartWithOptions(finalCartId); closeModal(); }
+                else { 
+                    addToCartWithOptions(finalCartId); 
+                    // 🚀 TOVAR OYNASIDAN SAVATGA UCHISH
+                    if(e) flyToCartAnimation(e, imgs[0]);
+                    setTimeout(() => closeModal(), 600); // Parvoz tugaguncha oynani kutib turish
+                }
             };
         }
     }
@@ -6090,7 +6141,48 @@ window.renderCartItems = () => {
         footer.style.display = (Object.keys(cart).length === 0) ? 'none' : 'block';
     }
 };
+// 🚀 UCHUVCHI TOVAR ANIMATSIYASI FUNKSIYASI
+window.flyToCartAnimation = (e, imgSrc) => {
+    // 1. Mijoz bosgan joyning koordinatalarini olamiz
+    let clientX = e.clientX || (e.touches && e.touches.length > 0 ? e.touches[0].clientX : null);
+    let clientY = e.clientY || (e.touches && e.touches.length > 0 ? e.touches[0].clientY : null);
+    if (!clientX || !clientY) return; 
 
+    // 2. Klon rasm yaratamiz va havoga ko'taramiz
+    let flyingImg = document.createElement('img');
+    flyingImg.src = imgSrc || 'https://via.placeholder.com/150';
+    flyingImg.className = 'flying-img';
+    
+    flyingImg.style.left = (clientX - 30) + 'px';
+    flyingImg.style.top = (clientY - 30) + 'px';
+    flyingImg.style.width = '60px';
+    flyingImg.style.height = '60px';
+    document.body.appendChild(flyingImg);
+
+    // 3. Pastki savat manzilini (nishonni) aniqlaymiz
+    let cartNav = document.getElementById('nav-cart');
+    let targetRect = cartNav.getBoundingClientRect();
+    let targetX = targetRect.left + (targetRect.width / 2) - 10;
+    let targetY = targetRect.top + (targetRect.height / 2) - 10;
+
+    // 4. Parvozni boshlaymiz! (Kichik kechikish bilan)
+    setTimeout(() => {
+        flyingImg.style.left = targetX + 'px';
+        flyingImg.style.top = targetY + 'px';
+        flyingImg.style.width = '15px';
+        flyingImg.style.height = '15px';
+        flyingImg.style.opacity = '0.4';
+        flyingImg.style.transform = 'rotate(360deg)';
+    }, 20);
+
+    // 5. Savatga yetib borganda o'chirish va savatni sakratish
+    setTimeout(() => {
+        flyingImg.remove();
+        cartNav.classList.add('cart-bounce');
+        if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        setTimeout(() => cartNav.classList.remove('cart-bounce'), 400);
+    }, 700); // 0.7 soniya uçadi
+};
     
     
 </script>    
