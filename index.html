@@ -1038,6 +1038,78 @@
             50% { transform: translateY(-15px); }
             100% { transform: translateY(0px); }
         }
+        /* ================================================= */
+        /* 📦 VIZUAL BUYURTMA KUZATUVI (TIMELINE) DIZAYNI */
+        /* ================================================= */
+        .timeline-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            margin: 25px 0 35px 0;
+            padding: 0 10px;
+        }
+        .timeline-line {
+            position: absolute;
+            top: 15px;
+            left: 35px;
+            right: 35px;
+            height: 3px;
+            background: rgba(255,255,255,0.1);
+            z-index: 1;
+        }
+        .timeline-progress {
+            position: absolute;
+            top: 15px;
+            left: 35px;
+            height: 3px;
+            background: linear-gradient(90deg, #e5c07b, #c5a028);
+            z-index: 2;
+            transition: width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+        }
+        .timeline-step {
+            position: relative;
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            width: 60px;
+        }
+        .timeline-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #1c1c1e;
+            border: 2px solid rgba(255,255,255,0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            color: gray;
+            transition: all 0.3s;
+        }
+        /* Faol bosqich (Yongan holati) */
+        .timeline-step.active .timeline-icon {
+            background: var(--luxury-gold);
+            border-color: #fff;
+            color: #000;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
+            transform: scale(1.1);
+        }
+        .timeline-text {
+            font-size: 9px;
+            color: gray;
+            font-weight: 700;
+            text-transform: uppercase;
+            text-align: center;
+            letter-spacing: 0.5px;
+            transition: 0.3s;
+        }
+        .timeline-step.active .timeline-text {
+            color: var(--luxury-gold);
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -4146,6 +4218,54 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
     }
 };
 
+// ==========================================
+// 📦 1. VIZUAL KUZATUV ZANJIRI (TIMELINE)
+// ==========================================
+window.getTimelineHTML = (status) => {
+    if (status === 'bekor_qilingan') {
+        return `
+        <div style="text-align:center; padding: 15px; background: rgba(255,69,58,0.1); border-radius: 16px; border: 1px dashed var(--accent-red); margin-top: 15px;">
+            <div style="font-size: 30px; margin-bottom: 5px;">❌</div>
+            <div style="color: var(--accent-red); font-weight: bold; font-size: 14px;">Buyurtma bekor qilingan</div>
+            <div style="color: gray; font-size: 11px; margin-top: 5px;">Mablag' qaytarilgan yoki admin tomonidan bekor qilingan.</div>
+        </div>`;
+    }
+
+    let progress = "0%";
+    let s1 = "", s2 = "", s3 = "", s4 = "";
+    
+    if (status === 'kutilmoqda' || !status) { progress = "0%"; s1 = "active"; }
+    else if (status === 'qabul') { progress = "33%"; s1 = "active"; s2 = "active"; }
+    else if (status === 'yolda') { progress = "66%"; s1 = "active"; s2 = "active"; s3 = "active"; }
+    else if (status === 'yetkazildi') { progress = "100%"; s1 = "active"; s2 = "active"; s3 = "active"; s4 = "active"; }
+
+    return `
+    <div class="timeline-container">
+        <div class="timeline-line"></div>
+        <div class="timeline-progress" style="width: ${progress};"></div>
+        
+        <div class="timeline-step ${s1}">
+            <div class="timeline-icon">⏳</div>
+            <div class="timeline-text">Kutilmoqda</div>
+        </div>
+        <div class="timeline-step ${s2}">
+            <div class="timeline-icon">📦</div>
+            <div class="timeline-text">Qabul</div>
+        </div>
+        <div class="timeline-step ${s3}">
+            <div class="timeline-icon">🚚</div>
+            <div class="timeline-text">Yo'lda</div>
+        </div>
+        <div class="timeline-step ${s4}">
+            <div class="timeline-icon">🏁</div>
+            <div class="timeline-text">Yetkazildi</div>
+        </div>
+    </div>`;
+};
+
+// ==========================================
+// 📦 2. BUYURTMA ICHIGA KIRISH (KABINETDAN)
+// ==========================================
 window.openOrderDetails = (id) => { 
     let o = myOrders.find(x => x.id === id); 
     if(!o) return; 
@@ -4153,8 +4273,10 @@ window.openOrderDetails = (id) => {
     currentOpenOrderId = id; 
     
     document.getElementById('od-code').innerText = "Buyurtma: #" + (o.code || o.id); 
-    document.getElementById('od-date').innerText = o.date + " " + o.time; 
-    document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda'); 
+    document.getElementById('od-date').innerText = o.date + " | " + o.time; 
+    
+    // Eski yozuv o'rniga Zanjirni ulaymiz
+    document.getElementById('od-status').innerHTML = getTimelineHTML(o.status || 'kutilmoqda'); 
     
     let iH = ''; 
     for(let fullId in o.items) { 
@@ -4163,20 +4285,26 @@ window.openOrderDetails = (id) => {
         if(p) {
             let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
             let dName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="font-size:10px; color:gray;">[${carOpt}]</span>` : p.name;
-            iH += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${dName} (x${o.items[fullId]})</span><span style="color:var(--luxury-gold);">${(p.price * o.items[fullId]).toLocaleString()} so'm</span></div>`; 
+            iH += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${dName} (x${o.items[fullId]})</span><span style="color:var(--luxury-gold); font-weight:600;">${(p.price * o.items[fullId]).toLocaleString()} so'm</span></div>`; 
         }
     }
     document.getElementById('od-items').innerHTML = iH; 
     document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm"; 
     
+    // CHAT FUNKSIYASI SHU YERDA CHAQIRILADI (Yo'qolib ketmaydi)
     if(typeof renderChatMessages === 'function') renderChatMessages();
     openModal('orderDetailModal'); 
 };
 
+// ==========================================
+// 📦 3. KUZATUV ID ORQALI QIDIRGANDA OCHISH
+// ==========================================
 window.showTrackedOrder = (o) => {
     document.getElementById('od-code').innerText = "Kuzatuv: #" + (o.code || o.id); 
-    document.getElementById('od-date').innerText = o.date + " " + o.time; 
-    document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda');
+    document.getElementById('od-date').innerText = o.date + " | " + o.time; 
+    
+    // Bu yerga ham Zanjirni ulaymiz
+    document.getElementById('od-status').innerHTML = getTimelineHTML(o.status || 'kutilmoqda');
     
     let itemsHtml = ''; 
     if (o.items) {
@@ -4186,7 +4314,7 @@ window.showTrackedOrder = (o) => {
             if(p) {
                 let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
                 let dName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="font-size:10px; color:gray;">[${carOpt}]</span>` : p.name;
-                itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${dName} (x${o.items[pid]})</span> <span style="color:var(--luxury-gold);">${(p.price * o.items[pid]).toLocaleString()} so'm</span></div>`; 
+                itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${dName} (x${o.items[pid]})</span> <span style="color:var(--luxury-gold); font-weight:600;">${(p.price * o.items[pid]).toLocaleString()} so'm</span></div>`; 
             }
         }
     }
@@ -4194,6 +4322,13 @@ window.showTrackedOrder = (o) => {
     document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm";
     
     if(document.getElementById('od-review-section')) document.getElementById('od-review-section').innerHTML = '';
+    
+    // Agar kuzatuvda ham chat bo'lishini xohlasangiz, shu yerga qo'shdik:
+    if(typeof renderChatMessages === 'function') {
+        currentOpenOrderId = o.id; // Chat ishlashi uchun id ni saqlaymiz
+        renderChatMessages();
+    }
+    
     openModal('orderDetailModal');
 };
 
