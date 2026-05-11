@@ -1407,6 +1407,16 @@
             .items-grid .luxury-card:nth-child(10) { animation-delay: 1.0s; }
             .items-grid .luxury-card:nth-child(11) { animation-delay: 1.1s; }
             .items-grid .luxury-card:nth-child(12) { animation-delay: 1.2s; }
+        /* ================================================= */
+        /* 🛑 LIQQILLASH (BOUNCE) VA SAKRASHLARGA QARSHI QULF */
+        /* ================================================= */
+        body {
+            overscroll-behavior: none; /* Asosiy oyna sakramaydi */
+        }
+        .modal-standard {
+            overscroll-behavior-y: contain; /* Modal ichida skroll tashqariga chiqib ketmaydi */
+            -webkit-overflow-scrolling: touch; /* iPhone larda silliq yurishi uchun */
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -1808,107 +1818,142 @@
         <a href="https://t.me/anvaraxtamov2004" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(40, 167, 69, 0.1); color: #28a745; border: 1px solid rgba(40, 167, 69, 0.3);">💬 Telegram</a>
     </div>
 </div>
-
-<div class="modal-standard" id="editModal">
-    <div class="modal-header">
-        <h2 style="color: #30d158;">✏️ Tahrirlash</h2>
-        <button class="close-btn" onclick="closeEditGoBack()" style="font-size: 24px;">←</button>
+<div class="modal-standard" id="editModal" style="z-index: 3000; display: none; padding: 0;">
+    <div class="modal-header" style="padding: 20px 20px 15px; position: sticky; top: 0; background: rgba(10, 10, 12, 0.95); backdrop-filter: blur(20px); z-index: 100; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 0;">
+        <h2 style="color: #30d158; margin: 0; font-size: 22px;">✏️ Tahrirlash</h2>
+        <button class="close-btn" onclick="closeEditGoBack()">×</button>
     </div>
+
     <input type="hidden" id="edit-id">
-    <span class="luxury-input-label">NOMI</span><input type="text" id="edit-name" class="search-box" style="margin-bottom: 15px;">
-    <span class="luxury-input-label">NARXI (SO'MDA)</span><input type="number" id="edit-price" class="search-box" style="margin-bottom: 15px;">
-    <span class="luxury-input-label">O'LCHOV BIRLIGI</span>
-    <select id="edit-unit" class="search-box" style="margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white;">
-        <option value="dona">📦 1 dona uchun</option>
-        <option value="komplekt">🧰 Komplekt (Nabor)</option>
-    </select>
-     <span class="luxury-input-label">TOVAR TURI</span>
-    <select id="edit-prod-type" class="search-box" style="margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white;" onchange="toggleEditProductTypeFields()">
-        <option value="oddiy">Oddiy tovar</option>
-        <option value="razmerli">Razmerli tovar</option>
-    </select>
 
-    <div id="edit-oddiy-fields">
-        <span class="luxury-input-label">QOLDIQ (DONA)</span><input type="number" id="edit-stock" class="search-box" style="margin-bottom: 15px;">
-    </div>
-
-    <div id="edit-razmerli-fields" style="display: none; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px dashed var(--luxury-gold);">
-        <span class="luxury-input-label" style="color: var(--luxury-gold);">MARKANI TANLANG</span>
-        <select id="edit-prod-brand" class="search-box" style="margin-bottom: 10px; background: rgba(0,0,0,0.5); color: white;" onchange="updateEditBrandModels()">
-            <option value="">-- Marka tanlang --</option>
-            <option value="gaz">GAZ (Universal)</option>
-            <option value="daewoo">Daewoo</option>
-            <option value="chevy">Chevrolet</option>
-            <option value="uaz">UAZ</option>
-        </select>
-
-        <div id="edit-brand-models-box" style="display:none;">
-            <span class="luxury-input-label">MASHINA MODELI</span>
-            <select id="edit-prod-model" class="search-box" style="margin-bottom: 10px; background: rgba(0,0,0,0.5); color: white;"></select>
-        </div>
-
-        <span class="luxury-input-label">RAZMERLAR VA QOLDIQ</span>
-        <div id="edit-sizes-container"></div>
-        <button type="button" onclick="addEditSizeField()" style="width:100%; padding:10px; background: rgba(212, 175, 55, 0.2); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 5px;">+ Yangi razmer qo'shish</button>
-    </div>
-   <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(212, 175, 55, 0.15); border-radius: 14px; padding: 14px; margin-bottom: 15px; box-shadow: inset 0 0 15px rgba(212,175,55,0.02);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span style="font-size: 12px; font-weight: 800; color: var(--luxury-gold); letter-spacing: 1px;">✨ AI SOTUVCHI MENEJER</span>
+    <div style="padding: 20px;">
+        <div class="admin-form-group">
+            <div style="font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 18px; letter-spacing: 1.5px;">📝 ASOSIY MA'LUMOTLAR</div>
+            
+            <div class="admin-input-wrap">
+                <i>🏷️</i>
+                <input type="text" id="edit-name" class="admin-input" placeholder="Tovar nomi (mas: Kalotka)">
             </div>
             
-            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Ishlab chiqarilgan joyni tanlang:</div>
-            <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;" id="edit-origin-chips">
+            <div class="admin-input-wrap">
+                <i>💰</i>
+                <input type="number" id="edit-price" class="admin-input" placeholder="Narxi (so'mda, mas: 150000)">
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-bottom: 15px;">
+                <div class="admin-input-wrap" style="flex: 1; margin-bottom: 0;">
+                    <i>📦</i>
+                    <select id="edit-unit" class="admin-input" style="padding-left: 48px; color: var(--luxury-gold);">
+                        <option value="dona">1 dona</option>
+                        <option value="komplekt">Nabor (Kompl)</option>
+                    </select>
+                </div>
+                <div class="admin-input-wrap" style="flex: 1; margin-bottom: 0;">
+                    <i>⚙️</i>
+                    <select id="edit-prod-type" class="admin-input" style="padding-left: 48px; color: #007aff;" onchange="toggleEditProductTypeFields()">
+                        <option value="oddiy">Oddiy tovar</option>
+                        <option value="razmerli">Razmerli</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="edit-oddiy-fields" class="admin-input-wrap" style="margin-bottom: 0;">
+                <i>📊</i>
+                <input type="number" id="edit-stock" class="admin-input" placeholder="Skladdagi qoldiq (dona)" value="10">
+            </div>
+
+            <div id="edit-razmerli-fields" style="display: none; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 16px; margin-top: 15px; border: 1px dashed var(--luxury-gold);">
+                <span class="luxury-input-label" style="color: var(--luxury-gold); margin-top: 0;">MARKANI TANLANG</span>
+                <select id="edit-prod-brand" class="admin-input" style="margin-bottom: 15px; padding-left: 15px;" onchange="updateEditBrandModels()">
+                    <option value="">-- Marka tanlang --</option>
+                    <option value="gaz">GAZ (Universal razmerlar)</option>
+                    <option value="daewoo">Daewoo</option>
+                    <option value="chevy">Chevrolet</option>
+                    <option value="uaz">UAZ</option>
+                </select>
+
+                <div id="edit-brand-models-box" style="display:none;">
+                    <span class="luxury-input-label" style="margin-top: 0;">MASHINA MODELI</span>
+                    <select id="edit-prod-model" class="admin-input" style="margin-bottom: 15px; padding-left: 15px;"></select>
+                </div>
+
+                <span class="luxury-input-label" style="margin-top: 0;">RAZMERLAR VA QOLDIQ</span>
+                <div id="edit-sizes-container"></div>
+                <button type="button" onclick="addEditSizeField()" style="width:100%; padding:12px; background: rgba(212, 175, 55, 0.15); color: var(--luxury-gold); border: 1px dashed var(--luxury-gold); border-radius: 12px; cursor: pointer; font-weight: 800; margin-top: 10px; transition: 0.2s;">+ YANGI RAZMER</button>
+            </div>
+        </div>
+
+        <div class="admin-form-group" style="border-left-color: #a855f7;">
+            <div style="font-size: 11px; font-weight: 800; color: #a855f7; margin-bottom: 18px; letter-spacing: 1.5px;">📸 RASMLAR (1-3 TA)</div>
+            
+            <div class="upload-dropzone" id="edit-upload-btn" onclick="document.getElementById('edit-multi-file').click()">
+                <span class="upload-icon">📥</span>
+                <div style="color: var(--luxury-gold); font-weight: 800; font-size: 16px;">Rasmlarni yangilash</div>
+                <div style="color: gray; font-size: 12px; margin-top: 8px;">Kamera yoki galereyadan</div>
+            </div>
+            
+            <input type="file" id="edit-multi-file" accept="image/*" multiple class="hidden" onchange="handleMultiImgUpload(event,'edit')">
+            <div id="edit-img-previews" style="display:flex; gap:12px; margin-top:15px; flex-wrap:wrap; justify-content:center;"></div>
+            
+            <input type="hidden" id="edit-img-url">
+            <input type="hidden" id="edit-img-url2">
+            <input type="hidden" id="edit-img-url3">
+        </div>
+
+        <div class="admin-form-group" style="border-left-color: #007aff;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <span style="font-size: 11px; font-weight: 800; color: #007aff; letter-spacing: 1.5px;">✨ AI SOTUVCHI MENEJER</span>
+            </div>
+            
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px; font-weight: 600;">Ishlab chiqarilgan joy:</div>
+            <div style="display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap;" id="edit-origin-chips">
                 <span class="chip origin-chip selected" data-origin="Original" onclick="selectOrigin(this, 'edit')" style="background: rgba(212,175,55,0.15); color: var(--luxury-gold); border-color: var(--luxury-gold);">🌟 Original</span>
                 <span class="chip origin-chip" data-origin="Rossiya" onclick="selectOrigin(this, 'edit')">🇷🇺 Rossiya</span>
                 <span class="chip origin-chip" data-origin="Xitoy (Zavodskoy)" onclick="selectOrigin(this, 'edit')">🇨🇳 Xitoy</span>
             </div>
 
-            <button type="button" onclick="generateAiDescription('edit')" style="width: 100%; padding: 12px; border-radius: 10px; background: linear-gradient(135deg, #1c1c1e, #121212); border: 1px solid rgba(212, 175, 55, 0.4); color: var(--luxury-gold); font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; margin-bottom: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-                <span style="font-size: 20px;">🤖</span> Chiroyli ta'rif yozdirish
+            <button type="button" onclick="generateAiDescription('edit')" style="width: 100%; padding: 15px; border-radius: 14px; background: rgba(0, 122, 255, 0.1); border: 1px solid rgba(0, 122, 255, 0.3); color: #007aff; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; margin-bottom: 15px;">
+                <span style="font-size: 22px;">🤖</span> Chiroyli ta'rif yozdirish
             </button>
 
-            <textarea id="edit-desc" class="search-box" style="height: 90px; resize: none; border-color: rgba(212, 175, 55, 0.2); background: rgba(0,0,0,0.5); font-size: 13px;"></textarea>
+            <textarea id="edit-desc" class="admin-input" style="height: 100px; resize: none; padding: 15px; border-color: rgba(0, 122, 255, 0.3); background: rgba(0,0,0,0.5); font-size: 13px;" placeholder="AI yozgan matn shu yerda paydo bo'ladi (yoki o'zingiz yozing)..."></textarea>
         </div>
-    <span class="luxury-input-label">RASMLAR (1-3 ta, bir vaqtda tanlang)</span>
-<button type="button" id="edit-upload-btn"
-    style="width:100%;padding:15px;background:rgba(212,175,55,0.08);border:2px dashed var(--luxury-gold);color:var(--luxury-gold);border-radius:14px;font-size:15px;font-weight:700;margin-bottom:10px;cursor:pointer;"
-    onclick="document.getElementById('edit-multi-file').click()">
-    📸 Rasm qo'shish (1-3 ta)
-</button>
-<input type="file" id="edit-multi-file" accept="image/*" multiple class="hidden"
-    onchange="handleMultiImgUpload(event,'edit')">
-<div id="edit-img-previews" style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;justify-content:center;min-height:10px;"></div>
-<input type="hidden" id="edit-img-url">
-<input type="hidden" id="edit-img-url2">
-<input type="hidden" id="edit-img-url3">
-    <span class="luxury-input-label">1. MASHINANI TANLANG</span>
-    <div style="font-size:12px; color:var(--primary-blue); font-weight:bold; margin:10px 0 5px;">🚛 GAZ / VOLGA / SOBOL</div>
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
-        <span class="cat-chip model-chip" data-val="gazel-biznes" onclick="toggleChip(this)">Biznes</span><span class="cat-chip model-chip" data-val="gazel-next" onclick="toggleChip(this)">Next</span><span class="cat-chip model-chip" data-val="gazel-eski" onclick="toggleChip(this)">Eski</span><span class="cat-chip model-chip" data-val="volga-2401" onclick="toggleChip(this)">V2401</span><span class="cat-chip model-chip" data-val="volga-2410" onclick="toggleChip(this)">V2410</span><span class="cat-chip model-chip" data-val="volga-3110" onclick="toggleChip(this)">V3110</span><span class="cat-chip model-chip" data-val="volga-31105" onclick="toggleChip(this)">V31105</span><span class="cat-chip model-chip" data-val="volga-31029" onclick="toggleChip(this)">V31029</span><span class="cat-chip model-chip" data-val="sobol" onclick="toggleChip(this)">Sobol</span>
+
+        <div class="admin-form-group" style="border-left-color: #30d158; padding-bottom: 5px;">
+            <div style="font-size: 11px; font-weight: 800; color: #30d158; margin-bottom: 15px; letter-spacing: 1.5px;">🚘 KATEGORIYANI TANLANG</div>
+            
+            <div style="font-size:12px; color:var(--text-muted); font-weight:bold; margin:10px 0 8px;">🚛 GAZ / VOLGA / SOBOL</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 15px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                <span class="cat-chip model-chip" data-val="gazel-biznes" onclick="toggleChip(this)">Biznes</span><span class="cat-chip model-chip" data-val="gazel-next" onclick="toggleChip(this)">Next</span><span class="cat-chip model-chip" data-val="gazel-eski" onclick="toggleChip(this)">Eski</span><span class="cat-chip model-chip" data-val="volga-2401" onclick="toggleChip(this)">V2401</span><span class="cat-chip model-chip" data-val="volga-2410" onclick="toggleChip(this)">V2410</span><span class="cat-chip model-chip" data-val="volga-3110" onclick="toggleChip(this)">V3110</span><span class="cat-chip model-chip" data-val="volga-31105" onclick="toggleChip(this)">V31105</span><span class="cat-chip model-chip" data-val="volga-31029" onclick="toggleChip(this)">V31029</span><span class="cat-chip model-chip" data-val="sobol" onclick="toggleChip(this)">Sobol</span>
+            </div>
+            
+            <div style="font-size:12px; color:var(--text-muted); font-weight:bold; margin:15px 0 8px;">🚘 CHEVROLET</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 15px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                <span class="cat-chip model-chip" data-val="chevy-damas" onclick="toggleChip(this)">Damas</span><span class="cat-chip model-chip" data-val="chevy-cobalt" onclick="toggleChip(this)">Cobalt</span><span class="cat-chip model-chip" data-val="chevy-gentra" onclick="toggleChip(this)">Gentra</span><span class="cat-chip model-chip" data-val="chevy-lacetti" onclick="toggleChip(this)">Lacetti</span><span class="cat-chip model-chip" data-val="chevy-malibu1" onclick="toggleChip(this)">Malibu 1</span><span class="cat-chip model-chip" data-val="chevy-malibu2" onclick="toggleChip(this)">Malibu 2</span><span class="cat-chip model-chip" data-val="chevy-tracker2" onclick="toggleChip(this)">Tracker 2</span><span class="cat-chip model-chip" data-val="chevy-nexia3" onclick="toggleChip(this)">Nexia 3</span><span class="cat-chip model-chip" data-val="chevy-spark" onclick="toggleChip(this)">Spark</span><span class="cat-chip model-chip" data-val="chevy-onix" onclick="toggleChip(this)">Onix</span><span class="cat-chip model-chip" data-val="chevy-captiva1" onclick="toggleChip(this)">Captiva 1</span><span class="cat-chip model-chip" data-val="chevy-captiva2" onclick="toggleChip(this)">Captiva 2</span><span class="cat-chip model-chip" data-val="chevy-captiva3" onclick="toggleChip(this)">Captiva 3</span><span class="cat-chip model-chip" data-val="chevy-captiva4" onclick="toggleChip(this)">Captiva 4</span><span class="cat-chip model-chip" data-val="chevy-labo" onclick="toggleChip(this)">Labo</span><span class="cat-chip model-chip" data-val="chevy-matiz" onclick="toggleChip(this)">Matiz</span><span class="cat-chip model-chip" data-val="chevy-epica" onclick="toggleChip(this)">Epica</span>
+            </div>
+            
+            <div style="font-size:12px; color:var(--text-muted); font-weight:bold; margin:15px 0 8px;">🚕 DAEWOO & UAZ</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
+                <span class="cat-chip model-chip" data-val="daewoo-nexia1" onclick="toggleChip(this)">Nexia 1</span><span class="cat-chip model-chip" data-val="daewoo-nexia2" onclick="toggleChip(this)">Nexia 2</span><span class="cat-chip model-chip" data-val="daewoo-matiz" onclick="toggleChip(this)">Matiz</span><span class="cat-chip model-chip" data-val="daewoo-tico" onclick="toggleChip(this)">Tico</span><span class="cat-chip model-chip" data-val="uaz-patriot" onclick="toggleChip(this)">Patriot</span><span class="cat-chip model-chip" data-val="uaz-hunter" onclick="toggleChip(this)">Hunter</span>
+            </div>
+        </div>
     </div>
-    <div style="font-size:12px; color:var(--primary-blue); font-weight:bold; margin:10px 0 5px;">🚘 CHEVROLET</div>
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
-        <span class="cat-chip model-chip" data-val="chevy-damas" onclick="toggleChip(this)">Damas</span><span class="cat-chip model-chip" data-val="chevy-cobalt" onclick="toggleChip(this)">Cobalt</span><span class="cat-chip model-chip" data-val="chevy-gentra" onclick="toggleChip(this)">Gentra</span><span class="cat-chip model-chip" data-val="chevy-lacetti" onclick="toggleChip(this)">Lacetti</span><span class="cat-chip model-chip" data-val="chevy-malibu1" onclick="toggleChip(this)">Malibu 1</span><span class="cat-chip model-chip" data-val="chevy-malibu2" onclick="toggleChip(this)">Malibu 2</span><span class="cat-chip model-chip" data-val="chevy-tracker2" onclick="toggleChip(this)">Tracker 2</span><span class="cat-chip model-chip" data-val="chevy-nexia3" onclick="toggleChip(this)">Nexia 3</span><span class="cat-chip model-chip" data-val="chevy-spark" onclick="toggleChip(this)">Spark</span><span class="cat-chip model-chip" data-val="chevy-onix" onclick="toggleChip(this)">Onix</span><span class="cat-chip model-chip" data-val="chevy-captiva1" onclick="toggleChip(this)">Captiva 1</span><span class="cat-chip model-chip" data-val="chevy-captiva2" onclick="toggleChip(this)">Captiva 2</span><span class="cat-chip model-chip" data-val="chevy-captiva3" onclick="toggleChip(this)">Captiva 3</span><span class="cat-chip model-chip" data-val="chevy-captiva4" onclick="toggleChip(this)">Captiva 4</span><span class="cat-chip model-chip" data-val="chevy-labo" onclick="toggleChip(this)">Labo</span><span class="cat-chip model-chip" data-val="chevy-matiz" onclick="toggleChip(this)">Matiz</span><span class="cat-chip model-chip" data-val="chevy-epica" onclick="toggleChip(this)">Epica</span>
-    </div>
-    <div style="font-size:12px; color:var(--primary-blue); font-weight:bold; margin:10px 0 5px;">🚕 DAEWOO</div>
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
-        <span class="cat-chip model-chip" data-val="daewoo-nexia1" onclick="toggleChip(this)">Nexia 1</span><span class="cat-chip model-chip" data-val="daewoo-nexia2" onclick="toggleChip(this)">Nexia 2</span><span class="cat-chip model-chip" data-val="daewoo-matiz" onclick="toggleChip(this)">Matiz</span><span class="cat-chip model-chip" data-val="daewoo-tico" onclick="toggleChip(this)">Tico</span>
-    </div>
-    <div style="font-size:12px; color:var(--primary-blue); font-weight:bold; margin:10px 0 5px;">🚙 UAZ</div>
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px;">
-        <span class="cat-chip model-chip" data-val="uaz-patriot" onclick="toggleChip(this)">Patriot</span><span class="cat-chip model-chip" data-val="uaz-hunter" onclick="toggleChip(this)">Hunter</span>
-    </div>
-   <div style="display: flex; flex-direction: column; gap: 10px;">
-         <div style="display: flex; flex-direction: column; gap: 10px;">
-         <div style="display: flex; flex-direction: column; gap: 10px;">
+
+    <div class="sticky-admin-footer" style="display: flex; flex-direction: column; gap: 10px;">
         <div style="display: flex; gap: 10px;">
-            <button class="btn-checkout" style="background: #333; color: white; flex: 1; border: 1px solid var(--luxury-gold); font-size: 13px;" onclick="saveEditProduct(true)">⏳ Hozircha saqlash</button>
-            <button class="btn-checkout" style="flex: 1; font-size: 13px;" onclick="saveEditProduct(false)">✅ Mijozlarga chiqarish</button>
+            <button class="btn-checkout" style="background: rgba(255,255,255,0.08); color: white; flex: 1; border: 1px solid rgba(255,255,255,0.1); font-size: 14px; box-shadow: none;" onclick="saveEditProduct(true)">
+                ⏳ Qoralama qilish
+            </button>
+            <button class="btn-checkout" style="flex: 1.5; font-size: 14px; box-shadow: 0 4px 15px rgba(212,175,55,0.3);" onclick="saveEditProduct(false)">
+                ✅ Yangilash
+            </button>
         </div>
-        <button class="btn-checkout" style="background: rgba(255, 69, 58, 0.1); color: var(--accent-red); border: 1px solid var(--accent-red); font-size: 14px;" onclick="deleteProduct()">🗑 O'chirish</button>
-        </div>
-      </div>
-   </div>
+        <button class="btn-checkout" style="background: rgba(255, 69, 58, 0.05); color: var(--accent-red); border: 1px dashed rgba(255,69,58,0.4); font-size: 14px; padding: 15px; box-shadow: none;" onclick="deleteProduct()">
+            🗑 Tovarni o'chirish
+        </button>
+    </div>
+</div>
+
 </div> <div class="modal-standard" id="adminModal"> <div class="modal-header"><h2 style="color: #ff453a;">⚙️ Admin Panel</h2><button class="close-btn" onclick="closeModal()">×</button></div>
     <div class="admin-grid">
         <div class="admin-card" onclick="openAdminOrders()">
