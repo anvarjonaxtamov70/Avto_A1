@@ -6073,87 +6073,132 @@ window.onclick = function(event) {
             closeModal();
         }
     });
-}
-// 🛠️ YAKUNIY VA XATOSIZ MATEMATIK HISOB-KITOB (JAMI NARXNI TO'G'RILASH)
+};
 
+// ➖➕ SAVATDAGI SONNI O'ZGARTIRISH (Toza va yagona versiya)
 window.chg = (safeId, d) => { 
-    // 1. Savatda shu tovar borligini tekshiramiz
-    if (!cart[safeId]) cart[safeId] = 0;
-
-    // 2. Tovar bazasidan aslini topamiz (narxini bilish uchun)
     let [baseId, carOptRaw] = String(safeId).split('||');
     let p = productsDB.find(x => x.id == baseId);
     if(!p) return;
-
-    // 3. Ombordagi qoldiqni aniqlaymiz
+    
     let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-    let stockLimit = 10;
+    
+    let st = 10;
     if (p.product_type === 'razmerli' && p.sizes) {
         let sizeObj = p.sizes.find(s => s.size === carOpt);
-        if(sizeObj) stockLimit = sizeObj.stock;
+        if(sizeObj) st = sizeObj.stock;
     } else {
-        stockLimit = p.stock !== undefined ? p.stock : 10;
+        st = p.stock !== undefined ? p.stock : 10;
     }
-
-    // 4. Sonini o'zgartiramiz
+    
+    let totalInCart = 0;
+    for(let cid in cart) { if(cid.startsWith(baseId + "||" + (carOptRaw||""))) totalInCart += parseInt(cart[cid]) || 0; }
+    
+    if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+    
     let currentQty = parseInt(cart[safeId]) || 0;
     let newQty = currentQty + d;
-
-    // 5. Minusga o'tib ketmasligi va ombordan oshib ketmasligi nazorati
-    if (d > 0 && currentQty >= stockLimit) {
-        showToast("Omborda bunday ko'p emas", "warning");
-        return;
-    }
-
+    
     if (newQty <= 0) {
-        delete cart[safeId]; // 0 bo'lsa savatdan butunlay o'chiramiz
+        delete cart[safeId]; 
     } else {
         cart[safeId] = newQty;
     }
-
-    // 6. MUHIM: Ma'lumotlarni saqlash va HAMMA joyni yangilash
-    saveLocalCart();      // Bazaga yozish
-    updateCartBadge();    // Pastki menyudagi qizil sonni yangilash
-    renderCartItems();    // SAVAT ICHIDAGI MATEMATIKANI QAYTADAN HISOBLASH
+    
+    saveLocalCart(); 
+    updateCartBadge(); 
+    renderCartItems(); 
 };
 
-// Jami narxni hisoblashda xatolik bo'lmasligi uchun renderCartItems'ni ham yangilab qo'yamiz:
-const originalRender = window.renderCartItems;
+// 🛍️ SAVATNI CHIZISH VA RASM KO'RSATISH (Qotishlarsiz yagona versiya)
 window.renderCartItems = () => {
-    let t = 0; // Jami summani nollaymiz
+    let c = document.getElementById('cart-items-container'); 
+    let b = document.getElementById('main-checkout-btn'); 
+    let footer = document.getElementById('cart-total-footer'); 
+    let pWrap = document.getElementById('cart-progress-wrap');
+    let t = 0; 
     
-    // Har safar savatni boshidan aylantirib chiqamiz
-    for(let safeId in cart) {
-        let [baseId] = String(safeId).split('||');
-        let p = productsDB.find(x => x.id == baseId);
-        if(p) {
-            t += p.price * (parseInt(cart[safeId]) || 0);
+    if(!c) return; 
+    c.innerHTML = '';
+    
+    if(!cart || Object.keys(cart).length === 0) { 
+        c.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 50px 20px; text-align:center;">
+            <div style="font-size: 80px; animation: floatCart 2s ease-in-out infinite; filter: drop-shadow(0 15px 15px rgba(212,175,55,0.3)); margin-bottom: 20px;">🛒</div>
+            <h3 style="color: #fff; margin: 0 0 8px 0; font-size: 20px; font-weight: 800;">Savatingiz bo'p-bo'sh</h3>
+            <p style="color: gray; font-size: 14px; margin: 0 0 25px 0; line-height: 1.5;">Hozircha hech narsa tanlamadingiz.<br>Katalogda ajoyib zapchastlar bor!</p>
+            <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); padding: 14px 35px; border-radius: 16px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.3s; box-shadow: 0 8px 15px rgba(0,0,0,0.3);">
+                🛍️ TOVARLARNI KO'RISH
+            </button>
+        </div>`; 
+        
+        if(b) b.style.display = 'none'; 
+        if(footer) footer.style.display = 'none'; 
+        if(pWrap) pWrap.style.display = 'none';
+        return; 
+    } 
+
+    if(b) b.style.display = 'block';
+    if(footer) footer.style.display = 'block'; 
+    
+    t = 0; 
+    for(let safeId in cart) { 
+        let [baseId, carOptRaw] = String(safeId).split('||');
+        let p = productsDB.find(x => x.id == baseId); 
+        if(!p) continue; 
+        
+        let qty = parseInt(cart[safeId]) || 0;
+        let sum = p.price * qty;
+        t += sum; 
+        
+        let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+        let displayName = carOpt && carOpt !== "Universal" ? `${p.name} <br><span style="color:var(--text-muted); font-size:11px;">(Razmer: <b style="color:var(--luxury-gold);">${carOpt}</b>)</span>` : p.name;
+        
+        c.innerHTML += `
+            <div class="cart-row">
+                <img src="${p.img}" style="cursor:pointer; width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onclick="openProduct(${baseId})" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/65?text=A1'">
+                
+                <div class="cart-info" style="cursor:pointer;" onclick="openProduct(${baseId})">
+                    <h4 style="line-height: 1.4;">${displayName}</h4>
+                    <span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span>
+                </div>
+                
+                <div class="cart-controls">
+                    <button onclick="chg('${safeId}',-1)">-</button>
+                    <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
+                    <button onclick="chg('${safeId}',1)">+</button>
+                </div>
+            </div>`; 
+    } 
+    
+    let tSum = document.getElementById('cart-total-sum');
+    if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+
+    if(pWrap) {
+        pWrap.style.display = 'block';
+        let target = 150000;
+        let percent = Math.min((t / target) * 100, 100);
+        let pBar = document.getElementById('cart-progress-bar');
+        let pMsg = document.getElementById('cart-progress-msg');
+        if(pBar) pBar.style.width = percent + '%';
+        if(pMsg) {
+            if(percent >= 100) {
+                pMsg.innerHTML = '🎉 Tabriklaymiz! Dostavka <b>BEPUL</b>!';
+                pMsg.style.color = '#30d158';
+            } else {
+                pMsg.innerHTML = `Bepul dostavka uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
+                pMsg.style.color = 'var(--luxury-gold)';
+            }
         }
     }
-
-    // Eski render funksiyasini chaqiramiz (u ekranga chizadi)
-    if(typeof originalRender === 'function') originalRender();
-
-    // Jami summani ekranda majburlab yangilaymiz
-    let tSum = document.getElementById('cart-total-sum');
-    if(tSum) {
-        tSum.innerText = t.toLocaleString() + " so'm";
-    }
-    
-    // Agar savat bo'shab qolgan bo'lsa, pastki qismini yashirish
-    let footer = document.getElementById('cart-total-footer');
-    if(footer) {
-        footer.style.display = (Object.keys(cart).length === 0) ? 'none' : 'block';
-    }
 };
-// 🚀 UCHUVCHI TOVAR ANIMATSIYASI FUNKSIYASI
+
+// 🚀 UCHUVCHI TOVAR ANIMATSIYASI (FLY TO CART)
 window.flyToCartAnimation = (e, imgSrc) => {
-    // 1. Mijoz bosgan joyning koordinatalarini olamiz
     let clientX = e.clientX || (e.touches && e.touches.length > 0 ? e.touches[0].clientX : null);
     let clientY = e.clientY || (e.touches && e.touches.length > 0 ? e.touches[0].clientY : null);
     if (!clientX || !clientY) return; 
 
-    // 2. Klon rasm yaratamiz va havoga ko'taramiz
     let flyingImg = document.createElement('img');
     flyingImg.src = imgSrc || 'https://via.placeholder.com/150';
     flyingImg.className = 'flying-img';
@@ -6164,13 +6209,13 @@ window.flyToCartAnimation = (e, imgSrc) => {
     flyingImg.style.height = '60px';
     document.body.appendChild(flyingImg);
 
-    // 3. Pastki savat manzilini (nishonni) aniqlaymiz
     let cartNav = document.getElementById('nav-cart');
+    if(!cartNav) return;
+    
     let targetRect = cartNav.getBoundingClientRect();
     let targetX = targetRect.left + (targetRect.width / 2) - 10;
     let targetY = targetRect.top + (targetRect.height / 2) - 10;
 
-    // 4. Parvozni boshlaymiz! (Kichik kechikish bilan)
     setTimeout(() => {
         flyingImg.style.left = targetX + 'px';
         flyingImg.style.top = targetY + 'px';
@@ -6180,13 +6225,30 @@ window.flyToCartAnimation = (e, imgSrc) => {
         flyingImg.style.transform = 'rotate(360deg)';
     }, 20);
 
-    // 5. Savatga yetib borganda o'chirish va savatni sakratish
     setTimeout(() => {
         flyingImg.remove();
         cartNav.classList.add('cart-bounce');
         if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         setTimeout(() => cartNav.classList.remove('cart-bounce'), 400);
-    }, 700); // 0.7 soniya uçadi
+    }, 700); 
+};
+
+// 🛡️ MODALNI XAVFSIZ OCHISH (Qotishlarga qarshi)
+window.openModal = function(id) { 
+    if (activeModal === id) return; 
+    
+    if(id === 'cartModal') renderCartItems(); 
+    
+    let m = document.getElementById(id); 
+    if(!m) return;
+    
+    m.style.display = 'flex'; 
+    document.body.style.overflow = 'hidden'; 
+    activeModal = id; 
+    
+    window.history.pushState({ modal: id }, ""); 
+    if(typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show(); 
+    updateBtns(); 
 };
     
     
