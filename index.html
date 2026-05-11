@@ -1110,6 +1110,97 @@
         .timeline-step.active .timeline-text {
             color: var(--luxury-gold);
         }
+        /* ================================================= */
+        /* 💬 PREMIUM CHAT (iMessage / Telegram uslubi) */
+        /* ================================================= */
+        .premium-chat-box {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .chat-messages {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 5px;
+            margin-bottom: 15px;
+        }
+        /* Skroll barni yashirish/chiroyli qilish */
+        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        .chat-bubble {
+            max-width: 80%;
+            padding: 10px 14px;
+            font-size: 13px;
+            line-height: 1.4;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        
+        /* Admin (Sizning) xabarlaringiz */
+        .chat-admin {
+            align-self: flex-start;
+            background: #2c2c2e;
+            color: #fff;
+            border-radius: 18px 18px 18px 4px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        /* Mijozning xabarlari */
+        .chat-user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #d4af37, #aa8825);
+            color: #000;
+            font-weight: 500;
+            border-radius: 18px 18px 4px 18px;
+        }
+        
+        .chat-time {
+            display: block;
+            font-size: 9px;
+            margin-top: 5px;
+            opacity: 0.6;
+            text-align: right;
+        }
+        .chat-user .chat-time { color: rgba(0,0,0,0.6); }
+
+        /* Yozish maydoni */
+        .chat-input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 25px;
+            padding: 5px 5px 5px 15px;
+        }
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+        }
+        .chat-send-btn {
+            background: var(--luxury-gold);
+            color: #000;
+            border: none;
+            border-radius: 50%;
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .chat-send-btn:active { transform: scale(0.9); }
     </style>
 </head>
 <body ontouchstart="">
@@ -3020,65 +3111,72 @@ window.clearAppCache = () => {
         openModal('orderDetailModal'); 
     }
 
-    // Chatdagi xabarlarni chizish funksiyasi
+    // 💬 PREMIUM CHAT: Xabarlarni chizish funksiyasi
     window.renderChatMessages = () => {
         let box = document.getElementById('od-chat-messages');
+        if(!box) return;
+        
+        // Chat qutisiga yangi klassni ulaymiz
+        box.className = "chat-messages"; 
         box.innerHTML = '';
         
-        let o = myOrders.find(x => x.id === currentOpenOrderId); 
+        let o = myOrders.find(x => x.id === currentcurrentOpenOrderId || x.id === currentOpenOrderId); 
         if(!o) return;
 
         if(!o.messages || o.messages.length === 0) {
-            box.innerHTML = `<div style="color: gray; text-align: center; font-size: 12px; margin-top: 20px;">Hali xabarlar yo'q. Adminga savolingiz bo'lsa yozing.</div>`;
+            box.innerHTML = `<div style="text-align:center; color:gray; font-size:12px; margin: 20px 0;">Hali xabarlar yo'q. Savolingiz bo'lsa yozing...</div>`;
             return;
         }
 
         let chatHtml = '';
         o.messages.forEach(msg => {
-            // Mijoz yozgan xabar o'ngda (ko'k rangda), adminniki chapda (qora rangda) bo'ladi
-            let isMe = msg.sender === 'mijoz';
+            // Sizning eski bazangizdagi 'mijoz' so'zi saqlab qolindi
+            let isMe = msg.sender === 'mijoz' || msg.sender === 'user';
+            
             chatHtml += `
-                <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'};">
-                    <div style="max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 13px; 
-                         background: ${isMe ? 'var(--primary-blue)' : 'rgba(255,255,255,0.1)'}; 
-                         color: white; border-bottom-${isMe ? 'right' : 'left'}-radius: 2px;">
-                        ${msg.text}
-                        <div style="font-size: 9px; opacity: 0.7; text-align: right; margin-top: 4px;">${msg.time}</div>
-                    </div>
+            <div style="display: flex; flex-direction: column; width: 100%; margin-bottom: 8px;">
+                <div class="chat-bubble ${isMe ? 'chat-user' : 'chat-admin'}">
+                    ${msg.text}
+                    <span class="chat-time">${msg.time || ''}</span>
                 </div>
+            </div>
             `;
         });
+        
         box.innerHTML = chatHtml;
-        box.scrollTop = box.scrollHeight; // Har doim eng pastki xabarni ko'rsatish
-    }
+        
+        // Yangi xabar kelganda avtomat pastga tushish
+        setTimeout(() => {
+            box.scrollTop = box.scrollHeight;
+        }, 50);
+    };
 
-    // Xabar jo'natish tugmasi bosilganda
+    // 💬 PREMIUM CHAT: Xabar jo'natish tugmasi
     window.sendOrderMessage = () => {
         let input = document.getElementById('od-chat-input');
+        if(!input) return;
+        
         let text = input.value.trim();
         if(!text) return;
 
         let idx = myOrders.findIndex(x => x.id === currentOpenOrderId);
         if(idx !== -1) {
-            // Agar messages massivi yo'q bo'lsa, yangi ochamiz
             if(!myOrders[idx].messages) myOrders[idx].messages = [];
             
-            // Yangi xabarni qo'shamiz
             let now = new Date();
             let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
             
             myOrders[idx].messages.push({
-                sender: 'mijoz',
+                sender: 'mijoz', // Eski xabarlar bilan bir xil bo'lishi uchun
                 text: text,
                 time: timeString
             });
 
-            // Bazaga saqlaymiz
             saveLocalOrders();
             input.value = ''; // Yozish joyini tozalash
-            renderChatMessages(); // Oynani yangilash
+            renderChatMessages(); // Oynani srazi yangilash
         }
-    }
+    };
 
 // =====================================
     // ADMIN: MIJOZ BILAN YOZISHMA (CHAT)
