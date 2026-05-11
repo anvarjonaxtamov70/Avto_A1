@@ -1656,7 +1656,7 @@
         /* 👑 LUXURY AI: TUGMA VA OYNA (PREMIUM USLUB) */
         /* ================================================= */
         
-        /* 1. Sokin va Salobatli AI Tugma */
+       /* 1. Sokin va Salobatli AI Tugma (Yangilangan: Silliq harakat va yashirinish bilan) */
         .ai-luxury-btn {
             position: fixed; bottom: 110px; right: 25px; z-index: 2000;
             background: linear-gradient(145deg, #161618, #0a0a0c) !important;
@@ -1672,11 +1672,21 @@
             text-transform: uppercase !important;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), inset 0 0 10px rgba(212, 175, 55, 0.1) !important;
             cursor: pointer;
-            transition: all 0.4s ease !important;
-            /* Sokkingina tilla nur yuguradi */
+            /* 🚀 YANGI: Silliq yonga chiqish va kirish animatsiyasi */
+            transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease !important;
             animation: luxuryGlow 4s infinite alternate ease-in-out !important;
         }
-        .ai-luxury-btn:active { transform: scale(0.95) !important; }
+
+        /* 🚀 SKROLL QILGANDA YONGA YASHIRINISH KLASSI */
+        .ai-luxury-btn.ai-hidden {
+            transform: translateX(150%) !important;
+            opacity: 0;
+        }
+
+        /* 🚀 ADMIN PANEL YOKI MODAL OCHILGANDA TUGMANI BUTUNLAY YO'QOTISH */
+        body[style*="overflow: hidden"] .ai-luxury-btn {
+            display: none !important;
+        }
         
         @keyframes luxuryGlow {
             0% { box-shadow: 0 5px 15px rgba(0,0,0,0.8), inset 0 0 5px rgba(212,175,55,0.05); }
@@ -6773,28 +6783,30 @@ document.addEventListener('click', function(e) {
     // Animatsiya tugagach, to'lqinni o'chiramiz
     setTimeout(() => circle.remove(), 600);
 });
+
 // ===================================================
-// 📱 AQLLI MENYU (SKROLL QILGANDA YASHIRINADI)
+// 📱 AQLLI MENYU VA AI TUGMASI (SKROLL HARAKATI)
 // ===================================================
 let lastScrollTop = 0;
 window.addEventListener("scroll", function() {
-    // Agar birorta modal (tovar, savat, admin) ochiq bo'lsa, menyu qotib tursin
+    // Agar birorta oyna ochiq bo'lsa, hech narsa qilma
     if (activeModal) return; 
 
     let st = window.pageYOffset || document.documentElement.scrollTop;
     let bottomNav = document.querySelector('.bottom-nav');
-    if (!bottomNav) return;
+    let aiBtn = document.querySelector('.ai-luxury-btn'); // AI tugmasini ushlaymiz
 
     if (st > lastScrollTop && st > 50) {
-        // Pastga scroll qilyapti -> Menyuni yashiramiz
-        bottomNav.classList.add("nav-hidden");
+        // ⬇️ PASTGA SKROLL: Menyu pastga, AI tugmasi o'ngga yashirinadi
+        if(bottomNav) bottomNav.classList.add("nav-hidden");
+        if(aiBtn) aiBtn.classList.add("ai-hidden");
     } else {
-        // Tepaga scroll qilyapti -> Menyuni chiqaramiz
-        bottomNav.classList.remove("nav-hidden");
+        // ⬆️ TEPAGA SKROLL: Hammasi joyiga qaytadi
+        if(bottomNav) bottomNav.classList.remove("nav-hidden");
+        if(aiBtn) aiBtn.classList.remove("ai-hidden");
     }
     lastScrollTop = st <= 0 ? 0 : st;
 }, false);
-
 
 // ===================================================
 // 🎉 BAYRAMONA XARID (CONFETTI YOMG'IRI)
