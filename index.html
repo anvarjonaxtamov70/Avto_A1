@@ -211,8 +211,35 @@
         .nav-badge.show { opacity: 1; transform: scale(1); }
         .nav-badge.pulse { animation: badgePulse 0.4s ease-out; }
         @keyframes badgePulse { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
-        .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .toast { background: rgba(40, 40, 45, 0.95); border-left: 4px solid var(--accent-green); color: white; padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.4); display: flex; align-items: center; gap: 10px; }
+       /* ================================================= */
+        /* 🪟 1. DYNAMIC ISLAND XABARNOMASI (IOS 16 USLUBI) */
+        /* ================================================= */
+        .toast-container { 
+            position: fixed; top: 15px; left: 50%; transform: translateX(-50%); 
+            z-index: 99999; display: flex; flex-direction: column; gap: 10px; 
+            pointer-events: none; align-items: center; 
+        }
+        .toast { 
+            background: rgba(15, 15, 18, 0.85); 
+            backdrop-filter: blur(25px) saturate(200%); -webkit-backdrop-filter: blur(25px) saturate(200%);
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            color: white; padding: 12px 20px; border-radius: 30px; /* Kapsula shakli */
+            font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 15px rgba(212,175,55,0.1); 
+            display: flex; align-items: center; gap: 10px; 
+            /* Tepadan cho'zilib tushish va yig'ilib ketish animatsiyasi */
+            animation: dynamicDrop 0.5s cubic-bezier(0.25, 1.2, 0.5, 1) forwards, 
+                       dynamicHide 0.4s ease-in 2.6s forwards; 
+            transform-origin: top center;
+        }
+        @keyframes dynamicDrop { 
+            0% { transform: translateY(-30px) scale(0.8); opacity: 0; } 
+            100% { transform: translateY(0) scale(1); opacity: 1; } 
+        }
+        @keyframes dynamicHide { 
+            0% { transform: translateY(0) scale(1); opacity: 1; } 
+            100% { transform: translateY(-20px) scale(0.8); opacity: 0; } 
+        }
         #loading-text { text-align: center; padding: 40px; color: var(--luxury-gold); font-weight: 600; font-size: 16px; letter-spacing: 1px; }
         .order-loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(10px); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .order-loading-overlay.active { opacity: 1; pointer-events: auto; }
@@ -1018,19 +1045,24 @@
             padding: 20px !important;
             margin-bottom: 12px !important;
         }
-        /* 🔄 BO'LIMLARARO SILLIQ O'TISH ANIMATSIYASI */
+/* ================================================= */
+        /* 🎬 2. KINO USLUBIDAGI SAHIFA ALMASHINUVI (CINEMATIC) */
+        /* ================================================= */
         #content-area > div {
-            animation: fadeInSlide 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            animation: cinematicEnter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            transform-origin: center top;
         }
 
-        @keyframes fadeInSlide {
-            from {
-                opacity: 0;
-                transform: translateY(15px); /* Pastdan tepaga ko'tarilib chiqadi */
+        @keyframes cinematicEnter {
+            0% { 
+                opacity: 0; 
+                transform: scale(0.92) translateY(25px); /* Orqaroqdan va pastdan boshlaydi */
+                filter: blur(5px); /* Boshida xira bo'ladi */
             }
-            to {
-                opacity: 1;
-                transform: translateY(0);
+            100% { 
+                opacity: 1; 
+                transform: scale(1) translateY(0); /* Silliq oldinga chiqib keladi */
+                filter: blur(0); 
             }
         }
 
@@ -1596,6 +1628,29 @@
             touch-action: none !important;   /* Orqa fon umuman skroll bo'lmaydi */
             filter: blur(4px) brightness(0.85); /* Fonni chiroyli xiralashtiramiz */
             transition: filter 0.4s ease;
+        }
+        /* ================================================= */
+        /* 🔦 3. QIDIRUV SPOTLIGHT (MAGNIT FOKUS) EFFEKTI */
+        /* ================================================= */
+        /* Qidiruv bosilganda orqa fon qorayadi va xiralashadi */
+        body.search-focused #main-menu,
+        body.search-focused .slider-container,
+        body.search-focused .quick-chips {
+            filter: blur(8px) brightness(0.4) grayscale(0.5);
+            transition: filter 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+            pointer-events: none; /* Bosishdan saqlaydi */
+            transform: scale(0.98); /* Sal orqaga chekinadi */
+        }
+        
+        /* Qidiruv qutisi o'zi sal kattalashib nur taratadi */
+        body.search-focused .search-input-container {
+            transform: scale(1.02);
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 1500;
+        }
+        
+        #main-menu, .slider-container, .quick-chips {
+            transition: filter 0.5s ease, transform 0.5s ease;
         }
     </style>
 </head>
@@ -2658,8 +2713,24 @@ function toggleWishlist(e, id) {
     }
     function saveLocalOrders() { if (currentUser) db.ref('users/' + currentUser + '/orders').set(myOrders); }
     function saveProfile() { let nN = document.getElementById('user-edit-name').value.trim(); let nP = document.getElementById('user-edit-phone').value.trim(); let nA = document.getElementById('user-edit-address') ? document.getElementById('user-edit-address').value.trim() : ""; if(!nN || !nP) { showToast("Ism va raqamni kiritish shart!", "warning"); return; } myProfile.name = nN; myProfile.phone = nP; myProfile.address = nA; updateProfileUI(); if (currentUser) { db.ref('users/' + currentUser + '/profile').set(myProfile).then(() => { showToast("Saqlandi!"); closeModal(); }); } else { showToast("Saqlandi!"); closeModal(); } }
-    function showToast(m, t = 'success') { const c = document.getElementById('toast-container'); const el = document.createElement('div'); el.className = 'toast'; el.style.borderLeftColor = t === 'success' ? 'var(--accent-green)' : 'var(--luxury-gold)'; el.innerHTML = `<span>${t === 'success' ? '✅' : '⚠️'}</span> <span>${m}</span>`; c.appendChild(el); setTimeout(() => el.remove(), 3000); }
-
+    // 🪟 DYNAMIC ISLAND (XABARNOMA) FUNKSIYASI
+function showToast(m, t = 'success') { 
+    const c = document.getElementById('toast-container'); 
+    const el = document.createElement('div'); 
+    el.className = 'toast'; 
+    // Muvaffaqiyatli bo'lsa yashil nur, xato bo'lsa sariq/qizil nur taratadi
+    let glowColor = t === 'success' ? 'rgba(48,209,88,0.2)' : 'rgba(212,175,55,0.2)';
+    el.style.boxShadow = `0 15px 35px rgba(0,0,0,0.5), 0 0 20px ${glowColor}`;
+    
+    // Ikonkalar ham Dynamic Island uslubida
+    let icon = t === 'success' ? '<span style="color:#30d158; font-size:16px; filter:drop-shadow(0 0 5px #30d158);">✨</span>' : '<span style="color:var(--luxury-gold); font-size:16px;">⚠️</span>';
+    
+    el.innerHTML = `${icon} <span style="margin-top: 1px;">${m}</span>`; 
+    c.appendChild(el); 
+    
+    // Animatsiya o'zini yig'ib ketgach, elementni tozalaymiz
+    setTimeout(() => el.remove(), 3000); 
+}
     const initialProducts = [ { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", desc: "100% original", price: 1060000, stock: 10, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "gazel-biznes-motor", badge: "hot" } ];
 
      db.ref('products').on('value', (snap) => {
@@ -6659,7 +6730,28 @@ window.shootConfetti = () => {
         setTimeout(() => conf.remove(), 4500);
     }
 };
+// 🔦 QIDIRUV SPOTLIGHT DVIJOGI
+document.addEventListener('DOMContentLoaded', () => {
+    let searchInput = document.getElementById('searchInput');
+    if(searchInput) {
+        searchInput.addEventListener('focus', () => {
+            document.body.classList.add('search-focused');
+        });
+        searchInput.addEventListener('blur', () => {
+            // Agar matn yozilmagan bo'lsa fon yana yorishadi
+            if(searchInput.value.trim() === '') {
+                document.body.classList.remove('search-focused');
+            }
+        });
+    }
+});
 
+// Qidiruvdan chiqishda Spotlight'ni ham o'chiramiz
+const originalExitSearch = window.exitSearch;
+window.exitSearch = () => {
+    document.body.classList.remove('search-focused');
+    if(typeof originalExitSearch === 'function') originalExitSearch();
+};
 
 
     
