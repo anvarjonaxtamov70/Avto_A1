@@ -1728,6 +1728,14 @@
         .luxury-dot:nth-child(1) { animation-delay: -0.4s; }
         .luxury-dot:nth-child(2) { animation-delay: -0.2s; }
         @keyframes elegantPulse { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; } 40% { transform: scale(1); opacity: 1; } }
+        /* ================================================= */
+        /* 🛑 SHOGIRD CHAT UCHUN SKROLL QULFI (BLEED FIX) */
+        /* ================================================= */
+        #ai-chat-box {
+            overscroll-behavior-y: contain !important; /* Skroll kuchi oynadan tashqariga toshmaydi */
+            -webkit-overflow-scrolling: touch !important; /* iOS (iPhone) da qotib qolmasligi uchun */
+            touch-action: pan-y !important; /* Faqatgina tepaga va pastga yurishga ruxsat */
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -6030,19 +6038,22 @@ window.addDescTemplate = (prefix, text) => {
 // ==========================================
 
 window.openAiChat = () => {
-    openModal('aiChatModal');
-    let box = document.getElementById('ai-chat-box');
+    activeModal = 'aiChatModal';
+    document.getElementById('aiChatModal').style.display = 'flex';
     
-    if(!currentUser) {
-        box.innerHTML = '<p style="color:gray; text-align:center;">Iltimos, bot orqali kiring.</p>';
-        return;
+    // 🛑 ASOSIY SEHR: ORQA FONNI MUZLATISH
+    document.body.style.overflow = 'hidden'; 
+    
+    // Tarixga yozish (Telefonning "Orqaga" tugmasi to'g'ri ishlashi uchun)
+    if (typeof historyStack !== 'undefined') {
+        window.history.pushState({ modal: 'aiChatModal' }, "");
     }
-
-    // Firebase'dan AI xabarlarini doimiy o'qib turish
-    db.ref('ai_requests/' + currentUser).on('value', snap => {
-        let data = snap.exists() ? snap.val() : { messages: [] };
-        renderAiChat(data.messages || []);
-    });
+    
+    // Oyna ochilganda avtomat eng oxirgi xabarga tushib turishi uchun
+    setTimeout(() => {
+        let box = document.getElementById('ai-chat-box');
+        if(box) box.scrollTop = box.scrollHeight;
+    }, 50);
 };
 
     window.sendAiMessage = () => {
