@@ -136,36 +136,90 @@
         #back-btn { left: 15px; top: 15px; }
         #productModal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 2000; display: none; flex-direction: column; overflow-y: auto; padding: 0; animation: slideUpModal 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
         @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
-          /* ================================================= */
-        /* 🛠️ YAKUNIY: RASMNI MAJBURLAB CHIQARUVCHI DIZAYN */
+        /* ================================================= */
+        /* 💎 YAKUNIY PREMIMUM SHOWROOM DIZAYNI (TOSHIB KETMAYDI) */
         /* ================================================= */
         
         #productModal { background: #0a0a0b !important; }
-        
+
+        /* 1. Asosiy Quti: Endi qotib qolgan piksel emas, ekranga moslashadi (vh) */
         .pm-img-header { 
             background: #1c1c1f !important;
-            background-image: radial-gradient(circle at 50% 50%, #1c1c1f 0%, #0a0a0b 80%) !important;
+            background-image: radial-gradient(circle at 50% 50%, #2a2a2f 0%, #0a0a0b 80%) !important;
             width: 100% !important;
-            height: 380px !important; 
+            height: 35vh !important; /* Ekran balandligining 35% ni oladi */
+            min-height: 280px !important; /* Juda pachoq bo'lib ketmaydi */
+            max-height: 380px !important; /* Juda katta bo'lib ketmaydi */
             position: relative !important; 
             border-radius: 0 0 30px 30px !important; 
             box-shadow: 0 15px 40px rgba(0,0,0,0.9) !important; 
-            border-bottom: 1px solid rgba(212, 175, 55, 0.2) !important;
+            overflow: hidden !important; 
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2) !important; 
+            display: block !important;
         }
 
-        .pm-slider-container { width: 100% !important; height: 100% !important; position: absolute !important; top:0; left:0; z-index: 1 !important; }
-        .pm-slider { display: flex !important; overflow-x: auto !important; scroll-snap-type: x mandatory !important; scrollbar-width: none !important; width: 100% !important; height: 100% !important; scroll-behavior: smooth !important; }
+        /* Qorong'u gradient tepa va pastdan rasmga singib ketishi uchun */
+        .pm-img-header::before {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 80px;
+            background: linear-gradient(to bottom, rgba(10,10,11,0.8) 0%, transparent 100%);
+            z-index: 5; pointer-events: none;
+        }
+        .pm-img-header::after {
+            content: ""; position: absolute; bottom: 0; left: 0; width: 100%; height: 80px;
+            background: linear-gradient(to top, rgba(10,10,11,0.8) 0%, transparent 100%);
+            z-index: 5; pointer-events: none;
+        }
+
+        .pm-slider-container { 
+            width: 100% !important; height: 100% !important; 
+            position: absolute !important; top: 0 !important; left: 0 !important; 
+            z-index: 1 !important; 
+        }
         
-        /* Eski animatsiyalar rasmni yashirmasligi uchun tozalash */
-        .pm-slider img {
+        .pm-slider { 
+            display: flex !important; overflow-x: auto !important; scroll-snap-type: x mandatory !important; 
+            scrollbar-width: none !important; width: 100% !important; height: 100% !important; 
+            scroll-behavior: smooth !important; align-items: center !important; 
+        }
+
+        /* 2. ENG ASOSIY QISMI: Rasm qochib ketmasligi uchun 100% himoya */
+        .pm-slider img { 
+            flex: 0 0 100% !important; 
+            width: 100% !important; 
+            height: 100% !important; 
+            object-fit: contain !important; /* Rasmni qutiga to'liq moslaydi, kesmaydi! */
+            padding: 40px 20px !important; /* Atrofidan havo qoldiradi */
+            box-sizing: border-box !important; 
             opacity: 1 !important; 
             visibility: visible !important;
-            transform: none !important;
+            display: block !important;
+            filter: drop-shadow(0 15px 25px rgba(0,0,0,0.8)) !important; /* Chiroyli soya */
+            transform: none !important; /* Hech qayoqqa siljib ketmaydi */
+            position: relative !important;
+            z-index: 3 !important; 
         }
 
-        /* Tugmalar professional joylashuvi */
-        .pm-close-btn { position: absolute !important; top: 20px !important; left: 20px !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.15) !important; color: white !important; width: 38px !important; height: 38px !important; border-radius: 50% !important; font-size: 20px !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important; backdrop-filter: blur(8px) !important; z-index: 10 !important; }
-        .pm-edit-icon { position: absolute !important; top: 20px !important; right: 20px !important; background: rgba(212, 175, 55, 0.1) !important; color: white !important; border: 1px solid rgba(212, 175, 55, 0.3) !important; width: 38px !important; height: 38px !important; border-radius: 50% !important; font-size: 16px !important; display: none; align-items: center !important; justify-content: center !important; cursor: pointer !important; backdrop-filter: blur(8px) !important; z-index: 10 !important; }
+        /* 3. Tugmalar - Joylashuv o'ta aniq va toza qilib qo'yildi */
+        .pm-close-btn { 
+            position: absolute !important; top: 15px !important; left: 15px !important; 
+            background: rgba(255,255,255,0.1) !important; border: 1px solid rgba(255,255,255,0.2) !important; 
+            color: white !important; width: 36px !important; height: 36px !important; border-radius: 50% !important; 
+            font-size: 20px !important; display: flex !important; align-items: center !important; justify-content: center !important; 
+            cursor: pointer !important; backdrop-filter: blur(8px) !important; z-index: 10 !important; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+        }
+        .pm-edit-icon { 
+            position: absolute !important; top: 15px !important; right: 15px !important; 
+            background: rgba(212, 175, 55, 0.15) !important; color: var(--luxury-gold) !important; 
+            border: 1px solid rgba(212, 175, 55, 0.4) !important; width: 36px !important; height: 36px !important; 
+            border-radius: 50% !important; font-size: 16px !important; display: none; align-items: center !important; 
+            justify-content: center !important; cursor: pointer !important; backdrop-filter: blur(8px) !important; 
+            z-index: 10 !important; box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+        }
+        
+        .pm-slider-dots { position: absolute !important; bottom: 15px !important; left: 0 !important; width: 100% !important; display: flex !important; justify-content: center !important; gap: 8px !important; z-index: 10 !important; }
+        .pm-dot { background: rgba(255,255,255,0.3) !important; width: 6px !important; height: 6px !important; border-radius: 50% !important; transition: 0.3s !important; margin: 0 !important; box-shadow: none !important; }
+        .pm-dot.active { background: var(--luxury-gold) !important; width: 20px !important; border-radius: 4px !important; }
         
         .pm-slider-dots { position: absolute !important; bottom: 15px !important; left: 0 !important; width: 100% !important; display: flex !important; justify-content: center !important; gap: 8px !important; z-index: 10 !important; }
         .pm-dot { background: rgba(255,255,255,0.3) !important; width: 8px !important; height: 8px !important; border-radius: 50% !important; transition: 0.3s !important; margin: 0 !important; box-shadow: none !important; }
