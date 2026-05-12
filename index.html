@@ -38,9 +38,61 @@
         }
         .container { padding: 15px 0; max-width: 500px; margin: 0 auto; overflow-x: hidden; }
         .hidden { display: none !important; }
-        #welcome-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transition: opacity 0.5s; }
-        #welcome-screen h1 { font-size: 28px; font-weight: 800; margin-bottom: 10px; }
-        #welcome-screen p { color: var(--luxury-gold); font-weight: 500; }
+        /* ================================================= */
+        /* 🎬 5. CINEMATIC WELCOME SCREEN (YANGI USLUB) */
+        /* ================================================= */
+        #welcome-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; /* Mutlaqo qora fon */
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), filter 0.8s ease;
+        }
+
+        .welcome-text {
+            color: var(--luxury-gold);
+            font-size: 32px;
+            font-weight: 200; /* Ingichka va elita ko'rinishi uchun */
+            letter-spacing: 8px; /* Cinematic masofa */
+            text-transform: uppercase;
+            text-align: center;
+            opacity: 0;
+            transform: scale(0.9);
+            /* Neon yorug'lik effekti */
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.5), 0 0 40px rgba(212, 175, 55, 0.2);
+            animation: cinematicFade 2.5s ease-out forwards;
+        }
+
+        /* Nafas oluvchi va kengayuvchi animatsiya */
+        @keyframes cinematicFade {
+            0% { 
+                opacity: 0; 
+                transform: scale(0.9); 
+                letter-spacing: 2px;
+                filter: blur(10px);
+            }
+            40% { 
+                opacity: 1; 
+                filter: blur(0);
+            }
+            100% { 
+                opacity: 1; 
+                transform: scale(1.05); 
+                letter-spacing: 10px;
+                text-shadow: 0 0 30px rgba(212, 175, 55, 0.8), 0 0 60px rgba(212, 175, 55, 0.4);
+            }
+        }
+
+        /* Sahifa ochilayotganda fonning xiralashishi */
+        .welcome-fade-out {
+            opacity: 0 !important;
+            filter: blur(20px);
+            pointer-events: none;
+        }
         .header { text-align: center; padding: 10px 20px 20px; }
         .header h1 { font-size: 26px; font-weight: 800; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .verify-icon { background: var(--primary-blue); border-radius: 50%; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
@@ -3336,8 +3388,31 @@ window.addEditSizeField = () => {
    
 
     window.history.replaceState({ section: 'main-menu' }, "");
-    setTimeout(() => { document.getElementById('welcome-screen').style.opacity = '0'; setTimeout(() => { document.getElementById('welcome-screen').style.display = 'none'; }, 500); }, 1500);
-// =====================================
+   // 🎬 Cinematic Welcome Screen boshqaruvi
+    function startCinematicWelcome() {
+        const screen = document.getElementById('welcome-screen');
+        
+        // Hozirgi "Assalomu alaykum" yozuvini yangi stilga o'tkazamiz
+        screen.innerHTML = `<div class="welcome-text">Assalomu alaykum</div>`;
+        
+        // Animatsiya tugagach (2.5 sekunddan keyin), ilovani ochamiz
+        setTimeout(() => {
+            screen.classList.add('welcome-fade-out');
+            
+            // 0.8 sekunddan keyin elementni domdan butunlay yo'qotamiz
+            setTimeout(() => {
+                screen.style.display = 'none';
+            }, 800);
+            
+            // Telefonni yengil titratib (Haptic), "Xush kelibsiz" signali beramiz
+            if (typeof tg !== 'undefined' && tg.HapticFeedback) {
+                tg.HapticFeedback.notificationOccurred('success');
+            }
+        }, 2800); 
+    }
+
+    // Ilova yuklanishi bilan ishga tushiramiz
+    startCinematicWelcome();
     // 🔄 SILLIQ SKROLL VA TOVARLARNI YUKLASH (Muzlamaydigan versiya)
     // =====================================
     let limitCount = 12; 
