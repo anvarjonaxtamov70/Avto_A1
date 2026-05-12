@@ -1990,6 +1990,19 @@
     filter: brightness(0.9);
     transition: 0.1s;
 }
+        /* 🌊 ELEMENTLARNING SUZIB CHIQISHI */
+.reveal-item {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+    transition: all 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+    filter: blur(5px);
+}
+
+.reveal-item.active {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+}
     </style>
 </head>
 <body ontouchstart="">
@@ -2876,6 +2889,14 @@
     const firebaseConfig = { databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/" };
     if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
     const db = firebase.database();
+    // ⚡️ TELEGRAM PREMIUM HAPTIC (VIBRATSIYA) TIZIMI
+const Haptics = {
+    light: () => tg.HapticFeedback.impactOccurred('light'),     // Mayin (tugma uchun)
+    medium: () => tg.HapticFeedback.impactOccurred('medium'),   // O'rtacha (savat uchun)
+    success: () => tg.HapticFeedback.notificationOccurred('success'), // Zo'r (xarid uchun)
+    warning: () => tg.HapticFeedback.notificationOccurred('warning'), // Ogohlantirish
+    selection: () => tg.HapticFeedback.selectionChanged()       // Menyu almashganda
+};
 
     let currentCropper = null, currentTargetInput = "";
     
@@ -2938,8 +2959,12 @@
         let nameVal = document.getElementById('login-name').value.trim();
         let phoneVal = document.getElementById('login-phone').value.trim();
         
-        if(!nameVal || phoneVal.length < 9) { showToast("Ism va telefon raqamni to'liq kiriting!", "warning"); return; }
-        
+
+    if(!nameVal || phoneVal.length < 9) { 
+        Haptics.warning(); // ⚠️ "Xato" tebranishi
+        showToast("Ism va telefonni kiriting!", "warning"); 
+        return; 
+    }        
         let fakeId = "apk_" + phoneVal.replace(/[^0-9]/g, '');
         window.currentUser = fakeId;
         myProfile.name = nameVal;
@@ -3874,9 +3899,12 @@ window.clearAppCache = () => {
                     let itemRect = it.getBoundingClientRect();
                     // Chapdan qancha masofada ekanini hisoblaymiz
                     let offsetLeft = itemRect.left - navRect.left;
-                    
+                        if(it) {
+                            it.classList.add('active');
+                               Haptics.selection(); // ✅ Barmoq sezadigan nozik tebranish
                     indicator.style.transform = `translateX(${offsetLeft}px)`;
                     indicator.style.width = `${itemRect.width}px`;
+                   }
                 }
             }
         } 
@@ -4846,6 +4874,7 @@ window.addToCartWithOptions = (finalId) => {
     saveLocalCart(); 
     updateCartBadge(); 
     if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium'); 
+    Haptics.success(); // ✅ Muvaffaqiyatli tebranish qo'shildi
     showToast('Savatda!'); 
 };
 
@@ -4988,6 +5017,7 @@ window.addToCartWithOptions = (finalId) => {
     saveLocalCart(); 
     updateCartBadge(); 
     if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium'); 
+    Haptics.success(); // ✅ Muvaffaqiyatli tebranish qo'shildi
     showToast('Savatda!'); 
 };
 
@@ -5113,6 +5143,7 @@ window.addToCartWithOptions = (finalId) => {
     saveLocalCart(); 
     updateCartBadge(); 
     if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium'); 
+    Haptics.success(); // ✅ Muvaffaqiyatli tebranish qo'shildi
     showToast('Savatda!'); 
 };
 
@@ -7206,7 +7237,28 @@ window.animatePrice = (id, end) => {
     }
     window.requestAnimationFrame(step);
 };
+// 👁️ ELEMENTLARNI KUZATUVCHI MOTOR
+const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('active');
+        }
+    });
+}, { threshold: 0.1 }); // 10% ko'rinishi bilan ishga tushadi
 
+function initReveal() {
+    // Barcha kartochkalarni kuzatuvga olamiz
+    document.querySelectorAll('.luxury-card, .section-title, .neon-brand-card').forEach(el => {
+        el.classList.add('reveal-item');
+        revealObserver.observe(el);
+    });
+}
+
+// Tovar chizilgandan keyin bu funksiyani chaqirish kerak
+// Buni renderProducts funksiyasining oxiriga qo'shib qo'ying
+
+
+    
     
 </script> 
 </body>    
