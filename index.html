@@ -1862,7 +1862,33 @@
         .luxury-card .img-wrap {
             box-shadow: inset 0 0 20px rgba(0,0,0,0.05) !important;
         }
-       
+       /* ================================================= */
+        /* 🧲 3. MAGNITLI SUYUQ MENYU (LIQUID BOTTOM NAV) */
+        /* ================================================= */
+        
+        /* Faol bo'lgan ikonkaning qotib turgan eski fonini o'chiramiz */
+        .bottom-nav .nav-item.active {
+            background: transparent !important; 
+            transform: translateY(-6px) scale(1.1) !important; /* Sal balandroq sakraydi */
+        }
+        
+        .bottom-nav .nav-item {
+            z-index: 2 !important; /* Ikonkalar suvning ustida turishi uchun */
+        }
+
+        /* Yugurib yuradigan Magnit Kapsula (Suyuqlik) */
+        .nav-indicator {
+            position: absolute;
+            bottom: 8px; /* Menyuning paddingiga moslab */
+            height: calc(100% - 16px);
+            background: rgba(212, 175, 55, 0.18); /* Tilla rang fon */
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            border-radius: 20px;
+            z-index: 1; /* Ikonkalarning orqasida turadi */
+            /* Mana shu joyi unga simobdek oqish effektini beradi */
+            transition: transform 0.4s cubic-bezier(0.5, 1.5, 0.4, 1), width 0.4s cubic-bezier(0.5, 1.5, 0.4, 1);
+            pointer-events: none; /* Mijoz xato bosib yubormasligi uchun */
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -3696,7 +3722,41 @@ window.clearAppCache = () => {
 
     function updateCartBadge() { let tot = Object.values(cart).reduce((a,b)=>a+b,0); let b = document.getElementById('nav-badge'); b.innerText = tot; if(tot > 0) { b.classList.add('show'); b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse'); } else { b.classList.remove('show'); } }
     function addToCart(id) { cart[id] = (cart[id] || 0) + 1; saveLocalCart(); updateCartBadge(); tg.HapticFeedback.impactOccurred('medium'); showToast('Savatda!'); }
-    function updateNav(id) { document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active')); if(id) { let it = document.getElementById(id); if(it) it.classList.add('active'); } }
+    // HTML ni buzmaslik uchun Magnit Kapsulani JS orqali o'zimiz menyuga joylaymiz
+    document.addEventListener('DOMContentLoaded', () => {
+        let nav = document.querySelector('.bottom-nav');
+        if(nav && !document.getElementById('nav-indicator')) {
+            let indicator = document.createElement('div');
+            indicator.id = 'nav-indicator';
+            indicator.className = 'nav-indicator';
+            nav.appendChild(indicator);
+            // Ilova ochilganda birinchi ikonka ustiga borib turishi uchun:
+            setTimeout(() => updateNav('nav-home'), 100); 
+        }
+    });
+
+    // Eskining o'rniga yangi Suyuq Navigatsiya funksiyasi
+    window.updateNav = function(id) { 
+        document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active')); 
+        if(id) { 
+            let it = document.getElementById(id); 
+            if(it) {
+                it.classList.add('active'); 
+                
+                // Magnit kapsulani hisoblab, o'sha ikonkaning orqasiga yugurtiramiz
+                let indicator = document.getElementById('nav-indicator');
+                if(indicator) {
+                    let navRect = document.querySelector('.bottom-nav').getBoundingClientRect();
+                    let itemRect = it.getBoundingClientRect();
+                    // Chapdan qancha masofada ekanini hisoblaymiz
+                    let offsetLeft = itemRect.left - navRect.left;
+                    
+                    indicator.style.transform = `translateX(${offsetLeft}px)`;
+                    indicator.style.width = `${itemRect.width}px`;
+                }
+            }
+        } 
+    };
     function showSection(id) { document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); d.classList.remove('animate-slide-up'); }); let t = document.getElementById(id); if(t) { t.classList.remove('hidden'); t.classList.add('animate-slide-up'); } if (historyStack[historyStack.length - 1] !== id) { historyStack.push(id); window.history.pushState({ section: id }, ""); } let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (id === 'main-menu') ? 'block' : 'none'; if(searchActive) exitSearch(); updateBtns(); }
     function showCatalog() { if(activeModal) closeModal(); updateNav('nav-catalog'); showSection('katalog-menu'); }
     function showProfile() { if(activeModal) closeModal(); updateNav('nav-profile'); showSection('profile-section'); }
