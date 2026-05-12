@@ -7025,7 +7025,80 @@ window.animatePrice = (id, end) => {
     }
     window.requestAnimationFrame(step);
 };
+// ===================================================
+// 🎲 PREMIUM SWIPE-TO-CLOSE (Instagram uslubi)
+// ===================================================
+function initSwipeToClose() {
+    const modals = document.querySelectorAll('.modal-standard');
+    
+    modals.forEach(modal => {
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+        let startScrollTop = 0;
 
+        modal.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+            startScrollTop = modal.scrollTop;
+            isDragging = true;
+            // Barmoqqa tez va qotmasdan ergashishi uchun animatsiyani o'chiramiz
+            modal.style.transition = 'none'; 
+        }, { passive: true });
+
+        modal.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            currentY = e.touches[0].clientY;
+            let deltaY = currentY - startY;
+
+            // FAqat oyna eng tepasida (skroll 0 da) bo'lsa va pastga tortilsagina ishlaydi!
+            if (startScrollTop <= 0 && deltaY > 0) {
+                // Ichidagi ro'yxat skroll bo'lib ketishini to'xtatamiz
+                if(e.cancelable) e.preventDefault(); 
+                
+                // Premium "Kauchuk" qarshiligi (Barmoqdan biroz sekinroq tushadi)
+                let resistance = deltaY * 0.65; 
+                modal.style.transform = `translateY(${resistance}px)`;
+            }
+        }, { passive: false });
+
+        modal.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            let deltaY = currentY - startY;
+            // Joyiga qaytish yoki yopilish animatsiyasini yoqamiz
+            modal.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+
+            // Agar 120 pikseldan ko'proq tortilgan bo'lsa -> Yopamiz!
+            if (startScrollTop <= 0 && deltaY > 120) {
+                modal.style.transform = 'translateY(100%)'; // Ekrandan chiqarib yuboramiz
+                
+                // Telefonni engil titratib qo'yamiz (Tactile feedback)
+                if (typeof tg !== 'undefined' && tg.HapticFeedback) {
+                    tg.HapticFeedback.impactOccurred('light');
+                }
+                
+                // Dastur tizimi orqali oynani to'liq yopamiz
+                setTimeout(() => {
+                    closeModal();
+                    modal.style.transform = ''; // Keyingi safar uchun joyiga qaytarib qo'yish
+                }, 300);
+            } else {
+                // Oxirigacha tortmasa, prujina bo'lib joyiga qaytadi
+                modal.style.transform = '';
+            }
+            
+            currentY = startY; // Reset
+        });
+    });
+}
+
+// Barcha oyna (Modal) larga jon kiritamiz
+document.addEventListener('DOMContentLoaded', initSwipeToClose);
+
+
+
+    
 </script> 
 </body>    
 </html>
