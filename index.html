@@ -254,7 +254,38 @@
         .profile-menu-item:active { transform: scale(0.98); background: rgba(255,255,255,0.08); }
         .profile-menu-item .left { display: flex; align-items: center; gap: 15px; font-weight: 600; font-size: 15px; }
         .profile-menu-item svg { width: 22px; height: 22px; fill: var(--luxury-gold); }
-        .bottom-nav { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); width: calc(100% - 30px); max-width: 450px; background: rgba(28, 28, 30, 0.9); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; padding: 10px 5px; backdrop-filter: blur(20px); z-index: 1500; transition: opacity 0.3s ease; }
+        /* 🌫️ PREMIUM SHISHA EFFEKTI (BOTTOM NAV) */
+        .bottom-nav {
+            /* Eski backgroundni o'chiramiz va shaffof fon qo'yamiz */
+            background: rgba(18, 18, 20, 0.75) !important; 
+            
+            /* 💥 ENG ASOSIYSI: Orqa fonni xiralashtirish (Glassmorphism) */
+            backdrop-filter: blur(25px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(25px) saturate(180%) !important; /* Safari/iOS uchun */
+            
+            /* Nozik, tilla rangli chegara */
+            border-top: 1px solid rgba(212, 175, 55, 0.15) !important;
+            
+            /* Soyani kengroq va yumshoqroq qilamiz */
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5) !important;
+        }
+        
+        /* 🌫️ PREMIUM SHISHA EFFEKTI (TOP STICKY BAR / QIDIRUV) */
+        .sticky-bar {
+            background: rgba(18, 18, 20, 0.7) !important;
+            backdrop-filter: blur(20px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.1) !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4) !important;
+        }
+        
+        /* 🌫️ TOVAR TAFSILOTLARI OYNASIDAGI PASTKI BAR */
+        .pm-sticky-bar {
+            background: rgba(22, 22, 24, 0.8) !important;
+            backdrop-filter: blur(20px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+        }
         .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); cursor: pointer; flex: 1; position: relative; }
         .nav-item.active { color: var(--luxury-gold); }
         .nav-item svg { width: 24px; height: 24px; fill: currentColor; }
@@ -502,8 +533,11 @@
              transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
         .luxury-card:active {
-            box-shadow: 0 0 25px rgba(212, 175, 55, 0.5), inset 0 0 15px rgba(212, 175, 55, 0.2);
-            border-color: var(--luxury-gold);
+                    /* Eski soyani o'chirib, mana shu "Chuqur soya"ni qo'ying */
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5) !important;
+            
+            /* Kartochkaning chetiga deyarli ko'rinmas oq chiziq (yorug'lik qaytishi) */
+            border: 1px solid rgba(255, 255, 255, 0.03) !important;
         }
         
         /* 💀 SKELETON LOADING (Yuklanish) */
@@ -2002,6 +2036,17 @@
     opacity: 1;
     transform: translateY(0) scale(1);
     filter: blur(0);
+}
+        /* Oyna ochiq turganda butun ekranni xira qilish qoidasi */
+.blur-bg {
+    filter: blur(8px) brightness(0.7);
+    transition: filter 0.4s ease;
+    pointer-events: none; /* Orqa fonni bosib bo'lmaydigan qiladi */
+}
+
+/* Oddiy holatda silliq qaytishi uchun */
+.container {
+    transition: filter 0.4s ease;
 }
     </style>
 </head>
@@ -3719,6 +3764,8 @@ function openProduct(id) {
     let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
     if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
     let mod = document.getElementById('productModal'); mod.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); tg.BackButton.show(); updateBtns();
+    let cont = document.querySelector('.container');
+    if(cont) cont.classList.add('blur-bg');
 }
     
     function backToCart() {
@@ -4553,6 +4600,8 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     
                 // Boshqa har qanday oyna butunlay yopiladi va Asosiy ekranga tushadi
                 document.body.style.overflow = '';
+                let cont = document.querySelector('.container');
+                if(cont) cont.classList.remove('blur-bg');
                 activeModal = null;
                 updateBtns();
                 
