@@ -7026,9 +7026,14 @@ window.animatePrice = (id, end) => {
     window.requestAnimationFrame(step);
 };
 // ===================================================
-// 🎲 PREMIUM SWIPE-TO-CLOSE (Instagram uslubi)
+// 🎲 PREMIUM SWIPE-TO-CLOSE (Telegram uchun 100% himoyalangan)
 // ===================================================
 function initSwipeToClose() {
+    // Telegram Mini App yopilib ketmasligi uchun vertikal svayplarni rasman bloklash (Yangi API)
+    if (typeof tg !== 'undefined' && tg.disableVerticalSwipes) {
+        tg.disableVerticalSwipes();
+    }
+
     const modals = document.querySelectorAll('.modal-standard');
     
     modals.forEach(modal => {
@@ -7040,9 +7045,12 @@ function initSwipeToClose() {
         modal.addEventListener('touchstart', (e) => {
             startY = e.touches[0].clientY;
             startScrollTop = modal.scrollTop;
-            isDragging = true;
-            // Barmoqqa tez va qotmasdan ergashishi uchun animatsiyani o'chiramiz
-            modal.style.transition = 'none'; 
+            
+            // Faqat oyna eng tepada bo'lsa tortishga ruxsat beramiz
+            if (startScrollTop <= 0) {
+                isDragging = true;
+                modal.style.transition = 'none'; 
+            }
         }, { passive: true });
 
         modal.addEventListener('touchmove', (e) => {
@@ -7050,50 +7058,42 @@ function initSwipeToClose() {
             currentY = e.touches[0].clientY;
             let deltaY = currentY - startY;
 
-            // FAqat oyna eng tepasida (skroll 0 da) bo'lsa va pastga tortilsagina ishlaydi!
-            if (startScrollTop <= 0 && deltaY > 0) {
-                // Ichidagi ro'yxat skroll bo'lib ketishini to'xtatamiz
-                if(e.cancelable) e.preventDefault(); 
+            if (deltaY > 0) {
+                // 🛑 ENG MUHIM QATOR: Telegram Mini App yopilib ketishini taqqa to'xtatadi!
+                if (e.cancelable) {
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                }
                 
-                // Premium "Kauchuk" qarshiligi (Barmoqdan biroz sekinroq tushadi)
+                // Kauchuk effekti
                 let resistance = deltaY * 0.65; 
                 modal.style.transform = `translateY(${resistance}px)`;
             }
-        }, { passive: false });
+        }, { passive: false }); // Telegram qotib qolmasligi uchun passive: false shart!
 
         modal.addEventListener('touchend', () => {
             if (!isDragging) return;
             isDragging = false;
             
             let deltaY = currentY - startY;
-            // Joyiga qaytish yoki yopilish animatsiyasini yoqamiz
             modal.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
 
-            // Agar 120 pikseldan ko'proq tortilgan bo'lsa -> Yopamiz!
-            if (startScrollTop <= 0 && deltaY > 120) {
-                modal.style.transform = 'translateY(100%)'; // Ekrandan chiqarib yuboramiz
-                
-                // Telefonni engil titratib qo'yamiz (Tactile feedback)
+            if (deltaY > 120) {
+                modal.style.transform = 'translateY(100%)'; 
                 if (typeof tg !== 'undefined' && tg.HapticFeedback) {
                     tg.HapticFeedback.impactOccurred('light');
                 }
-                
-                // Dastur tizimi orqali oynani to'liq yopamiz
                 setTimeout(() => {
                     closeModal();
-                    modal.style.transform = ''; // Keyingi safar uchun joyiga qaytarib qo'yish
+                    modal.style.transform = ''; 
                 }, 300);
             } else {
-                // Oxirigacha tortmasa, prujina bo'lib joyiga qaytadi
                 modal.style.transform = '';
             }
-            
-            currentY = startY; // Reset
         });
     });
 }
 
-// Barcha oyna (Modal) larga jon kiritamiz
 document.addEventListener('DOMContentLoaded', initSwipeToClose);
 
 
