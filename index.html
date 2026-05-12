@@ -1859,54 +1859,10 @@
             50% { left: 150%; }
             100% { left: 150%; }
         }
-
-        /* Qo'shimcha: Rasm ustidagi soyani lyuks qilish */
         .luxury-card .img-wrap {
             box-shadow: inset 0 0 20px rgba(0,0,0,0.05) !important;
         }
-        /* ================================================= */
-        /* 🛒 1. SAVATDA SURIB O'CHIRISH (SWIPE TO DELETE) */
-        /* ================================================= */
-        .cart-row {
-            position: relative !important;
-            overflow: hidden !important;
-            padding: 0 !important; 
-            border: none !important;
-            background: transparent !important;
-            box-shadow: none !important;
-            display: block !important;
-        }
-        .cart-delete-bg {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #ff453a; /* Qip-qizil fon */
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-right: 25px;
-            font-size: 24px;
-            color: white;
-            z-index: 1;
-            cursor: pointer;
-        }
-        .cart-delete-bg:active { opacity: 0.8; }
-        
-        .cart-row-inner {
-            position: relative;
-            z-index: 2;
-            background: linear-gradient(145deg, #1c1c1e 0%, #151515 100%);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            padding: 15px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            width: 100%;
-            box-sizing: border-box;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-        }
+       
     </style>
 </head>
 <body ontouchstart="">
@@ -6645,57 +6601,7 @@ window.toggleChip = function(el) {
         el.classList.toggle('selected');
     }
 };    
-// ===================================================
-// 🛒 1. SAVAT: SWIPE TO DELETE MOTORLARI
-// ===================================================
-let cartStartX = 0;
-let cartCurrentX = 0;
-
-window.cartSwipeStart = (e) => {
-    cartStartX = e.touches ? e.touches[0].clientX : e.clientX;
-    let rowInner = e.currentTarget;
-    rowInner.style.transition = 'none'; // Barmoqqa yopishib yurishi uchun
-};
-
-window.cartSwipeMove = (e) => {
-    cartCurrentX = e.touches ? e.touches[0].clientX : e.clientX;
-    let diff = cartCurrentX - cartStartX;
-    let rowInner = e.currentTarget;
-    
-    // Faqat chapga surishga ruxsat (-100px gacha)
-    if (diff < 0 && diff > -100) {
-        rowInner.style.transform = `translateX(${diff}px)`;
-    }
-};
-
-window.cartSwipeEnd = (e, el) => {
-    let diff = cartCurrentX - cartStartX;
-    el.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; 
-    
-    // Agar 45px dan ko'proq surilsa, ochiq qoldiramiz (musor ko'rinadi)
-    if (diff < -45) {
-        el.style.transform = `translateX(-80px)`;
-        // Boshqa ochiq qolgan qatorlar bo'lsa, avtomat yopamiz
-        document.querySelectorAll('.cart-row-inner').forEach(row => {
-            if (row !== el) row.style.transform = 'translateX(0)';
-        });
-        if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-    } else {
-        // Oxirigacha surmasa, prujinadek joyiga qaytadi
-        el.style.transform = `translateX(0)`; 
-    }
-};
-
-window.deleteFromCart = (safeId) => {
-    delete cart[safeId];
-    saveLocalCart();
-    updateCartBadge();
-    renderCartItems();
-    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-    showToast("O'chirildi", "warning");
-};
-
-// 🛍️ SAVATNI CHIZISH VA RASM KO'RSATISH (Yangilangan dizayn)
+// 🛍️ SAVATNI CHIZISH VA RASM KO'RSATISH (Qotishlarsiz yagona versiya)
 window.renderCartItems = () => {
     let c = document.getElementById('cart-items-container'); 
     let b = document.getElementById('main-checkout-btn'); 
@@ -6739,23 +6645,19 @@ window.renderCartItems = () => {
         let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
         let displayName = carOpt && carOpt !== "Universal" ? `${p.name} <br><span style="color:var(--text-muted); font-size:11px;">(Razmer: <b style="color:var(--luxury-gold);">${carOpt}</b>)</span>` : p.name;
         
-        // 🚀 MANA SHU YERGA SWIPE FUNKSIYASI QO'SHILDI
         c.innerHTML += `
-            <div class="cart-row" data-id="${safeId}">
-                <div class="cart-delete-bg" onclick="deleteFromCart('${safeId}')">🗑️</div>
-                <div class="cart-row-inner" ontouchstart="cartSwipeStart(event)" ontouchmove="cartSwipeMove(event)" ontouchend="cartSwipeEnd(event, this)">
-                    <img src="${p.img}" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/65?text=A1'">
-                    
-                    <div class="cart-info">
-                        <h4 style="line-height: 1.4; margin: 0 0 4px 0;">${displayName}</h4>
-                        <span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span>
-                    </div>
-                    
-                    <div class="cart-controls">
-                        <button onclick="chg('${safeId}',-1)">-</button>
-                        <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
-                        <button onclick="chg('${safeId}',1)">+</button>
-                    </div>
+            <div class="cart-row">
+                <img src="${p.img}" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/65?text=A1'">
+                
+                <div class="cart-info">
+                    <h4 style="line-height: 1.4;">${displayName}</h4>
+                    <span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span>
+                </div>
+                
+                <div class="cart-controls">
+                    <button onclick="chg('${safeId}',-1)">-</button>
+                    <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
+                    <button onclick="chg('${safeId}',1)">+</button>
                 </div>
             </div>`; 
     } 
