@@ -7258,7 +7258,314 @@ window.animatePrice = (id, end) => {
     }
     window.requestAnimationFrame(step);
 };
+<!-- ====================================================
+     BU KODNI </body> DAN OLDIN QO'SHING
+     Boshqa hech narsa o'zgartirmasdan ishlaydi!
+==================================================== -->
 
+<style>
+/* NUCLEAR OVERRIDE - barcha eski CSS larni bekor qiladi */
+#safe-img-header,
+#safe-img-header * {
+    filter: none !important;
+    -webkit-filter: none !important;
+}
+#safe-img-header {
+    position: relative !important;
+    width: 100% !important;
+    height: 320px !important;
+    background: #0d0d0d !important;
+    overflow: hidden !important;
+    border-radius: 0 0 30px 30px !important;
+    border-bottom: 1px solid rgba(212,175,55,0.25) !important;
+    display: block !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+#safe-img-header .pm-slider-container {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 1 !important;
+    overflow: hidden !important;
+}
+#safe-img-header .pm-slider {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow-x: scroll !important;
+    overflow-y: hidden !important;
+    scroll-snap-type: x mandatory !important;
+    scroll-behavior: smooth !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    align-items: center !important;
+}
+#safe-img-header .pm-slider::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+#pm-slider-wrapper img,
+#safe-img-header .pm-slider img {
+    flex: 0 0 100% !important;
+    min-width: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+    background: transparent !important;
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+    transition: none !important;
+    scroll-snap-align: start !important;
+}
+#safe-img-header .pm-close-btn {
+    position: absolute !important;
+    top: 14px !important;
+    left: 14px !important;
+    z-index: 20 !important;
+    background: rgba(0,0,0,0.55) !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    color: white !important;
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 22px !important;
+    font-weight: 300 !important;
+    filter: none !important;
+}
+#safe-img-header .pm-edit-icon {
+    position: absolute !important;
+    top: 14px !important;
+    right: 14px !important;
+    z-index: 20 !important;
+    display: none !important;
+    filter: none !important;
+}
+#pm-slider-dots {
+    position: absolute !important;
+    bottom: 12px !important;
+    left: 0 !important;
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    z-index: 10 !important;
+}
+#pm-slider-dots .pm-dot {
+    width: 8px !important;
+    height: 8px !important;
+    border-radius: 50% !important;
+    background: rgba(255,255,255,0.3) !important;
+    transition: all 0.3s !important;
+}
+#pm-slider-dots .pm-dot.active {
+    background: #D4AF37 !important;
+    width: 22px !important;
+    border-radius: 4px !important;
+}
+</style>
+
+<script>
+// openProduct funksiyasini to'liq qayta yozamiz
+// Eski funksiya ustiga yoziladi
+const _originalOpenProduct = window.openProduct;
+window.openProduct = function(id) {
+    let p = productsDB.find(x => x.id == id);
+    if (!p) return;
+
+    let imgs = [];
+    if (p.images && p.images.length > 0) {
+        imgs = p.images.filter(Boolean);
+    } else if (p.img) {
+        imgs = [p.img];
+    }
+    if (imgs.length === 0) {
+        imgs = ['https://via.placeholder.com/300?text=Rasm+yoq'];
+    }
+
+    // Rasmlarni TO'G'RIDAN-TO'G'RI yuklash — hech qanday opacity triku yo'q
+    let sliderWrapper = document.getElementById('pm-slider-wrapper');
+    let dotsWrapper = document.getElementById('pm-slider-dots');
+
+    sliderWrapper.innerHTML = '';
+    dotsWrapper.innerHTML = '';
+
+    imgs.forEach(function(src, i) {
+        let img = document.createElement('img');
+        img.src = src;
+        // Inline style — hech qanday CSS override qila olmaydi
+        img.setAttribute('style',
+            'flex:0 0 100%!important;' +
+            'min-width:100%!important;' +
+            'width:100%!important;' +
+            'height:100%!important;' +
+            'object-fit:contain!important;' +
+            'padding:24px!important;' +
+            'box-sizing:border-box!important;' +
+            'opacity:1!important;' +
+            'filter:none!important;' +
+            '-webkit-filter:none!important;' +
+            'transform:none!important;' +
+            'display:block!important;' +
+            'visibility:visible!important;' +
+            'scroll-snap-align:start!important;'
+        );
+        img.onerror = function() {
+            this.src = 'https://via.placeholder.com/300?text=Rasm+yoq';
+        };
+        sliderWrapper.appendChild(img);
+    });
+
+    sliderWrapper.scrollLeft = 0;
+
+    // Nuqtalar (dots)
+    if (imgs.length > 1) {
+        imgs.forEach(function(_, i) {
+            let dot = document.createElement('div');
+            dot.className = 'pm-dot' + (i === 0 ? ' active' : '');
+            dotsWrapper.appendChild(dot);
+        });
+    }
+
+    // Qolgan hamma narsa eski funksiyadan
+    document.getElementById('pm-title').innerText = p.name;
+
+    let unitBadge = document.getElementById('pm-unit-badge');
+    if (p.unit === 'komplekt') {
+        unitBadge.innerHTML = '🧰 Komplekt (Nabor) narxi';
+        unitBadge.style.cssText = 'display:inline-block;background:rgba(48,209,88,0.15);color:#30d158;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:800;margin-bottom:15px;border:1px solid rgba(48,209,88,0.3);';
+    } else {
+        unitBadge.innerHTML = '📦 1 dona uchun narx';
+        unitBadge.style.cssText = 'display:inline-block;background:rgba(212,175,55,0.15);color:#D4AF37;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:800;margin-bottom:15px;border:1px solid rgba(212,175,55,0.3);';
+    }
+
+    document.getElementById('pm-desc').innerText = p.desc || 'Tavsif kiritilmagan';
+    document.getElementById('pm-price').innerText = p.price.toLocaleString() + ' so\'m';
+
+    let buyB = document.getElementById('pm-buy-btn');
+    let sInf = document.getElementById('pm-stock');
+
+    if (p.product_type === 'razmerli' && p.sizes && p.sizes.length > 0) {
+        window.currentSelectedCar = p.sizes[0].size;
+        window.currentSelectedStock = p.sizes[0].stock;
+
+        let sizesHtml = '<div style="margin-top:15px;"><p style="font-size:12px;font-weight:bold;color:var(--text-muted);margin-bottom:8px;">Razmerni tanlang:</p><div style="display:flex;gap:8px;flex-wrap:wrap;" id="pm-size-options">' +
+            p.sizes.map(function(s, i) {
+                return '<button onclick="selectSizeModel(this,' + s.stock + ')" data-size="' + s.size + '" style="background:' + (i===0?'rgba(212,175,55,0.2)':'rgba(255,255,255,0.05)') + ';color:' + (i===0?'var(--luxury-gold)':'white') + ';border:1px solid ' + (i===0?'var(--luxury-gold)':'var(--glass-border)') + ';padding:8px 15px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;" class="pm-size-btn' + (i===0?' selected':'') + '">' + s.size + '</button>';
+            }).join('') + '</div></div>';
+
+        sInf.innerHTML = '<div id="dynamic-stock-info"></div>' + sizesHtml;
+        updateDynamicStock(window.currentSelectedStock);
+
+        buyB.onclick = function(e) {
+            if (window.currentSelectedStock <= 0) { showToast('Bu razmerdan qolmagan!', 'warning'); return; }
+            let finalCartId = id + '||' + window.currentSelectedCar;
+            let totalInCart = 0;
+            for (let cid in cart) { if (cid.startsWith(id + '||' + window.currentSelectedCar)) totalInCart += (parseInt(cart[cid]) || 0); }
+            if (totalInCart >= window.currentSelectedStock) { showToast('Omborda bunday ko\'p emas', 'warning'); }
+            else { addToCartWithOptions(finalCartId); if(e) flyToCartAnimation(e, imgs[0]); setTimeout(function(){closeModal();}, 600); }
+        };
+    } else {
+        let st = p.stock !== undefined ? p.stock : 10;
+        let stockHtml = st <= 0
+            ? '<span style="color:#ff453a;font-weight:bold;">❌ Sotuvda qolmagan</span>'
+            : '<span style="color:var(--accent-green);font-weight:bold;">✅ Sotuvda bor</span>';
+
+        if (st <= 0) { buyB.disabled = true; buyB.innerText = 'Tugagan'; buyB.onclick = null; }
+        else { buyB.disabled = false; buyB.innerText = 'Savatga qo\'shish'; }
+
+        const carNames = {'gazel-biznes':'Gazel Biznes','gazel-next':'Gazel Next','gazel-eski':'Gazel Eski','volga-2401':'Volga 2401','volga-2410':'Volga 2410','volga-3110':'Volga 3110','volga-31105':'Volga 31105','volga-31029':'Volga 31029','sobol':'Sobol','chevy-damas':'Damas','chevy-cobalt':'Cobalt','chevy-gentra':'Gentra','chevy-lacetti':'Lacetti','chevy-malibu1':'Malibu 1','chevy-malibu2':'Malibu 2','chevy-tracker2':'Tracker 2','chevy-nexia3':'Nexia 3','chevy-spark':'Spark','chevy-onix':'Onix','chevy-captiva1':'Captiva 1','chevy-captiva2':'Captiva 2','chevy-captiva3':'Captiva 3','chevy-captiva4':'Captiva 4','chevy-labo':'Labo','chevy-matiz':'Matiz','chevy-epica':'Epica','daewoo-nexia1':'Nexia 1','daewoo-nexia2':'Nexia 2','daewoo-matiz':'Matiz','daewoo-tico':'Tico','uaz-patriot':'Patriot','uaz-hunter':'Hunter'};
+        let uniqueModels = new Set();
+        let pCats = p.categories || [p.category];
+        pCats.forEach(function(c) { for (let key in carNames) { if (c && c.startsWith(key)) uniqueModels.add(carNames[key]); } });
+        let carsArr = Array.from(uniqueModels);
+        let modelsHtml = '';
+        if (carsArr.length > 0) {
+            window.currentSelectedCar = carsArr[0];
+            modelsHtml = '<div style="margin-top:15px;"><p style="font-size:12px;font-weight:bold;color:var(--text-muted);margin-bottom:8px;">Qaysi mashina uchun?</p><div style="display:flex;gap:8px;flex-wrap:wrap;" id="pm-car-options">' +
+                carsArr.map(function(m, i) {
+                    return '<button onclick="selectCarModel(this)" data-car="' + m + '" style="background:' + (i===0?'rgba(212,175,55,0.2)':'rgba(255,255,255,0.05)') + ';color:' + (i===0?'var(--luxury-gold)':'white') + ';border:1px solid ' + (i===0?'var(--luxury-gold)':'var(--glass-border)') + ';padding:8px 15px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;" class="pm-car-btn' + (i===0?' selected':'') + '">' + m + '</button>';
+                }).join('') + '</div></div>';
+        } else { window.currentSelectedCar = 'Universal'; }
+
+        sInf.innerHTML = stockHtml + modelsHtml;
+
+        if (st > 0) {
+            buyB.onclick = function(e) {
+                let finalCartId = id + '||' + window.currentSelectedCar;
+                let totalInCart = 0;
+                for (let cid in cart) { if (cid.startsWith(id + '||')) totalInCart += (parseInt(cart[cid]) || 0); }
+                if (totalInCart >= st) { showToast('Omborda bunday ko\'p emas', 'warning'); }
+                else { addToCartWithOptions(finalCartId); if(e) flyToCartAnimation(e, imgs[0]); setTimeout(function(){closeModal();}, 600); }
+            };
+        }
+    }
+
+    buyB.setAttribute('data-id', id);
+
+    // Admin tahrirlash tugmasi
+    let edB = document.getElementById('pm-edit-btn');
+    if (typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(window.currentUser)) {
+        edB.style.display = 'flex';
+        edB.onclick = function(e) { openEditModal(e); };
+    } else {
+        edB.style.display = 'none';
+    }
+
+    // O'xshash tovarlar
+    if (typeof loadProductReviews === 'function') loadProductReviews(id);
+    let sC = document.getElementById('pm-similar-items');
+    let pC = p.categories ? p.categories[0] : p.category;
+    let sP = productsDB.filter(function(x) { return x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))); }).slice(0, 6);
+    if (sP.length > 0) {
+        document.getElementById('similar-title').style.display = 'block';
+        sC.innerHTML = sP.map(function(x) {
+            return '<div class="similar-card" onclick="openProduct(' + x.id + ')"><div class="img-wrap"><img src="' + x.img + '" onload="this.style.opacity=1"></div><h4>' + x.name + '</h4><div class="price">' + x.price.toLocaleString() + ' so\'m</div></div>';
+        }).join('');
+    } else {
+        document.getElementById('similar-title').style.display = 'none';
+        sC.innerHTML = '';
+    }
+
+    // Modalni ochish
+    let mod = document.getElementById('productModal');
+    mod.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    activeModal = 'productModal';
+    window.history.pushState({modal: 'productModal'}, '');
+    if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show();
+    if (typeof updateBtns === 'function') updateBtns();
+};
+
+// Slider dots yangilash
+window.updateSliderDots = function() {
+    let sw = document.getElementById('pm-slider-wrapper');
+    if (!sw) return;
+    let idx = Math.round(sw.scrollLeft / sw.clientWidth);
+    document.querySelectorAll('#pm-slider-dots .pm-dot').forEach(function(d, i) {
+        d.classList.toggle('active', i === idx);
+    });
+};
+
+console.log('✅ PATCH yuklandi — openProduct yangilandi');
+</script>
     
 </script>    
 </body>    
