@@ -7481,22 +7481,24 @@ function initReveal() {
         let isStoryPaused = false;
         let storyVideoElement = null;
 
-        // 📁 STORIES BAZASI (Hozircha vaqtinchalik xotira, 3-qadamda Firebase'ga ulaymiz)
-        const STORIES_DB = {
-            'aksiyalar': [
-                { type: 'image', src: 'https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png' },
-                { type: 'image', src: 'https://i.postimg.cc/VLj18zjV/orig-(4).png' }
-            ],
-            'jarayon': [
-                { type: 'video', src: 'https://v1.pinimg.com/videos/mc/720p/f1/3d/8c/f13d8c9735d109403f7e53f19e485458.mp4' },
-                { type: 'image', src: 'https://i.postimg.cc/zDhCzyyB/gazel.jpg' }
-            ],
-            'mijozlar': [ { type: 'image', src: 'https://i.postimg.cc/VLj18zjV/orig-(4).png' } ],
-            'dostavka': [ { type: 'image', src: 'https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png' } ],
-            'kafolat': [ { type: 'image', src: 'https://i.postimg.cc/7Y4dS02Y/Daewoo-logo.png' } ],
-            'lokatsiya': [ { type: 'image', src: 'https://i.postimg.cc/yxr763cn/orig-(5).png' } ],
-            'tolov': [ { type: 'image', src: 'https://i.postimg.cc/zDhCzyyB/gazel.jpg' } ]
-        };
+ // ===================================================
+        // ☁️ FIREBASE STORIES BAZASI VA MANTIQ (JONLI)
+        // ===================================================
+        let STORIES_DB = {};
+
+        // Dastur ishga tushganda storislarni Firebase'dan avtomat o'qiydi
+        if (typeof db !== 'undefined') {
+            db.ref('stories').on('value', (snap) => {
+                STORIES_DB = {}; // Avval bazani tozalaymiz
+                if (snap.exists()) {
+                    let data = snap.val();
+                    for (let cat in data) {
+                        // Vaqt bo'yicha ketma-ket taxlash (eskilari oldin, yangilari keyin chiqadi)
+                        STORIES_DB[cat] = Object.values(data[cat]).sort((a,b) => a.timestamp - b.timestamp);
+                    }
+                }
+            });
+        }
 
         window.startStories = (playlistId, caption) => {
             currentPlaylistId = playlistId;
@@ -7660,18 +7662,18 @@ function initReveal() {
             }
         };
 
-        function executeStoryDelete() {
-            // Hozircha mahalliy massivdan o'chiramiz (3-qadamda Firebase ga ulaymiz)
-            STORIES_DB[currentPlaylistId].splice(currentStoryIdx, 1);
-            showToast("Storis o'chirildi!", "success");
-            
-            if (STORIES_DB[currentPlaylistId].length === 0) {
-                closeStoryViewer();
-            } else {
-                playCurrentStory();
-            }
-        }
+    function executeStoryDelete() {
+            const item = currentPlaylist[currentStoryIdx];
+            if(!item || !item.id) return;
 
+            // Firebase bazasidan to'liq yo'q qilamiz
+            db.ref('stories/' + currentPlaylistId + '/' + item.id).remove().then(() => {
+                showToast("Storis bazadan o'chirildi!", "success");
+                closeStoryViewer(); // Oynani yopib yuboramiz. Keyingi ochilganda bu storis bo'lmaydi.
+            }).catch(err => {
+                showToast("O'chirishda xatolik yuz berdi", "warning");
+            });
+        }
 
 // ===================================================
 // 💳 3. VIP CARD GOLOGRAMMA MOTOR (Device Orientation)
