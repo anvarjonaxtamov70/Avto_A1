@@ -2053,64 +2053,102 @@
     transition: filter 0.4s ease;
 }
 /* ================================================= */
-        /* 📱 1. STORIES "AKTUALNIY" DIZAYNI (Minimalistik) */
+        /* 📱 1. PREMIUM STORIES "AKTUALNIY" DIZAYNI */
         /* ================================================= */
         .stories-container {
             display: flex;
-            gap: 15px; /* Orasi bemalolroq, tiqilinch emas */
-            padding: 10px 20px 5px;
+            gap: 12px;
+            padding: 15px 20px 5px;
             overflow-x: auto;
             scrollbar-width: none;
-            margin-bottom: 5px;
         }
-        
         .story-item {
             display: flex;
             flex-direction: column;
             align-items: center;
             flex-shrink: 0;
             cursor: pointer;
+            width: 68px;
         }
-
-        /* 🔘 Asosiy halqa (O'qilgan highlight uchun) */
         .story-ring {
-            width: 62px !important; 
-            height: 62px !important;
+            width: 64px;
+            height: 64px;
             border-radius: 50%;
-            padding: 2px; /* Halqa va rasm orasidagi oq joy uchun */
+            padding: 2px;
             background: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.15); /* Nozik kulrang chiziq */
+            border: 1.5px solid rgba(255, 255, 255, 0.15); /* O'qilgan (Kulrang) */
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: 0.3s;
         }
-
-        /* 🥇 Yangi qo'shilgan (O'qilmagan) highlight uchun nozik tilla chiziq */
         .story-ring.active {
-            border: 1.5px solid var(--luxury-gold);
+            border: 2px solid var(--luxury-gold); /* O'qilmagan (Tilla) */
         }
-
         .story-img {
             width: 100%;
             height: 100%;
             border-radius: 50%;
             object-fit: cover;
-            border: 2px solid var(--bg-dark); /* Orqa fon bilan bir xil rang, bo'shliq hosil qiladi */
+            border: 2px solid var(--bg-dark);
             background: #1c1c1e;
         }
-
         .story-item span {
-            font-size: 10px !important;
-            font-weight: 500; /* Qalinligini sal kamaytirdik, nozikroq ko'rinadi */
-            color: #d1d1d6; /* O'ta oq emas, ko'zni toliqtirmaydi */
-            max-width: 68px;
+            font-size: 10px;
+            font-weight: 500;
+            color: #d1d1d6;
             text-align: center;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             margin-top: 6px;
-            letter-spacing: 0.3px;
+            width: 100%;
         }
+
+        /* 🎬 KINO USLUBIDAGI OYNA (CINEMATIC VIEWER) */
+        #story-viewer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 99999; display: none; flex-direction: column;
+        }
+        .story-header {
+            position: absolute; top: 15px; left: 0; width: 100%; z-index: 10; padding: 0 10px; box-sizing: border-box;
+        }
+        .story-progress-container {
+            display: flex; gap: 4px; width: 100%; margin-bottom: 12px;
+        }
+        .story-progress-bg {
+            flex: 1; height: 2.5px; background: rgba(255,255,255,0.3); border-radius: 3px; overflow: hidden;
+        }
+        .story-progress-fill {
+            height: 100%; background: #fff; width: 0%; border-radius: 3px;
+        }
+        .story-top-info {
+            display: flex; justify-content: space-between; align-items: center; padding: 0 5px;
+        }
+        .story-title {
+            color: #fff; font-weight: 700; font-size: 14px; text-shadow: 0 1px 5px rgba(0,0,0,0.8);
+        }
+        .story-close-btn {
+            color: #fff; font-size: 26px; cursor: pointer; text-shadow: 0 1px 5px rgba(0,0,0,0.8); padding: 0 10px;
+        }
+        
+        #story-content {
+            flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #111;
+        }
+        
+        /* Bosish uchun ko'rinmas zonalar (Instagramdek ishlashi uchun) */
+        .story-tap-left { position: absolute; left: 0; top: 0; width: 30%; height: 100%; z-index: 5; }
+        .story-tap-right { position: absolute; right: 0; top: 0; width: 70%; height: 100%; z-index: 5; }
+        
+        /* 🗑 ADMIN O'CHIRISH TUGMASI (Glassmorphism) */
+        .story-admin-delete {
+            position: absolute; bottom: 30px; right: 20px;
+            background: rgba(255, 69, 58, 0.2); color: #ff453a;
+            border: 1px solid rgba(255, 69, 58, 0.5); padding: 10px 18px;
+            border-radius: 14px; font-weight: 800; font-size: 13px; z-index: 10;
+            display: none; backdrop-filter: blur(10px); cursor: pointer; transition: 0.2s;
+        }
+        .story-admin-delete:active { transform: scale(0.9); background: rgba(255, 69, 58, 0.4); }
 /* ================================================= */
 /* 💳 3. VIP GOLOGRAMMA KARTA (3D TILT) */
 /* ================================================= */
@@ -7433,146 +7471,207 @@ function initReveal() {
         revealObserver.observe(el);
     });
 }
-
 // ===================================================
-// 📺 1. "AKTUALNIY" UCHUN HD CHEKSIZ STORY MOTOR
-// ===================================================
-let storyTimer;
-let currentPlaylist = [];
-let currentStoryIdx = 0;
+        // 📺 2. PREMIUM STORIS MOTOR (4K Video, Tap, Pause, Admin)
+        // ===================================================
+        let storyProgressAnimation;
+        let currentPlaylist = [];
+        let currentPlaylistId = '';
+        let currentStoryIdx = 0;
+        let isStoryPaused = false;
+        let storyVideoElement = null;
 
-// 📁 STORIES BAZASI (Xohlagancha video va rasm qo'shaverasiz!)
-const STORIES_DB = {
-    'aksiyalar': [
-        { type: 'image', src: 'https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png' },
-        { type: 'image', src: 'https://i.postimg.cc/VLj18zjV/orig-(4).png' }
-    ],
-    'jarayon': [
-        // Bu yerga o'zingizning Firebase Storage'dan olingan toza .mp4 videongiz linkini qo'yasiz
-        { type: 'video', src: 'https://v1.pinimg.com/videos/mc/720p/f1/3d/8c/f13d8c9735d109403f7e53f19e485458.mp4' },
-        { type: 'image', src: 'https://i.postimg.cc/zDhCzyyB/gazel.jpg' }
-    ],
-    'mijozlar': [
-        { type: 'image', src: 'https://i.postimg.cc/VLj18zjV/orig-(4).png' }
-    ],
-    'dostavka': [
-        { type: 'image', src: 'https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png' }
-    ],
-    'kafolat': [
-        { type: 'image', src: 'https://i.postimg.cc/7Y4dS02Y/Daewoo-logo.png' }
-    ],
-    'lokatsiya': [
-        { type: 'image', src: 'https://i.postimg.cc/yxr763cn/orig-(5).png' }
-    ],
-    'tolov': [
-        { type: 'image', src: 'https://i.postimg.cc/zDhCzyyB/gazel.jpg' }
-    ]
-};
-
-window.startStories = (playlistId, caption) => {
-    currentPlaylist = STORIES_DB[playlistId];
-    if(!currentPlaylist || currentPlaylist.length === 0) {
-        showToast("Hali yangiliklar yo'q!", "warning"); return;
-    }
-    
-    currentStoryIdx = 0;
-    document.getElementById('story-caption').innerText = caption;
-    document.getElementById('story-viewer').style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    
-    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-    playCurrentStory();
-};
-
-function playCurrentStory() {
-    if (currentStoryIdx >= currentPlaylist.length) {
-        closeStoryViewer(); return;
-    }
-    if (currentStoryIdx < 0) currentStoryIdx = 0;
-
-    const item = currentPlaylist[currentStoryIdx];
-    const content = document.getElementById('story-content');
-    const progress = document.getElementById('story-progress-container');
-
-    // Tepadagi chiziqchalarni (progress bar) chizish
-    progress.innerHTML = currentPlaylist.map((_, i) => `
-        <div class="story-progress-bg">
-            <div class="story-progress-fill" style="width: ${i < currentStoryIdx ? '100%' : '0%'}"></div>
-        </div>
-    `).join('');
-
-    const currentFill = progress.children[currentStoryIdx].querySelector('.story-progress-fill');
-    clearInterval(storyTimer);
-
-    if (item.type === 'video') {
-        // 🔥 HD KATTA MB VIDEOLAR UCHUN MAXSUS KOD (Preload va Loader)
-        content.innerHTML = `
-            <div id="video-loader" style="position:absolute; z-index:2; color:var(--luxury-gold); display:flex; flex-direction:column; align-items:center;">
-                <div class="luxury-typing"><div class="luxury-dot"></div><div class="luxury-dot"></div><div class="luxury-dot"></div></div>
-                <div style="font-size:10px; margin-top:8px; font-weight:bold;">HD Yuklanmoqda...</div>
-            </div>
-            <video id="stVideo" playsinline autoplay muted preload="auto" src="${item.src}" style="width:100%;height:100%;object-fit:cover; display:none;"></video>
-        `;
-        
-        const v = document.getElementById('stVideo');
-        const loader = document.getElementById('video-loader');
-        
-        v.oncanplay = () => {
-            if(loader) loader.style.display = 'none';
-            v.style.display = 'block';
+        // 📁 STORIES BAZASI (Hozircha vaqtinchalik xotira, 3-qadamda Firebase'ga ulaymiz)
+        const STORIES_DB = {
+            'aksiyalar': [
+                { type: 'image', src: 'https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png' },
+                { type: 'image', src: 'https://i.postimg.cc/VLj18zjV/orig-(4).png' }
+            ],
+            'jarayon': [
+                { type: 'video', src: 'https://v1.pinimg.com/videos/mc/720p/f1/3d/8c/f13d8c9735d109403f7e53f19e485458.mp4' },
+                { type: 'image', src: 'https://i.postimg.cc/zDhCzyyB/gazel.jpg' }
+            ],
+            'mijozlar': [ { type: 'image', src: 'https://i.postimg.cc/VLj18zjV/orig-(4).png' } ],
+            'dostavka': [ { type: 'image', src: 'https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png' } ],
+            'kafolat': [ { type: 'image', src: 'https://i.postimg.cc/7Y4dS02Y/Daewoo-logo.png' } ],
+            'lokatsiya': [ { type: 'image', src: 'https://i.postimg.cc/yxr763cn/orig-(5).png' } ],
+            'tolov': [ { type: 'image', src: 'https://i.postimg.cc/zDhCzyyB/gazel.jpg' } ]
         };
 
-        v.onloadedmetadata = () => animateStoryProgress(currentFill, v.duration * 1000);
-        v.onended = () => { currentStoryIdx++; playCurrentStory(); };
-    } else {
-        content.innerHTML = `<img src="${item.src}" style="width:100%;height:100%;object-fit:contain;">`;
-        animateStoryProgress(currentFill, 4000); // Rasm 4 soniya turadi
-    }
-}
-
-function animateStoryProgress(fill, ms) {
-    let start = Date.now();
-    storyTimer = setInterval(() => {
-        let passed = Date.now() - start;
-        let percent = (passed / ms) * 100;
-        if (percent >= 100) {
-            clearInterval(storyTimer);
-            if (document.getElementById('story-viewer').style.display !== 'none') {
-                currentStoryIdx++; playCurrentStory();
+        window.startStories = (playlistId, caption) => {
+            currentPlaylistId = playlistId;
+            currentPlaylist = STORIES_DB[playlistId];
+            
+            if(!currentPlaylist || currentPlaylist.length === 0) {
+                showToast("Hali yangiliklar yo'q!", "warning"); return;
             }
-        } else {
-            fill.style.width = percent + '%';
+            
+            currentStoryIdx = 0;
+            document.getElementById('story-caption').innerText = caption;
+            document.getElementById('story-viewer').style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // Orqa fon skrollini qulflaymiz
+
+            // 👑 ADMIN TEKSHIRUVI: O'chirish tugmasini faqat admin ko'radi
+            let delBtn = document.getElementById('admin-story-delete-btn');
+            if (typeof currentUser !== 'undefined' && typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(currentUser)) {
+                delBtn.style.display = 'flex';
+            } else {
+                delBtn.style.display = 'none';
+            }
+
+            if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            playCurrentStory();
+        };
+
+        window.playCurrentStory = () => {
+            if (currentStoryIdx >= currentPlaylist.length) {
+                closeStoryViewer(); return;
+            }
+            if (currentStoryIdx < 0) currentStoryIdx = 0;
+
+            const item = currentPlaylist[currentStoryIdx];
+            const content = document.getElementById('story-content');
+            const progressContainer = document.getElementById('story-progress-container');
+
+            // Tepadagi progress chiziqchalarni chizish
+            progressContainer.innerHTML = currentPlaylist.map((_, i) => `
+                <div class="story-progress-bg">
+                    <div class="story-progress-fill" style="width: ${i < currentStoryIdx ? '100%' : '0%'}"></div>
+                </div>
+            `).join('');
+
+            const currentFill = progressContainer.children[currentStoryIdx].querySelector('.story-progress-fill');
+            cancelAnimationFrame(storyProgressAnimation);
+
+            // 🎥 4K VIDEO BUFERIZATSIYASI VA RASM YUKLASH
+            if (item.type === 'video') {
+                content.innerHTML = `
+                    <div id="video-loader" style="position:absolute; z-index:2; color:var(--luxury-gold); display:flex; flex-direction:column; align-items:center;">
+                        <div class="luxury-typing"><div class="luxury-dot"></div><div class="luxury-dot"></div><div class="luxury-dot"></div></div>
+                        <div style="font-size:10px; margin-top:8px; font-weight:bold;">HD Yuklanmoqda...</div>
+                    </div>
+                    <video id="stVideo" playsinline autoplay preload="auto" src="${item.src}" style="width:100%;height:100%;object-fit:contain; display:none;"></video>
+                `;
+                
+                storyVideoElement = document.getElementById('stVideo');
+                const loader = document.getElementById('video-loader');
+                
+                storyVideoElement.oncanplay = () => {
+                    if(loader) loader.style.display = 'none';
+                    storyVideoElement.style.display = 'block';
+                };
+
+                storyVideoElement.onloadedmetadata = () => {
+                    animateStoryProgress(currentFill, storyVideoElement.duration * 1000);
+                };
+                
+                storyVideoElement.onended = () => { nextStory(); };
+            } else {
+                storyVideoElement = null;
+                content.innerHTML = `<img src="${item.src}" style="width:100%;height:100%;object-fit:contain;">`;
+                animateStoryProgress(currentFill, 5000); // Rasm standart 5 soniya turadi
+            }
+
+            // ⏸ BOSIB TURGANDA PAUZA QILISH (Touch & Mouse events)
+            content.onmousedown = pauseStory;
+            content.onmouseup = resumeStory;
+            content.ontouchstart = pauseStory;
+            content.ontouchend = resumeStory;
+        };
+
+        // ⏭ KEYINGI VA  ⏮ OLDINGI STORISGA O'TISH
+        window.nextStory = (e) => {
+            if(e) e.stopPropagation();
+            currentStoryIdx++; 
+            playCurrentStory();
+        };
+
+        window.prevStory = (e) => {
+            if(e) e.stopPropagation();
+            currentStoryIdx--; 
+            playCurrentStory();
+        };
+
+        window.closeStoryViewer = () => {
+            document.getElementById('story-viewer').style.display = 'none';
+            document.getElementById('story-content').innerHTML = '';
+            document.body.style.overflow = '';
+            cancelAnimationFrame(storyProgressAnimation);
+            if (storyVideoElement) {
+                storyVideoElement.pause();
+                storyVideoElement.src = "";
+            }
+        };
+
+        // ⏱ PROGRESS BAR ANIMATSIYASI VA PAUZA MANTIG'I
+        let storyDuration = 0;
+        let storyPassedTime = 0;
+
+        function animateStoryProgress(fill, ms) {
+            storyDuration = ms;
+            storyPassedTime = 0;
+            isStoryPaused = false;
+            let lastTime = Date.now();
+
+            function step() {
+                if (isStoryPaused) {
+                    lastTime = Date.now(); // Pauza bo'lsa vaqtni ushlab turamiz
+                    storyProgressAnimation = requestAnimationFrame(step);
+                    return;
+                }
+                
+                let now = Date.now();
+                storyPassedTime += (now - lastTime);
+                lastTime = now;
+
+                let percent = (storyPassedTime / storyDuration) * 100;
+                
+                if (percent >= 100) {
+                    fill.style.width = '100%';
+                    if (!storyVideoElement) {
+                        nextStory(); // Rasm bo'lsa vaqti tugashi bilan keyingisiga o'tadi
+                    }
+                } else {
+                    fill.style.width = percent + '%';
+                    storyProgressAnimation = requestAnimationFrame(step);
+                }
+            }
+            storyProgressAnimation = requestAnimationFrame(step);
         }
-    }, 10);
-}
 
-window.closeStoryViewer = () => {
-    document.getElementById('story-viewer').style.display = 'none';
-    document.getElementById('story-content').innerHTML = '';
-    document.body.style.overflow = '';
-    clearInterval(storyTimer);
-};
+        function pauseStory() {
+            isStoryPaused = true;
+            if(storyVideoElement) storyVideoElement.pause();
+        }
+        
+        function resumeStory() {
+            isStoryPaused = false;
+            if(storyVideoElement) storyVideoElement.play();
+        }
 
-// 👆 EKRANGA BOSGANDA KEYINGISIGA O'TISH (Instagram kabi)
-document.getElementById('story-viewer').addEventListener('mousedown', (e) => {
-    let screenWidth = window.innerWidth;
-    if (e.clientX > screenWidth * 0.7) {
-        // O'ng tarafga bosilsa -> Keyingisi
-        clearInterval(storyTimer); currentStoryIdx++; playCurrentStory();
-    } else if (e.clientX < screenWidth * 0.3) {
-        // Chap tarafga bosilsa -> Oldingisi
-        clearInterval(storyTimer); currentStoryIdx--; playCurrentStory();
-    } else {
-        // O'rtaga bosilsa -> Yopiladi
-        closeStoryViewer();
-    }
-});
+        // 🗑 FAQAT ADMIN UCHUN: STORISNI O'CHIRISH
+        window.deleteCurrentStory = () => {
+            if(typeof tg !== 'undefined' && tg.showConfirm) {
+                tg.showConfirm("Ushbu storisni butunlay o'chirib tashlaysizmi?", function(ok) {
+                    if(ok) executeStoryDelete();
+                });
+            } else {
+                if(confirm("Ushbu storisni butunlay o'chirib tashlaysizmi?")) executeStoryDelete();
+            }
+        };
 
-window.closeStoryViewer = () => {
-    document.getElementById('story-viewer').style.display = 'none';
-    document.getElementById('story-content').innerHTML = '';
-    clearInterval(storyTimer);
-};
+        function executeStoryDelete() {
+            // Hozircha mahalliy massivdan o'chiramiz (3-qadamda Firebase ga ulaymiz)
+            STORIES_DB[currentPlaylistId].splice(currentStoryIdx, 1);
+            showToast("Storis o'chirildi!", "success");
+            
+            if (STORIES_DB[currentPlaylistId].length === 0) {
+                closeStoryViewer();
+            } else {
+                playCurrentStory();
+            }
+        }
+
 
 // ===================================================
 // 💳 3. VIP CARD GOLOGRAMMA MOTOR (Device Orientation)
@@ -7608,10 +7707,26 @@ setInterval(() => {
     
     
 </script> 
-    <div id="story-viewer" onclick="closeStoryViewer()">
-    <div class="story-progress-bar" id="story-progress-container"></div>
-    <div id="story-content" style="height: 100%; display: flex; align-items: center;"></div>
-    <div style="position: absolute; bottom: 30px; left: 20px; color: white; font-weight: 800; font-size: 18px; text-shadow: 0 2px 10px rgba(0,0,0,0.5);" id="story-caption"></div>
+<!-- YANGI KINO USLUBIDAGI STORIS OYNASI -->
+<div id="story-viewer">
+    <!-- Tepadagi chiziqchalar va yopish tugmasi -->
+    <div class="story-header">
+        <div class="story-progress-container" id="story-progress-container"></div>
+        <div class="story-top-info">
+            <div class="story-title" id="story-caption">Kategoriya</div>
+            <div class="story-close-btn" onclick="closeStoryViewer()">×</div>
+        </div>
+    </div>
+    
+    <!-- Video yoki Rasm -->
+    <div id="story-content"></div>
+    
+    <!-- Instagram kabi boshqaruv (Chapga/O'ngga bosish) -->
+    <div class="story-tap-left" onclick="prevStory(event)"></div>
+    <div class="story-tap-right" onclick="nextStory(event)"></div>
+    
+    <!-- FAQAT ADMIN UCHUN O'CHIRISH TUGMASI -->
+    <div class="story-admin-delete" id="admin-story-delete-btn" onclick="deleteCurrentStory()">🗑 O'chirish</div>
 </div>
 </body>    
 </html>
