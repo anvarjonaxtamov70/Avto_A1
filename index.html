@@ -2161,43 +2161,41 @@
         <h1>Avto_A1 <span class="verify-icon"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></span></h1>
         <p>Premium Zapchastlar Do'koni</p>
     </div>    
-<div class="stories-container" id="stories-list">
-        
-        <div class="story-item" onclick="openStoryViewer('image', 'https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png', '🔥 Qaynoq Skidkalar')">
+    <div class="stories-container" id="stories-list">
+        <div class="story-item" onclick="startStories('aksiyalar', '🔥 Qaynoq Skidkalar')">
             <div class="story-ring active"><img src="https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png" class="story-img"></div>
             <span>Aksiyalar</span>
         </div>
 
-        <div class="story-item" onclick="openStoryViewer('video', 'https://v1.pinimg.com/videos/mc/720p/f1/3d/8c/f13d8c9735d109403f7e53f19e485458.mp4', '📦 Yangi partiya ochilishi')">
+        <div class="story-item" onclick="startStories('jarayon', '📦 Yangi partiya ochilishi')">
             <div class="story-ring active"><img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" class="story-img"></div>
             <span>Jarayon</span>
         </div>
 
-        <div class="story-item" onclick="openStoryViewer('image', 'https://i.postimg.cc/VLj18zjV/orig-(4).png', '🤝 Xursand mijozlarimiz')">
+        <div class="story-item" onclick="startStories('mijozlar', '🤝 Xursand mijozlarimiz')">
             <div class="story-ring"><img src="https://i.postimg.cc/VLj18zjV/orig-(4).png" class="story-img"></div>
             <span>Mijozlar</span>
         </div>
 
-        <div class="story-item" onclick="openStoryViewer('image', 'https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png', '🚚 Viloyatlarga dastavka')">
+        <div class="story-item" onclick="startStories('dostavka', '🚚 Viloyatlarga dastavka')">
             <div class="story-ring"><img src="https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png" class="story-img"></div>
             <span>Dostavka</span>
         </div>
 
-        <div class="story-item" onclick="openStoryViewer('image', 'https://i.postimg.cc/7Y4dS02Y/Daewoo-logo.png', '🛡️ Original mahsulotlar')">
+        <div class="story-item" onclick="startStories('kafolat', '🛡️ Original mahsulotlar')">
             <div class="story-ring"><img src="https://i.postimg.cc/7Y4dS02Y/Daewoo-logo.png" class="story-img"></div>
             <span>Kafolat</span>
         </div>
 
-        <div class="story-item" onclick="openStoryViewer('image', 'https://i.postimg.cc/yxr763cn/orig-(5).png', '📍 Bizning manzil')">
+        <div class="story-item" onclick="startStories('lokatsiya', '📍 Bizning manzil')">
             <div class="story-ring"><img src="https://i.postimg.cc/yxr763cn/orig-(5).png" class="story-img"></div>
             <span>Lokatsiya</span>
         </div>
 
-        <div class="story-item" onclick="openStoryViewer('image', 'https://i.postimg.cc/zDhCzyyB/gazel.jpg', '💳 To\'lov turlari')">
+        <div class="story-item" onclick="startStories('tolov', '💳 To\'lov turlari')">
             <div class="story-ring"><img src="https://i.postimg.cc/zDhCzyyB/gazel.jpg" class="story-img"></div>
             <span>To'lov</span>
         </div>
-        
     </div>
     <div class="slider-container">
         <div class="slider" id="main-slider">
@@ -7436,53 +7434,139 @@ function initReveal() {
     });
 }
 
-// Tovar chizilgandan keyin bu funksiyani chaqirish kerak
-// Buni renderProducts funksiyasining oxiriga qo'shib qo'ying
 // ===================================================
-// 📺 1. STORIES MOTOR (Video & Image Support)
+// 📺 1. "AKTUALNIY" UCHUN HD CHEKSIZ STORY MOTOR
 // ===================================================
 let storyTimer;
-window.openStoryViewer = (type, src, caption) => {
-    const viewer = document.getElementById('story-viewer');
-    const content = document.getElementById('story-content');
-    const progress = document.getElementById('story-progress-container');
-    const cap = document.getElementById('story-caption');
+let currentPlaylist = [];
+let currentStoryIdx = 0;
 
-    viewer.style.display = 'flex';
-    cap.innerText = caption;
-    
-    // Progress bar chizish
-    progress.innerHTML = '<div class="story-progress-bg"><div class="story-progress-fill" id="fill"></div></div>';
-    
-    if(type === 'video') {
-        content.innerHTML = `<video id="stVideo" playsinline autoplay muted src="${src}"></video>`;
-        const v = document.getElementById('stVideo');
-        v.onloadedmetadata = () => {
-            const duration = v.duration * 1000;
-            animateStoryProgress(duration);
-        };
-    } else {
-        content.innerHTML = `<img src="${src}">`;
-        animateStoryProgress(5000); // Rasm uchun 5 sekund
-    }
-    
-    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+// 📁 STORIES BAZASI (Xohlagancha video va rasm qo'shaverasiz!)
+const STORIES_DB = {
+    'aksiyalar': [
+        { type: 'image', src: 'https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png' },
+        { type: 'image', src: 'https://i.postimg.cc/VLj18zjV/orig-(4).png' }
+    ],
+    'jarayon': [
+        // Bu yerga o'zingizning Firebase Storage'dan olingan toza .mp4 videongiz linkini qo'yasiz
+        { type: 'video', src: 'https://v1.pinimg.com/videos/mc/720p/f1/3d/8c/f13d8c9735d109403f7e53f19e485458.mp4' },
+        { type: 'image', src: 'https://i.postimg.cc/zDhCzyyB/gazel.jpg' }
+    ],
+    'mijozlar': [
+        { type: 'image', src: 'https://i.postimg.cc/VLj18zjV/orig-(4).png' }
+    ],
+    'dostavka': [
+        { type: 'image', src: 'https://i.postimg.cc/NMgBNSyD/8h0a-Bn9L-1F0s-Hy-WEZSLfnhaqer-Kq-Kxj0Rp-SDjapvv-0z-LWJcn-SH19DCH-In-KOCt-N4s-Wd6Q9b4KGl-NDJp0vc-Ow.png' }
+    ],
+    'kafolat': [
+        { type: 'image', src: 'https://i.postimg.cc/7Y4dS02Y/Daewoo-logo.png' }
+    ],
+    'lokatsiya': [
+        { type: 'image', src: 'https://i.postimg.cc/yxr763cn/orig-(5).png' }
+    ],
+    'tolov': [
+        { type: 'image', src: 'https://i.postimg.cc/zDhCzyyB/gazel.jpg' }
+    ]
 };
 
-function animateStoryProgress(ms) {
-    const fill = document.getElementById('fill');
-    let start = Date.now();
+window.startStories = (playlistId, caption) => {
+    currentPlaylist = STORIES_DB[playlistId];
+    if(!currentPlaylist || currentPlaylist.length === 0) {
+        showToast("Hali yangiliklar yo'q!", "warning"); return;
+    }
+    
+    currentStoryIdx = 0;
+    document.getElementById('story-caption').innerText = caption;
+    document.getElementById('story-viewer').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    playCurrentStory();
+};
+
+function playCurrentStory() {
+    if (currentStoryIdx >= currentPlaylist.length) {
+        closeStoryViewer(); return;
+    }
+    if (currentStoryIdx < 0) currentStoryIdx = 0;
+
+    const item = currentPlaylist[currentStoryIdx];
+    const content = document.getElementById('story-content');
+    const progress = document.getElementById('story-progress-container');
+
+    // Tepadagi chiziqchalarni (progress bar) chizish
+    progress.innerHTML = currentPlaylist.map((_, i) => `
+        <div class="story-progress-bg">
+            <div class="story-progress-fill" style="width: ${i < currentStoryIdx ? '100%' : '0%'}"></div>
+        </div>
+    `).join('');
+
+    const currentFill = progress.children[currentStoryIdx].querySelector('.story-progress-fill');
     clearInterval(storyTimer);
+
+    if (item.type === 'video') {
+        // 🔥 HD KATTA MB VIDEOLAR UCHUN MAXSUS KOD (Preload va Loader)
+        content.innerHTML = `
+            <div id="video-loader" style="position:absolute; z-index:2; color:var(--luxury-gold); display:flex; flex-direction:column; align-items:center;">
+                <div class="luxury-typing"><div class="luxury-dot"></div><div class="luxury-dot"></div><div class="luxury-dot"></div></div>
+                <div style="font-size:10px; margin-top:8px; font-weight:bold;">HD Yuklanmoqda...</div>
+            </div>
+            <video id="stVideo" playsinline autoplay muted preload="auto" src="${item.src}" style="width:100%;height:100%;object-fit:cover; display:none;"></video>
+        `;
+        
+        const v = document.getElementById('stVideo');
+        const loader = document.getElementById('video-loader');
+        
+        v.oncanplay = () => {
+            if(loader) loader.style.display = 'none';
+            v.style.display = 'block';
+        };
+
+        v.onloadedmetadata = () => animateStoryProgress(currentFill, v.duration * 1000);
+        v.onended = () => { currentStoryIdx++; playCurrentStory(); };
+    } else {
+        content.innerHTML = `<img src="${item.src}" style="width:100%;height:100%;object-fit:contain;">`;
+        animateStoryProgress(currentFill, 4000); // Rasm 4 soniya turadi
+    }
+}
+
+function animateStoryProgress(fill, ms) {
+    let start = Date.now();
     storyTimer = setInterval(() => {
         let passed = Date.now() - start;
         let percent = (passed / ms) * 100;
-        if(percent >= 100) {
-            closeStoryViewer();
+        if (percent >= 100) {
+            clearInterval(storyTimer);
+            if (document.getElementById('story-viewer').style.display !== 'none') {
+                currentStoryIdx++; playCurrentStory();
+            }
         } else {
             fill.style.width = percent + '%';
         }
     }, 10);
 }
+
+window.closeStoryViewer = () => {
+    document.getElementById('story-viewer').style.display = 'none';
+    document.getElementById('story-content').innerHTML = '';
+    document.body.style.overflow = '';
+    clearInterval(storyTimer);
+};
+
+// 👆 EKRANGA BOSGANDA KEYINGISIGA O'TISH (Instagram kabi)
+document.getElementById('story-viewer').addEventListener('mousedown', (e) => {
+    let screenWidth = window.innerWidth;
+    if (e.clientX > screenWidth * 0.7) {
+        // O'ng tarafga bosilsa -> Keyingisi
+        clearInterval(storyTimer); currentStoryIdx++; playCurrentStory();
+    } else if (e.clientX < screenWidth * 0.3) {
+        // Chap tarafga bosilsa -> Oldingisi
+        clearInterval(storyTimer); currentStoryIdx--; playCurrentStory();
+    } else {
+        // O'rtaga bosilsa -> Yopiladi
+        closeStoryViewer();
+    }
+});
 
 window.closeStoryViewer = () => {
     document.getElementById('story-viewer').style.display = 'none';
