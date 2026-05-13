@@ -2082,9 +2082,7 @@
             justify-content: center;
             transition: 0.3s;
         }
-        .story-ring.active {
-            border: 2px solid var(--luxury-gold); /* O'qilmagan (Tilla) */
-        }
+    
         .story-img {
             width: 100%;
             height: 100%;
@@ -2194,12 +2192,25 @@
     transform: scale(0.92); /* Bosilganda 8% ga kichrayadi */
 }
 
-/* 3. Tilla rangli nur (Pulsatsiya animatsiyasi) */
-.story-ring.active {
-    border: 2px solid #FFD700 !important; /* Yorqin tilla rang */
+/* 1-Holat: Yangi (Ko'rilmagan) - Tilla rang va pulsatsiya */
+.story-ring.new {
+    border: 2px solid #FFD700 !important;
     box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
-    animation: tillaNur 2s infinite alternate; /* Animatsiyani yoqish */
-    transition: all 0.3s ease;
+    animation: tillaNur 2s infinite alternate;
+}
+
+/* 2-Holat: Ko'rilgan - Xira kulrang va qotib turadi */
+.story-ring.seen {
+    border: 2px solid #555555 !important; /* Xira rang */
+    box-shadow: none; /* Nur o'chadi */
+    animation: none; /* Harakat to'xtaydi */
+}
+
+/* 3-Holat: Bo'sh (Video yo'q) - Hech qanday ramka yo'q */
+.story-ring.empty {
+    border: 2px solid transparent !important; /* Shaffof/Ko'rinmas */
+    box-shadow: none;
+    animation: none;
 }
 
 /* Animatsiyaning yurak urishi (Pulse) qoidalari */
@@ -2266,58 +2277,59 @@
         <h1>Avto_A1 <span class="verify-icon"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></span></h1>
         <p>Premium Zapchastlar Do'koni</p>
     </div>    
-  <!-- 📱 AKTUALNIY STORIS HALQALARI (YANGILANGAN) -->
+    <!-- 📱 AKTUALNIY STORIS HALQALARI -->
     <div class="stories-container" id="stories-list">
         
-        <!-- 1. Aksiyalar -->
-        <div class="story-item" onclick="startStories('aksiyalar', '🔥 Aksiyalar')">
-            <div class="story-ring active"><img src="https://i.postimg.cc/Bvkx57Cg/cfce7f953881dc027c48ab63a9d8f1b2.png" class="story-img"></div>
+        <!-- 1. Aksiyalar (Aytaylik, bunda yangi video bor, shuning uchun 'new' yozdik) -->
+        <div class="story-item" onclick="markAsSeen(this); startStories('aksiyalar', '🔥 Aksiyalar')">
+            <div class="story-ring new"><img src="cfce7f953881dc027c48ab63a9d8f1b2.png" class="story-img"></div>
             <span>Aksiyalar</span>
         </div>
 
-        <!-- 2. Bugun -->
-        <div class="story-item" onclick="startStories('bugun', '💡 Bugun')">
-            <div class="story-ring active"><img src="https://i.postimg.cc/zftxskFr/full-6Enh-HLt-T.jpg" class="story-img"></div>
+        <!-- 2. Bugun (Bunda ham yangi video bor deylik - 'new') -->
+        <div class="story-item" onclick="markAsSeen(this); startStories('bugun', '💡 Bugun')">
+            <div class="story-ring new"><img src="full_6EnhHLtT.jpg" class="story-img"></div>
             <span>Bugun</span>
         </div>
 
-        <!-- 3. Mijozlar -->
-        <div class="story-item" onclick="startStories('mijozlar', '👥 Mijozlar')">
-            <div class="story-ring active"><img src="https://i.postimg.cc/7PM2bZjY/Pink-Illustrated-Ask-Me-Anything-Instagram-Post-6.png" class="story-img"></div>
+        <!-- 3. Mijozlar (Bunda hozircha video yo'q, shuning uchun 'empty' yozdik) -->
+        <div class="story-item" onclick="markAsSeen(this); startStories('mijozlar', '👥 Mijozlar')">
+            <div class="story-ring empty"><img src="Pink-Illustrated-Ask-Me-Anything-Instagram-Post-6.jpg" class="story-img"></div>
             <span>Mijozlar</span>
         </div>
 
-        <!-- 4. Dostavka -->
-        <div class="story-item" onclick="startStories('dostavka', '🚚 Dostavka')">
-            <div class="story-ring active"><img src="https://i.postimg.cc/KjZ4ttCc/orig.png" class="story-img"></div>
+        <!-- 4. Dostavka (Video yo'q - 'empty') -->
+        <div class="story-item" onclick="markAsSeen(this); startStories('dostavka', '🚚 Dostavka')">
+            <div class="story-ring empty"><img src="orig.png" class="story-img"></div>
             <span>Dostavka</span>
         </div>
 
-        <!-- 5. Kafolat -->
-        <div class="story-item" onclick="startStories('kafolat', '🛡️ Kafolat')">
-            <div class="story-ring active"><img src="https://i.postimg.cc/vB56rYBN/content-full-lewlcqnv.png" class="story-img"></div>
+        <!-- 5. Kafolat (Video yo'q - 'empty') -->
+        <div class="story-item" onclick="markAsSeen(this); startStories('kafolat', '🛡️ Kafolat')">
+            <div class="story-ring empty"><img src="content_full_lewlcqnv.png" class="story-img"></div>
             <span>Kafolat</span>
         </div>
 
-        <!-- 6. Lokatsiya -->
-        <div class="story-item" onclick="startStories('lokatsiya', '📍 Lokatsiya')">
-            <div class="story-ring active"><img src="https://i.postimg.cc/GpyBRLvW/308e0e8c2b804e9c64d0dd1bd69fc36a.png" class="story-img"></div>
+        <!-- 6. Lokatsiya (Video yo'q - 'empty') -->
+        <div class="story-item" onclick="markAsSeen(this); startStories('lokatsiya', '📍 Lokatsiya')">
+            <div class="story-ring empty"><img src="308e0e8c2b804e9c64d0dd1bd69fc36a.png" class="story-img"></div>
             <span>Lokatsiya</span>
         </div>
 
-        <!-- 7. To'lov -->
-        <div class="story-item" onclick="startStories('tolov', '💳 To\'lov')">
-            <div class="story-ring active"><img src="https://i.postimg.cc/kXsKYgc4/5.png" class="story-img"></div>
+        <!-- 7. To'lov (Video yo'q - 'empty') -->
+        <div class="story-item" onclick="markAsSeen(this); startStories('tolov', '💳 To\'lov')">
+            <div class="story-ring empty"><img src="5.png" class="story-img"></div>
             <span>To'lov</span>
         </div>
 
-        <!-- 8. Aloqa -->
-        <div class="story-item" onclick="startStories('aloqa', '📞 Aloqa')">
-            <div class="story-ring active"><img src="https://i.postimg.cc/bNh9FMfb/isee-7.png" class="story-img"></div>
+        <!-- 8. Aloqa (Video yo'q - 'empty') -->
+        <div class="story-item" onclick="markAsSeen(this); startStories('aloqa', '📞 Aloqa')">
+            <div class="story-ring empty"><img src="isee-7.png" class="story-img"></div>
             <span>Aloqa</span>
         </div>
 
     </div>
+
     <div class="slider-container">
         <div class="slider" id="main-slider">
             <img src="https://i.postimg.cc/d0PWw0zn/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1)-(1)-(1).png" onload="this.style.opacity=1">
@@ -7800,7 +7812,17 @@ function initVipCardGlow() {
 setInterval(() => {
     if(historyStack[historyStack.length-1] === 'profile-section') initVipCardGlow();
 }, 1000);
-
+// Storis bosilganda uni "ko'rilgan" qilib o'zgartiruvchi funksiya
+function markAsSeen(element) {
+    // Bosilgan element ichidagi halqani topish
+    let ring = element.querySelector('.story-ring');
+    
+    // Agar halqa "yangi" (new) bo'lsa, uni "ko'rilgan" (seen) ga o'zgartiramiz
+    if (ring.classList.contains('new')) {
+        ring.classList.remove('new');
+        ring.classList.add('seen');
+    }
+}
     
     
 </script> 
