@@ -6141,15 +6141,60 @@ window.submitReview = () => {
         originalSubmitReview();
     }
 };
-
-    // ============================================================
+ // ============================================================
 // ✅ TUZATILGAN: RASM YUKLASH + MODAL YOPISH
 // ============================================================
+// Rasmni telefonning o'zida yengillashtirish (JPG formatga o'tkazish)
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = event => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 800; // Rasmni ortiqcha katta bo'lmasligi uchun
+                const MAX_HEIGHT = 800;
+                let width = img.width;
+                let height = img.height;
 
-// ImgBB ga bitta rasm yuklash
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Telefonni qiynamaslik uchun 80% sifatdagi JPG ga o'zgartiramiz
+                canvas.toBlob(blob => {
+                    resolve(blob);
+                }, 'image/jpeg', 0.8);
+            };
+            img.onerror = error => reject(error);
+        };
+        reader.onerror = error => reject(error);
+    });
+}
+
+// ImgBB ga siqilgan rasmni yuklash
 async function uploadSingleToImgBB(file) {
+    // 1. Avval rasmni kichraytiramiz va JPG qilamiz
+    const compressedBlob = await compressImage(file);
+    
+    // 2. Tayyor rasmni serverga jo'natamiz
     const fd = new FormData();
-    fd.append("image", file);
+    fd.append("image", compressedBlob, "product_image.jpg");
+    
     const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
         method: "POST", body: fd
     });
@@ -6157,6 +6202,8 @@ async function uploadSingleToImgBB(file) {
     if (r.success) return r.data.url;
     throw new Error("ImgBB yuklash xatosi");
 }
+
+
 
 // Ko'p rasmni bir vaqtda yuklash (Cropper yo'q — iPhone uchun optimal)
 window.handleMultiImgUpload = async function(event, prefix) {
