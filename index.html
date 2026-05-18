@@ -6227,23 +6227,14 @@ window.handleMultiImgUpload = async function(event, prefix) {
     event.target.value = '';
     if (files.length === 0) return;
 
-    // Eski URLlarni tozalaymiz
     ['', '2', '3'].forEach(suf => {
         let el = document.getElementById(`${prefix}-img-url${suf}`);
         if (el) el.value = '';
     });
 
-    // Preview joyini "yuklanmoqda" holatiga o'tkazamiz
     const previewBox = document.getElementById(`${prefix}-img-previews`);
     if (previewBox) {
-        previewBox.innerHTML = `<div style="color:var(--luxury-gold);font-size:12px;padding:10px;display:flex;align-items:center;gap:8px;">
-            <div class="luxury-typing" style="transform:scale(0.8);">
-                <div class="luxury-dot"></div>
-                <div class="luxury-dot"></div>
-                <div class="luxury-dot"></div>
-            </div>
-            ${files.length} ta rasm yuklanmoqda...
-        </div>`;
+        previewBox.innerHTML = `<div style="color:var(--luxury-gold);font-size:12px;padding:10px;">⏳ Yuklanmoqda...</div>`;
     }
 
     let uploadedUrls = [];
@@ -6252,66 +6243,63 @@ window.handleMultiImgUpload = async function(event, prefix) {
         try {
             showToast(`📤 ${i + 1}/${files.length} yuklanyapti...`);
 
-            // ✅ ENG ISHONCHLI USUL: Faylni to'g'ridan-to'g'ri yuborish
+            // Faylni base64 ga aylantiramiz
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = () => reject(new Error('Fayl o\'qilmadi'));
+                reader.readAsDataURL(files[i]);
+            });
+
+            // Base64 ni form-data orqali yuboramiz
             const fd = new FormData();
-            fd.append('image', files[i], files[i].name);
+            fd.append('key', IMGBB_API_KEY);
+            fd.append('image', base64);
 
-            const res = await fetch(
-                `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
-                { method: 'POST', body: fd }
-            );
-
-            if (!res.ok) {
-                throw new Error(`Server xatosi: ${res.status}`);
-            }
+            const res = await fetch('https://api.imgbb.com/1/upload', {
+                method: 'POST',
+                body: fd
+            });
 
             const json = await res.json();
+            console.log('ImgBB javob:', JSON.stringify(json));
 
             if (json.success) {
                 const url = json.data.url;
                 uploadedUrls.push(url);
 
-                // URL ni tegishli input ga yozamiz
                 const suffix = i === 0 ? '' : String(i + 1);
                 const inputEl = document.getElementById(`${prefix}-img-url${suffix}`);
                 if (inputEl) inputEl.value = url;
 
-                // Preview ni yangilaymiz
                 if (previewBox) {
                     previewBox.innerHTML = uploadedUrls.map((u, idx) => `
                         <div style="position:relative;display:inline-block;">
-                            <img src="${u}" style="width:75px;height:75px;object-fit:cover;border-radius:12px;border:2px solid var(--luxury-gold);background:#fff;display:block;">
+                            <img src="${u}" style="width:75px;height:75px;object-fit:cover;border-radius:12px;border:2px solid var(--luxury-gold);background:#fff;">
                             <span style="position:absolute;top:-7px;right:-7px;background:var(--luxury-gold);color:#000;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;">${idx + 1}</span>
                         </div>
                     `).join('');
                 }
-
             } else {
-                // ImgBB qabul qilmadi — sababini konsolga yozamiz
-                console.error('ImgBB rad etdi:', JSON.stringify(json));
-                showToast(`⚠️ ${i + 1}-rasm yuklanmadi`, 'warning');
+                // Aniq xato sababini ko'rsatamiz
+                const errorMsg = json.error?.message || JSON.stringify(json.error) || 'Noma\'lum';
+                console.error('ImgBB xato:', errorMsg);
+                showToast(`⚠️ ImgBB: ${errorMsg}`, 'warning');
             }
 
         } catch (err) {
             console.error(`${i + 1}-rasm xatosi:`, err.message);
-            showToast(`❌ ${i + 1}-rasm: ${err.message}`, 'warning');
+            showToast(`❌ ${err.message}`, 'warning');
         }
 
-        // API limitiga hurmat (har rasm orasida 600ms)
-        if (i < files.length - 1) {
-            await new Promise(r => setTimeout(r, 600));
-        }
+        await new Promise(r => setTimeout(r, 500));
     }
 
     if (uploadedUrls.length > 0) {
         showToast(`✅ ${uploadedUrls.length} ta rasm yuklandi!`, 'success');
-        if (typeof tg !== 'undefined' && tg.HapticFeedback) {
-            tg.HapticFeedback.notificationOccurred('success');
-        }
     } else {
-        // Hech biri yuklanmadi — URL qo'lda kiriting deb aytamiz
         if (previewBox) previewBox.innerHTML = '';
-        showToast('❌ Yuklanmadi. URL ni qo\'lda kiriting yoki boshqa rasm tanlang.', 'warning');
+        showToast('❌ API kalitini yangilang: imgbb.com/dashboard', 'warning');
     }
 };
 
