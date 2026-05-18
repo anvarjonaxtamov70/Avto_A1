@@ -2399,27 +2399,7 @@
             z-index: 9999; transition: top 0.2s ease-out; pointer-events: none;
         }
         @keyframes fastSpin { 100% { transform: rotate(360deg); } }
-        /* ================================================= */
-        /* 🌌 1. "NAFAS OLUVCHI" AMBIENT FON VA NOISE TEKSTURA */
-        /* ================================================= */
-        body::before {
-            content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            /* Shisha teksturasiga o'ta nozik "muz" shovqini (Noise) */
-            background: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noise)" opacity="0.03"/%3E%3C/svg%3E');
-            pointer-events: none; z-index: 9999; mix-blend-mode: overlay;
-        }
-        body::after {
-            content: ""; position: fixed; top: -50%; left: -50%; width: 200%; height: 200%;
-            /* Tilla rangli nafas oluvchi aura */
-            background: radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.05), transparent 50%);
-            animation: ambientBreathe 6s ease-in-out infinite alternate;
-            pointer-events: none; z-index: -1;
-        }
-        @keyframes ambientBreathe { 
-            0% { transform: scale(0.9) translate(0, 0); opacity: 0.6; } 
-            100% { transform: scale(1.1) translate(2%, 2%); opacity: 1; } 
-        }
-
+      
         /* ================================================= */
         /* 💧 2. SUYUQ TUGMALAR UCHUN STIL */
         /* ================================================= */
@@ -8218,32 +8198,7 @@ document.addEventListener('click', (e) => {
         closeSmartSuggestions();
     }
 });
-// ===================================================
-// 🪐 1. 3D PARALLAX EFFEKTI (TELEFON GIROSKOPI)
-// ===================================================
-function init3DParallax() {
-    const cards = document.querySelectorAll('.luxury-card');
-    
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', (e) => {
-            if(activeModal || searchActive) return; // Oyna ochiq bo'lsa ishlamaydi
-            
-            // Telefonning egilish burchaklarini ushlaymiz
-            let tiltX = e.gamma ? e.gamma / 4 : 0; 
-            let tiltY = e.beta ? (e.beta - 45) / 4 : 0; 
-            
-            // Limit qo'yamiz (kartochka teskari aylanib ketmasligi uchun)
-            tiltX = Math.max(-8, Math.min(8, tiltX));
-            tiltY = Math.max(-8, Math.min(8, tiltY));
 
-            cards.forEach(card => {
-                card.style.transform = `perspective(1000px) rotateY(${tiltX}deg) rotateX(${-tiltY}deg)`;
-            });
-        });
-    }
-}
-// Har 2 soniyada yangi qo'shilgan (skroll qilingan) kartalarni topib ulab turadi
-setInterval(init3DParallax, 2000);
 
 // ===================================================
 // 💧 2. SUYUQ TUGMA (LIQUID BUTTON) MANTIG'I
