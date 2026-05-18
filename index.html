@@ -1714,26 +1714,25 @@
             animation: slideUpModal 0.55s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
         }
 
+      /* ================================================= */
+        /* 🌫️👁️ 3. YENGIL XIRADAN TINIQQA (OPTIMALLASHTIRILGAN) */
         /* ================================================= */
-        /* 🌫️👁️ 3. XIRADAN TINIQQA (BLUR-TO-CLEAR REVEAL) */
-        /* ================================================= */
-        /* 1. Rasm internetdan kelguncha xira, kichkina va xira qora bo'lib turadi */
-         .luxury-card .img-wrap img, 
+        .luxury-card .img-wrap img, 
         .cart-row img,
         .similar-card .img-wrap img {
-        filter: blur(15px) brightness(0.8) !important;
-            transform: scale(0.85) !important;
-            transition: opacity 0.6s ease, filter 0.6s ease-out, transform 0.6s cubic-bezier(0.25, 1, 0.25, 1) !important;
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.4s ease, transform 0.4s ease !important;
+            will-change: opacity, transform;
         }
         
-        /* 2. Rasm yuklanib bo'lgach (JS unga opacity:1 berganda) AVTOMAT tiniqlashadi va joyiga tushadi! */
         .luxury-card .img-wrap img[style*="opacity: 1"],
         .luxury-card .img-wrap img[style*="opacity:1"],
         .cart-row img[style*="opacity: 1"],
         .cart-row img[style*="opacity:1"],
         .similar-card .img-wrap img[style*="opacity: 1"],
         .similar-card .img-wrap img[style*="opacity:1"] {
-            filter: blur(0) brightness(1) !important;
+            opacity: 1 !important;
             transform: scale(1) !important;
         }
         /* ================================================= */
@@ -3976,13 +3975,13 @@ function cardHTML(p) {
     return `<div class="luxury-card" onclick="openProduct(${p.id})">
         ${bH}${heartBtn}
         <div class="img-wrap" style="${oosStyle}">
-            <img src="${p.img}" onload="this.style.opacity=1" onerror="this.style.opacity=1; this.src='https://via.placeholder.com/150'">
+            <img src="${p.img}" loading="lazy" decoding="async" onload="this.style.opacity=1" onerror="this.style.opacity=1; this.src='https://via.placeholder.com/150'">
         </div>
         <div class="info">
             <h4>${mainName}${carHint}</h4>
             ${cartBtn}
         </div>
-    </div>`; 
+    </div>`;
 }
 
 function openProduct(id) {
@@ -4241,7 +4240,7 @@ window.searchProducts = () => {
                 let np = x.name.split('·');
                 let mn = np[0] ? np[0].trim() : x.name;
                 return `<div class="search-item" onclick="openProduct(${x.id})">
-                    <img src="${x.img}" onload="this.style.opacity=1">
+                    <img src="${x.img}" loading="lazy" decoding="async" onload="this.style.opacity=1">
                     <div class="search-info">
                         <h4>${mn}</h4>
                         <p class="price">${x.price.toLocaleString()} so'm</p>
@@ -7477,8 +7476,7 @@ window.renderCartItems = () => {
         
         c.innerHTML += `
             <div class="cart-row">
-                <img src="${p.img}" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/65?text=A1'">
-                
+                <img src="${p.img}" loading="lazy" decoding="async" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/65?text=A1'">
                 <div class="cart-info">
                     <h4 style="line-height: 1.4;">${displayName}</h4>
                     <span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span>
