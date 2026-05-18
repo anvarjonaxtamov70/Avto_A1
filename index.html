@@ -2365,9 +2365,46 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
             transition: all 0.3s ease !important;
         }
+        /* ================================================= */
+        /* 🔍 2. AQLLI QIDIRUV (PREDICTIVE SEARCH) */
+        /* ================================================= */
+        .search-suggestions {
+            position: absolute; top: 100%; left: 0; width: 100%;
+            background: rgba(20, 20, 22, 0.95);
+            backdrop-filter: blur(25px) saturate(200%); -webkit-backdrop-filter: blur(25px) saturate(200%);
+            border-radius: 20px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+            margin-top: 10px; z-index: 1500;
+            opacity: 0; pointer-events: none; transform: translateY(-10px) scale(0.98);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            overflow: hidden;
+        }
+        .search-suggestions.show {
+            opacity: 1; pointer-events: auto; transform: translateY(0) scale(1);
+        }
+        .suggestion-item {
+            padding: 12px 20px; color: white; display: flex; align-items: center; gap: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: 0.2s;
+        }
+        .suggestion-item:last-child { border-bottom: none; }
+        .suggestion-item:active { background: rgba(212, 175, 55, 0.15); padding-left: 25px; } /* Bosganda yonga siljib tilla bo'ladi */
+
+        /* ================================================= */
+        /* 🔄 3. SHAXSIY PULL-TO-REFRESH (G'ILDIRAK) */
+        /* ================================================= */
+        #custom-ptr {
+            position: fixed; top: -70px; left: 0; width: 100%; height: 70px;
+            display: flex; justify-content: center; align-items: flex-end; padding-bottom: 15px;
+            z-index: 9999; transition: top 0.2s ease-out; pointer-events: none;
+        }
+        @keyframes fastSpin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body ontouchstart="">
+    <div id="custom-ptr">
+        <div id="ptr-wheel" style="font-size: 32px; filter: drop-shadow(0 4px 10px rgba(212,175,55,0.6));">⚙️</div>
+    </div>
     <div id="login-screen" class="login-overlay hidden">
         <div class="login-card">
             <h2 style="color: var(--luxury-gold); margin-top: 0;">Avto A1</h2>
@@ -2449,13 +2486,15 @@
             <img src="https://i.postimg.cc/NM8SWXFy/Gemini-Generated-Image-wz3selwz3selwz3s-(1).png" onload="this.style.opacity=1">
         </div>
     </div>
-<div class="search-input-container">
+    <div class="search-input-container">
         <span class="search-icon-left">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         </span>
         
-        <input type="text" id="searchInput" class="search-box" placeholder="Zapchast, marka qidiring..." oninput="searchProducts()" onfocus="searchProducts()">
-        <button id="clearSearchBtn" class="clear-search-btn" onclick="clearSearch()">✕</button>   
+        <input type="text" id="searchInput" class="search-box" placeholder="Zapchast, marka qidiring..." oninput="smartSearchInput()" onfocus="showSmartSuggestions()">
+        <button id="clearSearchBtn" class="clear-search-btn" onclick="clearSearch(); closeSmartSuggestions();">✕</button>   
+        
+        <div class="search-suggestions" id="search-suggestions"></div>
     </div>
     <div class="quick-chips hidden" id="quick-chips">
         <span class="chip" onclick="applyQuickSearch('Porshen')">🔥 Porshen</span>
@@ -8034,7 +8073,116 @@ function markAsSeen(element) {
         ring.classList.add('seen');
     }
 }
+    // ==========================================
+// 🔄 SHAXSIY PULL-TO-REFRESH (G'ILDIRAK) MOTOR
+// ==========================================
+let ptrStartY = 0; let ptrCurrentY = 0; 
+const ptrEl = document.getElementById('custom-ptr');
+const wheelEl = document.getElementById('ptr-wheel');
+
+document.addEventListener('touchstart', e => { 
+    if (window.scrollY <= 0 && !activeModal) ptrStartY = e.touches[0].clientY; 
+}, {passive: true});
+
+document.addEventListener('touchmove', e => {
+    if (ptrStartY > 0 && window.scrollY <= 0 && !activeModal) {
+        ptrCurrentY = e.touches[0].clientY - ptrStartY;
+        if (ptrCurrentY > 0 && ptrCurrentY < 150) {
+            ptrEl.style.top = (ptrCurrentY - 70) + 'px';
+            wheelEl.style.transform = `rotate(${ptrCurrentY * 4}deg)`; // Tortgan sari aylanadi
+        }
+    }
+}, {passive: true});
+
+document.addEventListener('touchend', e => {
+    if (ptrCurrentY > 80) { 
+        // Agar yetarlicha pastga tortilgan bo'lsa: Yangilashni ishga tushirish!
+        ptrEl.style.top = '20px';
+        wheelEl.style.animation = 'fastSpin 0.5s linear infinite';
+        if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+        
+        // 0.8 sekund g'ildirak aylanadi va keyin restart bo'ladi
+        setTimeout(() => window.location.reload(), 800);
+    } else {
+        // Oxirigacha tortilmasa joyiga qaytib ketadi
+        ptrEl.style.top = '-70px'; 
+    }
+    ptrStartY = 0; ptrCurrentY = 0;
+});
+
+// ==========================================
+// 🔍 AQLLI QIDIRUV (PREDICTIVE DROPDOWN) MOTOR
+// ==========================================
+window.showSmartSuggestions = () => {
+    let box = document.getElementById('search-suggestions');
+    let inp = document.getElementById('searchInput').value.trim();
     
+    document.body.classList.add('search-focused'); // Spotlight effekti
+
+    if(inp === '') {
+        // Bo'sh turganda Trendlar chiqadi
+        box.innerHTML = `
+            <div style="padding: 12px 20px 8px; font-size: 10px; color: var(--luxury-gold); font-weight: 800; letter-spacing: 1px;">🔥 OMMABOP QIDIRUVLAR</div>
+            <div class="suggestion-item" onclick="applyQuickSearch('Motor'); closeSmartSuggestions();"><span style="font-size:18px;">⚙️</span> Barcha motor qismlari</div>
+            <div class="suggestion-item" onclick="applyQuickSearch('Amortizator'); closeSmartSuggestions();"><span style="font-size:18px;">🛡️</span> Amortizatorlar</div>
+            <div class="suggestion-item" onclick="applyQuickSearch('Chevrolet'); closeSmartSuggestions();"><span style="font-size:18px;">🚘</span> Chevrolet modellari</div>
+            <div class="suggestion-item" onclick="applyQuickSearch('Gazel'); closeSmartSuggestions();"><span style="font-size:18px;">🚛</span> Gazel / Volga zapchastlari</div>
+        `;
+        box.classList.add('show');
+    } else {
+        smartSearchInput(); 
+    }
+};
+
+window.smartSearchInput = () => {
+    let q = document.getElementById('searchInput').value.toLowerCase().trim();
+    let box = document.getElementById('search-suggestions');
+    
+    searchProducts(); // Asosiy orqa fondagi qidiruvni ham ishlatamiz
+    
+    if(q.length === 0) { 
+        showSmartSuggestions(); 
+        return; 
+    }
+    
+    // Qidiruvga mos keladigan TOP 4 ta tovarni darhol ushlab olish
+    let filt = productsDB.filter(x => !x.is_draft && x.name.toLowerCase().includes(q)).slice(0, 4);
+    
+    if(filt.length > 0) {
+        box.innerHTML = `
+            <div style="padding: 12px 20px 8px; font-size: 10px; color: var(--text-muted); font-weight: 800; letter-spacing: 1px;">TAKLIFLAR</div>
+            ${filt.map(x => `
+            <div class="suggestion-item" onclick="openProduct(${x.id}); closeSmartSuggestions();">
+                <img src="${x.img}" style="width:35px; height:35px; border-radius:8px; object-fit:cover; background:#fff; padding:2px;">
+                <div style="flex:1;">
+                    <div style="font-size:13px; font-weight:700;">${x.name}</div>
+                    <div style="font-size:11px; color:var(--luxury-gold); font-weight:800; margin-top:2px;">${x.price.toLocaleString()} so'm</div>
+                </div>
+                <div style="color:var(--text-muted);">›</div>
+            </div>
+        `).join('')}`;
+        box.classList.add('show');
+    } else {
+        box.innerHTML = `<div style="padding: 20px; text-align:center; color:gray; font-size: 13px;">Bunday zapchast topilmadi</div>`;
+        box.classList.add('show');
+    }
+};
+
+window.closeSmartSuggestions = () => {
+    let box = document.getElementById('search-suggestions');
+    if(box) box.classList.remove('show');
+    document.body.classList.remove('search-focused');
+};
+
+// Ekranning qidiruvdan tashqari joyiga bosganda oyna avtomat yopiladi
+document.addEventListener('click', (e) => {
+    if(!e.target.closest('.search-input-container')) {
+        closeSmartSuggestions();
+    }
+});
+
+
+
     
 </script> 
 <!-- YANGI KINO USLUBIDAGI STORIS OYNASI -->
@@ -8056,11 +8204,7 @@ function markAsSeen(element) {
     <div class="story-tap-right" onclick="nextStory(event)"></div>
     
     <!-- FAQAT ADMIN UCHUN O'CHIRISH TUGMASI -->
-    <div class="story-admin-delete" id="admin-story-delete-btn" onclick="deleteCurrentStory()">🗑 O'chirish</div>
-
-
-
-    
+    <div class="story-admin-delete" id="admin-story-delete-btn" onclick="deleteCurrentStory()">🗑 O'chirish</div> 
 </div>
 </body>    
 </html>
