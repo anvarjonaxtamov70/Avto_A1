@@ -2485,6 +2485,29 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); } 
         }
+        /* ================================================= */
+        /* ❌ QIDIRUVNI YOPUVCHI "X" TUGMASI */
+        /* ================================================= */
+        body.search-focused .clear-search-btn {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            background: rgba(255, 69, 58, 0.15) !important; /* Yengil qizil fon */
+            color: #ff453a !important; /* Qizil x belgisi */
+            width: 30px !important;
+            height: 30px !important;
+            right: 12px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 50% !important;
+        }
+        body.search-focused .clear-search-btn:active {
+            transform: translateY(-50%) scale(0.8) !important;
+            background: rgba(255, 69, 58, 0.4) !important; /* Bosganda to'qroq qizil */
+        }
+
+
+        
     </style>
 </head>
 <body ontouchstart="">
@@ -2571,7 +2594,7 @@
         </span>
         
         <input type="text" id="searchInput" class="search-box" placeholder="Zapchast, marka qidiring..." oninput="smartSearchInput()" onfocus="showSmartSuggestions()">
-        <button id="clearSearchBtn" class="clear-search-btn" onclick="clearSearch(); closeSmartSuggestions();">✕</button>   
+          <button id="clearSearchBtn" class="clear-search-btn" onclick="cancelSearch()">✕</button>
         
         <div class="search-suggestions" id="search-suggestions"></div>
     </div>
@@ -8400,7 +8423,33 @@ window.addToCartQuick = function(e, id) {
         if(typeof originalAddToCartQuick === 'function') originalAddToCartQuick(e, id);
     }
 };
+// ===================================================
+// ❌ QIDIRUVNI BEKOR QILISH VA YOPISH
+// ===================================================
+window.cancelSearch = () => {
+    let inp = document.getElementById('searchInput');
+    if(inp) {
+        inp.value = ''; // Yozilgan matnni tozalaydi
+        inp.blur();     // Telefon klaviaturasini pastga tushirib yopadi
+    }
+    
+    // Aqlli takliflar oynasini yashirish
+    let box = document.getElementById('search-suggestions');
+    if(box) box.classList.remove('show');
+    
+    // Orqa fondagi xiralikni (Spotlight) o'chirish
+    document.body.classList.remove('search-focused');
+    
+    // Agar tovarlar allaqachon qidirilib ro'yxat chiqqan bo'lsa, uni ham yopish
+    if (typeof exitSearch === 'function') {
+        exitSearch();
+    }
+};
 
+
+
+
+    
     
 </script> 
 <!-- YANGI KINO USLUBIDAGI STORIS OYNASI -->
