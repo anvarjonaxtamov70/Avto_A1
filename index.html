@@ -2444,6 +2444,47 @@
             transform: scale(0.93) translateY(2px) !important;
             transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1) !important; /* Kirish tezroq, qaytish sekinroq */
         }
+        /* ================================================= */
+        /* 🚀 UCHUVCHI ANIMATSIYA VA TUGMA QOTISHIGA QARSHI FIX */
+        /* ================================================= */
+        
+        /* 1. Uchuvchi rasm faqat GPU'da ishlashi uchun (left/top emas) */
+        .flying-img {
+            top: 0 !important; left: 0 !important; /* Nolga qotiramiz */
+            /* FAQAT transform ishlatamiz, bu telefonni umuman qiynamaydi */
+            transition: transform 0.7s cubic-bezier(0.25, 1, 0.25, 1), opacity 0.7s ease !important;
+            will-change: transform, opacity !important;
+        }
+
+        /* 2. Tugmadagi aylanuvchi g'ildirak ko'rinishini silliqlash */
+        .btn-loading-liquid {
+            color: transparent !important;
+            pointer-events: none !important;
+            position: relative !important;
+        }
+        .btn-loading-liquid svg, .btn-loading-liquid span:not(.spinner-icon) {
+            opacity: 0 !important; /* Ichidagi eski narsalarni yashiramiz */
+        }
+        
+        /* Chiroyli va sekin aylanuvchi iOS uslubidagi spinner */
+        .spinner-icon {
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            width: 22px !important;
+            height: 22px !important;
+            margin-left: -11px !important;
+            margin-top: -11px !important;
+            border: 3px solid rgba(0,0,0,0.2) !important;
+            border-top-color: #000 !important;
+            border-radius: 50% !important;
+            animation: smoothSpin 1s linear infinite !important; /* 1 sekundda sokin aylanadi */
+            display: block !important;
+        }
+        @keyframes smoothSpin { 
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); } 
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -8275,7 +8316,90 @@ window.addToCartQuick = function(e, id) {
         if(typeof originalAddToCartQuick === 'function') originalAddToCartQuick(e, id);
     }
 };
+// ===================================================
+// 🚀 UCHUVCHI ANIMATSIYA (GPU OPTIMALLASHTIRILGAN)
+// ===================================================
+window.flyToCartAnimation = (e, imgSrc) => {
+    let clientX = e.clientX || (e.touches && e.touches.length > 0 ? e.touches[0].clientX : window.innerWidth / 2);
+    let clientY = e.clientY || (e.touches && e.touches.length > 0 ? e.touches[0].clientY : window.innerHeight / 2);
+    if (!clientX || !clientY) return; 
 
+    let flyingImg = document.createElement('img');
+    flyingImg.src = imgSrc || 'https://via.placeholder.com/150';
+    flyingImg.className = 'flying-img';
+    
+    // Boshlang'ich nuqta transform orqali beriladi (CPU qizimaydi)
+    flyingImg.style.transform = `translate3d(${clientX - 30}px, ${clientY - 30}px, 0) scale(1)`;
+    flyingImg.style.width = '60px';
+    flyingImg.style.height = '60px';
+    document.body.appendChild(flyingImg);
+
+    let cartNav = document.getElementById('nav-cart');
+    if(!cartNav) return;
+    
+    let targetRect = cartNav.getBoundingClientRect();
+    let targetX = targetRect.left + (targetRect.width / 2) - 30; // 30 = rasming yarmi
+    let targetY = targetRect.top + (targetRect.height / 2) - 30;
+
+    // Kichik pauza bilan animatsiyani ishga tushiramiz
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            flyingImg.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) scale(0.2) rotate(360deg)`;
+            flyingImg.style.opacity = '0.4';
+        });
+    });
+
+    setTimeout(() => {
+        flyingImg.remove();
+        cartNav.classList.add('cart-bounce');
+        if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        setTimeout(() => cartNav.classList.remove('cart-bounce'), 400);
+    }, 700); 
+};
+
+// ===================================================
+// 💧 2. SUYUQ TUGMA (QOTMASLIGI UCHUN FIX QILINDI)
+// ===================================================
+const originalAddToCartQuick = window.addToCartQuick;
+window.addToCartQuick = function(e, id) {
+    if(e) e.stopPropagation();
+    let btn = e ? e.currentTarget : null;
+    let p = productsDB.find(x => x.id == id);
+    
+    // Tovar razmerli bo'lsa yoki qolmagan bo'lsa oddiy ishlaydi
+    if (!p || p.product_type === 'razmerli' || (p.stock !== undefined && p.stock <= 0)) {
+        if(typeof originalAddToCartQuick === 'function') originalAddToCartQuick(e, id);
+        return;
+    }
+
+    if (btn && !btn.disabled && !btn.classList.contains('btn-loading-liquid')) {
+        let originalHtml = btn.innerHTML;
+        
+        // 1. Tugma o'lchamini buzmasdan, shunchaki spinner qo'shamiz (Qotmaydi)
+        btn.classList.add('btn-loading-liquid');
+        btn.innerHTML = originalHtml + `<span class="spinner-icon"></span>`; 
+        
+        // 2. Orqa fonda savatga qo'shamiz
+        if(typeof originalAddToCartQuick === 'function') originalAddToCartQuick(null, id);
+        
+        // 3. Yengillashtirilgan uchuvchi animatsiya
+        if(typeof flyToCartAnimation === 'function' && p.img) flyToCartAnimation(e, p.img);
+
+        // 4. Muvaffaqiyatli '✅' va joyiga qaytish
+        setTimeout(() => {
+            btn.innerHTML = `<span style="color: #000; font-size: 15px; margin: 0 auto; font-weight: 800;">✅ Qo'shildi</span>`;
+            btn.classList.remove('btn-loading-liquid');
+            
+            if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+            }, 1000); 
+        }, 600);
+    } else {
+        if(typeof originalAddToCartQuick === 'function') originalAddToCartQuick(e, id);
+    }
+};
 
     
 </script> 
