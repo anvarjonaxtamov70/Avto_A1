@@ -6758,67 +6758,6 @@ window.saveEditProduct = function(keepDraft = false) {
     }
 };
 // =====================================
-// 2. YANGI TOVAR QO'SHISH (ADD) FUNKSIYASI
-// =====================================
-window.saveNewProduct = function() {
-    let n = document.getElementById('add-name').value.trim();
-    let p = parseInt(document.getElementById('add-price').value) || 0;
-    let pUnit = document.getElementById('add-unit').value;
-    let pType = document.getElementById('admin-prod-type').value;
-    let img1 = document.getElementById('add-img-url').value;
-    let img2 = document.getElementById('add-img-url2') ? document.getElementById('add-img-url2').value : "";
-    let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
-    let imagesArr = [img1, img2, img3].filter(u => u);
-    let descVal = document.getElementById('add-desc').value.trim() || "Tavsif kiritilmagan";
-
-    let sMods = Array.from(document.querySelectorAll('#addProductModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
-
-    if (!n || !p || imagesArr.length === 0) { showToast("Ism, narx va kamida 1 rasm kerak!", "warning"); return; }
-
-    let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
-    let newProduct = { id: newId, name: n, desc: descVal, price: p, unit: pUnit, img: imagesArr[0], images: imagesArr, product_type: pType };
-
-    if (pType === 'oddiy') {
-        let st = parseInt(document.getElementById('add-stock').value) || 0;
-        if (sMods.length === 0) { showToast("Mashina rusumini tanlang!", "warning"); return; }
-        
-        newProduct.stock = st; 
-        newProduct.category = sMods[0]; 
-        newProduct.categories = sMods;
-    } else {
-        let brand = document.getElementById('admin-prod-brand').value;
-        let model = document.getElementById('admin-prod-model') ? document.getElementById('admin-prod-model').value : "";
-        
-        let sizes = [];
-        document.querySelectorAll('#admin-sizes-container .size-input-row').forEach(row => {
-            let sName = row.querySelector('.size-name').value.trim();
-            let sStock = parseInt(row.querySelector('.size-stock').value) || 0;
-            if (sName) sizes.push({ size: sName, stock: sStock });
-        });
-        if (sizes.length === 0) { showToast("Kamida 1 razmer kiriting!", "warning"); return; }
-        
-        let sCats = [];
-        if (brand === 'gaz') {
-            sCats = ['gazel-biznes','gazel-next','gazel-eski','volga-2401','volga-2410','volga-3110','volga-31105','volga-31029','sobol'];
-        } else {
-            if (!model) { showToast("Modelni tanlang!", "warning"); return; }
-            sCats.push(`${brand}-${model}`);
-        }
-        newProduct.brand = brand; newProduct.model = model; newProduct.sizes = sizes;
-        newProduct.stock = sizes.reduce((s, x) => s + x.stock, 0);
-        newProduct.category = sCats[0]; newProduct.categories = sCats;
-    }
-
-    productsDB.push(newProduct);
-    db.ref('products').set(productsDB).then(() => {
-        showToast("✅ Saqlandi! Yangilanmoqda...", "success");
-        setTimeout(() => { 
-            // Restart berishning xavfsiz va xatosiz usuli
-            window.location.reload(); 
-        }, 800);
-    });
-};
-// =====================================
 // 🚀 AQLLI OMMAVIY QO'SHISH (SMART BULK IMPORT)
 // =====================================
 
@@ -8340,8 +8279,67 @@ window.addToCartQuick = function(e, id) {
     }
 };
 // ===================================================
-// 🚀 UCHUVCHI ANIMATSIYA (GPU OPTIMALLASHTIRILGAN)
+// 🛠️ QUTQARUVCHI MOTOR (XATOLARDAN TOZALANGAN)
 // ===================================================
+
+// 1. Yangi tovar qo'shish va restart berish
+window.saveNewProduct = function() {
+    let n = document.getElementById('add-name').value.trim();
+    let p = parseInt(document.getElementById('add-price').value) || 0;
+    let pUnit = document.getElementById('add-unit').value;
+    let pType = document.getElementById('admin-prod-type').value;
+    let img1 = document.getElementById('add-img-url').value;
+    let img2 = document.getElementById('add-img-url2') ? document.getElementById('add-img-url2').value : "";
+    let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
+    let imagesArr = [img1, img2, img3].filter(u => u);
+    let descVal = document.getElementById('add-desc').value.trim() || "Tavsif kiritilmagan";
+
+    let sMods = Array.from(document.querySelectorAll('#addProductModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
+
+    if (!n || !p || imagesArr.length === 0) { showToast("Ism, narx va kamida 1 rasm kerak!", "warning"); return; }
+
+    let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
+    let newProduct = { id: newId, name: n, desc: descVal, price: p, unit: pUnit, img: imagesArr[0], images: imagesArr, product_type: pType };
+
+    if (pType === 'oddiy') {
+        let st = parseInt(document.getElementById('add-stock').value) || 0;
+        if (sMods.length === 0) { showToast("Mashina rusumini tanlang!", "warning"); return; }
+        
+        newProduct.stock = st; 
+        newProduct.category = sMods[0]; 
+        newProduct.categories = sMods;
+    } else {
+        let brand = document.getElementById('admin-prod-brand').value;
+        let model = document.getElementById('admin-prod-model') ? document.getElementById('admin-prod-model').value : "";
+        
+        let sizes = [];
+        document.querySelectorAll('#admin-sizes-container .size-input-row').forEach(row => {
+            let sName = row.querySelector('.size-name').value.trim();
+            let sStock = parseInt(row.querySelector('.size-stock').value) || 0;
+            if (sName) sizes.push({ size: sName, stock: sStock });
+        });
+        if (sizes.length === 0) { showToast("Kamida 1 razmer kiriting!", "warning"); return; }
+        
+        let sCats = [];
+        if (brand === 'gaz') {
+            sCats = ['gazel-biznes','gazel-next','gazel-eski','volga-2401','volga-2410','volga-3110','volga-31105','volga-31029','sobol'];
+        } else {
+            if (!model) { showToast("Modelni tanlang!", "warning"); return; }
+            sCats.push(`${brand}-${model}`);
+        }
+        newProduct.brand = brand; newProduct.model = model; newProduct.sizes = sizes;
+        newProduct.stock = sizes.reduce((s, x) => s + x.stock, 0);
+        newProduct.category = sCats[0]; newProduct.categories = sCats;
+    }
+
+    productsDB.push(newProduct);
+    db.ref('products').set(productsDB).then(() => {
+        showToast("✅ Saqlandi! Yangilanmoqda...", "success");
+        setTimeout(() => { window.location.reload(); }, 800);
+    });
+};
+
+// 2. Qotmaydigan uchuvchi animatsiya (GPU)
 window.flyToCartAnimation = (e, imgSrc) => {
     let clientX = e.clientX || (e.touches && e.touches.length > 0 ? e.touches[0].clientX : window.innerWidth / 2);
     let clientY = e.clientY || (e.touches && e.touches.length > 0 ? e.touches[0].clientY : window.innerHeight / 2);
@@ -8351,7 +8349,6 @@ window.flyToCartAnimation = (e, imgSrc) => {
     flyingImg.src = imgSrc || 'https://via.placeholder.com/150';
     flyingImg.className = 'flying-img';
     
-    // Boshlang'ich nuqta transform orqali beriladi (CPU qizimaydi)
     flyingImg.style.transform = `translate3d(${clientX - 30}px, ${clientY - 30}px, 0) scale(1)`;
     flyingImg.style.width = '60px';
     flyingImg.style.height = '60px';
@@ -8361,10 +8358,9 @@ window.flyToCartAnimation = (e, imgSrc) => {
     if(!cartNav) return;
     
     let targetRect = cartNav.getBoundingClientRect();
-    let targetX = targetRect.left + (targetRect.width / 2) - 30; // 30 = rasming yarmi
+    let targetX = targetRect.left + (targetRect.width / 2) - 30;
     let targetY = targetRect.top + (targetRect.height / 2) - 30;
 
-    // Kichik pauza bilan animatsiyani ishga tushiramiz
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
             flyingImg.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) scale(0.2) rotate(360deg)`;
@@ -8380,67 +8376,51 @@ window.flyToCartAnimation = (e, imgSrc) => {
     }, 700); 
 };
 
-// ===================================================
-// 💧 2. SUYUQ TUGMA (QOTMASLIGI UCHUN FIX QILINDI)
-// ===================================================
-const originalAddToCartQuick = window.addToCartQuick;
+// 3. Xatosiz Suyuq Tugma (Dublikat xatosidan himoyalangan)
+window.originalAddToCartQuickFallback = window.originalAddToCartQuickFallback || window.addToCartQuick;
 window.addToCartQuick = function(e, id) {
     if(e) e.stopPropagation();
     let btn = e ? e.currentTarget : null;
     let p = productsDB.find(x => x.id == id);
     
-    // Tovar razmerli bo'lsa yoki qolmagan bo'lsa oddiy ishlaydi
     if (!p || p.product_type === 'razmerli' || (p.stock !== undefined && p.stock <= 0)) {
-        if(typeof originalAddToCartQuick === 'function') originalAddToCartQuick(e, id);
+        if(typeof window.originalAddToCartQuickFallback === 'function') window.originalAddToCartQuickFallback(e, id);
         return;
     }
 
     if (btn && !btn.disabled && !btn.classList.contains('btn-loading-liquid')) {
         let originalHtml = btn.innerHTML;
         
-        // 1. Tugma o'lchamini buzmasdan, shunchaki spinner qo'shamiz (Qotmaydi)
         btn.classList.add('btn-loading-liquid');
         btn.innerHTML = originalHtml + `<span class="spinner-icon"></span>`; 
         
-        // 2. Orqa fonda savatga qo'shamiz
-        if(typeof originalAddToCartQuick === 'function') originalAddToCartQuick(null, id);
-        
-        // 3. Yengillashtirilgan uchuvchi animatsiya
-        if(typeof flyToCartAnimation === 'function' && p.img) flyToCartAnimation(e, p.img);
+        if(typeof window.originalAddToCartQuickFallback === 'function') window.originalAddToCartQuickFallback(null, id);
+        if(typeof window.flyToCartAnimation === 'function' && p.img) window.flyToCartAnimation(e, p.img);
 
-        // 4. Muvaffaqiyatli '✅' va joyiga qaytish
         setTimeout(() => {
             btn.innerHTML = `<span style="color: #000; font-size: 15px; margin: 0 auto; font-weight: 800;">✅ Qo'shildi</span>`;
             btn.classList.remove('btn-loading-liquid');
-            
             if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             
-            setTimeout(() => {
-                btn.innerHTML = originalHtml;
-            }, 1000); 
+            setTimeout(() => { btn.innerHTML = originalHtml; }, 1000); 
         }, 600);
     } else {
-        if(typeof originalAddToCartQuick === 'function') originalAddToCartQuick(e, id);
+        if(typeof window.originalAddToCartQuickFallback === 'function') window.originalAddToCartQuickFallback(e, id);
     }
 };
-// ===================================================
-// ❌ QIDIRUVNI BEKOR QILISH VA YOPISH
-// ===================================================
+
+// 4. Qidiruvni bekor qilish
 window.cancelSearch = () => {
     let inp = document.getElementById('searchInput');
     if(inp) {
-        inp.value = ''; // Yozilgan matnni tozalaydi
-        inp.blur();     // Telefon klaviaturasini pastga tushirib yopadi
+        inp.value = '';
+        inp.blur();
     }
-    
-    // Aqlli takliflar oynasini yashirish
     let box = document.getElementById('search-suggestions');
     if(box) box.classList.remove('show');
     
-    // Orqa fondagi xiralikni (Spotlight) o'chirish
     document.body.classList.remove('search-focused');
     
-    // Agar tovarlar allaqachon qidirilib ro'yxat chiqqan bo'lsa, uni ham yopish
     if (typeof exitSearch === 'function') {
         exitSearch();
     }
