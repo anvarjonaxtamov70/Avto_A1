@@ -2347,6 +2347,48 @@
         img {
             color: transparent !important; 
         }
+        /* ================================================= */
+        /* 🍏 IOS FIZIKASI VA XAVFSIZ HUDUDLAR (SAFE AREA) */
+        /* ================================================= */
+
+        /* 1. Matnni belgilashni butunlay o'chirish (Inputlardan tashqari hamma joyda) */
+        body {
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            -webkit-touch-callout: none !important; /* Rasmni bosib turganda "Save Image" chiqishini to'sadi */
+        }
+        
+        /* Faqat yozish kerak bo'lgan joylarda ruxsat beramiz */
+        input, textarea {
+            -webkit-user-select: auto !important;
+            user-select: auto !important;
+            -webkit-appearance: none; /* iPhone'dagi xunuk standart input dizaynini o'chiradi */
+        }
+
+        /* 2. IPHONE SAFE AREA (Pastki chiziq himoyasi) */
+        /* Pastki menyu iPhone'ning chizig'i ostida qolib ketmasligi uchun avtomat bo'shliq */
+        .bottom-nav {
+            padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+            bottom: env(safe-area-inset-bottom) !important;
+        }
+        
+        /* Modallarning pastki qismi iPhone chizig'iga tegmasligi uchun */
+        .modal-standard, #productModal, .sticky-admin-footer {
+            padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
+        }
+        /* 3. iOS Rubber-banding (Muzdek sirpanish va tortilish) */
+        .modal-standard, #productModal, .stories-container, .slider, #content-area, .pm-info-section, .chat-messages {
+            -webkit-overflow-scrolling: touch !important; 
+            overscroll-behavior-y: auto !important; /* Konteyner oxirida prujinadek tortiladi */
+        }
+
+        /* 4. Tepadagi shisha menyuni yanada tiniqroq "Apple Glass" ga aylantirish */
+        .header {
+            background: rgba(10, 10, 10, 0.45) !important;
+            backdrop-filter: blur(35px) saturate(250%) !important;
+            -webkit-backdrop-filter: blur(35px) saturate(250%) !important;
+            border-bottom: 0.5px solid rgba(255, 255, 255, 0.1) !important;
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -3297,6 +3339,29 @@
 window.currentUser = null;
     let tg = window.Telegram.WebApp;
     tg.expand();
+    // ==========================================
+    // 🍏 IOS NATIVE (HAQIQIY ILOVA) SOZLAMALARI
+    // ==========================================
+    
+    // 1. iPhone'da chapdan o'ngga surib orqaga qaytishni yoqish
+    if (tg.isVersionAtLeast('7.0') && tg.enableSwipeBack) {
+        tg.enableSwipeBack();
+    }
+
+    // 2. Tepadagi soat/batareya qismini (Status Bar) qora fon bilan bir xil qilish
+    if (tg.setHeaderColor) {
+        tg.setHeaderColor('#000000'); // Yoki sizning fonga mos to'q qora
+    }
+    
+    // 3. Pastki qism (Home Indicator) fonini moslash
+    if (tg.setBackgroundColor) {
+        tg.setBackgroundColor('#000000');
+    }
+    
+    // 4. Ekranni to'liq egallash (Yangi WebApp funksiyasi)
+    if (tg.requestFullscreen) {
+        tg.requestFullscreen();
+    }
 
     // 🛑 1. Tepadan pastga tortganda yopilib ketishini TO'LIQ BLOKLASH
     if (tg.disableVerticalSwipes) {
