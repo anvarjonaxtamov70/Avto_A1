@@ -2389,6 +2389,14 @@
             -webkit-backdrop-filter: blur(35px) saturate(250%) !important;
             border-bottom: 0.5px solid rgba(255, 255, 255, 0.1) !important;
         }
+        /* ================================================= */
+        /* ♻️ 3. VIRTUAL SCROLL (XOTIRANI BOSHATISH) */
+        /* ================================================= */
+        /* Ekranda ko'rinmayotgan tovarlarni telefon xotirasidan avtomat o'chirib turadi */
+        .luxury-card, .search-item, .inventory-item, .cart-row {
+            content-visibility: auto !important;
+            contain-intrinsic-size: 220px !important; /* Element o'rniga zaxira joy */
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -3590,20 +3598,50 @@ function showToast(m, t = 'success') {
 }
     const initialProducts = [ { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", desc: "100% original", price: 1060000, stock: 10, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "gazel-biznes-motor", badge: "hot" } ];
 
-     db.ref('products').on('value', (snap) => {
-        document.getElementById('loading-text').style.display = 'none'; document.getElementById('content-area').classList.remove('hidden');
-        if (snap.exists()) { productsDB = snap.val().filter(p => p !== null); } else { productsDB = initialProducts; db.ref('products').set(productsDB); }
-        
-        // Mijozlarga faqat Qoralama (draft) bo'lmagan tovarlarni ko'rsatish
-        displayDB = productsDB.filter(p => !p.is_draft);
-        for(let i = displayDB.length - 1; i > 0; i--){
-            const j = Math.floor(Math.random() * (i + 1));
-            [displayDB[i], displayDB[j]] = [displayDB[j], displayDB[i]];
+// ===================================================
+    // 🚀 2 VA 4. GIBRID PAGINATSIYA VA ORQA FON SINXRONIZATSIYASI
+    // ===================================================
+    window.isDataLoaded = false;
+
+    // 1. Dastur ochilganda faqat eng oxirgi (yangi) 30 ta tovarni chaqirib, ekranni yashindek tez ochamiz
+    db.ref('products').orderByKey().limitToLast(30).once('value', (snap) => {
+        document.getElementById('loading-text').style.display = 'none';
+        document.getElementById('content-area').classList.remove('hidden');
+
+        if (snap.exists()) {
+            let initialData = [];
+            snap.forEach(child => { if(child.val()) initialData.push(child.val()); });
+            // Yangi tovarlar tepada turishi uchun teskari o'giramiz
+            productsDB = initialData.reverse();
+        } else {
+            productsDB = initialProducts;
+            db.ref('products').set(productsDB);
         }
-        
-        renderProducts(); updateCartBadge(); if(activeModal === 'adminInventoryModal') renderAdminInventory();
+
+        displayDB = productsDB.filter(p => !p.is_draft);
+        renderProducts();
+        updateCartBadge();
+        if(activeModal === 'adminInventoryModal') renderAdminInventory();
+
+        // 2. Asosiy ekran ochilgach, qolgan qismni mijozga sezdirmasdan orqa fonda yuklaymiz
+        setTimeout(syncAllProductsInBackground, 1000);
     });
-    
+
+    function syncAllProductsInBackground() {
+        // Telefon qotib yonib ketmasligi uchun .on (doimiy kuzatuv) o'rniga .once ishlatamiz
+        db.ref('products').once('value', (snap) => {
+            if (snap.exists()) {
+                productsDB = snap.val().filter(p => p !== null);
+                
+                // Katalog, kategoriya va qidiruv uchun to'liq ro'yxatni tayyorlab qo'yamiz
+                displayDB = productsDB.filter(p => !p.is_draft);
+
+                // Agar mijoz allaqachon savat yoki omborda bo'lsa, orqa fonda jim yangilaymiz
+                if(activeModal === 'cartModal') renderCartItems();
+                if(activeModal === 'adminInventoryModal') renderAdminInventory();
+            }
+        });
+    }
     function toggleChip(el) { el.classList.toggle('selected'); }
 
     function handleFileSelect(e, t) {
