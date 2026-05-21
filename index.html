@@ -4053,40 +4053,63 @@ window.addEditSizeField = () => {
         } 
     }, { passive: true }); // passive: true — skroll zarracha ham qotmasligini ta'minlaydi
 
-   
-let isProductsLoading = false; // Ketma-ket ishlashni to'sib turuvchi qulf
-
-function loadMoreProducts(startIndex) {
-    if (isProductsLoading) return; // Agar yuklanayotgan bo'lsa, qotib qolmasligi uchun kutadi
-
-    let hc = document.getElementById('home-products'); 
-    let skeleton = document.getElementById('scroll-skeleton'); // Boya HTMLga qo'shganimiz
+   // 🔄 SILLIQ SKROLL VA TOVARLARNI YUKLASH (Skeleton bilan)
+    // =====================================
     
-    if(hc && skeleton) { 
-        let newItems = displayDB.slice(startIndex, limitCount); 
+    // 1. Ketma-ket ishlashni to'sib turuvchi qulf
+    let isProductsLoading = false; 
+
+    // 2. Skrollni kuzatuvchi asosiy funksiya
+    window.addEventListener('scroll', () => { 
+        // Ekranning pastiga 300px qolganda skrollni sezamiz
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) { 
+            // Agar hamma tovarlar yuklanib bo'lmagan bo'lsa va hozir yuklanish jarayoni ketmayotgan bo'lsa:
+            if (limitCount < displayDB.length && !isProductsLoading) { 
+                let oldLimit = limitCount;
+                limitCount += 12; // Yana 12 ta tovar qo'shamiz
+                
+                // Telefon qotib qolmasligi uchun protsessorni bo'shatib, requestAnimationFrame ishlatamiz
+                window.requestAnimationFrame(() => {
+                    loadMoreProducts(oldLimit); 
+                });
+            } 
+        } 
+    }, { passive: true }); // passive: true - skroll paytida barmoq qotib qolishini oldini oladi
+
+
+    // 3. Yangi tovarlarni va Arvoh (Skeleton) ni chizuvchi motor
+    function loadMoreProducts(startIndex) {
+        if (isProductsLoading) return; // Qulf yopiq bo'lsa, ishlamay turadi
+
+        let hc = document.getElementById('home-products'); 
+        let skeleton = document.getElementById('scroll-skeleton'); // HTML ga qo'shilgan Arvoh idish
         
-        if(newItems.length > 0) {
-            isProductsLoading = true;
+        if(hc && skeleton) { 
+            let newItems = displayDB.slice(startIndex, limitCount); 
             
-            // 1. Haqiqiy tovarlar kelguncha, Arvoh ekranlarni ekranga chiqaramiz
-            skeleton.classList.remove('hidden');
-            
-            // 2. Telefonning protsessori qotib qolmasligi uchun 0.5 soniya vaqt (nafas) beramiz
-            setTimeout(() => {
-                // 3. Yarim soniyadan keyin Arvohlarni yana yashiramiz
-                skeleton.classList.add('hidden');
+            if(newItems.length > 0) {
+                isProductsLoading = true; // Boshqa skrollar xalaqit bermasligi uchun qulfni yopamiz
                 
-                // 4. Asosiy ekranga haqiqiy tovarlarni silliq ulab qo'yamiz
-                hc.insertAdjacentHTML('beforeend', newItems.map(x => cardHTML(x)).join(''));
+                // ⏳ Haqiqiy tovarlar kelguncha, Arvoh ekranlarni ekranga chiqaramiz
+                skeleton.classList.remove('hidden');
                 
-                // 5. Suzib chiqish animatsiyasini ishga tushiramiz
-                setTimeout(initReveal, 100);
-                
-                isProductsLoading = false; // Qulfni ochamiz, keyingi skrollga ruxsat
-            }, 500); // 500 millisekund (yarim soniya) miltillab turadi
+                // 🛡️ Telefonning videokartasi nafas olishi uchun 0.5 soniya pauza beramiz
+                setTimeout(() => {
+                    // Arvohlarni yashiramiz
+                    skeleton.classList.add('hidden');
+                    
+                    // Asosiy ekranga haqiqiy tovarlarni ulab qo'yamiz (eskilarini buzmasdan)
+                    hc.insertAdjacentHTML('beforeend', newItems.map(x => cardHTML(x)).join(''));
+                    
+                    // Suzib chiqish (Kaskad) animatsiyasini ishga tushiramiz
+                    setTimeout(initReveal, 100);
+                    
+                    isProductsLoading = false; // Yuklab bo'ldik, qulfni ochamiz
+                }, 500); // 500 millisekund (yarim soniya) aylanib turadi
+            }
         }
     }
-}
+
 // Oynani birinchi marta ochgandagi yoki tovar yangilangandagi chizish
     function renderProducts() {
         let hc = document.getElementById('home-products'); 
