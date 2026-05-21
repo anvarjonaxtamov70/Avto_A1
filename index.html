@@ -707,8 +707,8 @@
         /* 📱 1:1 IPHONE OYNA (GLASSMORPHISM) EFFEKTI - BOTTOM NAV */
         .bottom-nav {
             background: rgba(30, 30, 32, 0.55) !important; /* Shaffofroq qora fon */
-            backdrop-filter: blur(40px) saturate(200%) !important; /* iPhone oyna effekti */
-            -webkit-backdrop-filter: blur(40px) saturate(200%) !important; /* Safari/iOS uchun majburiy */
+            backdrop-filter: blur(15px) saturate(200%) !important; /* iPhone oyna effekti */
+            -webkit-backdrop-filter: blur(15px) saturate(200%) !important; /* Safari/iOS uchun majburiy */
             border: 0.5px solid rgba(255, 255, 255, 0.15) !important; /* Nozik yorug'lik ramkasi */
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important; 
             border-radius: 24px !important; 
@@ -1557,31 +1557,7 @@
             filter: drop-shadow(0 0 15px var(--luxury-gold));
         }
 
-        /* ================================================= */
-        /* 🌊 2. KASKAD (STAGGERED FADE-IN) ANIMATSIYASI */
-        /* ================================================= */
-@keyframes slideUpFade {
-            /* Pastdan (60px) tepaga sekin suzib chiqadi */
-            0% { opacity: 0; transform: translateY(60px) scale(0.95); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-         .items-grid .luxury-card {
-            /* Tezlik 0.5s dan 0.85s ga uzaytirildi va yanada silliq qilindi */
-            animation: slideUpFade 0.85s cubic-bezier(0.25, 1, 0.25, 1) backwards;
-        }
-     /* Tovarlar orasidagi farq kattalashtirildi (Suvdek oqishi uchun) */
-            .items-grid .luxury-card:nth-child(1) { animation-delay: 0.1s; }
-            .items-grid .luxury-card:nth-child(2) { animation-delay: 0.2s; }
-            .items-grid .luxury-card:nth-child(3) { animation-delay: 0.3s; }
-            .items-grid .luxury-card:nth-child(4) { animation-delay: 0.4s; }
-            .items-grid .luxury-card:nth-child(5) { animation-delay: 0.5s; }
-            .items-grid .luxury-card:nth-child(6) { animation-delay: 0.6s; }
-            .items-grid .luxury-card:nth-child(7) { animation-delay: 0.7s; }
-            .items-grid .luxury-card:nth-child(8) { animation-delay: 0.8s; }
-            .items-grid .luxury-card:nth-child(9) { animation-delay: 0.9s; }
-            .items-grid .luxury-card:nth-child(10) { animation-delay: 1.0s; }
-            .items-grid .luxury-card:nth-child(11) { animation-delay: 1.1s; }
-            .items-grid .luxury-card:nth-child(12) { animation-delay: 1.2s; }
+
 /* ================================================= */
         /* 🛑 LIQQILLASH VA YONGA SURILISHGA QARSHI QULF */
         /* ================================================= */
@@ -2373,8 +2349,8 @@
         /* 4. Tepadagi shisha menyuni yanada tiniqroq "Apple Glass" ga aylantirish */
         .header {
             background: rgba(10, 10, 10, 0.45) !important;
-            backdrop-filter: blur(35px) saturate(250%) !important;
-            -webkit-backdrop-filter: blur(35px) saturate(250%) !important;
+            backdrop-filter: blur(15px) saturate(250%) !important;
+            -webkit-backdrop-filter: blur(15px) saturate(250%) !important;
             border-bottom: 0.5px solid rgba(255, 255, 255, 0.1) !important;
         }
     </style>
@@ -7720,39 +7696,39 @@ document.addEventListener('click', function(e) {
     setTimeout(() => circle.remove(), 600);
 });
 
-// ===================================================
-// 📱 HEADER MORPH VA MENYU NAZORATI (YANGI VERSIA)
-// ===================================================
-let lastScrollTop = 0; // Bu o'zgaruvchi tepada bir marta e'lon qilinishi shart
+let lastScrollTop = 0; 
+let isScrolling = false; // Yangi qulf
 
 window.addEventListener("scroll", function() {
-    let st = window.pageYOffset || document.documentElement.scrollTop;
-    
-    // 📐 1. Tepani kichraytirish (Morphing)
-    // Agar ekranni 40px pastga tushirsak, tepa qism avtomat kichrayadi
-    if (st > 40) {
-        document.body.classList.add("scrolled");
-    } else {
-        document.body.classList.remove("scrolled");
-    }
+    if (!isScrolling) {
+        window.requestAnimationFrame(function() {
+            let st = window.pageYOffset || document.documentElement.scrollTop;
+            
+            if (st > 40) {
+                document.body.classList.add("scrolled");
+            } else {
+                document.body.classList.remove("scrolled");
+            }
 
-    // 📱 2. Menyu va AI tugmasi yashirinishi
-    if (activeModal) return; // Agar oyna ochiq bo'lsa, menyu qimirlamaydi
-    
-    let bottomNav = document.querySelector('.bottom-nav');
-    let aiBtn = document.querySelector('.ai-luxury-btn');
+            if (!activeModal) {
+                let bottomNav = document.querySelector('.bottom-nav');
+                let aiBtn = document.querySelector('.ai-luxury-btn');
 
-    if (st > lastScrollTop && st > 50) {
-        // PASTGA SKROLL: Menyu va AI tugmasi yashirinadi
-        if(bottomNav) bottomNav.classList.add("nav-hidden");
-        if(aiBtn) aiBtn.classList.add("ai-hidden");
-    } else {
-        // TEPAGA SKROLL: Hammasi joyiga qaytadi
-        if(bottomNav) bottomNav.classList.remove("nav-hidden");
-        if(aiBtn) aiBtn.classList.remove("ai-hidden");
+                if (st > lastScrollTop && st > 50) {
+                    if(bottomNav) bottomNav.classList.add("nav-hidden");
+                    if(aiBtn) aiBtn.classList.add("ai-hidden");
+                } else {
+                    if(bottomNav) bottomNav.classList.remove("nav-hidden");
+                    if(aiBtn) aiBtn.classList.remove("ai-hidden");
+                }
+            }
+            lastScrollTop = st <= 0 ? 0 : st;
+            
+            isScrolling = false; // Qulfni ochamiz
+        });
+        isScrolling = true; // Qulfni yopamiz
     }
-    lastScrollTop = st <= 0 ? 0 : st;
-}, false);
+}, { passive: true });
 
 // ===================================================
 // 🎉 BAYRAMONA XARID (CONFETTI YOMG'IRI)
@@ -7840,14 +7816,14 @@ window.animatePrice = (id, end) => {
     }
     window.requestAnimationFrame(step);
 };
-// 👁️ ELEMENTLARNI KUZATUVCHI MOTOR
-const revealObserver = new IntersectionObserver((entries) => {
+const revealObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             entry.target.classList.add('active');
+            observer.unobserve(entry.target); // Diqqat: Animatsiya bir marta ishlagach, yukni kamaytirish uchun uni kuzatishni to'xtatamiz!
         }
     });
-}, { threshold: 0.1 }); // 10% ko'rinishi bilan ishga tushadi
+}, { threshold: 0.1 });
 
 function initReveal() {
     // Barcha kartochkalarni kuzatuvga olamiz
