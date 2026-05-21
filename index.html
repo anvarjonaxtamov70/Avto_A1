@@ -2353,81 +2353,6 @@
             -webkit-backdrop-filter: blur(15px) saturate(250%) !important;
             border-bottom: 0.5px solid rgba(255, 255, 255, 0.1) !important;
         }
-        /* ================================================= */
-/* ✨ SKELETON LOADING (ARVOH EKRAN) EFFECT */
-/* ================================================= */
-
-/* Haqiqiy tovarlar gridiga o'xshash arvoh grid */
-#skeleton-container {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-    padding: 15px;
-    margin-top: -10px; /* Asosiy grid tagidan silliq ulanishi uchun */
-    display: none; /* Dastlab yopiq turadi */
-}
-
-/* Tovar kartochkasi arvohi */
-.skeleton-card {
-    background: #202022; /* Tovar foniga o'xshash rang */
-    border-radius: 12px;
-    height: 220px; /* Tovar kartochkasining balandligi */
-    display: flex;
-    flex-direction: column;
-    padding: 10px;
-    position: relative;
-    overflow: hidden;
-}
-
-/* Arvoh rasm (oq kvadrat o'rniga) */
-.skeleton-img {
-    background: #2a2a2d;
-    width: 100%;
-    height: 120px; /* Tovar rasmining balandligi */
-    border-radius: 8px;
-}
-
-/* Arvoh matnlar (Sarlavha, narx) */
-.skeleton-text {
-    background: #2a2a2d;
-    height: 16px;
-    border-radius: 4px;
-    margin-top: 10px;
-    width: 80%; /* Sarlavha kengligi */
-}
-
-.skeleton-text.short {
-    width: 50%; /* Narx kengligi */
-    margin-top: 6px;
-}
-
-/* Arvoh tugma (Savatga qo'shish) */
-.skeleton-btn {
-    background: #2a2a2d;
-    height: 35px;
-    border-radius: 20px;
-    margin-top: auto; /* Eng pastga suradi */
-}
-
-/* ✨ To'lqinsimon miltillash animatsiyasi */
-.skeleton-card::after {
-    content: "";
-    position: absolute;
-    top: 0; right: 0; bottom: 0; left: 0;
-    transform: translateX(-100%);
-    background-image: linear-gradient(
-        90deg,
-        rgba(255, 255, 255, 0) 0,
-        rgba(255, 255, 255, 0.05) 20%,
-        rgba(255, 255, 255, 0.1) 60%,
-        rgba(255, 255, 255, 0)
-    );
-    animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-    100% { transform: translateX(100%); }
-}
     </style>
 </head>
 <body ontouchstart="">
@@ -2528,23 +2453,13 @@
     </div>
     <div id="loading-text">Yuklanmoqda...</div>
     
-<div id="main-menu">
-    <div class="section-title">Ommabop tovarlar</div>
-    
-    <div id="home-products" class="items-grid">
-        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
-        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
-        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
-        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
-    </div>
-
-    <div id="scroll-skeleton" class="items-grid hidden">
-        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
-        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
-        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
-        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
-    </div>
-</div>
+    <div id="content-area" class="hidden">
+        <div id="main-menu"><div class="section-title">Ommabop tovarlar</div><div id="home-products" class="items-grid">
+    <div class="skeleton" style="height: 180px;"></div>
+    <div class="skeleton" style="height: 180px;"></div>
+    <div class="skeleton" style="height: 180px;"></div>
+    <div class="skeleton" style="height: 180px;"></div>
+</div></div>
         
 <div id="katalog-menu" class="hidden" style="padding: 0 20px;">
     <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 20px; font-size: 22px;">Mashina markasini tanlang</div>
@@ -4057,59 +3972,19 @@ window.addEditSizeField = () => {
         } 
     }, { passive: true }); // passive: true — skroll zarracha ham qotmasligini ta'minlaydi
 
-   // 🔄 SILLIQ SKROLL VA TOVARLARNI YUKLASH (Skeleton bilan)
-    // =====================================
-    
-    // 1. Ketma-ket ishlashni to'sib turuvchi qulf
-    let isProductsLoading = false; 
-
-    // 2. Skrollni kuzatuvchi asosiy funksiya
-    window.addEventListener('scroll', () => { 
-        // Ekranning pastiga 300px qolganda skrollni sezamiz
-        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) { 
-            // Agar hamma tovarlar yuklanib bo'lmagan bo'lsa va hozir yuklanish jarayoni ketmayotgan bo'lsa:
-            if (limitCount < displayDB.length && !isProductsLoading) { 
-                let oldLimit = limitCount;
-                limitCount += 12; // Yana 12 ta tovar qo'shamiz
-                
-                // Telefon qotib qolmasligi uchun protsessorni bo'shatib, requestAnimationFrame ishlatamiz
-                window.requestAnimationFrame(() => {
-                    loadMoreProducts(oldLimit); 
-                });
-            } 
-        } 
-    }, { passive: true }); // passive: true - skroll paytida barmoq qotib qolishini oldini oladi
-
-
-    // 3. Yangi tovarlarni va Arvoh (Skeleton) ni chizuvchi motor
+   
+// ➕ Faqatgina yangi kelgan tovarlarni pastga yopishtiruvchi motor
     function loadMoreProducts(startIndex) {
-        if (isProductsLoading) return; // Qulf yopiq bo'lsa, ishlamay turadi
-
         let hc = document.getElementById('home-products'); 
-        let skeleton = document.getElementById('scroll-skeleton'); // HTML ga qo'shilgan Arvoh idish
-        
-        if(hc && skeleton) { 
+        if(hc) { 
+            // Eski tovarlarni buzmaymiz, faqat yangi qismini (slice) qirqib olamiz
             let newItems = displayDB.slice(startIndex, limitCount); 
-            
             if(newItems.length > 0) {
-                isProductsLoading = true; // Boshqa skrollar xalaqit bermasligi uchun qulfni yopamiz
+                // innerHTML emas, insertAdjacentHTML orqali oxiriga ulab qo'yamiz!
+                hc.insertAdjacentHTML('beforeend', newItems.map(x => cardHTML(x)).join(''));
                 
-                // ⏳ Haqiqiy tovarlar kelguncha, Arvoh ekranlarni ekranga chiqaramiz
-                skeleton.classList.remove('hidden');
-                
-                // 🛡️ Telefonning videokartasi nafas olishi uchun 0.5 soniya pauza beramiz
-                setTimeout(() => {
-                    // Arvohlarni yashiramiz
-                    skeleton.classList.add('hidden');
-                    
-                    // Asosiy ekranga haqiqiy tovarlarni ulab qo'yamiz (eskilarini buzmasdan)
-                    hc.insertAdjacentHTML('beforeend', newItems.map(x => cardHTML(x)).join(''));
-                    
-                    // Suzib chiqish (Kaskad) animatsiyasini ishga tushiramiz
-                    setTimeout(initReveal, 100);
-                    
-                    isProductsLoading = false; // Yuklab bo'ldik, qulfni ochamiz
-                }, 500); // 500 millisekund (yarim soniya) aylanib turadi
+                // 🔥 MANA SHU QATOR QO'SHILDI: Pastga skroll qilinganda yangi kelganlarni ham animatsiyaga ulaymiz
+                setTimeout(initReveal, 100);
             }
         }
     }
