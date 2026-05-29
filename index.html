@@ -2002,18 +2002,21 @@
     filter: brightness(0.9);
     transition: 0.1s;
 }
-        /* 🌊 ELEMENTLARNING SUZIB CHIQISHI */
 .reveal-item {
     opacity: 0;
-    transform: translateY(30px) scale(0.95);
-    transition: all 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
-    filter: blur(5px);
+    transform: translateY(16px);
+    /* transition: all emas, faqat kerakli xususiyatlar */
+    /* blur yo'q — u telefonda juda og'ir */
+    /* 0.4s — ko'zga silliq, lekin "qotib" ko'rinmaydi */
+    transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 .reveal-item.active {
     opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
+    transform: translateY(0);
+    /* active bo'lgandan keyin transition ni o'chiramiz */
+    /* shunda tepaga qaytganda qayta animatsiya bo'lmaydi */
+    transition: none;
 }
         /* Oyna ochiq turganda butun ekranni xira qilish qoidasi */
 .blur-bg {
@@ -7824,24 +7827,21 @@ const revealObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             entry.target.classList.add('active');
-            // Element ko'ringandan keyin kuzatuvdan olib tashlaymiz
-            // Bu xotirani bo'shatadi va observer yengilroq ishlaydi
+            // Eng muhim qator — bir marta ko'ringach, kuzatuvdan chiqamiz
+            // Endi tepaga qaytganda bu element hech qachon qayta animatsiyalanmaydi
             observer.unobserve(entry.target);
         }
     });
 }, { 
-    threshold: 0.05,  // 0.1 dan 0.05 ga — element biroz ko'ringanoq animatsiya boshlanadi
-    rootMargin: '0px 0px -20px 0px'  // Pastdan 20px oldin "ko'rindi" deb hisoblanadi
+    threshold: 0.05,
+    rootMargin: '0px 0px -10px 0px'
 });
 
 function initReveal() {
     document.querySelectorAll('.luxury-card, .section-title, .neon-brand-card').forEach(el => {
-        
-        // Agar bu element allaqachon animatsiyalangan bo'lsa
-        // uni qayta kuzatuvga qo'shmaymiz — xotirani tejaydi
+        // Agar allaqachon ko'ringan bo'lsa — o'tkazib yuboramiz
+        // Bu tepaga qaytganda rasmlar o'chib-yonishini to'xtatadi
         if (el.classList.contains('active')) return;
-        
-        // Agar allaqachon kuzatuvda bo'lsa ham o'tkazib yuboramiz
         if (el.classList.contains('reveal-item')) return;
         
         el.classList.add('reveal-item');
