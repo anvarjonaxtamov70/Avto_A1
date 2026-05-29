@@ -6,11 +6,11 @@
     <title>Avto A1 Shop</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=optional" rel="stylesheet">
+    <!-- ⚡ OPTIMIZATSIYA: Lottie olib tashlandi (ishlatilmasdi).
+         Cropper.js (rasm kesish) faqat admin kerak bo'lganda yuklanadi (lazy-load, pastda ensureCropper()). -->
+    <!-- ⚡ Shrift og'irliklari 5 tadan 3 taga tushirildi (400/600/800) — tezroq yuklanadi -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --btn-gradient: linear-gradient(
@@ -1208,10 +1208,6 @@
             background: rgba(255, 255, 255, 0.15);
             border-radius: 10px;
             z-index: 2001;
-        }
-        dotlottie-player {
-            filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.2));
-            margin-bottom: 10px;
         }
         /* 🛒 100% ISHLAYDIGAN SAVAT ANIMATSIYASI */
         @keyframes floatCart {
@@ -2491,6 +2487,61 @@
         .pm-img-header img {
             opacity: 1 !important;
         }
+
+        /* ============================================================ */
+        /* ⚡ TELEFON QIZISHINI KAMAYTIRISH — ORTIQCHA backdrop-filter   */
+        /* blur() effekti telefon videokartasini (GPU) qizdiradi.       */
+        /* Faqat eng kerakli panellarda qoldiramiz, qolganidan olamiz   */
+        /* (tashqi ko'rinish deyarli o'zgarmaydi, lekin telefon sovuydi).*/
+        /* ============================================================ */
+
+        /* 1. To'liq ekranli SKROLL oynalaridan blur olib tashlanadi
+              (blur + skroll = eng katta qizish sababi) */
+        #cartModal, #paymentModal, .modal-standard,
+        .ai-luxury-modal, .ai-chat-modal {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+
+        /* 2. Mayda elementlardan blur olib tashlanadi (ularda baribir ko'rinmaydi,
+              lekin har biri alohida GPU qatlami yaratib telefonni qizdiradi) */
+        .badge, .pm-close-btn, .pm-edit-icon, .floating-btn, .btn-wishlist {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+
+        /* 3. To'liq ekranli overlay'lar — og'ir blur o'rniga oddiy to'q fon */
+        .login-overlay, .order-loading-overlay {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            background: rgba(5, 5, 6, 0.92) !important;
+        }
+
+        /* 4. Qoladigan asosiy panellar — blur 10px -> 6px (3x yengilroq) */
+        .bottom-nav, .header, .pm-sticky-bar, .modal-header,
+        .toast, .search-box, .sticky-bar, .ai-input-container {
+            backdrop-filter: blur(6px) saturate(140%) !important;
+            -webkit-backdrop-filter: blur(6px) saturate(140%) !important;
+        }
+
+        /* ============================================================ */
+        /* ⚡ DOIMIY ANIMATSIYALARNI BOSHQARISH (CPU/batareya tejash)    */
+        /* ============================================================ */
+
+        /* Sahifa ko'rinmaganda (boshqa ilova/ekran o'chgan) HAMMA animatsiya to'xtaydi */
+        body.anim-paused *,
+        body.anim-paused *::before,
+        body.anim-paused *::after {
+            animation-play-state: paused !important;
+        }
+
+        /* Tovar kartochkalaridagi doimiy "nur yugurishi" (shine-wave) olib tashlandi.
+           Ekranda 10-20 ta karta bo'lsa, 10-20 ta animatsiya TINIMSIZ ishlab
+           telefonni qizdirardi. Katta tugmalarda (checkout/sticky) qoladi — ular 1-2 ta. */
+        .btn-add-cart::after {
+            display: none !important;
+            animation: none !important;
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -3744,26 +3795,35 @@ function showToast(m, t = 'success') {
         if(activeModal === 'adminInventoryModal') renderAdminInventory();
     });
 
-    function syncAllProductsInBackground() {
-        // Telefon qotib yonib ketmasligi uchun .on (doimiy kuzatuv) o'rniga .once ishlatamiz
-        db.ref('products').once('value', (snap) => {
-            if (snap.exists()) {
-                productsDB = snap.val().filter(p => p !== null);
-                
-                // Katalog, kategoriya va qidiruv uchun to'liq ro'yxatni tayyorlab qo'yamiz
-                displayDB = productsDB.filter(p => !p.is_draft);
-
-                // Agar mijoz allaqachon savat yoki omborda bo'lsa, orqa fonda jim yangilaymiz
-                if(activeModal === 'cartModal') renderCartItems();
-                if(activeModal === 'adminInventoryModal') renderAdminInventory();
-            }
-        });
-    }
     function toggleChip(el) { el.classList.toggle('selected'); }
+
+    // ⚡ OPTIMIZATSIYA: Cropper.js faqat kerak bo'lganda (admin rasm kesganda) yuklanadi.
+    // Shu tarzda oddiy mijozlar 110 KB ortiqcha kod yuklamaydi.
+    let _cropperLoading = null;
+    function ensureCropper() {
+        if (window.Cropper) return Promise.resolve();
+        if (_cropperLoading) return _cropperLoading;
+        _cropperLoading = new Promise((resolve, reject) => {
+            const css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css';
+            document.head.appendChild(css);
+            const js = document.createElement('script');
+            js.src = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js';
+            js.onload = () => resolve();
+            js.onerror = () => reject(new Error('Cropper yuklanmadi'));
+            document.head.appendChild(js);
+        });
+        return _cropperLoading;
+    }
 
     function handleFileSelect(e, t) {
         const f = e.target.files[0]; if (!f) return; currentTargetInput = t; const r = new FileReader();
-        r.onload = function(ev) { document.getElementById('cropper-image').src = ev.target.result; document.getElementById('cropModal').style.display = 'flex'; activeModal = 'cropModal'; if(currentCropper) currentCropper.destroy(); currentCropper = new Cropper(document.getElementById('cropper-image'), { aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 0.9 }); };
+        r.onload = function(ev) {
+            ensureCropper().then(() => {
+                document.getElementById('cropper-image').src = ev.target.result; document.getElementById('cropModal').style.display = 'flex'; activeModal = 'cropModal'; if(currentCropper) currentCropper.destroy(); currentCropper = new Cropper(document.getElementById('cropper-image'), { aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 0.9 });
+            }).catch(() => showToast("Rasm tahrirlagich yuklanmadi", "warning"));
+        };
         r.readAsDataURL(f); e.target.value = '';
     }
 
@@ -4092,12 +4152,14 @@ window.addEditSizeField = () => {
     // Foydalanuvchi boshqa ilovaga o'tganda barcha animatsiyalarni to'xtatamiz
 // Telefon ekrani o'chganda ham ishlaydi — batareyani tejaydi
 document.addEventListener('visibilitychange', function() {
+    // ⚡ TUZATILDI: ilgari faqat CSS o'zgaruvchisi o'rnatilardi, lekin u
+    // hech qayerda ishlatilmasdi — ya'ni animatsiyalar to'xtamasdi.
+    // Endi body'ga 'anim-paused' klassi qo'shamiz va u CSS orqali
+    // BARCHA animatsiyalarni haqiqatan to'xtatadi (batareya + CPU tejaladi).
     if (document.hidden) {
-        // Sahifa ko'rinmayapti — animatsiyalarni to'xtatamiz
-        document.body.style.setProperty('--animation-play-state', 'paused');
+        document.body.classList.add('anim-paused');
     } else {
-        // Sahifa qayta ko'rindi — animatsiyalarni davom ettiramiz
-        document.body.style.setProperty('--animation-play-state', 'running');
+        document.body.classList.remove('anim-paused');
     }
 });
     function startCinematicWelcome() {
@@ -4905,7 +4967,10 @@ window.openAdminChat = (uid, orderId) => {
     window.renderAdminChatMessages = () => {
         let box = document.getElementById('admin-chat-messages');
         box.innerHTML = '<p style="text-align:center; color:gray;">Yuklanmoqda...</p>';
-    db.ref('users/' + currentAdminChatUid + '/orders').on('value', snapshot => {
+    // ⚡ XOTIRA OQISHINI TUZATISH: eski listenerni o'chirib, keyin yangisini ulaymiz
+    if (window._adminChatRef) { try { window._adminChatRef.off('value'); } catch(e){} }
+    window._adminChatRef = db.ref('users/' + currentAdminChatUid + '/orders');
+    window._adminChatRef.on('value', snapshot => {
             if(snapshot.exists()) {
                 let orders = snapshot.val();
                 let o = orders.find(x => x.id === currentAdminChatOrderId);
@@ -5189,12 +5254,19 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     
                 // 1. Admin Chatdan -> Buyurtmalarga qaytish
                 if (current === 'adminChatModal') {
+                    // ⚡ Listenerni uzamiz (xotira oqishi bo'lmasligi uchun)
+                    if (window._adminChatRef) { try { window._adminChatRef.off('value'); window._adminChatRef = null; } catch(e){} }
                     activeModal = 'adminOrdersModal';
                     document.getElementById('adminOrdersModal').style.display = 'flex';
                     document.body.style.overflow = 'hidden';
                     updateBtns();
                     window.history.pushState({ modal: 'adminOrdersModal' }, "");
                     return;
+                }
+
+                // 1b. AI Chat yopilganda listenerni uzamiz
+                if (current === 'aiChatModal') {
+                    if (window._aiChatRef) { try { window._aiChatRef.off('value'); window._aiChatRef = null; } catch(e){} }
                 }
     
                 // 2. Tahrirlash oynasidan -> Tovar yoki Qoralamalarga qaytish
@@ -5269,7 +5341,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     function goBack() { window.history.back(); }
     function updateBtns() { let iD = historyStack.length > 1; let bB = document.getElementById('back-btn'); if(bB) bB.style.display = iD ? 'flex' : 'none'; if (iD || activeModal || searchActive) tg.BackButton.show(); else tg.BackButton.hide(); }
     updateBtns();
-    let aS = document.getElementById('main-slider'); if (aS) { setInterval(() => { if (aS.scrollWidth - aS.clientWidth <= aS.scrollLeft + 5) aS.scrollTo({ left: 0, behavior: 'smooth' }); else aS.scrollBy({ left: aS.clientWidth, behavior: 'smooth' }); }, 3500); } 
+    let aS = document.getElementById('main-slider'); if (aS) { setInterval(() => { if (document.hidden || activeModal || searchActive) return; if (aS.scrollWidth - aS.clientWidth <= aS.scrollLeft + 5) aS.scrollTo({ left: 0, behavior: 'smooth' }); else aS.scrollBy({ left: aS.clientWidth, behavior: 'smooth' }); }, 3500); } 
     // ==========================================
     // 8-FUNKSIYA: BUYURTMA IZLASH TIZIMI
     // ==========================================
@@ -6899,101 +6971,6 @@ window.saveNewProduct = function() {
 // 🚀 AQLLI OMMAVIY QO'SHISH (SMART BULK IMPORT)
 // =====================================
 
-window.saveBulkProductsSmart = () => {
-    let text = document.getElementById('bulk-input').value.trim();
-    if (!text) { showToast("Ro'yxat bo'sh!", "warning"); return; }
-    
-    // Admin yozgan kurs va foizni olamiz
-    let usdRate = parseFloat(document.getElementById('bulk-usd-rate').value) || 12600;
-    let markup = (parseFloat(document.getElementById('bulk-markup').value) || 25) / 100; // masalan, 25% = 0.25
-
-    let lines = text.split('\n');
-    let addedCount = 0;
-    let conflictCount = 0; // Nechta dublikat borligini sanaydi
-    let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
-    
-    // Partiya uchun yagona ID
-    let batchId = "Partiya_" + new Date().toLocaleString('uz-UZ').replace(/[,:\s]+/g, '_'); 
-
-    lines.forEach(line => {
-        let cleanLine = line.trim();
-        if (!cleanLine) return;
-
-        // Ro'yxatdan "Nomi - 15.5" ni ajratib olish ($ narxi bilan)
-        let match = cleanLine.match(/^(.*?)(?:[-=:]|\s+)?([\d.,]+)$/);
-        if (match) {
-            let name = match[1].trim().replace(/[-=:]$/, '').trim(); 
-            let rawPriceUSD = parseFloat(match[2].replace(',', '.').replace(/\s/g, ''));
-
-            if (name && !isNaN(rawPriceUSD)) {
-                // 1. Narxni hisoblash (USD -> Ustama -> UZS -> 1000 gacha yaxlitlash)
-                let finalPriceUZS = Math.round(((rawPriceUSD + (rawPriceUSD * markup)) * usdRate) / 1000) * 1000;
-
-                // 2. AQLLI SARALASH (Nomi ichidan mashinani topish)
-                let nLow = name.toLowerCase();
-                let sCats = ["draft"];
-                let brand = "Noma'lum";
-
-                // GAZ, VOLGA, UAZ qidirish
-                if (nLow.includes('газель') || nLow.includes('gazel') || nLow.includes('волга') || nLow.includes('volga') || nLow.includes('змз') || nLow.includes('уаз')) {
-                    brand = "gaz";
-                    if (nLow.includes('мотор') || nLow.includes('поршен') || nLow.includes('клапан') || nLow.includes('компенсатор')) sCats = ["gazel-biznes-motor"];
-                    else if (nLow.includes('хадавой') || nLow.includes('амортизатор') || nLow.includes('колодк') || nLow.includes('подшипник')) sCats = ["gazel-biznes-xadavoy"];
-                    else sCats = ["gazel-biznes-tashqi"];
-                } 
-                // CHEVROLET, DAEWOO qidirish
-                else if (nLow.includes('nexia') || nLow.includes('matiz') || nLow.includes('damas') || nLow.includes('chevrolet') || nLow.includes('ваз') || nLow.includes('vaz')) {
-                    brand = "chevy";
-                    sCats = ["chevy-cobalt-motor"]; // Default papka
-                }
-
-                // 3. DUBLIKAT NAZORATI (Bazadagi eskisini topish)
-                let existingIdx = productsDB.findIndex(p => p.name.toLowerCase() === name.toLowerCase() && !p.is_draft);
-                let isConflict = false;
-
-                if (existingIdx !== -1) {
-                    // Eskisini yashiramiz!
-                    productsDB[existingIdx].is_draft = true;
-                    productsDB[existingIdx].desc = "⚠️ DIQQAT: Yangi narx kelgani uchun bu eskisi yashirildi!";
-                    isConflict = true;
-                    conflictCount++;
-                }
-
-                // Yangisini bazaga tiqamiz
-                productsDB.push({
-                    id: newId++,
-                    name: name,
-                    price: finalPriceUZS,
-                    desc: "Sana: " + new Date().toLocaleDateString() + " | Partiya: " + batchId,
-                    img: "",
-                    images: [],
-                    product_type: "oddiy",
-                    stock: 10,
-                    category: sCats[0], 
-                    categories: sCats,
-                    brand: brand,
-                    is_draft: true, // Har doim avval qoralamaga yashirin tushadi
-                    batch_id: batchId, 
-                    has_conflict: isConflict 
-                });
-                addedCount++;
-            }
-        }
-    });
-
-    if (addedCount > 0) {
-        db.ref('products').set(productsDB).then(() => {
-            showToast(`✅ ${addedCount} ta yuklandi! ${conflictCount > 0 ? '⚠️ ' + conflictCount + ' ta dublikat ushlandi.' : ''}`, conflictCount > 0 ? "warning" : "success");
-            document.getElementById('bulk-input').value = '';
-            closeModal();
-            // Saqlangach, srazi Qoralamalarni ochib beradi
-            setTimeout(() => openAdminDrafts(), 500);
-        });
-    } else {
-        showToast("Xato! Nomi va Narxi ($) bo'lishi shart.", "warning");
-    }
-};
-
 window.currentDraftFilter = 'all';
 
 window.openAdminDrafts = () => {
@@ -7137,7 +7114,10 @@ window.openAiChat = () => {
 
     // 🛑 Xabarlarni bazadan real-vaqtda o'qish (Listener)
     if(window.currentUser) {
-        db.ref('ai_requests/' + window.currentUser).on('value', snap => {
+        // ⚡ XOTIRA OQISHINI TUZATISH: eski listenerni o'chirib, keyin yangisini ulaymiz
+        if (window._aiChatRef) { try { window._aiChatRef.off('value'); } catch(e){} }
+        window._aiChatRef = db.ref('ai_requests/' + window.currentUser);
+        window._aiChatRef.on('value', snap => {
             if(snap.exists()) {
                 let data = snap.val();
                 if(data.messages) {
@@ -7737,6 +7717,9 @@ window.renderCartItems = () => {
     if(footer) footer.style.display = 'block'; 
     
     t = 0; 
+    // ⚡ TEZLIK: har element uchun innerHTML += qilish (butun konteynerni
+    // qayta parse qiladi) o'rniga massivga yig'ib, OXIRIDA bir marta yozamiz.
+    let _rows = [];
     for(let safeId in cart) { 
         let [baseId, carOptRaw] = String(safeId).split('||');
         let p = productsDB.find(x => x.id == baseId); 
@@ -7749,7 +7732,7 @@ window.renderCartItems = () => {
         let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
         let displayName = carOpt && carOpt !== "Universal" ? `${p.name} <br><span style="color:var(--text-muted); font-size:11px;">(Razmer: <b style="color:var(--luxury-gold);">${carOpt}</b>)</span>` : p.name;
         
-        c.innerHTML += `
+        _rows.push(`
             <div class="cart-row">
                 <img src="${p.img}" loading="lazy" decoding="async" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src='https://via.placeholder.com/65?text=A1'">
                 <div class="cart-info">
@@ -7762,8 +7745,9 @@ window.renderCartItems = () => {
                     <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
                     <button onclick="chg('${safeId}',1)">+</button>
                 </div>
-            </div>`; 
+            </div>`); 
     } 
+    c.innerHTML = _rows.join(''); // ⚡ bir marta yozish — DOM bir marta yangilanadi
     
 // t - bu savatdagi jami summa o'zgaruvchisi
 animatePrice('cart-total-sum', t);
