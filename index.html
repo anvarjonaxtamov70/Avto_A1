@@ -2693,12 +2693,10 @@
                 var(--surface-1) 100%) !important;
             box-shadow: var(--shadow-card) !important;
             border: 1px solid rgba(255,255,255,0.06) !important;
-            contain: content;
-            /* ⚡ Pastdan tepaga skroll qotishi tuzatildi:
-               'auto 280px' brauzer kartaning ASL o'lchamini eslab qoladi —
-               qayta render qilmaydi, layout o'zgarmaydi. */
-            content-visibility: auto;
-            contain-intrinsic-size: auto 280px;
+            contain: layout style;
+            /* ⚠️ content-visibility: auto OLIB TASHLANDI — u pastdan tepaga
+               skroll qilganда kartalarni QAYTA render qilib, qotish (jank)
+               keltirib chiqarardi. */
         }
         .luxury-card:active {
             box-shadow: var(--shadow-card-active) !important;
@@ -2774,43 +2772,11 @@
             animation: addedPulse 0.4s var(--ease-bounce);
         }
 
-        /* === ✨ STAGGER FADE: tovarlar 1-2-3 ohista paydo bo'ladi (Apple uslubi) === */
-        /* Faqat opacity ishlatadi — CPU 0%, transform yo'q (skroll buzilmaydi). */
-        @keyframes cardFadeIn {
-            from { opacity: 0; }
-            to   { opacity: 1; }
-        }
-        .items-grid .luxury-card {
-            opacity: 0;
-            animation: cardFadeIn 380ms ease-out forwards;
-        }
-        /* Birinchi 12 ta karta — har biri 50ms kechikish bilan ohista chiqadi */
-        .items-grid .luxury-card:nth-child(1)  { animation-delay: 30ms; }
-        .items-grid .luxury-card:nth-child(2)  { animation-delay: 80ms; }
-        .items-grid .luxury-card:nth-child(3)  { animation-delay: 130ms; }
-        .items-grid .luxury-card:nth-child(4)  { animation-delay: 180ms; }
-        .items-grid .luxury-card:nth-child(5)  { animation-delay: 230ms; }
-        .items-grid .luxury-card:nth-child(6)  { animation-delay: 280ms; }
-        .items-grid .luxury-card:nth-child(7)  { animation-delay: 330ms; }
-        .items-grid .luxury-card:nth-child(8)  { animation-delay: 380ms; }
-        .items-grid .luxury-card:nth-child(9)  { animation-delay: 430ms; }
-        .items-grid .luxury-card:nth-child(10) { animation-delay: 480ms; }
-        .items-grid .luxury-card:nth-child(11) { animation-delay: 530ms; }
-        .items-grid .luxury-card:nth-child(12) { animation-delay: 580ms; }
-        /* 13+ kartalar — pastga skroll qilganda darhol ko'rinadi (kechiktirmasdan) */
-        .items-grid .luxury-card:nth-child(n+13) {
-            animation-delay: 0ms;
-            animation-duration: 200ms;
-        }
-        /* 🛡️ XAVFSIZLIK KAFOLATI: animatsiya har qanday sababdan ishlamasa ham
-           (reduced-motion, eski brauzer, JS yo'q) kartalar HECH QACHON
-           ko'rinmay qolmaydi — opacity majburan 1 ga qaytariladi. */
-        @media (prefers-reduced-motion: reduce) {
-            .items-grid .luxury-card {
-                opacity: 1 !important;
-                animation: none !important;
-            }
-        }
+        /* ℹ️ Eslatma: tovar kartalari uchun alohida "stagger" animatsiya OLIB
+           TASHLANDI. Mavjud (eski, yaxshi ishlagan) .reveal-item tizimi kartalarni
+           ekranга kirganda ohista ko'rsatadi — ikki tizim to'qnashmasligi uchun
+           bittasini qoldirdik. Batch (12talik) yuklanishida shesternya + reveal
+           birgalikda chiroyli ko'rinish beradi. */
 
         /* === ⚙️ TILLA SHESTERNYA LOADER (12 tovar yuklanguncha aylanadi) === */
         /* Mavjud #loading-text elementining ustiga premium gear loader qo'yamiz.
@@ -2869,6 +2835,44 @@
         /* Bitta chiroyli markaziy ⚙️ loader bo'ladi, e'tibor bo'linmaydi */
         .items-grid .skeleton {
             display: none !important;
+        }
+
+        /* === ⚙️ PASTKI "LOAD MORE" SHESTERNYASI (skroll qilganda 12 ta yuklanadi) === */
+        /* Tovar ro'yxati ostida, kichik markazда aylanadigan shesternya.
+           Faqat keyingi 12 ta yuklanayotganда ko'rinadi, yuklangach yo'qoladi. */
+        .scroll-loader {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 28px 0 10px;
+            grid-column: 1 / -1;            /* grid ichida butun enni egallaydi */
+        }
+        .scroll-loader.hidden {
+            display: none !important;
+        }
+        .scroll-loader::before {
+            content: "";
+            display: block;
+            width: 38px;
+            height: 38px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23C9A84C"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            filter: drop-shadow(0 3px 10px rgba(212, 175, 55, 0.4));
+            animation: gearSpin 1.4s linear infinite;
+        }
+        .scroll-loader::after {
+            content: "Yuklanmoqda...";
+            margin-top: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--luxury-gold, #C9A84C);
+            opacity: 0.75;
+            animation: gearTextPulse 1.6s ease-in-out infinite;
         }
 
         /* Press effektlari (mikro-animatsiya) bir xil professional */
@@ -3037,7 +3041,7 @@
     <div class="skeleton" style="height: 180px;"></div>
     <div class="skeleton" style="height: 180px;"></div>
     <div class="skeleton" style="height: 180px;"></div>
-</div></div>
+</div><div id="scroll-loader" class="scroll-loader hidden"></div></div>
         
 <div id="katalog-menu" class="hidden" style="padding: 0 20px;">
     <div class="section-title" style="margin-top: 0; padding: 0; margin-bottom: 20px; font-size: 22px;">Mashina markasini tanlang</div>
@@ -4163,22 +4167,31 @@ function showToast(m, t = 'success') {
     // ===================================================
     window.isDataLoaded = false;
 
-    // 1. Dastur ochilganda faqat eng oxirgi (yangi) 30 ta tovarni chaqirib, ekranni yashindek tez ochamiz
-    db.ref('products').orderByKey().limitToLast(30).once('value', (snap) => {
+    // 1. Dastur ochilganda BARCHA tovarlarni bir marta yuklaymiz.
+    //    ⚠️ Avval faqat limitToLast(30) yuklanardi — bu XAVFLI edi: kod 13 ta joyda
+    //    db.ref('products').set(productsDB) qiladi, ya'ni butun bazani xotiradagi
+    //    ro'yxat bilan qayta yozadi. Agar 30 tadan ko'p tovar bo'lsa, qolgani
+    //    O'CHIB ketardi. Endi hammasi yuklanadi -> .set() xavfsiz.
+    //    Ekran tez ochilishi uchun ma'lumot kelgach FAQAT 12 ta chiziladi
+    //    (renderProducts), qolgani skrollда 12 talab qo'shiladi.
+    db.ref('products').once('value', (snap) => {
         document.getElementById('loading-text').style.display = 'none';
         document.getElementById('content-area').classList.remove('hidden');
 
         if (snap.exists()) {
-            let initialData = [];
-            snap.forEach(child => { if(child.val()) initialData.push(child.val()); });
-            // Yangi tovarlar tepada turishi uchun teskari o'giramiz
-            productsDB = initialData.reverse();
+            let allData = [];
+            snap.forEach(child => { if(child.val()) allData.push(child.val()); });
+            // ⚠️ productsDB — BAZADAGI tartibda (teskari QILMAYMIZ!).
+            //    Aks holda .set(productsDB) tartibni har safar teskari yozib,
+            //    keyingi ochilishда buzilardi (oscillation). Faqat displayDB teskari.
+            productsDB = allData;
         } else {
             productsDB = initialProducts;
             db.ref('products').set(productsDB);
         }
 
-        displayDB = productsDB.filter(p => !p.is_draft);
+        // Ekranda yangi tovarlar TEPADA turishi uchun faqat displayDB teskari qilinadi
+        displayDB = productsDB.filter(p => !p.is_draft).slice().reverse();
         renderProducts();
         updateCartBadge();
         if(activeModal === 'adminInventoryModal') renderAdminInventory();
@@ -4578,18 +4591,36 @@ document.addEventListener('visibilitychange', function() {
     // 🔄 SILLIQ SKROLL VA TOVARLARNI YUKLASH (Muzlamaydigan versiya)
     // =====================================
     let limitCount = 12; 
+    let _isLoadingMore = false;   // bir vaqtda faqat BITTA batch yuklanadi (takror oldini oladi)
 
-// 🚀 SILLIQ (HARDWARE-ACCELERATED) SKROLL
+// 🚀 SILLIQ SKROLL + ⚙️ PASTKI SHESTERNYA bilan 12talab yuklash
     window.addEventListener('scroll', () => { 
-        // Skroll oxiriga yetishini kutmasdan (300px qolganda) yuklashni boshlaymiz, shunda mijoz qotishni sezmaydi
+        if (_isLoadingMore) return;
+        // Faqat asosiy sahifada ishlaydi (oyna ochiq yoki qidiruvда emas)
+        if (activeModal || searchActive) return;
+        let mm = document.getElementById('main-menu');
+        if (!mm || mm.classList.contains('hidden')) return;
+
+        // Skroll oxiriga 300px qolganda boshlaymiz
         if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) { 
             if (limitCount < displayDB.length) { 
+                _isLoadingMore = true;
                 let oldLimit = limitCount;
                 limitCount += 12; 
-                // Videokarta bo'shagan paytda chizishni buyuramiz (iPhone tezligi)
-                window.requestAnimationFrame(() => {
-                    loadMoreProducts(oldLimit); 
-                });
+
+                // ⚙️ Pastki shesternyani ko'rsatamiz
+                let loader = document.getElementById('scroll-loader');
+                if (loader) loader.classList.remove('hidden');
+
+                // 0.5s+ kutamiz — shesternya aniq ko'rinsin (premium hissi),
+                // keyin 12 ta tovar chiziladi va shesternya yo'qoladi
+                setTimeout(() => {
+                    window.requestAnimationFrame(() => {
+                        loadMoreProducts(oldLimit); 
+                        if (loader) loader.classList.add('hidden');
+                        _isLoadingMore = false;
+                    });
+                }, 550); 
             } 
         } 
     }, { passive: true }); // passive: true — skroll zarracha ham qotmasligini ta'minlaydi
@@ -7288,7 +7319,7 @@ window.saveEditProduct = function(keepDraft = false) {
         
         db.ref('products').set(productsDB).then(() => {
             showToast(keepDraft ? "⏳ Qoralama saqlandi!" : "✅ Mijozlarga chiqarildi!", "success");
-            displayDB = productsDB.filter(p => !p.is_draft);
+            displayDB = productsDB.filter(p => !p.is_draft).slice().reverse();
             renderProducts();
             if(typeof filterAdminDrafts === 'function') filterAdminDrafts();
             closeEditGoBack();
