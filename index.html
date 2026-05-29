@@ -2359,6 +2359,16 @@
             -webkit-backdrop-filter: blur(8px) saturate(250%) !important;
             border-bottom: 0.5px solid rgba(255, 255, 255, 0.1) !important;
         }
+                /* Foydalanuvchi boshqa tabga o'tganda yoki 
+           telefon ekrani o'chganda barcha animatsiyalar to'xtaydi.
+           Bu batareyani juda ko'p tejaydi */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -3932,9 +3942,19 @@ window.addEditSizeField = () => {
         }
     };
    
-
+    
     window.history.replaceState({ section: 'main-menu' }, "");
-   // 🎬 Cinematic Welcome Screen boshqaruvi
+    // Foydalanuvchi boshqa ilovaga o'tganda barcha animatsiyalarni to'xtatamiz
+// Telefon ekrani o'chganda ham ishlaydi — batareyani tejaydi
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        // Sahifa ko'rinmayapti — animatsiyalarni to'xtatamiz
+        document.body.style.setProperty('--animation-play-state', 'paused');
+    } else {
+        // Sahifa qayta ko'rindi — animatsiyalarni davom ettiramiz
+        document.body.style.setProperty('--animation-play-state', 'running');
+    }
+});
     function startCinematicWelcome() {
         const screen = document.getElementById('welcome-screen');
         
