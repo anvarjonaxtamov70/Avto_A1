@@ -2,7 +2,7 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Avto A1 Shop</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -10,7 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=optional" rel="stylesheet">
     <style>
         :root {
             --primary-blue: #007aff;
@@ -2369,6 +2369,36 @@
                 transition-duration: 0.01ms !important;
             }
         }
+                /* Asosiy elementlarni GPU ga "ko'chirамиз" 
+           Bu iOS dagi silliqlikni ta'minlaydi */
+        .luxury-card,
+        .bottom-nav,
+        .modal-standard,
+        #productModal,
+        .btn-add-cart,
+        .pm-sticky-btn,
+        .btn-checkout {
+            /* Bu qator elementni GPU da chizishga majbur qiladi */
+            will-change: transform;
+            /* Bu esa animatsiya paytida elementning orqasini ko'rsatmaydi */
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+        }
+                /* iOS kauchuk scroll effekti — barcha oynalarda */
+        .modal-standard,
+        #productModal,
+        #ai-chat-box,
+        .pm-info-section,
+        .chat-messages,
+        .stories-container {
+            /* iOS ning "kauchuk" scroll effekti */
+            -webkit-overflow-scrolling: touch;
+            /* Scroll chegaradan oshmasin */
+            overscroll-behavior: contain;
+            /* Scroll silliq bo'lsin */
+            scroll-behavior: smooth;
+        }
+        
     </style>
 </head>
 <body ontouchstart="">
@@ -3319,6 +3349,17 @@
 window.currentUser = null;
     let tg = window.Telegram.WebApp;
     tg.expand();
+    // iOS dagi 300ms kechikishni o'chiramiz
+// Endi tugmalar darhol javob beradi
+document.addEventListener('touchstart', function() {}, {passive: true});
+
+// iOS da scroll qilganda sahifa "sakrab" ketishini to'xtatamiz
+document.addEventListener('touchmove', function(e) {
+    // Modal ochiq bo'lsa, orqa fonni mutlaqo muzlatamiz
+    if (document.body.style.overflow === 'hidden') {
+        e.preventDefault();
+    }
+}, {passive: false});
     // ==========================================
     // 🍏 IOS NATIVE (HAQIQIY ILOVA) SOZLAMALARI
     // ==========================================
