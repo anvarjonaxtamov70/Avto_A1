@@ -6237,6 +6237,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     activeModal = 'adminOrdersModal';
                     document.getElementById('adminOrdersModal').style.display = 'flex';
                     document.body.style.overflow = 'hidden';
+                    window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
                     updateBtns();
                     window.history.pushState({ modal: 'adminOrdersModal' }, "");
                     return;
@@ -6258,6 +6259,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                         document.getElementById('productModal').style.display = 'flex';
                     }
                     document.body.style.overflow = 'hidden';
+                    window._modalStack = []; // 🧭 stack toza
                     updateBtns();
                     return;
                 }
@@ -6267,6 +6269,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     activeModal = 'adminModal';
                     document.getElementById('adminModal').style.display = 'flex';
                     document.body.style.overflow = 'hidden';
+                    window._modalStack = []; // 🧭 stack toza
                     updateBtns();
                     window.history.pushState({ modal: 'adminModal' }, ""); // Tarixni tiklaymiz    
                     return;
@@ -6277,6 +6280,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     activeModal = 'adminModal';
                     document.getElementById('adminModal').style.display = 'flex';
                     document.body.style.overflow = 'hidden';
+                    window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
                     updateBtns();
                     return;
                 }
@@ -7804,14 +7808,9 @@ window.openEditModal = function(e, directId = null) {
 
 
 window.closeEditGoBack = () => {
-    // 🧭 Soddalashtirildi: popstate handler editModal case'i hammasini hal qiladi
-    //    (drafts'dan kelgan bo'lsa adminDraftsModal'ga, aks holda productModal'ga).
-    //    Drafts holatida productModal'ni ham history'dan tushiramiz (go(-2)).
-    if (window.currentDraftFolder) {
-        window.history.go(-2); // editModal + productModal entry'lari
-    } else {
-        window.history.back();
-    }
+    // 🧭 Soddalashtirildi: oddiy history.back() — popstate handler editModal case'i hammasini hal qiladi
+    //    (drafts'dan kelgan bo'lsa adminDraftsModal'ga, aks holda productModal'ga qaytadi).
+    window.history.back();
 };
     
 // =====================================
@@ -8063,11 +8062,15 @@ window.filterAdminDrafts = (filterBrand = null) => {
 window.editDraft = (id) => {
     document.getElementById('adminDraftsModal').style.display = 'none';
     window.currentDraftFolder = true; // 🧭 closeEditGoBack qaytishi uchun bayroq
-    openProduct(id);
-    setTimeout(() => {
-        let editBtn = document.getElementById('pm-edit-btn');
-        if (editBtn) editBtn.click();
-    }, 100);
+    // To'g'ridan-to'g'ri editModal'ni ochamiz (productModal'ni o'tkazib yuboramiz)
+    // — bu navigatsiyani sodda qiladi va history'da ortiqcha entry qoldirmaydi.
+    if (typeof openEditModal === 'function') {
+        openEditModal(null, id);
+    } else {
+        // Zaxira: eski yo'l (productModal orqali)
+        openProduct(id);
+        setTimeout(() => { let editBtn = document.getElementById('pm-edit-btn'); if (editBtn) editBtn.click(); }, 100);
+    }
 };
 
 // 🗑️ Qoralamani o'chirish va Eskisini tiklash
