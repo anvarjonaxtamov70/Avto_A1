@@ -1438,6 +1438,74 @@
             filter: drop-shadow(0 0 8px var(--luxury-gold));
         }
 
+        /* === MODERNIZATSIYA: maydon ichidagi mic/scan tugmalari === */
+        .field-mic-btn, .field-scan-btn {
+            position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
+            background: rgba(212,175,55,0.12); border: 1px solid rgba(212,175,55,0.35);
+            color: var(--luxury-gold); width: 34px; height: 34px; border-radius: 10px;
+            font-size: 16px; cursor: pointer; z-index: 3; display: flex;
+            align-items: center; justify-content: center; transition: 0.2s; padding: 0;
+        }
+        .field-mic-btn:active, .field-scan-btn:active { transform: translateY(-50%) scale(0.9); background: rgba(212,175,55,0.25); }
+
+        /* === MODERNIZATSIYA: jonli ko'rinish kartochkasi === */
+        .live-preview-box .lp-card {
+            display: flex; align-items: center; gap: 12px;
+            background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(0,0,0,0.25));
+            border: 1px solid rgba(212,175,55,0.25); border-radius: 16px; padding: 12px;
+        }
+        .live-preview-box .lp-card img {
+            width: 64px; height: 64px; object-fit: contain; border-radius: 12px;
+            background: #fff; padding: 4px; flex-shrink: 0;
+        }
+        .live-preview-box .lp-empty {
+            text-align: center; color: var(--text-muted); font-size: 12px;
+            border: 1px dashed var(--glass-border); border-radius: 16px; padding: 18px;
+        }
+
+        /* === MODERNIZATSIYA: ombor filtr chiplari === */
+        .inv-fchip.selected { background: rgba(212,175,55,0.2); border-color: var(--luxury-gold); color: var(--luxury-gold); }
+
+        /* === MODERNIZATSIYA: rasm boshqaruv tugmalari === */
+        .img-thumb-wrap { position: relative; display: inline-block; }
+        .img-thumb-wrap .img-ctrl {
+            position: absolute; background: rgba(0,0,0,0.7); color: #fff; border: none;
+            border-radius: 8px; width: 26px; height: 26px; font-size: 13px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; padding: 0; backdrop-filter: blur(4px);
+        }
+        .img-thumb-wrap .img-del { top: -8px; right: -8px; background: #ff453a; }
+        .img-thumb-wrap .img-main-badge {
+            position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
+            background: var(--luxury-gold); color: #000; font-size: 9px; font-weight: 800;
+            padding: 2px 8px; border-radius: 8px; white-space: nowrap;
+        }
+        .img-thumb-wrap .img-move-row {
+            position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 4px;
+        }
+
+        /* === MODERNIZATSIYA: shtrix-kod skaner oynasi === */
+        #scanner-overlay {
+            position: fixed; inset: 0; z-index: 99999; background: #000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #scanner-overlay video { width: 100%; max-height: 70vh; object-fit: cover; }
+        #scanner-overlay .scan-frame {
+            position: absolute; width: 70%; max-width: 320px; aspect-ratio: 1.4/1;
+            border: 3px solid var(--luxury-gold); border-radius: 18px; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5);
+        }
+        #scanner-overlay .scan-hint { position: absolute; bottom: 120px; color: #fff; font-weight: 700; font-size: 14px; }
+        #scanner-overlay .scan-close {
+            position: absolute; top: 20px; right: 20px; width: 44px; height: 44px;
+            border-radius: 50%; background: rgba(255,255,255,0.15); color: #fff; border: none;
+            font-size: 24px; cursor: pointer; z-index: 2;
+        }
+
+        /* === MODERNIZATSIYA: rasm yuklash progress bari === */
+        .up-prog { width: 80px; height: 80px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; }
+        .up-prog .up-pct { font-size: 12px; font-weight: 800; color: var(--luxury-gold); z-index: 2; }
+        .up-prog .up-bar { position: absolute; bottom: 0; left: 0; width: 0%; height: 4px; background: var(--luxury-gold); transition: width 0.2s; }
+
         /* Tilla hoshiyali rasm yuklash joyi */
         .upload-dropzone {
             border: 2px dashed rgba(212, 175, 55, 0.4);
@@ -3615,6 +3683,7 @@
     </div>
     <div class="pm-info-section">
         <h2 id="pm-title" class="pm-title"></h2>
+        <div id="pm-code" style="display:none; font-size:12px; color:var(--text-muted); font-weight:700; margin-bottom:10px;"></div>
         <div id="pm-unit-badge" style="display: inline-block; background: rgba(212, 175, 55, 0.15); color: var(--luxury-gold); padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; margin-bottom: 15px; border: 1px solid rgba(212, 175, 55, 0.3);"></div>
         <div id="pm-stock" class="pm-stock-info"></div>
         <div id="pm-desc" class="pm-desc"></div>
@@ -3844,17 +3913,28 @@
     <input type="hidden" id="edit-id">
 
     <div style="padding: 20px;">
+        <div style="margin-bottom:18px;">
+            <div style="font-size:11px; font-weight:800; color:#0a84ff; letter-spacing:1.5px; margin-bottom:10px;">👁 MIJOZGA QANDAY KO'RINADI</div>
+            <div id="edit-live-preview" class="live-preview-box"></div>
+        </div>
         <div class="admin-form-group">
             <div style="font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 18px; letter-spacing: 1.5px;">📝 ASOSIY MA'LUMOTLAR</div>
             
             <div class="admin-input-wrap">
                 <i>🏷️</i>
-                <input type="text" id="edit-name" class="admin-input" placeholder="Tovar nomi (mas: Kalotka)">
+                <input type="text" id="edit-name" class="admin-input" placeholder="Tovar nomi (mas: Kalotka)" oninput="updateLivePreview('edit')" style="padding-right:50px;">
+                <button type="button" class="field-mic-btn" onclick="startVoice('edit-name')" title="Ovozdan yozish">🎤</button>
             </div>
             
             <div class="admin-input-wrap">
                 <i>💰</i>
-                <input type="number" id="edit-price" class="admin-input" placeholder="Narxi (so'mda, mas: 150000)">
+                <input type="text" inputmode="numeric" id="edit-price" class="admin-input" placeholder="Narxi (so'mda, mas: 150 000)" oninput="formatPriceInput(this)">
+            </div>
+
+            <div class="admin-input-wrap">
+                <i>🔖</i>
+                <input type="text" id="edit-code" class="admin-input" placeholder="Artikul / OEM kod (ixtiyoriy)" oninput="updateLivePreview('edit')" style="padding-right:50px;">
+                <button type="button" class="field-scan-btn" onclick="scanBarcode('edit')" title="Shtrix-kod skaner">📷</button>
             </div>
 
             <div style="display: flex; gap: 12px; margin-bottom: 15px;">
@@ -3943,6 +4023,8 @@
                 <span style="font-size: 22px;">🤖</span> Chiroyli ta'rif yozdirish
             </button>
 
+            <button type="button" onclick="startVoice('edit-desc')" style="width:100%; padding:12px; border-radius:14px; background:rgba(48,209,88,0.1); border:1px solid rgba(48,209,88,0.3); color:#30d158; font-weight:800; cursor:pointer; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:8px;">🎤 Ovoz bilan ayting</button>
+
             <textarea id="edit-desc" class="admin-input" style="height: 100px; resize: none; padding: 15px; border-color: rgba(0, 122, 255, 0.3); background: rgba(0,0,0,0.5); font-size: 13px;" placeholder="AI yozgan matn shu yerda paydo bo'ladi (yoki o'zingiz yozing)..."></textarea>
         </div>
 
@@ -3975,6 +4057,9 @@
                 ✅ Yangilash
             </button>
         </div>
+        <button onclick="cloneProductFromEdit()" style="width: 100%; background: rgba(10,132,255,0.08); color: #0a84ff; border: 1px dashed rgba(10,132,255,0.4); padding: 16px; border-radius: 16px; font-weight: 700; font-size: 14px; cursor: pointer; transition: 0.2s;">
+            📋 Nusxa olib yangi qo'shish
+        </button>
         <button onclick="deleteProduct()" style="width: 100%; background: rgba(255, 69, 58, 0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.4); padding: 16px; border-radius: 16px; font-weight: 700; font-size: 14px; cursor: pointer; transition: 0.2s;">
             🗑 Tovarni o'chirish
         </button>
@@ -4003,7 +4088,7 @@
             <h3>Mijozlar</h3>
             <p>Foydalanuvchilar bazasi</p>
         </div>
-<div class="admin-card gold-dashed" onclick="openModal('addProductModal')" style="aspect-ratio: 1/1; justify-content: center; padding: 10px;">
+<div class="admin-card gold-dashed" onclick="openAddProduct()" style="aspect-ratio: 1/1; justify-content: center; padding: 10px;">
             <div class="a-icon" style="font-size: 32px; color: #a855f7; margin-bottom: 5px;">+</div>
             <h3 style="color: var(--luxury-gold);">YANGI TOVAR</h3>
             <p style="font-size: 10px;">Alohida oynada</p>
@@ -4025,21 +4110,32 @@
    <div class="modal-standard" id="addProductModal" style="z-index: 3000; display: none; padding: 0;">
     <div class="modal-header" style="padding: 20px 20px 15px; position: sticky; top: 0; background: rgba(10, 10, 12, 0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 0;">
         <h2 style="color: var(--luxury-gold); margin: 0; font-size: 22px;">➕ Yangi Tovar</h2>
-        <button class="close-btn" onclick="closeModal()">×</button>
+        <button class="close-btn" onclick="tryCloseAddProduct()">×</button>
     </div>
 
     <div style="padding: 20px;">
+        <div style="margin-bottom:18px;">
+            <div style="font-size:11px; font-weight:800; color:#0a84ff; letter-spacing:1.5px; margin-bottom:10px;">👁 MIJOZGA QANDAY KO'RINADI</div>
+            <div id="add-live-preview" class="live-preview-box"></div>
+        </div>
         <div class="admin-form-group">
             <div style="font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 18px; letter-spacing: 1.5px;">📝 ASOSIY MA'LUMOTLAR</div>
             
             <div class="admin-input-wrap">
                 <i>🏷️</i>
-                <input type="text" id="add-name" class="admin-input" placeholder="Tovar nomi (mas: Kalotka)">
+                <input type="text" id="add-name" class="admin-input" placeholder="Tovar nomi (mas: Kalotka)" oninput="updateLivePreview('add')" style="padding-right:50px;">
+                <button type="button" class="field-mic-btn" onclick="startVoice('add-name')" title="Ovozdan yozish">🎤</button>
             </div>
             
             <div class="admin-input-wrap">
                 <i>💰</i>
-                <input type="number" id="add-price" class="admin-input" placeholder="Narxi (so'mda, mas: 150000)">
+                <input type="text" inputmode="numeric" id="add-price" class="admin-input" placeholder="Narxi (so'mda, mas: 150 000)" oninput="formatPriceInput(this)">
+            </div>
+
+            <div class="admin-input-wrap">
+                <i>🔖</i>
+                <input type="text" id="add-code" class="admin-input" placeholder="Artikul / OEM kod (ixtiyoriy)" oninput="updateLivePreview('add')" style="padding-right:50px;">
+                <button type="button" class="field-scan-btn" onclick="scanBarcode('add')" title="Shtrix-kod skaner">📷</button>
             </div>
 
             <div style="display: flex; gap: 12px; margin-bottom: 15px;">
@@ -4133,6 +4229,8 @@
                 <span style="font-size: 22px;">🤖</span> Chiroyli ta'rif yozdirish
             </button>
 
+            <button type="button" onclick="startVoice('add-desc')" style="width:100%; padding:12px; border-radius:14px; background:rgba(48,209,88,0.1); border:1px solid rgba(48,209,88,0.3); color:#30d158; font-weight:800; cursor:pointer; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:8px;">🎤 Ovoz bilan ayting</button>
+
             <textarea id="add-desc" class="admin-input" style="height: 100px; resize: none; padding: 15px; border-color: rgba(0, 122, 255, 0.3); background: rgba(0,0,0,0.5); font-size: 13px;" placeholder="AI yozgan matn shu yerda paydo bo'ladi (yoki o'zingiz yozing)..."></textarea>
         </div>
 
@@ -4166,6 +4264,30 @@
 
 <div class="modal-standard" id="adminInventoryModal">
     <div class="modal-header"><h2 style="color: var(--luxury-gold);">📊 Ombor</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div style="padding: 0 15px 10px;">
+        <input type="text" id="inv-search" class="search-box" placeholder="🔍 Tovar nomi yoki kodi bo'yicha qidirish..." oninput="renderAdminInventory()" style="margin-bottom:12px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;" id="inv-filter-chips">
+            <span class="chip inv-fchip selected" data-f="all" onclick="setInvFilter(this,'all')">Hammasi</span>
+            <span class="chip inv-fchip" data-f="gaz" onclick="setInvFilter(this,'gaz')">🚛 GAZ</span>
+            <span class="chip inv-fchip" data-f="chevy" onclick="setInvFilter(this,'chevy')">🚘 Chevrolet</span>
+            <span class="chip inv-fchip" data-f="daewoo" onclick="setInvFilter(this,'daewoo')">🚕 Daewoo</span>
+            <span class="chip inv-fchip" data-f="uaz" onclick="setInvFilter(this,'uaz')">🚙 UAZ</span>
+        </div>
+    </div>
+    <div id="inv-bulk-bar" style="display:none; margin:0 15px 12px; padding:12px; border-radius:14px; background:rgba(10,132,255,0.08); border:1px solid rgba(10,132,255,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span id="inv-bulk-count" style="font-size:12px; font-weight:800; color:#0a84ff;">0 ta belgilandi</span>
+            <span onclick="invClearSelection()" style="font-size:11px; color:var(--text-muted); cursor:pointer; text-decoration:underline;">Bekor qilish</span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="text" inputmode="numeric" id="inv-bulk-price" class="inv-input" placeholder="Yangi narx" oninput="formatPriceInput(this)" style="width:100px; text-align:left;">
+            <button class="inv-btn" onclick="invBulkSetPrice()">Narx qo'yish</button>
+            <input type="number" id="inv-bulk-pct" placeholder="%" class="inv-input" style="width:55px;">
+            <button class="inv-btn" style="background:#30d158;" onclick="invBulkPercent(1)">＋%</button>
+            <button class="inv-btn" style="background:#ff9f0a;" onclick="invBulkPercent(-1)">−%</button>
+            <button class="inv-btn" style="background:#ff453a; color:#fff;" onclick="invBulkDelete()">🗑 O'chirish</button>
+        </div>
+    </div>
     <div id="admin-inventory-list"></div>
 </div>
 
@@ -4789,7 +4911,12 @@ function showToast(m, t = 'success') {
     function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
 
     function openAdminInventory() {
-        document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.replaceState({ modal: 'adminInventoryModal' }, ""); renderAdminInventory();
+        document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.replaceState({ modal: 'adminInventoryModal' }, "");
+        let invS = document.getElementById('inv-search'); if (invS) invS.value = '';
+        window.invFilter = 'all';
+        window._invSelected = {};
+        document.querySelectorAll('#inv-filter-chips .inv-fchip').forEach(c => c.classList.toggle('selected', c.getAttribute('data-f') === 'all'));
+        renderAdminInventory();
     }
     function openEditModal(e) {
     if(e) e.stopPropagation(); 
@@ -5031,7 +5158,7 @@ window.addEditSizeField = () => {
     function fastSaveStock(id) {
         let val = parseInt(document.getElementById(`inv-input-${id}`).value) || 0;
         let idx = productsDB.findIndex(x => x.id === id);
-        if(idx !== -1) { productsDB[idx].stock = val; db.ref('products').set(productsDB).then(() => { showToast("Qoldiq saqlandi!"); }); }
+        if(idx !== -1) { productsDB[idx].stock = val; saveProductAt(idx).then(() => { showToast("Qoldiq saqlandi!"); }); }
     }
 
     // YANGI: Razmerning aniq qoldig'ini tezkor saqlash
@@ -5042,7 +5169,7 @@ window.addEditSizeField = () => {
             productsDB[idx].sizes[sizeIdx].stock = val;
             // Umumiy tovar qoldig'ini barcha razmerlar yig'indisi qilib qo'yamiz
             productsDB[idx].stock = productsDB[idx].sizes.reduce((sum, s) => sum + s.stock, 0);
-            db.ref('products').set(productsDB).then(() => { showToast("Razmer qoldig'i saqlandi!"); }); 
+            saveProductAt(idx).then(() => { showToast("Razmer qoldig'i saqlandi!"); }); 
         }
     };
    
@@ -5254,6 +5381,16 @@ function openProduct(id) {
     sliderWrapper.scrollLeft = 0;
 
     document.getElementById('pm-title').innerText = p.name; 
+
+    let pmCode = document.getElementById('pm-code');
+    if (pmCode) {
+        if (p.code) {
+            pmCode.innerHTML = `🔖 Kod: <span style="color:var(--luxury-gold); font-weight:800; letter-spacing:0.5px;">${p.code}</span>`;
+            pmCode.style.display = 'block';
+        } else {
+            pmCode.style.display = 'none';
+        }
+    }
     
     let unitBadge = document.getElementById('pm-unit-badge');
     if (p.unit === 'komplekt') {
@@ -5478,7 +5615,8 @@ window.searchProducts = () => {
             let n = x.name ? x.name.toLowerCase() : "";
             let desc = x.desc ? x.desc.toLowerCase() : "";
             let cat = (x.categories || []).join(' ').toLowerCase();
-            return n.includes(q) || desc.includes(q) || cat.includes(q);
+            let code = x.code ? x.code.toLowerCase() : "";
+            return n.includes(q) || desc.includes(q) || cat.includes(q) || (code && (code.includes(q) || code.includes(qRaw)));
         });
         
         if (filt.length === 0 && htmlResult === '') {
@@ -7699,7 +7837,9 @@ window.openEditModal = function(e, directId = null) {
     if (!p) return;
     document.getElementById('edit-id').value = p.id;
     document.getElementById('edit-name').value = p.name;
-    document.getElementById('edit-price').value = p.price;
+    document.getElementById('edit-price').value = formatNumber(p.price);
+    let editCodeEl = document.getElementById('edit-code');
+    if (editCodeEl) editCodeEl.value = p.code || "";
     document.getElementById('edit-desc').value = p.desc || "";
 
     let pType = p.product_type || 'oddiy';
@@ -7729,20 +7869,18 @@ window.openEditModal = function(e, directId = null) {
     let urlIds = ['edit-img-url', 'edit-img-url2', 'edit-img-url3'];
     urlIds.forEach((id, i) => { let el = document.getElementById(id); if (el) el.value = imgs[i] || ""; });
 
-    let previewBox = document.getElementById('edit-img-previews');
-    if (previewBox && imgs.length > 0) {
-        previewBox.innerHTML = imgs.map((url, i) => `
-            <div style="position:relative;display:inline-block;">
-                <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;border:2px solid var(--luxury-gold);display:block;">
-                <span style="position:absolute;top:-7px;right:-7px;background:var(--luxury-gold);color:#000;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;">${i + 1}</span>
-            </div>
-        `).join('');
-    }
+    // 🔄 Interaktiv rasm boshqaruvi (tartiblash, asosiy tanlash, o'chirish)
+    updateImgPreviews('edit');
 
     // Chip tanlovlarini yuklash
     document.querySelectorAll('#editModal .cat-chip').forEach(c => c.classList.remove('selected'));
     let cats = p.categories || [p.category];
     cats.forEach(c => {
+        if (!c) return;
+        // 1) To'g'ridan-to'g'ri moslik (yangi sxema: "chevy-cobalt")
+        let direct = document.querySelector(`#editModal .model-chip[data-val="${c}"]`);
+        if (direct) { direct.classList.add('selected'); return; }
+        // 2) Eski sxema (model-tur, mas: "chevy-cobalt-motor") — oxirgi qismni tashlaymiz
         let parts = c.split('-'); let t = parts.pop(); let m = parts.join('-');
         let mC = document.querySelector(`#editModal .model-chip[data-val="${m}"]`); if (mC) mC.classList.add('selected');
         let tC = document.querySelector(`#editModal .type-chip[data-val="${t}"]`); if (tC) tC.classList.add('selected');
@@ -7754,6 +7892,8 @@ window.openEditModal = function(e, directId = null) {
     // ✅ pushState (replaceState emas!) — back tugmasi ishlaydi
     window.history.pushState({ modal: 'editModal' }, "");
     tg.BackButton.show();
+    updateLivePreview('edit');
+    window._formDirty = false;
     updateBtns();
 };
 
@@ -7783,7 +7923,9 @@ window.closeEditGoBack = () => {
 window.saveEditProduct = function(keepDraft = false) {
     let id = parseInt(document.getElementById('edit-id').value);
     let n = document.getElementById('edit-name').value.trim();
-    let p = parseInt(document.getElementById('edit-price').value) || 0;
+    let p = parsePrice(document.getElementById('edit-price').value);
+    let codeEl = document.getElementById('edit-code');
+    let pCode = codeEl ? codeEl.value.trim() : "";
     
     let unitEl = document.getElementById('edit-unit');
     let pUnit = unitEl ? unitEl.value : 'dona';
@@ -7826,6 +7968,7 @@ window.saveEditProduct = function(keepDraft = false) {
             ...productsDB[idx], 
             name: n, 
             price: p, 
+            code: pCode,
             unit: pUnit, 
             desc: d, 
             img: imagesArr[0] || "", 
@@ -7872,7 +8015,8 @@ window.saveEditProduct = function(keepDraft = false) {
             productsDB[idx].is_draft = true; 
         }
         
-        db.ref('products').set(productsDB).then(() => {
+        window._formDirty = false;
+        saveProductAt(idx).then(() => {
             showToast(keepDraft ? "⏳ Qoralama saqlandi!" : "✅ Mijozlarga chiqarildi!", "success");
             displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
             renderProducts();
@@ -7886,7 +8030,9 @@ window.saveEditProduct = function(keepDraft = false) {
 // =====================================
 window.saveNewProduct = function() {
     let n = document.getElementById('add-name').value.trim();
-    let p = parseInt(document.getElementById('add-price').value) || 0;
+    let p = parsePrice(document.getElementById('add-price').value);
+    let codeEl = document.getElementById('add-code');
+    let pCode = codeEl ? codeEl.value.trim() : "";
     let pUnit = document.getElementById('add-unit').value;
     let pType = document.getElementById('admin-prod-type').value;
     let img1 = document.getElementById('add-img-url').value;
@@ -7899,8 +8045,8 @@ window.saveNewProduct = function() {
 
     if (!n || !p || imagesArr.length === 0) { showToast("Ism, narx va kamida 1 rasm kerak!", "warning"); return; }
 
-    let newId = productsDB.length > 0 ? Math.max(...productsDB.map(x => x.id)) + 1 : 1;
-    let newProduct = { id: newId, name: n, desc: descVal, price: p, unit: pUnit, img: imagesArr[0], images: imagesArr, product_type: pType };
+    let newId = generateProductId();
+    let newProduct = { id: newId, name: n, desc: descVal, price: p, code: pCode, unit: pUnit, img: imagesArr[0], images: imagesArr, product_type: pType };
 
     if (pType === 'oddiy') {
         let st = parseInt(document.getElementById('add-stock').value) || 0;
@@ -7934,12 +8080,18 @@ window.saveNewProduct = function() {
     }
 
     productsDB.push(newProduct);
-    db.ref('products').set(productsDB).then(() => {
-        showToast("✅ Saqlandi! Yangilanmoqda...", "success");
-        setTimeout(() => { 
-            // Restart berishning xavfsiz va xatosiz usuli
-            window.location.reload(); 
-        }, 800);
+    let newIdx = productsDB.length - 1;
+    window._formDirty = false;
+    saveProductAt(newIdx).then(() => {
+        showToast("✅ Tovar qo'shildi!", "success");
+        // Reload o'rniga xotirada yangilaymiz — tezroq va silliqroq
+        displayDB = _sortDisplayDB(productsDB.filter(x => !x.is_draft).slice().reverse());
+        renderProducts();
+        if (typeof filterAdminDrafts === 'function' && document.getElementById('adminDraftsModal') && document.getElementById('adminDraftsModal').style.display === 'flex') filterAdminDrafts();
+        resetAddForm();
+        closeModal();
+    }).catch(() => {
+        showToast("Saqlashda xato! Internetni tekshiring.", "warning");
     });
 };
 // =====================================
@@ -9609,6 +9761,465 @@ function markAsSeen(element) {
         }
     } catch (e) {}
 }
+
+// ============================================================
+// 💎 ADMIN TOVAR MODULI — ZAMONAVIYLASHTIRISH (2026)
+// Bu blok script oxirida turadi: window.* funksiyalar mavjudlarini
+// xavfsiz qayta belgilaydi (override) va yangilarini qo'shadi.
+// ============================================================
+
+// ---------- 1) NARX FORMATI ----------
+window.formatNumber = (n) => { n = parseInt(n) || 0; return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+window.parsePrice = (str) => parseInt(String(str == null ? '' : str).replace(/[^\d]/g, '')) || 0;
+window.formatPriceInput = (el) => {
+    if (!el) return;
+    let d = el.value.replace(/[^\d]/g, '');
+    el.value = d ? formatNumber(d) : '';
+    let prefix = (el.id && el.id.indexOf('edit') === 0) ? 'edit' : ((el.id && el.id.indexOf('add') === 0) ? 'add' : null);
+    if (prefix) updateLivePreview(prefix);
+    window._formDirty = true;
+};
+
+// ---------- 2) MARKA -> MODEL (to'liq, izchil ro'yxat) ----------
+window.BRAND_MODELS = {
+    chevy: [['damas','Damas'],['cobalt','Cobalt'],['gentra','Gentra'],['lacetti','Lacetti'],['malibu1','Malibu 1'],['malibu2','Malibu 2'],['tracker2','Tracker 2'],['nexia3','Nexia 3'],['spark','Spark'],['onix','Onix'],['captiva1','Captiva 1'],['captiva2','Captiva 2'],['captiva3','Captiva 3'],['captiva4','Captiva 4'],['labo','Labo'],['matiz','Matiz'],['epica','Epica']],
+    daewoo: [['nexia1','Nexia 1'],['nexia2','Nexia 2'],['matiz','Matiz'],['tico','Tico']],
+    uaz: [['patriot','Patriot'],['hunter','Hunter']]
+};
+window.buildModelOptions = (brand) => (BRAND_MODELS[brand] || []).map(m => `<option value="${m[0]}">${m[1]}</option>`).join('');
+window.updateBrandModels = () => {
+    let brandEl = document.getElementById('admin-prod-brand');
+    let box = document.getElementById('admin-brand-models-box');
+    let select = document.getElementById('admin-prod-model');
+    if (!brandEl || !box || !select) return;
+    let brand = brandEl.value;
+    if (brand === 'gaz' || !brand) { box.style.display = 'none'; select.innerHTML = ''; }
+    else { box.style.display = 'block'; select.innerHTML = buildModelOptions(brand); }
+};
+window.updateEditBrandModels = () => {
+    let brandEl = document.getElementById('edit-prod-brand');
+    let box = document.getElementById('edit-brand-models-box');
+    let select = document.getElementById('edit-prod-model');
+    if (!brandEl || !box || !select) return;
+    let brand = brandEl.value;
+    if (brand === 'gaz' || !brand) { box.style.display = 'none'; select.innerHTML = ''; }
+    else { box.style.display = 'block'; select.innerHTML = buildModelOptions(brand); }
+};
+
+// ---------- 3) RASMLARNI BOSHQARISH (tartiblash / asosiy / o'chirish) ----------
+window.getImgInputs = (prefix) => ['', '2', '3'].map(s => document.getElementById(`${prefix}-img-url${s}`));
+window.readImgUrls = (prefix) => getImgInputs(prefix).map(el => el ? el.value.trim() : '').filter(u => u);
+window.setImgUrls = (prefix, arr) => { getImgInputs(prefix).forEach((el, i) => { if (el) el.value = (arr && arr[i]) ? arr[i] : ''; }); };
+window.removeImg = (prefix, i) => { let a = readImgUrls(prefix); a.splice(i, 1); setImgUrls(prefix, a); updateImgPreviews(prefix); window._formDirty = true; };
+window.moveImg = (prefix, i, dir) => { let a = readImgUrls(prefix); let j = i + dir; if (j < 0 || j >= a.length) return; let t = a[i]; a[i] = a[j]; a[j] = t; setImgUrls(prefix, a); updateImgPreviews(prefix); window._formDirty = true; };
+window.setMainImg = (prefix, i) => { let a = readImgUrls(prefix); if (i <= 0 || i >= a.length) return; let x = a.splice(i, 1)[0]; a.unshift(x); setImgUrls(prefix, a); updateImgPreviews(prefix); window._formDirty = true; };
+
+window.updateImgPreviews = (prefix) => {
+    let urls = readImgUrls(prefix);
+    let box = document.getElementById(`${prefix}-img-previews`);
+    if (!box) return;
+    if (urls.length === 0) { box.innerHTML = ''; updateLivePreview(prefix); return; }
+    box.innerHTML = urls.map((url, i) => `
+        <div class="img-thumb-wrap" style="margin:4px;">
+            <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;border:2px solid ${i===0?'var(--luxury-gold)':'var(--glass-border)'};display:block;background:#fff;" onerror="this.style.borderColor='#ff453a';this.src='https://via.placeholder.com/80?text=Xato'">
+            <button type="button" class="img-ctrl img-del" onclick="removeImg('${prefix}',${i})" title="O'chirish">✕</button>
+            <button type="button" class="img-ctrl" style="top:-8px;left:-8px;background:${i===0?'var(--luxury-gold)':'rgba(0,0,0,0.7)'};color:${i===0?'#000':'#fff'};" onclick="setMainImg('${prefix}',${i})" title="${i===0?'Asosiy rasm':'Asosiy qilish'}">⭐</button>
+            <div class="img-move-row">
+                ${i>0?`<button type="button" class="img-ctrl" style="position:relative;width:24px;height:24px;font-size:11px;" onclick="moveImg('${prefix}',${i},-1)">◀</button>`:''}
+                ${i<urls.length-1?`<button type="button" class="img-ctrl" style="position:relative;width:24px;height:24px;font-size:11px;" onclick="moveImg('${prefix}',${i},1)">▶</button>`:''}
+            </div>
+        </div>
+    `).join('');
+    updateLivePreview(prefix);
+};
+
+// ---------- 4) RASM YUKLASH (progress bilan, XHR) ----------
+function uploadFileWithProgress(file, onProgress) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64 = reader.result.split(',')[1];
+            const fd = new FormData();
+            fd.append('key', IMGBB_API_KEY);
+            fd.append('image', base64);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://api.imgbb.com/1/upload');
+            xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100)); };
+            xhr.onload = () => {
+                try { let j = JSON.parse(xhr.responseText); if (j && j.success) resolve(j.data.url); else reject(new Error(j && j.error && j.error.message ? j.error.message : 'ImgBB rad etdi')); }
+                catch (err) { reject(err); }
+            };
+            xhr.onerror = () => reject(new Error('Tarmoq xatosi'));
+            xhr.send(fd);
+        };
+        reader.onerror = () => reject(new Error("Fayl o'qilmadi"));
+        reader.readAsDataURL(file);
+    });
+}
+
+window.handleMultiImgUpload = async function(event, prefix) {
+    let existing = readImgUrls(prefix);
+    let slots = 3 - existing.length;
+    if (slots <= 0) { showToast("Maksimum 3 ta rasm. Avval birortasini o'chiring.", "warning"); event.target.value = ''; return; }
+    const files = Array.from(event.target.files).slice(0, slots);
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    const box = document.getElementById(`${prefix}-img-previews`);
+    if (box) {
+        let existHtml = existing.map(url => `<div class="img-thumb-wrap" style="margin:4px;opacity:0.5;"><img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;border:2px solid var(--glass-border);background:#fff;"></div>`).join('');
+        let progHtml = files.map((f, i) => `<div class="up-prog" id="up-prog-${prefix}-${i}" style="margin:4px;"><span class="up-pct">0%</span><div class="up-bar"></div></div>`).join('');
+        box.innerHTML = existHtml + progHtml;
+    }
+
+    let uploaded = [];
+    for (let i = 0; i < files.length; i++) {
+        let cell = document.getElementById(`up-prog-${prefix}-${i}`);
+        try {
+            let url = await uploadFileWithProgress(files[i], (pct) => {
+                if (cell) { let b = cell.querySelector('.up-bar'); let t = cell.querySelector('.up-pct'); if (b) b.style.width = pct + '%'; if (t) t.innerText = pct + '%'; }
+            });
+            uploaded.push(url);
+            if (cell) { let t = cell.querySelector('.up-pct'); if (t) t.innerText = '✅'; let b = cell.querySelector('.up-bar'); if (b) b.style.width = '100%'; }
+        } catch (err) {
+            if (cell) { let t = cell.querySelector('.up-pct'); if (t) t.innerText = '❌'; }
+            showToast(`${i + 1}-rasm xatosi: ${err.message}`, 'warning');
+        }
+    }
+
+    if (uploaded.length > 0) {
+        setImgUrls(prefix, existing.concat(uploaded));
+        updateImgPreviews(prefix);
+        window._formDirty = true;
+        showToast(`✅ ${uploaded.length} ta rasm yuklandi!`, 'success');
+    } else {
+        updateImgPreviews(prefix);
+        showToast("❌ Rasm yuklanmadi. Qaytadan urinib ko'ring.", 'warning');
+    }
+};
+
+// ---------- 5) JONLI KO'RINISH (Live preview) ----------
+window.updateLivePreview = (prefix) => {
+    let box = document.getElementById(`${prefix}-live-preview`);
+    if (!box) return;
+    let nameEl = document.getElementById(`${prefix}-name`);
+    let name = nameEl ? nameEl.value.trim() : '';
+    let priceEl = document.getElementById(`${prefix}-price`);
+    let price = priceEl ? parsePrice(priceEl.value) : 0;
+    let codeEl = document.getElementById(`${prefix}-code`);
+    let code = codeEl ? codeEl.value.trim() : '';
+    let img = readImgUrls(prefix)[0] || '';
+    if (!name && !price && !img) { box.innerHTML = `<div class="lp-empty">Maydonlarni to'ldiring — bu yerda mijozga qanday ko'rinishi chiqadi</div>`; return; }
+    let mainName = (name || 'Tovar nomi').split('·')[0].trim();
+    box.innerHTML = `
+        <div class="lp-card">
+            <img src="${img || 'https://via.placeholder.com/64?text=Rasm'}" onerror="this.src='https://via.placeholder.com/64?text=Rasm'">
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; color:#fff; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${mainName || 'Tovar nomi'}</div>
+                ${code ? `<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">🔖 ${code}</div>` : ''}
+                <div style="color:var(--luxury-gold); font-weight:800; font-size:14px; margin-top:4px;">${price ? price.toLocaleString() : 0} so'm</div>
+            </div>
+        </div>`;
+};
+
+// ---------- 6) DB YOZISH (faqat o'zgargan tovar) va XAVFSIZ ID ----------
+window.saveProductAt = (idx) => {
+    if (idx < 0 || idx >= productsDB.length) return Promise.reject(new Error("Noto'g'ri indeks"));
+    return db.ref('products/' + idx).set(productsDB[idx]);
+};
+window.generateProductId = () => {
+    let id = Date.now();
+    while (productsDB.some(x => x.id === id)) id++;
+    return id;
+};
+
+// ---------- 7) ADD FORMANI TOZALASH / OCHISH / KLON ----------
+window.resetAddForm = () => {
+    ['add-name','add-price','add-code','add-desc','add-img-url','add-img-url2','add-img-url3'].forEach(id => { let el = document.getElementById(id); if (el) el.value = ''; });
+    let st = document.getElementById('add-stock'); if (st) st.value = 10;
+    let pt = document.getElementById('admin-prod-type'); if (pt) pt.value = 'oddiy';
+    if (typeof toggleProductTypeFields === 'function') toggleProductTypeFields();
+    let unit = document.getElementById('add-unit'); if (unit) unit.value = 'dona';
+    let brand = document.getElementById('admin-prod-brand'); if (brand) brand.value = '';
+    if (typeof updateBrandModels === 'function') updateBrandModels();
+    let sc = document.getElementById('admin-sizes-container');
+    if (sc) sc.innerHTML = `<div class="size-input-row" style="display:flex; gap:8px; margin-bottom:8px;"><input type="text" placeholder="Razmer (mas: 92.5)" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;" class="size-name"><input type="number" placeholder="Soni" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;" class="size-stock"><button type="button" onclick="this.parentElement.remove()" style="background:rgba(255,69,58,0.2); color:#ff453a; border:1px solid rgba(255,69,58,0.5); border-radius:12px; padding:0 15px; cursor:pointer; font-weight:bold; font-size:16px;">×</button></div>`;
+    document.querySelectorAll('#addProductModal .cat-chip').forEach(c => c.classList.remove('selected'));
+    let firstOrigin = document.querySelector('#add-origin-chips .origin-chip');
+    if (firstOrigin && typeof selectOrigin === 'function') selectOrigin(firstOrigin, 'add');
+    updateImgPreviews('add');
+    updateLivePreview('add');
+};
+window.openAddProduct = () => {
+    resetAddForm();
+    window._formDirty = false;
+    openModal('addProductModal');
+    updateLivePreview('add');
+};
+window.fillAddFormFromProduct = (p) => {
+    resetAddForm();
+    document.getElementById('add-name').value = (p.name || '') + ' (nusxa)';
+    document.getElementById('add-price').value = formatNumber(p.price);
+    let codeEl = document.getElementById('add-code'); if (codeEl) codeEl.value = p.code || '';
+    document.getElementById('add-desc').value = (p.desc && p.desc !== 'Tavsif kiritilmagan') ? p.desc : '';
+    let unit = document.getElementById('add-unit'); if (unit) unit.value = p.unit || 'dona';
+    let pType = p.product_type || 'oddiy';
+    document.getElementById('admin-prod-type').value = pType;
+    if (typeof toggleProductTypeFields === 'function') toggleProductTypeFields();
+    if (pType === 'oddiy') {
+        let st = document.getElementById('add-stock'); if (st) st.value = (p.stock !== undefined ? p.stock : 10);
+    } else {
+        let brandEl = document.getElementById('admin-prod-brand');
+        if (brandEl) { brandEl.value = p.brand || ''; updateBrandModels(); }
+        if (p.model) setTimeout(() => { let m = document.getElementById('admin-prod-model'); if (m) m.value = p.model; }, 60);
+        let sc = document.getElementById('admin-sizes-container');
+        if (sc && p.sizes && p.sizes.length) {
+            sc.innerHTML = p.sizes.map(s => `<div class="size-input-row" style="display:flex; gap:8px; margin-bottom:8px;"><input type="text" value="${s.size}" class="size-name" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;"><input type="number" value="${s.stock}" class="size-stock" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;"><button type="button" onclick="this.parentElement.remove()" style="background:rgba(255,69,58,0.2); color:#ff453a; border:1px solid rgba(255,69,58,0.5); border-radius:12px; padding:0 15px; cursor:pointer; font-weight:bold; font-size:16px;">×</button></div>`).join('');
+        }
+    }
+    let imgs = (p.images && p.images.length) ? p.images.slice(0, 3) : (p.img ? [p.img] : []);
+    setImgUrls('add', imgs);
+    document.querySelectorAll('#addProductModal .cat-chip').forEach(c => c.classList.remove('selected'));
+    let cats = p.categories || (p.category ? [p.category] : []);
+    cats.forEach(c => { let mC = document.querySelector(`#addProductModal .model-chip[data-val="${c}"]`); if (mC) mC.classList.add('selected'); });
+    updateImgPreviews('add');
+    updateLivePreview('add');
+};
+window.cloneProductFromEdit = () => {
+    let id = parseInt(document.getElementById('edit-id').value);
+    let p = productsDB.find(x => x.id === id);
+    if (!p) { showToast("Tovar topilmadi", "warning"); return; }
+    let em = document.getElementById('editModal'); if (em) em.style.display = 'none';
+    let am = document.getElementById('addProductModal');
+    am.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    activeModal = 'addProductModal';
+    window.history.pushState({ modal: 'addProductModal' }, "");
+    if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show();
+    fillAddFormFromProduct(p);
+    window._formDirty = true;
+    showToast("📋 Nusxa olindi! O'zgartirib, saqlang.", "success");
+};
+
+// ---------- 8) SAQLANMAGAN O'ZGARISHLAR OGOHLANTIRISHI ----------
+window.tryCloseAddProduct = () => {
+    if (window._formDirty) {
+        let go = () => { window._formDirty = false; closeModal(); };
+        if (typeof tg !== 'undefined' && tg.showConfirm) { tg.showConfirm("Saqlanmagan ma'lumotlar bor. Chiqasizmi?", (ok) => { if (ok) go(); }); }
+        else if (confirm("Saqlanmagan ma'lumotlar bor. Chiqasizmi?")) go();
+    } else { closeModal(); }
+};
+if (typeof window.closeEditGoBack === 'function' && !window._origCloseEditGoBack) {
+    window._origCloseEditGoBack = window.closeEditGoBack;
+    window.closeEditGoBack = function() {
+        if (window._formDirty) {
+            let go = () => { window._formDirty = false; window._origCloseEditGoBack(); };
+            if (typeof tg !== 'undefined' && tg.showConfirm) { tg.showConfirm("Saqlanmagan o'zgarishlar bor. Chiqasizmi?", (ok) => { if (ok) go(); }); }
+            else if (confirm("Saqlanmagan o'zgarishlar bor. Chiqasizmi?")) go();
+            return;
+        }
+        window._origCloseEditGoBack();
+    };
+}
+
+// ---------- 9) OVOZLI KIRITISH ----------
+window.startVoice = (targetId) => {
+    let SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { showToast("Bu qurilmada ovozli kiritish ishlamaydi", "warning"); return; }
+    let el = document.getElementById(targetId);
+    if (!el) return;
+    let rec = new SR();
+    rec.lang = 'ru-RU';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    showToast("🎤 Gapiring...");
+    rec.onresult = (e) => {
+        let t = e.results[0][0].transcript;
+        el.value = el.value ? (el.value + ' ' + t) : t;
+        el.dispatchEvent(new Event('input'));
+        window._formDirty = true;
+        showToast("✅ Yozildi", "success");
+    };
+    rec.onerror = () => { showToast("Ovoz tushunilmadi, qaytaring", "warning"); };
+    try { rec.start(); } catch (e) {}
+};
+
+// ---------- 10) SHTRIX-KOD / QR SKANER ----------
+window._scanStream = null;
+window.scanBarcode = async (prefix) => {
+    if (!('BarcodeDetector' in window)) { showToast("Skaner qo'llab-quvvatlanmaydi. Kodni qo'lda kiriting.", "warning"); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showToast("Kamera mavjud emas", "warning"); return; }
+    let detector;
+    try { detector = new BarcodeDetector(); } catch (e) { showToast("Skaner ishga tushmadi", "warning"); return; }
+    let ov = document.createElement('div');
+    ov.id = 'scanner-overlay';
+    ov.innerHTML = `<button class="scan-close" onclick="stopScan()">×</button><video id="scan-video" playsinline></video><div class="scan-frame"></div><div class="scan-hint">📷 Shtrix-kodni ramkaga tuting</div>`;
+    document.body.appendChild(ov);
+    try {
+        let stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        window._scanStream = stream;
+        let v = document.getElementById('scan-video');
+        v.srcObject = stream;
+        await v.play();
+        let tick = async () => {
+            if (!window._scanStream) return;
+            try {
+                let codes = await detector.detect(v);
+                if (codes && codes.length) {
+                    let val = codes[0].rawValue;
+                    let inp = document.getElementById(`${prefix}-code`);
+                    if (inp) { inp.value = val; inp.dispatchEvent(new Event('input')); }
+                    window._formDirty = true;
+                    if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                    showToast("✅ Kod: " + val, "success");
+                    stopScan();
+                    return;
+                }
+            } catch (e) {}
+            requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    } catch (err) {
+        showToast("Kameraga ruxsat berilmadi", "warning");
+        stopScan();
+    }
+};
+window.stopScan = () => {
+    if (window._scanStream) { window._scanStream.getTracks().forEach(t => t.stop()); window._scanStream = null; }
+    let ov = document.getElementById('scanner-overlay');
+    if (ov) ov.remove();
+};
+
+// ---------- 11) OMBOR: QIDIRUV / FILTR / OMMAVIY TAHRIR ----------
+window.invFilter = 'all';
+window._invSelected = {};
+window.setInvFilter = (el, f) => {
+    window.invFilter = f;
+    document.querySelectorAll('#inv-filter-chips .inv-fchip').forEach(c => c.classList.remove('selected'));
+    if (el) el.classList.add('selected');
+    renderAdminInventory();
+};
+window._invMatchesBrand = (p, f) => {
+    if (f === 'all') return true;
+    let cats = (p.categories || (p.category ? [p.category] : [])).join(' ').toLowerCase();
+    if (f === 'gaz') return cats.includes('gazel') || cats.includes('volga') || cats.includes('sobol');
+    if (f === 'chevy') return cats.includes('chevy');
+    if (f === 'daewoo') return cats.includes('daewoo');
+    if (f === 'uaz') return cats.includes('uaz');
+    return true;
+};
+window.invToggleSelect = (id, checked) => { if (checked) window._invSelected[id] = true; else delete window._invSelected[id]; invUpdateBulkBar(); };
+window.invSelectedIds = () => Object.keys(window._invSelected).map(k => parseInt(k)).filter(id => productsDB.some(p => p.id === id));
+window.invClearSelection = () => { window._invSelected = {}; renderAdminInventory(); };
+window.invUpdateBulkBar = () => {
+    let ids = invSelectedIds();
+    let bar = document.getElementById('inv-bulk-bar');
+    let cnt = document.getElementById('inv-bulk-count');
+    if (!bar) return;
+    if (ids.length > 0) { bar.style.display = 'block'; if (cnt) cnt.innerText = ids.length + " ta belgilandi"; }
+    else { bar.style.display = 'none'; }
+};
+window._afterBulk = () => {
+    window._invSelected = {};
+    displayDB = _sortDisplayDB(productsDB.filter(x => !x.is_draft).slice().reverse());
+    renderProducts();
+    renderAdminInventory();
+};
+window.invBulkSetPrice = () => {
+    let ids = invSelectedIds();
+    if (ids.length === 0) { showToast("Avval tovarlarni belgilang", "warning"); return; }
+    let newP = parsePrice(document.getElementById('inv-bulk-price').value);
+    if (!newP) { showToast("Yangi narx kiriting!", "warning"); return; }
+    let proms = [];
+    ids.forEach(id => { let idx = productsDB.findIndex(x => x.id === id); if (idx !== -1) { productsDB[idx].price = newP; proms.push(saveProductAt(idx)); } });
+    Promise.all(proms).then(() => { showToast(ids.length + " ta narx yangilandi!", "success"); _afterBulk(); }).catch(() => showToast("Saqlashda xato!", "warning"));
+};
+window.invBulkPercent = (sign) => {
+    let ids = invSelectedIds();
+    if (ids.length === 0) { showToast("Avval tovarlarni belgilang", "warning"); return; }
+    let pct = parseFloat(document.getElementById('inv-bulk-pct').value);
+    if (!pct || pct <= 0) { showToast("Foiz kiriting!", "warning"); return; }
+    let proms = [];
+    ids.forEach(id => { let idx = productsDB.findIndex(x => x.id === id); if (idx !== -1) { let np = Math.round(productsDB[idx].price * (1 + sign * pct / 100)); productsDB[idx].price = Math.max(0, np); proms.push(saveProductAt(idx)); } });
+    Promise.all(proms).then(() => { showToast("Narxlar " + (sign > 0 ? '+' : '−') + pct + "% o'zgartirildi!", "success"); _afterBulk(); }).catch(() => showToast("Saqlashda xato!", "warning"));
+};
+window.invBulkDelete = () => {
+    let ids = invSelectedIds();
+    if (ids.length === 0) { showToast("Avval tovarlarni belgilang", "warning"); return; }
+    let doDel = () => {
+        productsDB = productsDB.filter(p => !ids.includes(p.id));
+        db.ref('products').set(productsDB).then(() => { showToast(ids.length + " ta tovar o'chirildi!", "success"); _afterBulk(); }).catch(() => showToast("Saqlashda xato!", "warning"));
+    };
+    if (typeof tg !== 'undefined' && tg.showConfirm) { tg.showConfirm(ids.length + " ta tovarni o'chirasizmi?", (ok) => { if (ok) doDel(); }); }
+    else if (confirm(ids.length + " ta tovarni o'chirasizmi?")) doDel();
+};
+
+window.renderAdminInventory = () => {
+    let c = document.getElementById('admin-inventory-list');
+    if (!c) return;
+    let searchEl = document.getElementById('inv-search');
+    let q = (searchEl ? searchEl.value : '').toLowerCase().trim();
+    let f = window.invFilter || 'all';
+    let items = productsDB.filter(p => {
+        if (!_invMatchesBrand(p, f)) return false;
+        if (q) {
+            let n = (p.name || '').toLowerCase();
+            let code = (p.code || '').toLowerCase();
+            if (!n.includes(q) && !code.includes(q)) return false;
+        }
+        return true;
+    });
+    if (items.length === 0) {
+        c.innerHTML = '<p style="text-align:center; color:gray; margin:30px 0;">Tovar topilmadi.</p>';
+        invUpdateBulkBar();
+        return;
+    }
+    c.innerHTML = items.map(p => {
+        let checked = window._invSelected[p.id] ? 'checked' : '';
+        let checkbox = `<input type="checkbox" class="inv-check" ${checked} onchange="invToggleSelect(${p.id}, this.checked)" style="width:20px; height:20px; accent-color:var(--luxury-gold); margin-right:10px; flex-shrink:0;">`;
+        let codeHint = p.code ? `<span style="color:gray; font-size:10px; margin-left:8px; background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:5px;">🔖 ${p.code}</span>` : '';
+        if (p.product_type === 'razmerli' && p.sizes) {
+            let sizesHtml = p.sizes.map((s, idx) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; margin-top:5px;">
+                    <span style="font-size:12px; color:var(--luxury-gold); font-weight:bold;">Razmer: ${s.size}</span>
+                    <div class="inv-controls">
+                        <input type="number" id="inv-input-${p.id}-${idx}" class="inv-input" value="${s.stock}" style="width:40px; padding:4px; font-size:12px;">
+                        <button class="inv-btn" style="padding:4px 8px; font-size:11px;" onclick="fastSaveSizeStock(${p.id}, ${idx})">Saqlash</button>
+                    </div>
+                </div>`).join('');
+            return `
+            <div class="inventory-item" style="flex-direction:column; align-items:stretch;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                    <div style="display:flex; align-items:center; flex:1; min-width:0;">${checkbox}<div class="inv-info"><h4>${p.name}${codeHint}</h4><p>${p.price.toLocaleString()} so'm</p></div></div>
+                    <span style="font-size:10px; background:var(--primary-blue); padding:3px 6px; border-radius:4px; color:white; font-weight:bold; flex-shrink:0;">Razmerli</span>
+                </div>
+                <div style="margin-top:10px; border-top:1px dashed var(--glass-border); padding-top:5px;">${sizesHtml}</div>
+            </div>`;
+        } else {
+            let st = p.stock !== undefined ? p.stock : 10;
+            let nameParts = p.name.split('·');
+            let mainName = nameParts[0] ? nameParts[0].trim() : p.name;
+            let carHint = nameParts[1] ? `<span class="car-hint">· ${nameParts[1].trim()}</span>` : '';
+            return `
+            <div class="inventory-item">
+                <div style="display:flex; align-items:center; flex:1; min-width:0;">${checkbox}<div class="inv-info"><h4>${mainName}${carHint}${codeHint}</h4><p>${p.price.toLocaleString()} so'm</p></div></div>
+                <div class="inv-controls">
+                    <input type="number" id="inv-input-${p.id}" class="inv-input" value="${st}">
+                    <button class="inv-btn" onclick="fastSaveStock(${p.id})">Saqlash</button>
+                </div>
+            </div>`;
+        }
+    }).join('');
+    invUpdateBulkBar();
+};
+
+// ---------- 12) INIT: "o'zgarish bor" bayrog'ini kuzatish ----------
+(function initAdminEnhancements() {
+    ['addProductModal', 'editModal'].forEach(mid => {
+        let m = document.getElementById(mid);
+        if (m) m.addEventListener('input', () => { window._formDirty = true; });
+    });
+})();
     
     
 </script> 
