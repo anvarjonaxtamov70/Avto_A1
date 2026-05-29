@@ -4551,11 +4551,28 @@ function showToast(m, t = 'success') {
         }
 
         // Ekranda yangi tovarlar TEPADA turishi uchun faqat displayDB teskari qilinadi
-        displayDB = productsDB.filter(p => !p.is_draft).slice().reverse();
+        displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
         renderProducts();
         updateCartBadge();
         if(activeModal === 'adminInventoryModal') renderAdminInventory();
     });
+
+    // 📦 QADAM 3: Tugagan tovarlarni oxirga suruvchi yordamchi
+    // Mantiq: ichki tartib saqlanadi (yangidan-eskiga), faqat sotuvda
+    // bo'lganlari oldinga, tugaganlari oxirga ajraladi.
+    // - Razmerli tovar: jami stock yig'indisi (>0 bo'lsa "bor")
+    // - Oddiy tovar: stock > 0 bo'lsa "bor"
+    function _sortDisplayDB(items) {
+        const isInStock = (p) => {
+            if (p.product_type === 'razmerli' && Array.isArray(p.sizes)) {
+                return p.sizes.some(s => (parseInt(s.stock) || 0) > 0);
+            }
+            return (p.stock !== undefined ? p.stock : 10) > 0;
+        };
+        const inStock = items.filter(isInStock);
+        const outOfStock = items.filter(p => !isInStock(p));
+        return [...inStock, ...outOfStock];
+    }
 
     function toggleChip(el) { el.classList.toggle('selected'); }
 
@@ -7679,7 +7696,7 @@ window.saveEditProduct = function(keepDraft = false) {
         
         db.ref('products').set(productsDB).then(() => {
             showToast(keepDraft ? "⏳ Qoralama saqlandi!" : "✅ Mijozlarga chiqarildi!", "success");
-            displayDB = productsDB.filter(p => !p.is_draft).slice().reverse();
+            displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
             renderProducts();
             if(typeof filterAdminDrafts === 'function') filterAdminDrafts();
             closeEditGoBack();
