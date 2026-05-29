@@ -128,6 +128,8 @@
         .clear-search-btn { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.1); border: none; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; opacity: 0; pointer-events: none; transition: 0.2s; }
         .clear-search-btn.show { opacity: 1; pointer-events: auto; }
         .clear-search-btn:active { transform: translateY(-50%) scale(0.8); background: rgba(255,255,255,0.3); }
+        .scan-search-btn { position: absolute; right: 48px; top: 50%; transform: translateY(-50%); background: rgba(212,175,55,0.18); border: 1px solid rgba(212,175,55,0.45); color: var(--luxury-gold); width: 30px; height: 30px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 15px; padding: 0; transition: 0.2s; z-index: 2; }
+        .scan-search-btn:active { transform: translateY(-50%) scale(0.85); background: rgba(212,175,55,0.32); }
         .quick-chips { display: flex; gap: 8px; overflow-x: auto; padding: 0 20px 5px; scrollbar-width: none; margin-bottom: 15px; transition: 0.3s; }
         .quick-chips::-webkit-scrollbar { display: none; }
         .chip { background: rgba(30, 30, 35, 0.6); border: 1px solid var(--glass-border); padding: 8px 14px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: 0.2s; }
@@ -3463,7 +3465,8 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         </span>
         
-        <input type="text" id="searchInput" class="search-box" placeholder="Zapchast, marka qidiring..." oninput="searchProducts()" onfocus="searchProducts()">
+        <input type="text" id="searchInput" class="search-box" placeholder="Zapchast, marka qidiring..." oninput="searchProducts()" onfocus="searchProducts()" style="padding-right:84px;">
+        <button id="scanSearchBtn" class="scan-search-btn" onclick="scanToFindProduct()" title="Skaner orqali qidirish">📷</button>
         <button id="clearSearchBtn" class="clear-search-btn" onclick="clearSearch()">✕</button>   
     </div>
     <div class="quick-chips hidden" id="quick-chips">
@@ -9916,22 +9919,20 @@ function ensureQrScanner() {
     return _qrLibLoading;
 }
 
-// Telegram'ning native QR skaneri — kamera bloklanganda zaxira variant
-window._telegramQrScan = (prefix) => {
+// Telegram native QR skaneri — onResult(text) chaqiradi (umumiy)
+window._telegramQrScan = (onResult) => {
     if (typeof tg === 'undefined' || !tg.showScanQrPopup) {
         showToast("Kamera ishlamadi. Iltimos, kodni qo'lda kiriting.", "warning");
         return false;
     }
     let handler = (e) => {
-        let text = (e && e.data) ? e.data : '';
-        if (text) {
-            let inp = document.getElementById(`${prefix}-code`);
-            if (inp) { inp.value = text; inp.dispatchEvent(new Event('input')); }
-            window._formDirty = true;
-            showToast("✅ Kod: " + text, "success");
-        }
+        let text = (e && e.data) ? String(e.data).trim() : '';
         try { tg.closeScanQrPopup(); } catch (e2) {}
         try { tg.offEvent('qrTextReceived', handler); } catch (e2) {}
+        if (text) {
+            if (typeof tg.HapticFeedback !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            onResult(text);
+        }
     };
     try {
         tg.onEvent('qrTextReceived', handler);
@@ -9943,42 +9944,73 @@ window._telegramQrScan = (prefix) => {
     }
 };
 
+// Umumiy skaner: muvaffaqiyatda onResult(text) chaqiradi (kamera -> bo'lmasa Telegram)
 window._h5qr = null;
-window.scanBarcode = async (prefix) => {
-    // 1) Skaner kutubxonasini yuklaymiz
+window.runScanner = async (onResult) => {
     try {
         await ensureQrScanner();
     } catch (e) {
-        window._telegramQrScan(prefix); // yuklanmasa -> Telegram skaneri
+        window._telegramQrScan(onResult); // kutubxona yuklanmadi -> Telegram skaneri
         return;
     }
-
-    // 2) Kamera oynasini ochamiz
     let ov = document.createElement('div');
     ov.id = 'scanner-overlay';
-    ov.innerHTML = `<button class="scan-close" onclick="stopScan()">×</button><div id="qr-reader" style="width:100%; max-width:360px;"></div><div class="scan-hint">📷 Kodni ramkaga tuting</div>`;
+    ov.innerHTML = `<button class="scan-close" onclick="stopScan()">×</button><div id="qr-reader" style="width:100%; max-width:360px;"></div><div class="scan-hint">📷 Kod / QR ni ramkaga tuting</div>`;
     document.body.appendChild(ov);
-
     try {
         window._h5qr = new Html5Qrcode("qr-reader", false);
         await window._h5qr.start(
             { facingMode: "environment" },
             { fps: 10, qrbox: { width: 250, height: 160 } },
             (decodedText) => {
-                let inp = document.getElementById(`${prefix}-code`);
-                if (inp) { inp.value = decodedText; inp.dispatchEvent(new Event('input')); }
-                window._formDirty = true;
                 if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                showToast("✅ Kod: " + decodedText, "success");
                 stopScan();
+                onResult(String(decodedText).trim());
             },
-            () => {} // har kadrdagi "topilmadi" xatolari — e'tibordan chetda
+            () => {} // har kadrdagi "topilmadi" — e'tibordan chetda
         );
     } catch (err) {
-        // Kamera ochilmadi (ruxsat yo'q / webview bloklagan) -> Telegram skaneriga o'tamiz
         stopScan();
-        window._telegramQrScan(prefix);
+        window._telegramQrScan(onResult); // kamera ochilmadi -> Telegram skaneri
     }
+};
+
+// 1) ADMIN: skanerlangan kodni "code" maydoniga yozadi
+window.scanBarcode = (prefix) => {
+    runScanner((text) => {
+        let inp = document.getElementById(`${prefix}-code`);
+        if (inp) { inp.value = text; inp.dispatchEvent(new Event('input')); }
+        window._formDirty = true;
+        showToast("✅ Kod: " + text, "success");
+    });
+};
+
+// 2) MIJOZ/ADMIN: skanerlangan kod bo'yicha tovarni topib ochadi
+window.scanToFindProduct = () => {
+    runScanner((raw) => {
+        let text = String(raw || '').trim();
+        if (!text) return;
+        let low = text.toLowerCase();
+        // a) aniq kod mosligi
+        let matches = productsDB.filter(p => !p.is_draft && p.code && p.code.toLowerCase() === low);
+        // b) qisman kod mosligi
+        if (matches.length === 0) matches = productsDB.filter(p => !p.is_draft && p.code && p.code.toLowerCase().includes(low));
+        // c) nom bo'yicha (kod topilmasa)
+        if (matches.length === 0) matches = productsDB.filter(p => !p.is_draft && p.name && p.name.toLowerCase().includes(low));
+
+        if (matches.length === 1) {
+            showToast("✅ Topildi: " + matches[0].name, "success");
+            openProduct(matches[0].id);
+        } else if (matches.length > 1) {
+            let si = document.getElementById('searchInput');
+            if (si) { si.value = text; searchProducts(); }
+            showToast("🔎 " + matches.length + " ta tovar topildi", "success");
+        } else {
+            let si = document.getElementById('searchInput');
+            if (si) { si.value = text; searchProducts(); }
+            showToast("❌ '" + text + "' bo'yicha tovar topilmadi", "warning");
+        }
+    });
 };
 window.stopScan = () => {
     let cleanup = () => { let ov = document.getElementById('scanner-overlay'); if (ov) ov.remove(); };
