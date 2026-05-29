@@ -1138,7 +1138,9 @@
         }
 
         .profile-header::after {
-            content: 'VIP MEMBER' !important;
+            /* Default: VIP yorlig'i YASHIRIN. JS yetarli sharti bo'lgan
+               mijozga .is-vip klassi qo'shadi (5+ buyurtma yoki 1M+ so'm) */
+            content: none !important;
             position: absolute !important;
             top: 15px; right: -20px;
             background: rgba(255,255,255,0.2);
@@ -1148,6 +1150,10 @@
             font-weight: 900;
             color: #fff;
             letter-spacing: 1px;
+        }
+        /* QADAM 2: VIP yorlig'i faqat haqiqiy mijozlar uchun */
+        .profile-header.is-vip::after {
+            content: 'VIP MEMBER' !important;
         }
 
         .profile-avatar {
@@ -4406,6 +4412,7 @@ const Haptics = {
                 myOrders = data.orders || []; 
                 wishlist = data.wishlist || [];
                 if(data.profile) { myProfile = data.profile; updateProfileUI(); }
+                _updateVipStatus(); // ⭐ VIP holatini buyurtma tarixi bo'yicha yangilash
                 
                 if(!isDataLoaded) { 
                     updateCartBadge(); 
@@ -4424,7 +4431,28 @@ const Haptics = {
 
     function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
     function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">❌ Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
-    function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; }
+    function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; _updateVipStatus(); }
+
+    // ⭐ QADAM 2: VIP MEMBER yorlig'i faqat haqiqiy mijozlar uchun
+    // Mantiq:
+    //   - 5+ ta yetkazib berilgan buyurtma  YOKI
+    //   - 1,000,000 so'm va undan ortiq sarflagan mijoz -> VIP
+    //   - Aks holda yorliq ko'rinmaydi (eski "hammaga VIP" muammosi tuzatildi)
+    function _updateVipStatus() {
+        try {
+            const header = document.querySelector('.profile-header');
+            if (!header) return;
+            if (!Array.isArray(myOrders)) {
+                header.classList.remove('is-vip');
+                return;
+            }
+            const delivered = myOrders.filter(o => o && o.status === 'yetkazildi');
+            const orderCount = delivered.length;
+            const totalSpent = delivered.reduce((s, o) => s + (parseInt(o.total) || 0), 0);
+            const isVip = orderCount >= 5 || totalSpent >= 1000000;
+            header.classList.toggle('is-vip', isVip);
+        } catch (e) { /* xato bo'lsa indamasdan o'tib ketamiz - boshqa funksiyalar buzilmasin */ }
+    }
 
     function saveLocalCart() { localStorage.setItem('avto_cart', JSON.stringify(cart)); if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
     function saveLocalWishlist() { if (currentUser) db.ref('users/' + currentUser + '/wishlist').set(wishlist); }
