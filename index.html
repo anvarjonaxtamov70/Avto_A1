@@ -2802,15 +2802,29 @@
             animation-delay: 0ms;
             animation-duration: 200ms;
         }
+        /* 🛡️ XAVFSIZLIK KAFOLATI: animatsiya har qanday sababdan ishlamasa ham
+           (reduced-motion, eski brauzer, JS yo'q) kartalar HECH QACHON
+           ko'rinmay qolmaydi — opacity majburan 1 ga qaytariladi. */
+        @media (prefers-reduced-motion: reduce) {
+            .items-grid .luxury-card {
+                opacity: 1 !important;
+                animation: none !important;
+            }
+        }
 
         /* === ⚙️ TILLA SHESTERNYA LOADER (12 tovar yuklanguncha aylanadi) === */
-        /* Mavjud #loading-text elementining ustiga premium gear loader qo'yamiz */
+        /* Mavjud #loading-text elementining ustiga premium gear loader qo'yamiz.
+           ⚠️ MUHIM: 'display' ga !important QO'YILMAYDI! Aks holda JavaScript
+           tovarlar yuklangach uni style.display='none' qilib yashira olmaydi
+           va shesternya ABADIY aylanaveradi (oldingi xato shu edi).
+           Endi: dastlab stylesheet 'flex' -> gear ko'rinadi; tovar kelgach JS
+           inline 'none' qo'yadi -> u !important'siz qoidadan ustun -> gear yo'qoladi. */
         #loading-text {
-            display: flex !important;
+            display: flex;                       /* !important YO'Q — JS yashira olishi uchun */
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 60vh;
+            min-height: 55vh;
             padding: 0 !important;
             color: transparent !important;       /* asl "Yuklanmoqda..." matnini yashiramiz */
             font-size: 0 !important;
