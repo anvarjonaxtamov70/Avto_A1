@@ -3119,6 +3119,154 @@
             -moz-osx-font-smoothing: grayscale !important;
             text-rendering: optimizeLegibility !important;
         }
+
+        /* ============================================================ */
+        /* 📱 STORIES — INSTAGRAM-DARAJA PREMIUM (tezlik + UX + sayqal)  */
+        /* ============================================================ */
+
+        /* 🎬 1) STORIS HALQASI — yangi (ko'rilmagan) bo'lsa AYLANADI
+              Instagram'dagidek tilla nur halqa atrofida sokin yuradi.
+              Faqat conic-gradient + transform: rotate (GPU). */
+        .story-ring.new {
+            position: relative;
+            border: none !important;       /* eski qattiq border o'rniga gradient */
+            background: transparent;
+            padding: 2.5px !important;
+            box-shadow: none !important;
+            animation: none !important;     /* eski tillaNur pulse o'chirildi */
+            overflow: visible;
+        }
+        .story-ring.new::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            padding: 2.5px;
+            background: conic-gradient(
+                from 0deg,
+                #F0D060 0deg,
+                #C9A84C 90deg,
+                rgba(212,175,55,0.2) 180deg,
+                #C9A84C 270deg,
+                #F0D060 360deg
+            );
+            -webkit-mask:
+                linear-gradient(#000 0 0) content-box,
+                linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+                    mask-composite: exclude;
+            animation: storyRingSpin 4s linear infinite;
+            pointer-events: none;
+            filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.45));
+        }
+        @keyframes storyRingSpin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+
+        /* 🎬 2) BUFFERING BAR — video yuklanish foizi (pastda nozik tilla chiziq) */
+        .sv-buffer-bar {
+            position: absolute;
+            left: 8%;
+            right: 8%;
+            bottom: 14px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 2px;
+            overflow: hidden;
+            z-index: 9;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+        .sv-buffer-bar.show { opacity: 1; }
+        .sv-buffer-bar > div {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #F0D060, #C9A84C);
+            border-radius: 2px;
+            box-shadow: 0 0 6px rgba(212, 175, 55, 0.55);
+            transition: width 0.2s ease;
+        }
+
+        /* 🎬 3) PAUSE INDIKATORI — bosib turganda markazda ⏸ ko'rinadi */
+        .sv-pause-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.6);
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 26px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            z-index: 9;
+        }
+        .sv-pause-indicator.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        /* 🎬 4) SOUND TUGMASI — video uchun 🔊/🔇 */
+        .sv-sound-btn {
+            position: absolute;
+            top: 60px;
+            right: 14px;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 16px;
+            display: none;        /* JS yoqadi (faqat videoда) */
+            align-items: center;
+            justify-content: center;
+            z-index: 11;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        .sv-sound-btn:active { transform: scale(0.88); }
+
+        /* 🎬 5) SWIPE-DOWN TO CLOSE — barmoq bilan pastga sursangiz tushadi */
+        #story-viewer {
+            transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+                        opacity 0.25s ease;
+            will-change: transform;
+        }
+        #story-viewer.swiping {
+            transition: none;     /* barmoq harakat paytida real-time */
+        }
+        #story-viewer.closing-down {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+
+        /* 🎬 6) STORIS CONTENT — qora fon (video yuklanguncha stabil ko'rinish) */
+        #story-content {
+            background: #050505;
+            position: relative;
+        }
+
+        /* 🎬 7) Eski "HD Yuklanmoqda" 3 nuqta o'rniga toza tilla spinner */
+        .sv-spinner {
+            width: 36px;
+            height: 36px;
+            border: 2.5px solid rgba(212, 175, 55, 0.18);
+            border-top-color: #C9A84C;
+            border-radius: 50%;
+            animation: gearSpin 0.85s linear infinite;
+        }
     </style>
 </head>
 <body ontouchstart="">
@@ -8643,20 +8791,67 @@ function initReveal() {
             });
         }
 
+        // ============================================================
+        // 📱 INSTAGRAM-DARAJA STORIES — tezlik + UX + sayqal
+        // ============================================================
+        // Yangi xususiyatlar:
+        // ✅ Preload (keyingi storis fonда oldindan yuklanadi)
+        // ✅ Buffering bar (pastda nozik tilla chiziq)
+        // ✅ Cover poster (qora ekran o'rniga birinchi kadr)
+        // ✅ Toza tilla spinner (eski 3 nuqta o'rniga)
+        // ✅ Pause indikatori (bosib turganda ⏸)
+        // ✅ Sound icon (🔊/🔇)
+        // ✅ Swipe-down to close
+        // ✅ Avtomat keyingi kategoriyaga o'tish
+        // ✅ Tap zona aniq (chap 30%, o'ng 70%)
+        // ============================================================
+
+        // Kategoriyalar tartibi (avtomat o'tish uchun) — HTML buyrug'iga mos
+        const STORY_CATEGORIES_ORDER = [
+            'aksiyalar', 'bugun', 'mijozlar', 'dostavka',
+            'kafolat', 'lokatsiya', 'tolov', 'aloqa'
+        ];
+        const STORY_CAPTIONS = {
+            aksiyalar: '🔥 Aksiyalar',
+            bugun:     '💡 Bugun',
+            mijozlar:  '👥 Mijozlar',
+            dostavka:  '🚚 Dostavka',
+            kafolat:   '🛡️ Kafolat',
+            lokatsiya: '📍 Lokatsiya',
+            tolov:     '💳 To\'lov',
+            aloqa:     '📞 Aloqa'
+        };
+
+        // Preload va sound holatini saqlash
+        let _preloadVideo = null;
+        let _storySoundMuted = true;   // boshlanishida ovozsiz (Instagram qoidasi: brauzer ovozli avtoplay'ni bloklaydi)
+        let _storyTouchStartY = 0;
+        let _storyTouchCurrentY = 0;
+        let _storyIsSwiping = false;
+        // Sekin internet — preload o'chiriladi
+        let _saveData = false;
+        try {
+            if (navigator.connection && navigator.connection.saveData) _saveData = true;
+        } catch (e) {}
+
         window.startStories = (playlistId, caption) => {
             currentPlaylistId = playlistId;
             currentPlaylist = STORIES_DB[playlistId];
-            
-            if(!currentPlaylist || currentPlaylist.length === 0) {
+
+            if (!currentPlaylist || currentPlaylist.length === 0) {
                 showToast("Hali yangiliklar yo'q!", "warning"); return;
             }
-            
+
             currentStoryIdx = 0;
             document.getElementById('story-caption').innerText = caption;
-            document.getElementById('story-viewer').style.display = 'flex';
-            document.body.style.overflow = 'hidden'; // Orqa fon skrollini qulflaymiz
+            const viewer = document.getElementById('story-viewer');
+            viewer.style.display = 'flex';
+            viewer.classList.remove('closing-down', 'swiping');
+            viewer.style.transform = '';
+            viewer.style.opacity = '';
+            document.body.style.overflow = 'hidden';
 
-            // 👑 ADMIN TEKSHIRUVI: O'chirish tugmasini faqat admin ko'radi
+            // Admin uchun o'chirish tugmasi
             let delBtn = document.getElementById('admin-story-delete-btn');
             if (typeof currentUser !== 'undefined' && typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(currentUser)) {
                 delBtn.style.display = 'flex';
@@ -8664,13 +8859,18 @@ function initReveal() {
                 delBtn.style.display = 'none';
             }
 
-            if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            // Swipe-down va sound tugmalarini biriktirish (faqat 1 marta)
+            _attachSwipeDownClose();
+            _ensureSoundButton();
+
+            if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             playCurrentStory();
         };
 
         window.playCurrentStory = () => {
             if (currentStoryIdx >= currentPlaylist.length) {
-                closeStoryViewer(); return;
+                _goToNextCategory();   // joriy kategoriya tugadi -> keyingisiga o'tamiz
+                return;
             }
             if (currentStoryIdx < 0) currentStoryIdx = 0;
 
@@ -8678,73 +8878,289 @@ function initReveal() {
             const content = document.getElementById('story-content');
             const progressContainer = document.getElementById('story-progress-container');
 
-            // Tepadagi progress chiziqchalarni chizish
+            // Tepadagi progress chiziqlari
             progressContainer.innerHTML = currentPlaylist.map((_, i) => `
                 <div class="story-progress-bg">
                     <div class="story-progress-fill" style="width: ${i < currentStoryIdx ? '100%' : '0%'}"></div>
                 </div>
             `).join('');
-
             const currentFill = progressContainer.children[currentStoryIdx].querySelector('.story-progress-fill');
             cancelAnimationFrame(storyProgressAnimation);
 
-            // 🎥 4K VIDEO BUFERIZATSIYASI VA RASM YUKLASH
-            if (item.type === 'video') {
-                content.innerHTML = `
-                    <div id="video-loader" style="position:absolute; z-index:2; color:var(--luxury-gold); display:flex; flex-direction:column; align-items:center;">
-                        <div class="luxury-typing"><div class="luxury-dot"></div><div class="luxury-dot"></div><div class="luxury-dot"></div></div>
-                        <div style="font-size:10px; margin-top:8px; font-weight:bold;">HD Yuklanmoqda...</div>
-                    </div>
-                    <video id="stVideo" playsinline autoplay preload="auto" src="${item.src}" style="width:100%;height:100%;object-fit:contain; display:none;"></video>
-                `;
-                
-                storyVideoElement = document.getElementById('stVideo');
-                const loader = document.getElementById('video-loader');
-                
-                storyVideoElement.oncanplay = () => {
-                    if(loader) loader.style.display = 'none';
-                    storyVideoElement.style.display = 'block';
-                };
-
-                storyVideoElement.onloadedmetadata = () => {
-                    animateStoryProgress(currentFill, storyVideoElement.duration * 1000);
-                };
-                
-                storyVideoElement.onended = () => { nextStory(); };
-            } else {
+            // Eski videoni xavfsiz to'xtatamiz (xotira oqishini oldini olamiz)
+            if (storyVideoElement) {
+                try {
+                    storyVideoElement.pause();
+                    storyVideoElement.removeAttribute('src');
+                    storyVideoElement.load();
+                } catch (e) {}
                 storyVideoElement = null;
-                content.innerHTML = `<img src="${item.src}" style="width:100%;height:100%;object-fit:contain;">`;
-                animateStoryProgress(currentFill, 5000); // Rasm standart 5 soniya turadi
             }
 
-            // ⏸ BOSIB TURGANDA PAUZA QILISH (Touch & Mouse events)
-            content.onmousedown = pauseStory;
-            content.onmouseup = resumeStory;
-            content.ontouchstart = pauseStory;
-            content.ontouchend = resumeStory;
+            // Sound tugmasini yashiramiz (faqat video uchun yoqamiz)
+            const soundBtn = document.getElementById('sv-sound-btn');
+            if (soundBtn) soundBtn.style.display = 'none';
+
+            // ============================================================
+            // VIDEO STORIS
+            // ============================================================
+            if (item.type === 'video') {
+                // poster (cover) — agar item.poster bo'lsa shu, aks holda bo'sh (qora)
+                const poster = item.poster ? `poster="${item.poster}"` : '';
+
+                content.innerHTML = `
+                    <div id="sv-loader" style="position:absolute; z-index:2; display:flex; flex-direction:column; align-items:center;">
+                        <div class="sv-spinner"></div>
+                    </div>
+                    <video id="stVideo" ${poster} playsinline webkit-playsinline preload="auto"
+                           ${_storySoundMuted ? 'muted' : ''}
+                           src="${item.src}"
+                           style="width:100%;height:100%;object-fit:contain;background:#000;">
+                    </video>
+                    <div class="sv-buffer-bar" id="sv-buffer-bar"><div></div></div>
+                    <div class="sv-pause-indicator" id="sv-pause-indicator">⏸</div>
+                `;
+
+                storyVideoElement = document.getElementById('stVideo');
+                const loader = document.getElementById('sv-loader');
+                const bufferBar = document.getElementById('sv-buffer-bar');
+                const bufferFill = bufferBar ? bufferBar.firstElementChild : null;
+
+                // Sound tugmasini ko'rsatamiz va holatga moslashtiramiz
+                if (soundBtn) {
+                    soundBtn.style.display = 'flex';
+                    soundBtn.innerText = _storySoundMuted ? '🔇' : '🔊';
+                }
+
+                // Yuklanish boshlanmaguncha buffering bar ko'rinadi
+                if (bufferBar) bufferBar.classList.add('show');
+
+                // Progress event — yuklanish foizini yangilaymiz
+                storyVideoElement.addEventListener('progress', () => {
+                    try {
+                        if (storyVideoElement.buffered.length > 0 && storyVideoElement.duration) {
+                            const buffered = storyVideoElement.buffered.end(storyVideoElement.buffered.length - 1);
+                            const pct = Math.min(100, (buffered / storyVideoElement.duration) * 100);
+                            if (bufferFill) bufferFill.style.width = pct + '%';
+                        }
+                    } catch (e) {}
+                });
+
+                // Yetarli yuklanganда — loader ketadi, video boshlanadi
+                storyVideoElement.addEventListener('canplay', () => {
+                    if (loader) loader.style.display = 'none';
+                }, { once: true });
+
+                storyVideoElement.addEventListener('loadedmetadata', () => {
+                    animateStoryProgress(currentFill, storyVideoElement.duration * 1000);
+                }, { once: true });
+
+                // Sekin internet — "waiting" / "stalled" da loader qaytadi
+                storyVideoElement.addEventListener('waiting', () => {
+                    if (loader) loader.style.display = 'flex';
+                });
+                storyVideoElement.addEventListener('playing', () => {
+                    if (loader) loader.style.display = 'none';
+                    if (bufferBar) {
+                        // 1.2s dan keyin buffering barni yashiramiz (chalg'itmasin)
+                        setTimeout(() => { bufferBar.classList.remove('show'); }, 1200);
+                    }
+                });
+
+                storyVideoElement.addEventListener('ended', () => { nextStory(); });
+
+                // Xato bo'lsa — keyingi storisga o'tamiz (qotib qolmasin)
+                storyVideoElement.addEventListener('error', () => {
+                    showToast("Video yuklanmadi", "warning");
+                    setTimeout(() => nextStory(), 600);
+                });
+
+            // ============================================================
+            // RASM STORIS
+            // ============================================================
+            } else {
+                content.innerHTML = `
+                    <img src="${item.src}" style="width:100%;height:100%;object-fit:contain;background:#000;"
+                         onerror="this.style.opacity=0.3;">
+                    <div class="sv-pause-indicator" id="sv-pause-indicator">⏸</div>
+                `;
+                animateStoryProgress(currentFill, 5000);
+            }
+
+            // ⏸ BOSIB TURGANDA PAUZA + ⏯ pause indikatorini ko'rsatamiz
+            content.onmousedown  = _onPressDown;
+            content.onmouseup    = _onPressUp;
+            content.onmouseleave = _onPressUp;     // sichqoncha chiqib ketsa ham qaytaradi
+            content.ontouchstart = _onPressDown;
+            content.ontouchend   = _onPressUp;
+            content.ontouchcancel = _onPressUp;
+
+            // 🚀 PRELOAD: keyingi storisni fonда yuklab qo'yamiz
+            _preloadNextStory();
         };
 
-        // ⏭ KEYINGI VA  ⏮ OLDINGI STORISGA O'TISH
+        function _onPressDown(e) {
+            // Swipe-down davomida pause qilmaymiz (yuqorida swipe handler ishlaydi)
+            if (_storyIsSwiping) return;
+            pauseStory();
+            const ind = document.getElementById('sv-pause-indicator');
+            if (ind) ind.classList.add('show');
+        }
+        function _onPressUp() {
+            resumeStory();
+            const ind = document.getElementById('sv-pause-indicator');
+            if (ind) ind.classList.remove('show');
+        }
+
+        // 🚀 PRELOAD — keyingi 1 ta videoni fonда yuklash (saveData rejimda o'chadi)
+        function _preloadNextStory() {
+            if (_saveData) return;            // sekin internet — preload yo'q
+            if (!currentPlaylist) return;
+            const nextItem = currentPlaylist[currentStoryIdx + 1];
+            if (!nextItem || nextItem.type !== 'video' || !nextItem.src) {
+                if (_preloadVideo) _preloadVideo.removeAttribute('src');
+                return;
+            }
+            try {
+                if (!_preloadVideo) {
+                    _preloadVideo = document.createElement('video');
+                    _preloadVideo.style.display = 'none';
+                    _preloadVideo.preload = 'auto';
+                    _preloadVideo.muted = true;
+                    _preloadVideo.playsInline = true;
+                    document.body.appendChild(_preloadVideo);
+                }
+                if (_preloadVideo.src !== nextItem.src) {
+                    _preloadVideo.src = nextItem.src;
+                    _preloadVideo.load();
+                }
+            } catch (e) {}
+        }
+
+        // 🔊/🔇 Sound tugmasini bir marta yaratish
+        function _ensureSoundButton() {
+            if (document.getElementById('sv-sound-btn')) return;
+            const viewer = document.getElementById('story-viewer');
+            const btn = document.createElement('div');
+            btn.id = 'sv-sound-btn';
+            btn.className = 'sv-sound-btn';
+            btn.innerText = '🔇';
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                _storySoundMuted = !_storySoundMuted;
+                btn.innerText = _storySoundMuted ? '🔇' : '🔊';
+                if (storyVideoElement) {
+                    storyVideoElement.muted = _storySoundMuted;
+                    if (!_storySoundMuted) {
+                        // Brauzer ba'zan ovoz uchun ruxsatni qaytaradi
+                        try { storyVideoElement.play(); } catch (er) {}
+                    }
+                }
+            };
+            viewer.appendChild(btn);
+        }
+
+        // 👇 SWIPE-DOWN TO CLOSE (Instagram qoidasi)
+        let _swipeAttached = false;
+        function _attachSwipeDownClose() {
+            if (_swipeAttached) return;
+            _swipeAttached = true;
+            const viewer = document.getElementById('story-viewer');
+
+            viewer.addEventListener('touchstart', (e) => {
+                if (e.touches.length !== 1) return;
+                _storyTouchStartY = e.touches[0].clientY;
+                _storyTouchCurrentY = _storyTouchStartY;
+                _storyIsSwiping = false;
+            }, { passive: true });
+
+            viewer.addEventListener('touchmove', (e) => {
+                if (e.touches.length !== 1) return;
+                _storyTouchCurrentY = e.touches[0].clientY;
+                const dy = _storyTouchCurrentY - _storyTouchStartY;
+                // Faqat PASTGA yoki YUQORIGA sezilarli sursa swipe deb hisoblaymiz
+                if (Math.abs(dy) > 12 && !_storyIsSwiping) {
+                    _storyIsSwiping = true;
+                    viewer.classList.add('swiping');
+                    pauseStory();
+                }
+                if (_storyIsSwiping) {
+                    // Faqat pastga sirpanishni ko'rsatamiz, yuqoriga — kichikroq
+                    const moveY = dy > 0 ? dy : dy * 0.3;
+                    viewer.style.transform = `translateY(${moveY}px)`;
+                    viewer.style.opacity = String(Math.max(0.4, 1 - Math.abs(dy) / 600));
+                }
+            }, { passive: true });
+
+            viewer.addEventListener('touchend', () => {
+                if (!_storyIsSwiping) return;
+                const dy = _storyTouchCurrentY - _storyTouchStartY;
+                viewer.classList.remove('swiping');
+                if (dy > 110) {
+                    // Yetarli pastga surildi -> yopamiz
+                    viewer.classList.add('closing-down');
+                    setTimeout(() => closeStoryViewer(), 240);
+                } else {
+                    // Qaytib joyiga keladi
+                    viewer.style.transform = '';
+                    viewer.style.opacity = '';
+                    resumeStory();
+                }
+                _storyIsSwiping = false;
+            });
+        }
+
+        // ⏭ Joriy kategoriya tugagach — keyingi kategoriyaga avtomat o'tish
+        function _goToNextCategory() {
+            const currentIdx = STORY_CATEGORIES_ORDER.indexOf(currentPlaylistId);
+            for (let i = currentIdx + 1; i < STORY_CATEGORIES_ORDER.length; i++) {
+                const nextCat = STORY_CATEGORIES_ORDER[i];
+                if (STORIES_DB[nextCat] && STORIES_DB[nextCat].length > 0) {
+                    // Yangi kategoriyani ko'rilgan deb belgilaymiz (UI uchun)
+                    const ringEl = document.querySelector(`.story-item[onclick*="'${nextCat}'"] .story-ring`);
+                    if (ringEl && ringEl.classList.contains('new')) {
+                        ringEl.classList.remove('new');
+                        ringEl.classList.add('seen');
+                    }
+                    startStories(nextCat, STORY_CAPTIONS[nextCat] || nextCat);
+                    return;
+                }
+            }
+            // Boshqa kategoriya yo'q — yopamiz
+            closeStoryViewer();
+        }
+
+        // ⏭ KEYINGI VA ⏮ OLDINGI
         window.nextStory = (e) => {
-            if(e) e.stopPropagation();
-            currentStoryIdx++; 
+            if (e) e.stopPropagation();
+            currentStoryIdx++;
             playCurrentStory();
         };
-
         window.prevStory = (e) => {
-            if(e) e.stopPropagation();
-            currentStoryIdx--; 
+            if (e) e.stopPropagation();
+            currentStoryIdx--;
             playCurrentStory();
         };
 
         window.closeStoryViewer = () => {
-            document.getElementById('story-viewer').style.display = 'none';
+            const viewer = document.getElementById('story-viewer');
+            viewer.style.display = 'none';
+            viewer.classList.remove('closing-down', 'swiping');
+            viewer.style.transform = '';
+            viewer.style.opacity = '';
             document.getElementById('story-content').innerHTML = '';
             document.body.style.overflow = '';
             cancelAnimationFrame(storyProgressAnimation);
             if (storyVideoElement) {
-                storyVideoElement.pause();
-                storyVideoElement.src = "";
+                try {
+                    storyVideoElement.pause();
+                    storyVideoElement.removeAttribute('src');
+                    storyVideoElement.load();
+                } catch (e) {}
+                storyVideoElement = null;
+            }
+            if (_preloadVideo) {
+                try { _preloadVideo.removeAttribute('src'); _preloadVideo.load(); } catch (e) {}
             }
         };
 
