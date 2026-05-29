@@ -8788,15 +8788,25 @@ function initReveal() {
         //  - Storis yo'q              -> 'empty' (kulrang, aylanmaydi, ishlatib bo'lmaydi)
         function _refreshStoryRings() {
             const rings = document.querySelectorAll('.story-ring[data-story]');
+            let visibleCount = 0;
             rings.forEach(ring => {
                 const cat = ring.getAttribute('data-story');
                 const items = STORIES_DB[cat];
                 ring.classList.remove('new', 'seen', 'empty');
+                // Halqaning ota-elementi (.story-item) — uni to'liq yashirish/ko'rsatish uchun
+                const itemEl = ring.closest('.story-item');
                 if (!items || items.length === 0) {
-                    // Storis yo'q
+                    // ⚙️ QADAM 1: Storis yo'q -> butun halqa YASHIRINADI
+                    // (avval 'empty' kulrang halqa turardi - mijozga "tashlab qo'yilgan sayt"
+                    //  hissini berardi. Endi Aksiyalar/Aloqa kabilar yo'q bo'lsa, umuman
+                    //  ko'rinmaydi - faqat haqiqiy kontent ko'rinadi.)
                     ring.classList.add('empty');
+                    if (itemEl) itemEl.style.display = 'none';
                     return;
                 }
+                // Storis bor -> ko'rsatamiz
+                if (itemEl) itemEl.style.display = '';
+                visibleCount++;
                 // Eng yangi storis timestamp'ini olamiz
                 const latestTs = items.reduce((m, it) => Math.max(m, it.timestamp || 0), 0);
                 const seenTs = _seenStories[cat] || 0;
@@ -8806,6 +8816,12 @@ function initReveal() {
                     ring.classList.add('seen');    // hammasini ko'rgan
                 }
             });
+            // Agar BIRORTA storis yo'q bo'lsa, butun storis qatori yashirinadi
+            // (toza ko'rinish, "tashlab qo'yilgan" hissi yo'qoladi)
+            const container = document.getElementById('stories-list');
+            if (container) {
+                container.style.display = visibleCount === 0 ? 'none' : '';
+            }
         }
 
         // Dastur ishga tushganda storislarni Firebase'dan avtomat o'qiydi
