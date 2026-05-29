@@ -4850,7 +4850,13 @@ function showToast(m, t = 'success') {
         const f = e.target.files[0]; if (!f) return; currentTargetInput = t; const r = new FileReader();
         r.onload = function(ev) {
             ensureCropper().then(() => {
-                document.getElementById('cropper-image').src = ev.target.result; document.getElementById('cropModal').style.display = 'flex'; activeModal = 'cropModal'; if(currentCropper) currentCropper.destroy(); currentCropper = new Cropper(document.getElementById('cropper-image'), { aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 0.9 });
+                document.getElementById('cropper-image').src = ev.target.result;
+                document.getElementById('cropModal').style.display = 'flex';
+                window._cropPrevActive = activeModal; // qaytadigan modalni saqlaymiz
+                activeModal = 'cropModal';
+                window.history.pushState({ modal: 'cropModal' }, ""); // ⚡ popstate'da yopiladi
+                tg.BackButton.show();
+                if(currentCropper) currentCropper.destroy(); currentCropper = new Cropper(document.getElementById('cropper-image'), { aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 0.9 });
             }).catch(() => showToast("Rasm tahrirlagich yuklanmadi", "warning"));
         };
         r.readAsDataURL(f); e.target.value = '';
@@ -4915,7 +4921,11 @@ function showToast(m, t = 'success') {
                 btn.disabled = false; 
             }
         }
-    function closeCropModal() { closeModal(); if(currentCropper) currentCropper.destroy(); }
+    function closeCropModal() {
+        // Agar cropModal history'da bo'lsa — back orqali yopamiz (popstate cleanup qiladi)
+        if (activeModal === 'cropModal') { window.history.back(); }
+        else { if(currentCropper) currentCropper.destroy(); document.getElementById('cropModal').style.display = 'none'; }
+    }
     function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
 
     function openAdminInventory() {
@@ -6184,6 +6194,40 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         window.addEventListener('popstate', function(e) {
             if (activeModal) {
                 let current = activeModal;
+
+                // 🆕 0a. SKANER overlay'i — eng yuqori prioritet, oldingi modalga qaytadi
+                if (current === '__scanner__') {
+                    let cleanup = () => { let ov = document.getElementById('scanner-overlay'); if (ov) ov.remove(); };
+                    if (window._h5qr) {
+                        let r = window._h5qr; window._h5qr = null;
+                        try { r.stop().then(() => { try { r.clear(); } catch(e2){} cleanup(); }).catch(cleanup); }
+                        catch(e2) { cleanup(); }
+                    } else { cleanup(); }
+                    activeModal = window._scannerPrevActive || null;
+                    window._scannerPrevActive = null;
+                    if (!activeModal) {
+                        document.body.style.overflow = '';
+                        let cont = document.querySelector('.container'); if(cont) cont.classList.remove('blur-bg');
+                    }
+                    updateBtns();
+                    return;
+                }
+
+                // 🆕 0b. CROPPER (rasm kesish) — oldingi modalga qaytadi (asosiy ekranga emas)
+                if (current === 'cropModal') {
+                    if (typeof currentCropper !== 'undefined' && currentCropper) { try { currentCropper.destroy(); } catch(e2){} }
+                    document.getElementById('cropModal').style.display = 'none';
+                    activeModal = window._cropPrevActive || null;
+                    window._cropPrevActive = null;
+                    // Oldingi modal hali DOMda ochiq edi — boshqa hech narsa kerak emas
+                    if (!activeModal) {
+                        document.body.style.overflow = '';
+                        let cont = document.querySelector('.container'); if(cont) cont.classList.remove('blur-bg');
+                    }
+                    updateBtns();
+                    return;
+                }
+
                 document.getElementById(current).style.display = 'none';
     
                 // 1. Admin Chatdan -> Buyurtmalarga qaytish
@@ -6208,6 +6252,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     if (window.currentDraftFolder) {
                         activeModal = 'adminDraftsModal';
                         document.getElementById('adminDraftsModal').style.display = 'flex';
+                        window.currentDraftFolder = false; // bayroqni tozalaymiz
                     } else {
                         activeModal = 'productModal';
                         document.getElementById('productModal').style.display = 'flex';
@@ -7759,22 +7804,14 @@ window.openEditModal = function(e, directId = null) {
 
 
 window.closeEditGoBack = () => {
-    document.getElementById('editModal').style.display = 'none';
-    
-    let draftsModal = document.getElementById('adminDraftsModal');
-    // Agar Qoralamalar (Draft) ichidan kirgan bo'lsak, srazi o'shanga qaytadi
-    if (draftsModal && window.currentDraftFolder !== undefined) {
-        document.getElementById('productModal').style.display = 'none';
-        draftsModal.style.display = 'flex';
-        activeModal = 'adminDraftsModal';
-        window.history.go(-2); // Tarixda orqaga
+    // 🧭 Soddalashtirildi: popstate handler editModal case'i hammasini hal qiladi
+    //    (drafts'dan kelgan bo'lsa adminDraftsModal'ga, aks holda productModal'ga).
+    //    Drafts holatida productModal'ni ham history'dan tushiramiz (go(-2)).
+    if (window.currentDraftFolder) {
+        window.history.go(-2); // editModal + productModal entry'lari
     } else {
-        // Oddiy do'kon vitrinasidan kirgan bo'lsak, tovar oynasiga qaytadi
-        document.getElementById('productModal').style.display = 'flex';
-        activeModal = 'productModal';
         window.history.back();
     }
-    updateBtns();
 };
     
 // =====================================
@@ -8025,6 +8062,7 @@ window.filterAdminDrafts = (filterBrand = null) => {
 
 window.editDraft = (id) => {
     document.getElementById('adminDraftsModal').style.display = 'none';
+    window.currentDraftFolder = true; // 🧭 closeEditGoBack qaytishi uchun bayroq
     openProduct(id);
     setTimeout(() => {
         let editBtn = document.getElementById('pm-edit-btn');
@@ -9970,6 +10008,7 @@ window._switchToTelegramScan = (onResult) => {
 // Umumiy skaner: muvaffaqiyatda onResult(text) chaqiradi
 // ⚡ TEZLASHTIRILGAN: fps 10 -> 25, kattaroq qrbox, faqat kerakli formatlar,
 //    native BarcodeDetector (Chrome/Edge/Samsung) — bu deyarli darrov o'qiydi.
+// 🧭 NAVIGATSIYA: history.pushState bilan ulangan — BackButton overlay'ni yopadi.
 window._h5qr = null;
 window.runScanner = async (onResult) => {
     try {
@@ -9989,7 +10028,13 @@ window.runScanner = async (onResult) => {
             <button class="scan-action-btn" onclick="_switchToTelegramScan(window._scanCb)" title="Tezkor Telegram skaneri (faqat QR)">⚡ Tezkor</button>
         </div>`;
     document.body.appendChild(ov);
-    window._scanCb = onResult; // tezkor tugma uchun saqlaymiz
+    window._scanCb = onResult;
+
+    // 🧭 History'ga qo'shamiz: BackButton overlay'ni yopadi (asosiy ekranga emas)
+    window._scannerPrevActive = activeModal;
+    activeModal = '__scanner__';
+    window.history.pushState({ modal: '__scanner__' }, "");
+    if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show();
 
     try {
         // Faqat avto-ehtiyot qism qutilarida bo'ladigan formatlar — boshqasini tekshirmaydi
@@ -10084,6 +10129,12 @@ window.scanToFindProduct = () => {
     });
 };
 window.stopScan = () => {
+    // Agar history'da skaner bor bo'lsa — back orqali yopamiz (popstate cleanup qiladi)
+    if (activeModal === '__scanner__') {
+        window.history.back();
+        return;
+    }
+    // Aks holda to'g'ridan-to'g'ri tozalaymiz
     let cleanup = () => { let ov = document.getElementById('scanner-overlay'); if (ov) ov.remove(); };
     if (window._h5qr) {
         let r = window._h5qr;
