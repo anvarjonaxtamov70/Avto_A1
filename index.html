@@ -2694,8 +2694,11 @@
             box-shadow: var(--shadow-card) !important;
             border: 1px solid rgba(255,255,255,0.06) !important;
             contain: content;
+            /* ⚡ Pastdan tepaga skroll qotishi tuzatildi:
+               'auto 280px' brauzer kartaning ASL o'lchamini eslab qoladi —
+               qayta render qilmaydi, layout o'zgarmaydi. */
             content-visibility: auto;
-            contain-intrinsic-size: 0 280px;
+            contain-intrinsic-size: auto 280px;
         }
         .luxury-card:active {
             box-shadow: var(--shadow-card-active) !important;
@@ -2762,13 +2765,6 @@
                 box-shadow 200ms var(--ease-silk),
                 border-color 200ms ease !important;
         }
-        @keyframes silkyEnter {
-            0%   { opacity: 0; transform: translate3d(0, 14px, 0); }
-            100% { opacity: 1; transform: translate3d(0, 0, 0); }
-        }
-        #content-area > div {
-            animation: silkyEnter 0.42s var(--ease-silk) both !important;
-        }
         @keyframes addedPulse {
             0%   { transform: scale(1); }
             40%  { transform: scale(1.08); }
@@ -2778,60 +2774,90 @@
             animation: addedPulse 0.4s var(--ease-bounce);
         }
 
-        /* === 3-A: RASM BLUR-UP (silliq yuklanish, qotishsiz) === */
-        .luxury-card .img-wrap img,
-        .search-item img,
-        .cart-row img,
-        .pm-slider img,
-        .similar-card .img-wrap img,
-        .pm-img-header img {
-            background-color: var(--surface-3);
-            transition: filter 0.4s ease, opacity 0.3s ease !important;
+        /* === ✨ STAGGER FADE: tovarlar 1-2-3 ohista paydo bo'ladi (Apple uslubi) === */
+        /* Faqat opacity ishlatadi — CPU 0%, transform yo'q (skroll buzilmaydi). */
+        @keyframes cardFadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
         }
-        img:not(.img-loaded):not([src=""]):not([src*="placeholder"]) {
-            filter: blur(8px) brightness(0.75);
+        .items-grid .luxury-card {
+            opacity: 0;
+            animation: cardFadeIn 380ms ease-out forwards;
         }
-        img.img-loaded {
-            filter: none !important;
-        }
-
-        /* === 3-B + 3-C: PERFORMANS (ko'p tovarda qotmaydi) === */
-        #content-area > div.hidden {
-            content-visibility: hidden;
-        }
-        .skeleton {
-            background: var(--surface-2) !important;
-            border-radius: 22px !important;
-            border: 1px solid rgba(255,255,255,0.04) !important;
-            position: relative;
-            overflow: hidden;
-            min-height: 260px !important;
-        }
-        .skeleton::before {
-            content: "";
-            position: absolute;
-            top: 12px; left: 12px; right: 12px;
-            aspect-ratio: 1;
-            background: var(--surface-3);
-            border-radius: 18px;
-        }
-        .skeleton::after {
-            content: "";
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: linear-gradient(115deg,
-                transparent 35%,
-                rgba(212,175,55,0.07) 50%,
-                transparent 65%);
-            transform: translate3d(-100%, 0, 0);
-            animation: skeleton-shine 1.6s linear infinite;
-        }
-        @keyframes skeleton-shine {
-            0%   { transform: translate3d(-100%, 0, 0); }
-            100% { transform: translate3d(100%, 0, 0); }
+        /* Birinchi 12 ta karta — har biri 50ms kechikish bilan ohista chiqadi */
+        .items-grid .luxury-card:nth-child(1)  { animation-delay: 30ms; }
+        .items-grid .luxury-card:nth-child(2)  { animation-delay: 80ms; }
+        .items-grid .luxury-card:nth-child(3)  { animation-delay: 130ms; }
+        .items-grid .luxury-card:nth-child(4)  { animation-delay: 180ms; }
+        .items-grid .luxury-card:nth-child(5)  { animation-delay: 230ms; }
+        .items-grid .luxury-card:nth-child(6)  { animation-delay: 280ms; }
+        .items-grid .luxury-card:nth-child(7)  { animation-delay: 330ms; }
+        .items-grid .luxury-card:nth-child(8)  { animation-delay: 380ms; }
+        .items-grid .luxury-card:nth-child(9)  { animation-delay: 430ms; }
+        .items-grid .luxury-card:nth-child(10) { animation-delay: 480ms; }
+        .items-grid .luxury-card:nth-child(11) { animation-delay: 530ms; }
+        .items-grid .luxury-card:nth-child(12) { animation-delay: 580ms; }
+        /* 13+ kartalar — pastga skroll qilganda darhol ko'rinadi (kechiktirmasdan) */
+        .items-grid .luxury-card:nth-child(n+13) {
+            animation-delay: 0ms;
+            animation-duration: 200ms;
         }
 
+        /* === ⚙️ TILLA SHESTERNYA LOADER (12 tovar yuklanguncha aylanadi) === */
+        /* Mavjud #loading-text elementining ustiga premium gear loader qo'yamiz */
+        #loading-text {
+            display: flex !important;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            padding: 0 !important;
+            color: transparent !important;       /* asl "Yuklanmoqda..." matnini yashiramiz */
+            font-size: 0 !important;
+            line-height: 0 !important;
+        }
+        /* Tilla aylanuvchi shesternya — toza SVG, faqat transform: rotate (GPU) */
+        #loading-text::before {
+            content: "";
+            display: block;
+            width: 64px;
+            height: 64px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23C9A84C"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            filter: drop-shadow(0 4px 16px rgba(212, 175, 55, 0.45));
+            animation: gearSpin 1.8s linear infinite;
+        }
+        /* "YUKLANMOQDA" yozuvi shesternya tagida, tinch pulse bilan */
+        #loading-text::after {
+            content: "YUKLANMOQDA";
+            display: block;
+            margin-top: 22px;
+            font-size: 11px !important;
+            line-height: 1 !important;
+            color: var(--gold-200, #C9A84C) !important;
+            font-weight: 700;
+            letter-spacing: 4px;
+            opacity: 0.8;
+            animation: gearTextPulse 1.6s ease-in-out infinite;
+        }
+        @keyframes gearSpin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+        @keyframes gearTextPulse {
+            0%, 100% { opacity: 0.45; letter-spacing: 4px; }
+            50%      { opacity: 1;    letter-spacing: 5px; }
+        }
+
+        /* === 🧹 ESKI SKELETON kartalarni yashiramiz (markaziy gear bilan almashtirildi) === */
+        /* Bitta chiroyli markaziy ⚙️ loader bo'ladi, e'tibor bo'linmaydi */
+        .items-grid .skeleton {
+            display: none !important;
+        }
+
+        /* Press effektlari (mikro-animatsiya) bir xil professional */
         .luxury-card:active     { transform: scale(0.96) translateZ(0) !important; }
         .btn-add-cart:active    { transform: scale(0.94) translateZ(0) !important; }
         .btn-checkout:active    { transform: scale(0.97) translateZ(0) !important; }
@@ -8633,50 +8659,12 @@ function markAsSeen(element) {
 <script>
 // ============================================================
 // 💎 PREMIUM REDESIGN v2 — JS YORDAMCHILARI (passiv qo'shimcha)
-// Mavjud onclick'larga TEGMAYDI - faqat capture phase'da kuzatadi.
+// Mavjud onclick'larga TEGMAYDI — faqat capture phase'da kuzatadi.
+// (Eski blur-up tizimi olib tashlandi — arzon ko'rinardi va botni
+//  qotirardi. Endi rasmlar darhol o'z holicha ko'rinadi.)
 // ============================================================
 
-// 🖼️ 3-A: RASM BLUR-UP — har bir rasm yuklangach silliq aniqga aylanadi
-document.addEventListener('load', function (e) {
-    if (e.target && e.target.tagName === 'IMG') {
-        e.target.classList.add('img-loaded');
-    }
-}, true);
-
-// Allaqachon yuklangan (cached) rasmlar uchun
-function _markLoadedImages(root) {
-    var imgs = (root || document).querySelectorAll('img');
-    for (var i = 0; i < imgs.length; i++) {
-        var img = imgs[i];
-        if (img.complete && img.naturalHeight > 0) {
-            img.classList.add('img-loaded');
-        }
-    }
-}
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { _markLoadedImages(); });
-} else {
-    _markLoadedImages();
-}
-
-// Yangi qo'shilgan rasmlarni ham (renderProducts dinamik chizganlari)
-var _imgMutObs = new MutationObserver(function (muts) {
-    for (var i = 0; i < muts.length; i++) {
-        var nodes = muts[i].addedNodes;
-        for (var j = 0; j < nodes.length; j++) {
-            var n = nodes[j];
-            if (n.nodeType !== 1) continue;
-            if (n.tagName === 'IMG') {
-                if (n.complete && n.naturalHeight > 0) n.classList.add('img-loaded');
-            } else if (n.querySelectorAll) {
-                _markLoadedImages(n);
-            }
-        }
-    }
-});
-_imgMutObs.observe(document.body, { childList: true, subtree: true });
-
-// ✨ 2-E: SAVATGA QO'SHILGANDA TUGMA "PULSE" (mikro-animatsiya)
+// ✨ SAVATGA QO'SHILGANDA TUGMA "PULSE" (mikro-animatsiya)
 document.addEventListener('click', function (e) {
     var btn = e.target.closest && e.target.closest('.btn-add-cart');
     if (!btn || btn.disabled) return;
