@@ -3447,9 +3447,24 @@ document.addEventListener('touchstart', function() {}, {passive: true});
 
 // iOS da scroll qilganda sahifa "sakrab" ketishini to'xtatamiz
 document.addEventListener('touchmove', function(e) {
-    // Modal ochiq bo'lsa, orqa fonni mutlaqo muzlatamiz
+    // Oyna (modal) ochiq bo'lsa, FAQAT orqa fonni muzlatamiz.
+    // ⚠️ MUHIM: ilgari bu kod oyna ochiq bo'lganda BARCHA barmoq harakatini
+    // (modal ichidagi va slayderdagi skrollni ham) to'xtatib qo'yardi.
+    // Endi barmoq skroll bo'ladigan element (oyna, slayder, chat...) ustida
+    // bo'lsa — skrollga TO'LIQ ruxsat beramiz, faqat orqa fonni qotiramiz.
     if (document.body.style.overflow === 'hidden') {
-        e.preventDefault();
+        var t = e.target;
+        var scrollable = (t && t.closest) ? t.closest(
+            '#productModal, .modal-standard, .pm-slider, .pm-info-section, ' +
+            '#ai-chat-box, #story-content, .chat-messages, .pm-similar-wrapper, ' +
+            '#admin-orders-list, #admin-customers-list, #admin-drafts-list, ' +
+            '#admin-inventory-list, #admin-stats-content, #od-chat-messages, ' +
+            '#admin-chat-messages, #pm-reviews-list, #pm-size-options, #pm-car-options'
+        ) : null;
+        // Faqat skroll bo'ladigan joy TOPILMASA (ya'ni orqa fon) to'xtatamiz
+        if (!scrollable) {
+            e.preventDefault();
+        }
     }
 }, {passive: false});
     // ==========================================
