@@ -9897,49 +9897,100 @@ window.startVoice = (targetId) => {
 };
 
 // ---------- 10) SHTRIX-KOD / QR SKANER ----------
-window._scanStream = null;
+// BarcodeDetector ko'p qurilmalarda (iPhone, ba'zi Telegram brauzerlari) yo'q edi.
+// Endi universal "html5-qrcode" kutubxonasidan foydalanamiz (lazy-load):
+//   1) Kamera ishlasa — 1D shtrix-kod VA QR ni o'qiydi.
+//   2) Kamera bloklansa — Telegram'ning o'z (native) QR skaneriga o'tamiz.
+//   3) U ham bo'lmasa — kodni qo'lda kiritish taklif qilinadi.
+let _qrLibLoading = null;
+function ensureQrScanner() {
+    if (window.Html5Qrcode) return Promise.resolve();
+    if (_qrLibLoading) return _qrLibLoading;
+    _qrLibLoading = new Promise((resolve, reject) => {
+        const js = document.createElement('script');
+        js.src = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+        js.onload = () => resolve();
+        js.onerror = () => reject(new Error('yuklanmadi'));
+        document.head.appendChild(js);
+    });
+    return _qrLibLoading;
+}
+
+// Telegram'ning native QR skaneri — kamera bloklanganda zaxira variant
+window._telegramQrScan = (prefix) => {
+    if (typeof tg === 'undefined' || !tg.showScanQrPopup) {
+        showToast("Kamera ishlamadi. Iltimos, kodni qo'lda kiriting.", "warning");
+        return false;
+    }
+    let handler = (e) => {
+        let text = (e && e.data) ? e.data : '';
+        if (text) {
+            let inp = document.getElementById(`${prefix}-code`);
+            if (inp) { inp.value = text; inp.dispatchEvent(new Event('input')); }
+            window._formDirty = true;
+            showToast("✅ Kod: " + text, "success");
+        }
+        try { tg.closeScanQrPopup(); } catch (e2) {}
+        try { tg.offEvent('qrTextReceived', handler); } catch (e2) {}
+    };
+    try {
+        tg.onEvent('qrTextReceived', handler);
+        tg.showScanQrPopup({ text: "Kod yoki QR ni ramkaga tuting" });
+        return true;
+    } catch (e) {
+        showToast("Skaner ochilmadi. Kodni qo'lda kiriting.", "warning");
+        return false;
+    }
+};
+
+window._h5qr = null;
 window.scanBarcode = async (prefix) => {
-    if (!('BarcodeDetector' in window)) { showToast("Skaner qo'llab-quvvatlanmaydi. Kodni qo'lda kiriting.", "warning"); return; }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showToast("Kamera mavjud emas", "warning"); return; }
-    let detector;
-    try { detector = new BarcodeDetector(); } catch (e) { showToast("Skaner ishga tushmadi", "warning"); return; }
+    // 1) Skaner kutubxonasini yuklaymiz
+    try {
+        await ensureQrScanner();
+    } catch (e) {
+        window._telegramQrScan(prefix); // yuklanmasa -> Telegram skaneri
+        return;
+    }
+
+    // 2) Kamera oynasini ochamiz
     let ov = document.createElement('div');
     ov.id = 'scanner-overlay';
-    ov.innerHTML = `<button class="scan-close" onclick="stopScan()">×</button><video id="scan-video" playsinline></video><div class="scan-frame"></div><div class="scan-hint">📷 Shtrix-kodni ramkaga tuting</div>`;
+    ov.innerHTML = `<button class="scan-close" onclick="stopScan()">×</button><div id="qr-reader" style="width:100%; max-width:360px;"></div><div class="scan-hint">📷 Kodni ramkaga tuting</div>`;
     document.body.appendChild(ov);
+
     try {
-        let stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        window._scanStream = stream;
-        let v = document.getElementById('scan-video');
-        v.srcObject = stream;
-        await v.play();
-        let tick = async () => {
-            if (!window._scanStream) return;
-            try {
-                let codes = await detector.detect(v);
-                if (codes && codes.length) {
-                    let val = codes[0].rawValue;
-                    let inp = document.getElementById(`${prefix}-code`);
-                    if (inp) { inp.value = val; inp.dispatchEvent(new Event('input')); }
-                    window._formDirty = true;
-                    if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                    showToast("✅ Kod: " + val, "success");
-                    stopScan();
-                    return;
-                }
-            } catch (e) {}
-            requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
+        window._h5qr = new Html5Qrcode("qr-reader", false);
+        await window._h5qr.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 160 } },
+            (decodedText) => {
+                let inp = document.getElementById(`${prefix}-code`);
+                if (inp) { inp.value = decodedText; inp.dispatchEvent(new Event('input')); }
+                window._formDirty = true;
+                if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                showToast("✅ Kod: " + decodedText, "success");
+                stopScan();
+            },
+            () => {} // har kadrdagi "topilmadi" xatolari — e'tibordan chetda
+        );
     } catch (err) {
-        showToast("Kameraga ruxsat berilmadi", "warning");
+        // Kamera ochilmadi (ruxsat yo'q / webview bloklagan) -> Telegram skaneriga o'tamiz
         stopScan();
+        window._telegramQrScan(prefix);
     }
 };
 window.stopScan = () => {
-    if (window._scanStream) { window._scanStream.getTracks().forEach(t => t.stop()); window._scanStream = null; }
-    let ov = document.getElementById('scanner-overlay');
-    if (ov) ov.remove();
+    let cleanup = () => { let ov = document.getElementById('scanner-overlay'); if (ov) ov.remove(); };
+    if (window._h5qr) {
+        let r = window._h5qr;
+        window._h5qr = null;
+        try {
+            r.stop().then(() => { try { r.clear(); } catch (e) {} cleanup(); }).catch(() => cleanup());
+        } catch (e) { cleanup(); }
+    } else {
+        cleanup();
+    }
 };
 
 // ---------- 11) OMBOR: QIDIRUV / FILTR / OMMAVIY TAHRIR ----------
