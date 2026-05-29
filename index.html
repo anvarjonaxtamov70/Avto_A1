@@ -1497,6 +1497,9 @@
             border: 3px solid var(--luxury-gold); border-radius: 18px; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5);
         }
         #scanner-overlay .scan-hint { position: absolute; bottom: 120px; color: #fff; font-weight: 700; font-size: 14px; }
+        #scanner-overlay .scan-actions { position: absolute; bottom: 40px; display: flex; gap: 12px; z-index: 3; }
+        #scanner-overlay .scan-action-btn { padding: 10px 18px; border-radius: 14px; background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25); font-weight: 700; font-size: 13px; cursor: pointer; backdrop-filter: blur(10px); transition: 0.2s; }
+        #scanner-overlay .scan-action-btn:active { transform: scale(0.93); }
         #scanner-overlay .scan-close {
             position: absolute; top: 20px; right: 20px; width: 44px; height: 44px;
             border-radius: 50%; background: rgba(255,255,255,0.15); color: #fff; border: none;
@@ -9946,24 +9949,86 @@ window._telegramQrScan = (onResult) => {
     }
 };
 
-// Umumiy skaner: muvaffaqiyatda onResult(text) chaqiradi (kamera -> bo'lmasa Telegram)
+// Fonarik (flashlight) — ba'zi telefonlarda track.applyConstraints orqali ishlaydi
+window._toggleTorch = async () => {
+    try {
+        if (!window._h5qr || !window._h5qr.applyVideoConstraints) return;
+        let st = window._h5qr.getRunningTrackSettings ? window._h5qr.getRunningTrackSettings() : {};
+        let next = !st.torch;
+        await window._h5qr.applyVideoConstraints({ advanced: [{ torch: next }] });
+        let btn = document.getElementById('scan-torch-btn');
+        if (btn) btn.style.background = next ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.15)';
+    } catch (e) { showToast("Bu qurilmada fonarik yo'q", "warning"); }
+};
+
+// Skaner ichidan Telegram tezkor (ruxsat saqlanadi) skaneriga o'tish
+window._switchToTelegramScan = (onResult) => {
+    stopScan();
+    setTimeout(() => window._telegramQrScan(onResult), 100);
+};
+
+// Umumiy skaner: muvaffaqiyatda onResult(text) chaqiradi
+// ⚡ TEZLASHTIRILGAN: fps 10 -> 25, kattaroq qrbox, faqat kerakli formatlar,
+//    native BarcodeDetector (Chrome/Edge/Samsung) — bu deyarli darrov o'qiydi.
 window._h5qr = null;
 window.runScanner = async (onResult) => {
     try {
         await ensureQrScanner();
     } catch (e) {
-        window._telegramQrScan(onResult); // kutubxona yuklanmadi -> Telegram skaneri
+        window._telegramQrScan(onResult); // kutubxona yuklanmadi -> Telegram
         return;
     }
     let ov = document.createElement('div');
     ov.id = 'scanner-overlay';
-    ov.innerHTML = `<button class="scan-close" onclick="stopScan()">×</button><div id="qr-reader" style="width:100%; max-width:360px;"></div><div class="scan-hint">📷 Kod / QR ni ramkaga tuting</div>`;
+    ov.innerHTML = `
+        <button class="scan-close" onclick="stopScan()">×</button>
+        <div id="qr-reader" style="width:100%; max-width:380px; min-height:300px;"></div>
+        <div class="scan-hint">📷 Kod / QR ni ramkaga tuting</div>
+        <div class="scan-actions">
+            <button id="scan-torch-btn" class="scan-action-btn" onclick="_toggleTorch()" title="Fonarik">💡</button>
+            <button class="scan-action-btn" onclick="_switchToTelegramScan(window._scanCb)" title="Tezkor Telegram skaneri (faqat QR)">⚡ Tezkor</button>
+        </div>`;
     document.body.appendChild(ov);
+    window._scanCb = onResult; // tezkor tugma uchun saqlaymiz
+
     try {
-        window._h5qr = new Html5Qrcode("qr-reader", false);
+        // Faqat avto-ehtiyot qism qutilarida bo'ladigan formatlar — boshqasini tekshirmaydi
+        let formats = [];
+        if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+            formats = [
+                Html5QrcodeSupportedFormats.QR_CODE,
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.CODE_39,
+                Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.UPC_E,
+                Html5QrcodeSupportedFormats.ITF
+            ];
+        }
+        window._h5qr = new Html5Qrcode("qr-reader", { 
+            formatsToSupport: formats.length ? formats : undefined,
+            // ⚡ Eng katta tezlashtirish: native BarcodeDetector (Chrome/Edge/Samsung Internet)
+            //    Bu html5-qrcode'ning ZXing dekoderiga 5-10 baravar tezroq.
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            verbose: false
+        });
         await window._h5qr.start(
             { facingMode: "environment" },
-            { fps: 10, qrbox: { width: 250, height: 160 } },
+            { 
+                fps: 25,                                  // 10 -> 25 (sekundiga 25 kadr)
+                qrbox: (vw, vh) => {                      // dinamik: ekran kattaligiga moslashadi
+                    let edge = Math.floor(Math.min(vw, vh) * 0.8);
+                    return { width: edge, height: Math.floor(edge * 0.65) };
+                },
+                aspectRatio: 1.333,
+                disableFlip: false,
+                videoConstraints: { 
+                    facingMode: "environment", 
+                    width: { ideal: 1280 }, 
+                    height: { ideal: 720 } 
+                }
+            },
             (decodedText) => {
                 if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
                 stopScan();
