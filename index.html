@@ -3284,6 +3284,7 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
             pointer-events: none;
             font-family: 'Inter', sans-serif !important;
+            transition: opacity 0.35s ease;   /* faol slaydga qarab silliq paydo bo'ladi */
         }
 
         /* 🎬 7) Eski "HD Yuklanmoqda" 3 nuqta o'rniga toza tilla spinner */
@@ -3374,10 +3375,11 @@
     </div>
 
     <div class="slider-container">
-        <!-- 🤝 QADAM 6: 'HAMKORLIK' badge - banner reklamasi alohida hamkor brand
-             ekanligini aniq ko'rsatadi, mijoz 'qaysi brand asl?' deb chalkashmaydi -->
-        <div class="slider-partner-badge">🤝 HAMKORLIK</div>
-        <div class="slider" id="main-slider">
+        <!-- 🤝 QADAM 6: 'HAMKORLIK' badge — FAQAT FARA_CLUB_SAM banneri (2-slayd)
+             faol bo'lganda ko'rinadi. Birinchi bannerда ko'rinmaydi.
+             JS slider scroll'ini kuzatib opacity ni boshqaradi. -->
+        <div class="slider-partner-badge" id="slider-partner-badge" style="opacity:0;">🤝 HAMKORLIK</div>
+        <div class="slider" id="main-slider" onscroll="updatePartnerBadge()">
             <img src="https://i.postimg.cc/d0PWw0zn/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1)-(1)-(1).png" onload="this.style.opacity=1">
             <img src="https://i.postimg.cc/NM8SWXFy/Gemini-Generated-Image-wz3selwz3selwz3s-(1).png" onload="this.style.opacity=1">
         </div>
@@ -3684,7 +3686,7 @@
     <div class="modal-header"><h2>🛒 Savat</h2><button class="close-btn" onclick="closeModal()">×</button></div>
     
     <div id="cart-progress-wrap" style="display:none; padding: 0 5px;">
-        <div class="cart-progress-text" id="cart-progress-msg">Yetkazib berish bepul bo'lishiga: 150,000 so'm qoldi</div>
+        <div class="cart-progress-text" id="cart-progress-msg">Tekin yetkazib berishga: 3 000 000 so'm qoldi</div>
         <div class="cart-progress-container"><div class="cart-progress-bar" id="cart-progress-bar"></div></div>
     </div>
 
@@ -3697,8 +3699,8 @@
     <!-- 🛡️ ISHONCH BELGILARI (mijoz "ishonchsiz to'lov" deb o'ylamasligi uchun) -->
     <div id="cart-trust-badges" style="display:none; gap:8px; padding:8px 0 14px; flex-wrap:wrap;">
         <div onclick="openModal('trustModal')" style="flex:1; min-width:0; cursor:pointer; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:10px; text-align:center; transition:0.2s;">
-            <div style="font-size:18px; margin-bottom:3px;">🚚</div>
-            <div style="font-size:10px; font-weight:700; color:var(--text-main); line-height:1.2;">1–2 kun<br><span style="color:var(--text-muted); font-weight:500;">Toshkent</span></div>
+            <div style="font-size:18px; margin-bottom:3px;">🚕</div>
+            <div style="font-size:10px; font-weight:700; color:var(--text-main); line-height:1.2;">1–2 kun<br><span style="color:var(--text-muted); font-weight:500;">Taksi/Pochta</span></div>
         </div>
         <div onclick="openModal('trustModal')" style="flex:1; min-width:0; cursor:pointer; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:10px; text-align:center; transition:0.2s;">
             <div style="font-size:18px; margin-bottom:3px;">🛡️</div>
@@ -3782,19 +3784,15 @@
                 <h3 style="margin:0; font-size:16px; color:var(--primary-blue);">Yetkazib berish muddatlari</h3>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">
-                <div><div style="font-weight:700; font-size:14px;">Toshkent shahri</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Ish kunlari</div></div>
+                <div><div style="font-weight:700; font-size:14px;">Shahar ichida</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">🚕 Taksi orqali</div></div>
                 <div style="color:var(--accent-green); font-weight:800; font-size:14px;">1–2 kun</div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">
-                <div><div style="font-weight:700; font-size:14px;">Boshqa viloyatlar</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Pochta yoki kuryer orqali</div></div>
-                <div style="color:var(--accent-green); font-weight:800; font-size:14px;">3–5 kun</div>
-            </div>
             <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0;">
-                <div><div style="font-weight:700; font-size:14px;">Tezkor (express)</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Toshkent ichida, qo'shimcha to'lov</div></div>
-                <div style="color:var(--luxury-gold); font-weight:800; font-size:14px;">3–6 soat</div>
+                <div><div style="font-weight:700; font-size:14px;">Viloyatlarga</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">📦 BTS pochta orqali</div></div>
+                <div style="color:var(--accent-green); font-weight:800; font-size:14px;">2–4 kun</div>
             </div>
             <div style="margin-top:14px; padding:12px; background: rgba(212,175,55,0.08); border:1px solid rgba(212,175,55,0.25); border-radius:12px; font-size:12.5px; line-height:1.5;">
-                💎 <b>150 000 so'm</b>дан ortiq xaridda yetkazib berish <b style="color:var(--luxury-gold);">BEPUL</b>
+                💎 <b>3 000 000 so'm</b>дан ortiq buyurtmalarga yetkazib berish <b style="color:var(--luxury-gold);">TEKIN</b>
             </div>
         </div>
 
@@ -5589,7 +5587,7 @@ window.clearAppCache = () => {
     if(pWrap && pBar && pMsg) {
         if(t > 0) {
             pWrap.style.display = 'block';
-            let target = 150000;
+            let target = 3000000;
             let percent = (t / target) * 100;
             if(percent >= 100) {
                 pBar.style.width = '100%';
@@ -6243,6 +6241,20 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     function updateBtns() { let iD = historyStack.length > 1; let bB = document.getElementById('back-btn'); if(bB) bB.style.display = iD ? 'flex' : 'none'; if (iD || activeModal || searchActive) tg.BackButton.show(); else tg.BackButton.hide(); }
     updateBtns();
     let aS = document.getElementById('main-slider'); if (aS) { setInterval(() => { if (document.hidden || activeModal || searchActive) return; if (aS.scrollWidth - aS.clientWidth <= aS.scrollLeft + 5) aS.scrollTo({ left: 0, behavior: 'smooth' }); else aS.scrollBy({ left: aS.clientWidth, behavior: 'smooth' }); }, 3500); } 
+
+    // 🤝 'HAMKORLIK' badge — faqat FARA_CLUB_SAM banneri (2-slayd, index 1) faol
+    // bo'lganda ko'rinadi. Slider scroll qilinganda (qo'lda yoki avtomat) chaqiriladi.
+    window.updatePartnerBadge = function() {
+        var sl = document.getElementById('main-slider');
+        var badge = document.getElementById('slider-partner-badge');
+        if (!sl || !badge) return;
+        var w = sl.clientWidth || 1;
+        var idx = Math.round(sl.scrollLeft / w);
+        // FARA_CLUB_SAM = 2-slayd (index 1). Birinchi banner (index 0) da yashirin.
+        badge.style.opacity = (idx === 1) ? '1' : '0';
+    };
+    // Boshlang'ich holat (1-banner faol -> badge yashirin)
+    setTimeout(() => { if (window.updatePartnerBadge) window.updatePartnerBadge(); }, 300);
     // ==========================================
     // 8-FUNKSIYA: BUYURTMA IZLASH TIZIMI
     // ==========================================
@@ -8540,7 +8552,7 @@ window.renderCartItems = () => {
 
     if(pWrap) {
         pWrap.style.display = 'block';
-        let target = 150000;
+        let target = 3000000;
         let percent = Math.min((t / target) * 100, 100);
         let pBar = document.getElementById('cart-progress-bar');
         let pMsg = document.getElementById('cart-progress-msg');
@@ -8677,7 +8689,7 @@ animatePrice('cart-total-sum', t);
 
     if(pWrap) {
         pWrap.style.display = 'block';
-        let target = 150000;
+        let target = 3000000;
         let percent = Math.min((t / target) * 100, 100);
         let pBar = document.getElementById('cart-progress-bar');
         let pMsg = document.getElementById('cart-progress-msg');
