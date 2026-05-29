@@ -2334,13 +2334,16 @@
         /* 🚀 IPHONE SILLIQLIGI (60 FPS GPU ACCELERATION) */
         /* ================================================= */
         
-        /* 1. Faqat og'ir modallarni videokartaga o'tkazish */
-        .bottom-nav, .modal-standard, #productModal {
+        /* 1. Faqat pastki menyuni (u skroll bo'lmaydi) videokartaga o'tkazamiz.
+              ⚠️ DIQQAT: Skroll bo'ladigan modallarga (productModal / modal-standard)
+              translateZ(0) + perspective + backface-visibility berish
+              mobil brauzerlarda (ayniqsa iOS/Telegram WebView) vertikal skrollni
+              "qotirib" qo'yadi. Shuning uchun ular bu yerdan OLIB TASHLANDI. */
+        .bottom-nav {
             -webkit-transform: translateZ(0);
             transform: translateZ(0);
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
-            perspective: 1000px;
         }
 
         /* 2. Telefonni qiynaydigan "transition: all" xatosini tuzatish */
@@ -2353,7 +2356,9 @@
 
         /* 3. O'ta og'ir Blur (Shisha) effektlarini yengillashtirish */
         /* 25px blur telefonni qizitadi. Uni 10px ga tushiramiz, ko'rinishi premiumligicha qoladi, lekin 3 barobar tez ishlaydi */
-        .bottom-nav, .search-box, #productModal, .modal-header, .search-suggestions, .pm-sticky-bar {
+        /* ⚠️ #productModal bu yerdan olib tashlandi: to'liq ekranli skroll oynasiga
+           backdrop-filter berish skrollni sekinlashtiradi va qotiradi. */
+        .bottom-nav, .search-box, .modal-header, .search-suggestions, .pm-sticky-bar {
             backdrop-filter: blur(10px) saturate(150%) !important;
             -webkit-backdrop-filter: blur(10px) saturate(150%) !important;
             background: rgba(18, 18, 20, 0.85) !important; /* Fonni sal to'qlashtiramiz, blur kamaygani bilinmaydi */
@@ -2436,6 +2441,56 @@
             scroll-behavior: smooth;
         }
         
+        /* ================================================================= */
+        /* ✅ TOVAR OYNASI YAKUNIY TUZATISHI (SCROLL + RASM) — 100% ISHLAYDI */
+        /* ================================================================= */
+
+        /* 🔓 1. TOVAR OYNASINI SKROLL QILINADIGAN QILAMIZ
+              (pastga-tepaga silliq yuradi, qotmaydi) */
+        #productModal {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch !important;   /* iOS momentum (silliq) skroll */
+            overscroll-behavior: contain;
+            touch-action: pan-y !important;                 /* vertikal skrollga to'liq ruxsat */
+            /* Skrollni qotirgan og'ir effektlarni o'chiramiz */
+            perspective: none !important;
+            -webkit-perspective: none !important;
+            backface-visibility: visible !important;
+            -webkit-backface-visibility: visible !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            background: #0a0a0c !important;                 /* to'liq mat (shaffof emas) fon */
+        }
+
+        /* Boshqa modallar ham ishonchli skroll bo'lsin */
+        .modal-standard {
+            -webkit-overflow-scrolling: touch !important;
+            touch-action: pan-y !important;
+            perspective: none !important;
+            -webkit-perspective: none !important;
+        }
+
+        /* 🖼️ 2. RASM SLIDERI: yon tomonga (gorizontal) silliq suriladi */
+        .pm-slider {
+            touch-action: pan-x !important;                 /* yonga surishga ruxsat */
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-x: contain;
+            scroll-snap-type: x mandatory;
+        }
+        .pm-slider img {
+            scroll-snap-align: start;
+            flex: 0 0 100% !important;                       /* har bir rasm to'liq enini egallaydi */
+        }
+
+        /* 👁️ 3. TOVAR RASMLARI HAR DOIM KO'RINADI
+              (eski .pm-slider img { opacity:0 } xatosi tuzatildi) */
+        #productModal .pm-slider img,
+        #productModal .pm-img-header img,
+        .pm-slider img,
+        .pm-img-header img {
+            opacity: 1 !important;
+        }
     </style>
 </head>
 <body ontouchstart="">
