@@ -3297,49 +3297,49 @@
         
         <!-- 1. Aksiyalar (Yangi video bor - 'new') -->
         <div class="story-item" onclick="markAsSeen(this); startStories('aksiyalar', '🔥 Aksiyalar')">
-            <div class="story-ring new"><img src="https://i.postimg.cc/Bvkx57Cg/cfce7f953881dc027c48ab63a9d8f1b2.png" class="story-img"></div>
+            <div class="story-ring" data-story="aksiyalar"><img src="https://i.postimg.cc/Bvkx57Cg/cfce7f953881dc027c48ab63a9d8f1b2.png" class="story-img"></div>
             <span>Aksiyalar</span>
         </div>
 
         <!-- 2. Bugun (Yangi video bor - 'new') -->
         <div class="story-item" onclick="markAsSeen(this); startStories('bugun', '💡 Bugun')">
-            <div class="story-ring empty"><img src="https://i.postimg.cc/zftxskFr/full-6Enh-HLt-T.jpg" class="story-img"></div>
+            <div class="story-ring" data-story="bugun"><img src="https://i.postimg.cc/zftxskFr/full-6Enh-HLt-T.jpg" class="story-img"></div>
             <span>Bugun</span>
         </div>
 
         <!-- 3. Mijozlar (Video yo'q - 'empty') -->
         <div class="story-item" onclick="markAsSeen(this); startStories('mijozlar', '👥 Mijozlar')">
-            <div class="story-ring empty"><img src="https://i.postimg.cc/7PM2bZjY/Pink-Illustrated-Ask-Me-Anything-Instagram-Post-6.png" class="story-img"></div>
+            <div class="story-ring" data-story="mijozlar"><img src="https://i.postimg.cc/7PM2bZjY/Pink-Illustrated-Ask-Me-Anything-Instagram-Post-6.png" class="story-img"></div>
             <span>Mijozlar</span>
         </div>
 
         <!-- 4. Dostavka (Video yo'q - 'empty') -->
         <div class="story-item" onclick="markAsSeen(this); startStories('dostavka', '🚚 Dostavka')">
-            <div class="story-ring empty"><img src="https://i.postimg.cc/KjZ4ttCc/orig.png" class="story-img"></div>
+            <div class="story-ring" data-story="dostavka"><img src="https://i.postimg.cc/KjZ4ttCc/orig.png" class="story-img"></div>
             <span>Dostavka</span>
         </div>
 
         <!-- 5. Kafolat (Video yo'q - 'empty') -->
         <div class="story-item" onclick="markAsSeen(this); startStories('kafolat', '🛡️ Kafolat')">
-            <div class="story-ring empty"><img src="https://i.postimg.cc/vB56rYBN/content-full-lewlcqnv.png" class="story-img"></div>
+            <div class="story-ring" data-story="kafolat"><img src="https://i.postimg.cc/vB56rYBN/content-full-lewlcqnv.png" class="story-img"></div>
             <span>Kafolat</span>
         </div>
 
         <!-- 6. Lokatsiya (Video yo'q - 'empty') -->
         <div class="story-item" onclick="markAsSeen(this); startStories('lokatsiya', '📍 Lokatsiya')">
-            <div class="story-ring empty"><img src="https://i.postimg.cc/GpyBRLvW/308e0e8c2b804e9c64d0dd1bd69fc36a.png" class="story-img"></div>
+            <div class="story-ring" data-story="lokatsiya"><img src="https://i.postimg.cc/GpyBRLvW/308e0e8c2b804e9c64d0dd1bd69fc36a.png" class="story-img"></div>
             <span>Lokatsiya</span>
         </div>
 
         <!-- 7. To'lov (Video yo'q - 'empty') -->
         <div class="story-item" onclick="markAsSeen(this); startStories('tolov', '💳 To\'lov')">
-            <div class="story-ring empty"><img src="https://i.postimg.cc/kXsKYgc4/5.png" class="story-img"></div>
+            <div class="story-ring" data-story="tolov"><img src="https://i.postimg.cc/kXsKYgc4/5.png" class="story-img"></div>
             <span>To'lov</span>
         </div>
 
         <!-- 8. Aloqa (Video yo'q - 'empty') -->
         <div class="story-item" onclick="markAsSeen(this); startStories('aloqa', '📞 Aloqa')">
-            <div class="story-ring empty"><img src="https://i.postimg.cc/bNh9FMfb/isee-7.png" class="story-img"></div>
+            <div class="story-ring" data-story="aloqa"><img src="https://i.postimg.cc/bNh9FMfb/isee-7.png" class="story-img"></div>
             <span>Aloqa</span>
         </div>
 
@@ -8777,6 +8777,37 @@ function initReveal() {
         // ===================================================
         let STORIES_DB = {};
 
+        // Mijoz ko'rgan storislarni eslab qolish (qaytib kelganda kulrang turadi)
+        let _seenStories = {};
+        try { _seenStories = JSON.parse(localStorage.getItem('avto_seen_stories')) || {}; } catch(e) {}
+
+        // ⚙️ Halqalarni Firebase ma'lumotiga qarab AVTOMAT markirlash
+        // Mantiq:
+        //  - Storis bor + ko'rilmagan -> 'new' (tilla aylanadi)
+        //  - Storis bor + ko'rilgan    -> 'seen' (kulrang, aylanmaydi)
+        //  - Storis yo'q              -> 'empty' (kulrang, aylanmaydi, ishlatib bo'lmaydi)
+        function _refreshStoryRings() {
+            const rings = document.querySelectorAll('.story-ring[data-story]');
+            rings.forEach(ring => {
+                const cat = ring.getAttribute('data-story');
+                const items = STORIES_DB[cat];
+                ring.classList.remove('new', 'seen', 'empty');
+                if (!items || items.length === 0) {
+                    // Storis yo'q
+                    ring.classList.add('empty');
+                    return;
+                }
+                // Eng yangi storis timestamp'ini olamiz
+                const latestTs = items.reduce((m, it) => Math.max(m, it.timestamp || 0), 0);
+                const seenTs = _seenStories[cat] || 0;
+                if (latestTs > seenTs) {
+                    ring.classList.add('new');     // yangisi bor -> aylanadi
+                } else {
+                    ring.classList.add('seen');    // hammasini ko'rgan
+                }
+            });
+        }
+
         // Dastur ishga tushganda storislarni Firebase'dan avtomat o'qiydi
         if (typeof db !== 'undefined') {
             db.ref('stories').on('value', (snap) => {
@@ -8788,6 +8819,8 @@ function initReveal() {
                         STORIES_DB[cat] = Object.values(data[cat]).sort((a,b) => a.timestamp - b.timestamp);
                     }
                 }
+                // Halqalarni yangilash (Firebase javobiga qarab avtomat)
+                _refreshStoryRings();
             });
         }
 
@@ -8841,6 +8874,12 @@ function initReveal() {
             if (!currentPlaylist || currentPlaylist.length === 0) {
                 showToast("Hali yangiliklar yo'q!", "warning"); return;
             }
+
+            // Bosilgan halqani avtomat 'seen' qilib markirlash (timestamp saqlanadi)
+            try {
+                const itemEl = document.querySelector('.story-item .story-ring[data-story="' + playlistId + '"]');
+                if (itemEl && itemEl.parentElement) markAsSeen(itemEl.parentElement);
+            } catch (e) {}
 
             currentStoryIdx = 0;
             document.getElementById('story-caption').innerText = caption;
@@ -9284,16 +9323,28 @@ function initVipCardGlow() {
     });
 }
 
-// Storis bosilganda uni "ko'rilgan" qilib o'zgartiruvchi funksiya
+// Storis bosilganda uni "ko'rilgan" qilib o'zgartiruvchi funksiya.
+// Endi: localStorage'ga timestamp saqlanadi -> mijoz qaytib kelganda
+// halqa kulrang (seen) bo'lib qoladi (admin yangi storis qo'shsa - yana 'new').
+// Agar storis yo'q (empty) yoki allaqachon ko'rilgan (seen) bo'lsa - tegmaydi.
 function markAsSeen(element) {
-    // Bosilgan element ichidagi halqani topish
     let ring = element.querySelector('.story-ring');
-    
-    // Agar halqa "yangi" (new) bo'lsa, uni "ko'rilgan" (seen) ga o'zgartiramiz
+    if (!ring) return;
+    if (ring.classList.contains('empty')) return;     // storis yo'q -> tegmaymiz
+    const cat = ring.getAttribute('data-story');
+    if (!cat) return;
+    // Vizual: yangi -> ko'rilgan (aylanish to'xtaydi)
     if (ring.classList.contains('new')) {
         ring.classList.remove('new');
         ring.classList.add('seen');
     }
+    // Eslab qolish: hozirgi vaqt seenTs sifatida saqlanadi
+    try {
+        if (typeof _seenStories !== 'undefined') {
+            _seenStories[cat] = Date.now();
+            localStorage.setItem('avto_seen_stories', JSON.stringify(_seenStories));
+        }
+    } catch (e) {}
 }
     
     
