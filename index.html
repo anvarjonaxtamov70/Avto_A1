@@ -2110,7 +2110,11 @@
             background: #000; z-index: 99999; display: none; flex-direction: column;
         }
         .story-header {
-            position: absolute; top: 15px; left: 0; width: 100%; z-index: 10; padding: 0 10px; box-sizing: border-box;
+            /* Telegram tepa paneli (3 nuqta + nazad) ostiga kirib qolmasligi uchun
+               safe-area + tg.contentSafeAreaInset hisoblansin. Ortiqcha 56px =
+               taxminan Telegram bar balandligi (mini app native paneli). */
+            position: absolute; top: calc(15px + var(--safe-top, 0px) + 56px);
+            left: 0; width: 100%; z-index: 10; padding: 0 10px; box-sizing: border-box;
         }
         .story-progress-container {
             display: flex; gap: 4px; width: 100%; margin-bottom: 12px;
@@ -3224,7 +3228,9 @@
         /* 🎬 4) SOUND TUGMASI — video uchun 🔊/🔇 */
         .sv-sound-btn {
             position: absolute;
-            top: 60px;
+            /* Telegram tepa paneli (3 nuqta + nazad) ostiga TUSHIB qolmaydi:
+               story-header tagiga (~104px = 56 Telegram bar + 48 progress) joylashadi */
+            top: calc(104px + var(--safe-top, 0px));
             right: 14px;
             width: 38px;
             height: 38px;
@@ -4664,6 +4670,17 @@ function showToast(m, t = 'success') {
     // bo'lganlari oldinga, tugaganlari oxirga ajraladi.
     // - Razmerli tovar: jami stock yig'indisi (>0 bo'lsa "bor")
     // - Oddiy tovar: stock > 0 bo'lsa "bor"
+    // 🎲 Fisher-Yates shuffle — har safar random tartib (lekin har bir
+    // sahifa ochilganда BIR XIL tartib saqlanadi - skroll/qaytishда qotmaydi).
+    // Faqat 'inStock' guruhi aralashtiriladi, tugaganlari oxirda qoladi.
+    function _shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+    }
     function _sortDisplayDB(items) {
         const isInStock = (p) => {
             if (p.product_type === 'razmerli' && Array.isArray(p.sizes)) {
@@ -4673,7 +4690,8 @@ function showToast(m, t = 'success') {
         };
         const inStock = items.filter(isInStock);
         const outOfStock = items.filter(p => !isInStock(p));
-        return [...inStock, ...outOfStock];
+        // 🎲 Sotuvda bor tovarlar har safar boshqacha tartibda chiqadi
+        return [..._shuffle(inStock), ..._shuffle(outOfStock)];
     }
 
     function toggleChip(el) { el.classList.toggle('selected'); }
@@ -6141,7 +6159,26 @@ async function changeOrderStatus(uid, orderId, newStatus) {
             }
         });
     }
-    function openModal(id) { if (activeModal === id) return; if(id === 'cartModal') renderCartItems(); let m = document.getElementById(id); m.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = id; window.history.pushState({ modal: id }, ""); tg.BackButton.show(); updateBtns(); }
+    function openModal(id) {
+        if (activeModal === id) return;
+        if(id === 'cartModal') renderCartItems();
+        let m = document.getElementById(id);
+        // 🛒 Agar boshqa modal ochiq bo'lsa - uni xotirada saqlab, yashiramiz.
+        // Yangi modal yopilganда (popstate) - eski modal qaytib ochiladi.
+        // Bu 'savatdan kafolatga -> orqaga -> savatga qaytish' muammosini hal qiladi.
+        if (activeModal && activeModal !== id) {
+            window._modalStack = window._modalStack || [];
+            window._modalStack.push(activeModal);
+            const prev = document.getElementById(activeModal);
+            if (prev) prev.style.display = 'none';
+        }
+        m.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        activeModal = id;
+        window.history.pushState({ modal: id }, "");
+        tg.BackButton.show();
+        updateBtns();
+    }
     function closeModal() { if(activeModal) window.history.back(); }
     function goHome() { if(activeModal) closeModal(); if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); } updateNav('nav-home'); }
 
@@ -6200,9 +6237,24 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     updateBtns();
                     return;
                 }
-    
+
+                // 5. 🛒 MODAL STACK: agar oldingi modal saqlangan bo'lsa - unga qaytamiz.
+                //    Bu 'savat -> kafolat -> orqa' muammosini hal qiladi: kafolat
+                //    yopilganда savat oynasi qaytib ochiladi (asosiy menyu emas).
+                if (window._modalStack && window._modalStack.length > 0) {
+                    const prevId = window._modalStack.pop();
+                    activeModal = prevId;
+                    const prevEl = document.getElementById(prevId);
+                    if (prevEl) prevEl.style.display = 'flex';
+                    if (prevId === 'cartModal') renderCartItems();
+                    document.body.style.overflow = 'hidden';
+                    updateBtns();
+                    return;
+                }
+
                 // Boshqa har qanday oyna butunlay yopiladi va Asosiy ekranga tushadi
                 document.body.style.overflow = '';
+                window._modalStack = [];   // 🛒 stack ham tozalanadi (xavfsizlik)
                 let cont = document.querySelector('.container');
                 if(cont) cont.classList.remove('blur-bg');
                 activeModal = null;
