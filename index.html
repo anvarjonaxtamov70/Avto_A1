@@ -2415,21 +2415,12 @@
                 transition-duration: 0.01ms !important;
             }
         }
-                /* Asosiy elementlarni GPU ga "ko'chirамиз" 
-           Bu iOS dagi silliqlikni ta'minlaydi */
-        .luxury-card,
-        .bottom-nav,
-        .modal-standard,
-        #productModal,
-        .btn-add-cart,
-        .pm-sticky-btn,
-        .btn-checkout {
-            /* Bu qator elementni GPU da chizishga majbur qiladi */
-            will-change: transform;
-            /* Bu esa animatsiya paytida elementning orqasini ko'rsatmaydi */
-            -webkit-backface-visibility: hidden;
-            backface-visibility: hidden;
-        }
+            .bottom-nav,
+            #productModal {
+                will-change: transform;
+                -webkit-backface-visibility: hidden;
+                backface-visibility: hidden;
+}
                 /* iOS kauchuk scroll effekti — barcha oynalarda */
         .modal-standard,
         #productModal,
@@ -3681,9 +3672,6 @@ function showToast(m, t = 'success') {
         renderProducts();
         updateCartBadge();
         if(activeModal === 'adminInventoryModal') renderAdminInventory();
-
-        // 2. Asosiy ekran ochilgach, qolgan qismni mijozga sezdirmasdan orqa fonda yuklaymiz
-        setTimeout(syncAllProductsInBackground, 1000);
     });
 
     function syncAllProductsInBackground() {
@@ -4207,7 +4195,7 @@ function openProduct(id) {
     if (imgs.length > 0) {
         // ⚪ ASLIY ORIGINAL OQ FON (XATOSIZ YUKLASH)
         sliderWrapper.innerHTML = imgs.map(src => `
-            <img src="${src}" style="width:100%; height:100%; object-fit:contain; padding:25px; box-sizing:border-box; opacity:1 !important; display:block !important;" onerror="this.src='https://via.placeholder.com/300?text=Rasm+yoq'">
+            <img src="${src}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:contain; padding:25px; box-sizing:border-box; flex-shrink:0; display:block;"
         `).join('');
         dotsWrapper.innerHTML = imgs.length > 1 ? imgs.map((_, i) => `<div class="pm-dot ${i===0?'active':''}"></div>`).join('') : '';
     } else {
@@ -4526,7 +4514,13 @@ window.clearAppCache = () => {
     };
     function showSection(id) { document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); d.classList.remove('animate-slide-up'); }); let t = document.getElementById(id); if(t) { t.classList.remove('hidden'); t.classList.add('animate-slide-up'); } if (historyStack[historyStack.length - 1] !== id) { historyStack.push(id); window.history.pushState({ section: id }, ""); } let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (id === 'main-menu') ? 'block' : 'none'; if(searchActive) exitSearch(); updateBtns(); }
     function showCatalog() { if(activeModal) closeModal(); updateNav('nav-catalog'); showSection('katalog-menu'); }
-    function showProfile() { if(activeModal) closeModal(); updateNav('nav-profile'); showSection('profile-section'); }
+       function showProfile() { 
+    if(activeModal) closeModal(); 
+    updateNav('nav-profile'); 
+    showSection('profile-section');
+    initVipCardGlow(); // ← mana shu
+}
+    
     function showMyOrders() { closeModal(); renderMyOrders(); showSection('my-orders-section'); }
 
 // ==========================================
@@ -8194,10 +8188,6 @@ function initVipCardGlow() {
     });
 }
 
-// Profil bo'limi ochilganda kartani ishga tushiramiz
-setInterval(() => {
-    if(historyStack[historyStack.length-1] === 'profile-section') initVipCardGlow();
-}, 1000);
 // Storis bosilganda uni "ko'rilgan" qilib o'zgartiruvchi funksiya
 function markAsSeen(element) {
     // Bosilgan element ichidagi halqani topish
