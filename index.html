@@ -8799,18 +8799,30 @@ window.flyToCartAnimation = (e, imgSrc) => {
 };
 
 // 🛡️ MODALNI XAVFSIZ OCHISH (Qotishlarga qarshi)
+//   ⚠️ Bu funksiya ASOSIY (oxirgi declared) openModal — eskini yozib qo'yadi.
+//   Modal stack: agar boshqa modal ochiq bo'lsa, uning ID si stack'ga saqlanadi
+//   va u yashiriladi. Yangi modal yopilganда (popstate) eski qaytib ochiladi.
+//   Bu 'savat -> kafolat -> orqa -> savat' qotishi muammosini hal qiladi.
 window.openModal = function(id) { 
     if (activeModal === id) return; 
-    
+
     if(id === 'cartModal') renderCartItems(); 
-    
+
     let m = document.getElementById(id); 
     if(!m) return;
-    
+
+    // 🛒 Boshqa modal ochiq bo'lsa - xotirada saqlab, yashiramiz
+    if (activeModal && activeModal !== id) {
+        window._modalStack = window._modalStack || [];
+        window._modalStack.push(activeModal);
+        const prev = document.getElementById(activeModal);
+        if (prev) prev.style.display = 'none';
+    }
+
     m.style.display = 'flex'; 
     document.body.style.overflow = 'hidden'; 
     activeModal = id; 
-    
+
     window.history.pushState({ modal: id }, ""); 
     if(typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show(); 
     updateBtns(); 
