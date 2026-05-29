@@ -8912,7 +8912,7 @@ function initReveal() {
                     <div id="sv-loader" style="position:absolute; z-index:2; display:flex; flex-direction:column; align-items:center;">
                         <div class="sv-spinner"></div>
                     </div>
-                    <video id="stVideo" ${poster} playsinline webkit-playsinline preload="auto"
+                    <video id="stVideo" ${poster} playsinline webkit-playsinline preload="auto" autoplay
                            ${_storySoundMuted ? 'muted' : ''}
                            src="${item.src}"
                            style="width:100%;height:100%;object-fit:contain;background:#000;">
@@ -8925,6 +8925,25 @@ function initReveal() {
                 const loader = document.getElementById('sv-loader');
                 const bufferBar = document.getElementById('sv-buffer-bar');
                 const bufferFill = bufferBar ? bufferBar.firstElementChild : null;
+
+                // 🛡️ AUTOPLAY KAFOLATI: agar autoplay atributi bloklansa
+                // (sound on holatida brauzer ba'zan bloklaydi), qo'lda
+                // play() chaqiramiz; agar u ham bloklansa - mute qilib urinamiz
+                const _safePlay = () => {
+                    if (!storyVideoElement) return;
+                    const p = storyVideoElement.play();
+                    if (p && typeof p.catch === 'function') {
+                        p.catch(() => {
+                            try {
+                                storyVideoElement.muted = true;
+                                _storySoundMuted = true;
+                                const sb = document.getElementById('sv-sound-btn');
+                                if (sb) sb.innerText = '🔇';
+                                storyVideoElement.play().catch(() => {});
+                            } catch (e) {}
+                        });
+                    }
+                };
 
                 // Sound tugmasini ko'rsatamiz va holatga moslashtiramiz
                 if (soundBtn) {
@@ -8949,10 +8968,15 @@ function initReveal() {
                 // Yetarli yuklanganда — loader ketadi, video boshlanadi
                 storyVideoElement.addEventListener('canplay', () => {
                     if (loader) loader.style.display = 'none';
+                    // 🛡️ Backup: agar autoplay atributi qandaydir sababdan
+                    // ishlamagan bo'lsa, qo'lda boshlaymiz
+                    if (storyVideoElement.paused) _safePlay();
                 }, { once: true });
 
                 storyVideoElement.addEventListener('loadedmetadata', () => {
                     animateStoryProgress(currentFill, storyVideoElement.duration * 1000);
+                    // Yana bir kafolat: ba'zan canplay'dan oldin loadedmetadata keladi
+                    if (storyVideoElement.paused) _safePlay();
                 }, { once: true });
 
                 // Sekin internet — "waiting" / "stalled" da loader qaytadi
