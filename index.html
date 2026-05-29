@@ -7408,7 +7408,17 @@ window.loadProductReviews = (productId) => {
     db.ref('reviews/' + productId).once('value', (snap) => {
         let reviews = []; if (snap.exists()) { let data = snap.val(); reviews = Object.values(data).filter(r => r && r.rating); }
         if (reviews.length > 0) { let avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length; avgEl.innerText = '★ ' + avg.toFixed(1) + ' (' + reviews.length + ' baho)'; } else { avgEl.innerText = ''; }
-        if (reviews.length === 0) { reviewsList.innerHTML = '<p style="color:gray; font-size:12px; text-align:center; padding:10px;">Hali izoh yo\'q. Birinchi bo\'ling!</p>'; } else {
+        if (reviews.length === 0) {
+            // QADAM 7: chiroyli, jonli, taklifkor empty state — eski oddiy
+            // 'Hali izoh yo'q' yozuvi mijozga 'tovar zerikkan' hissini berardi
+            reviewsList.innerHTML = `
+                <div style="text-align:center; padding:24px 12px; background:rgba(255,255,255,0.02); border-radius:14px; border:1px dashed rgba(212,175,55,0.18);">
+                    <div style="font-size:42px; margin-bottom:10px; opacity:0.55; filter:drop-shadow(0 4px 10px rgba(212,175,55,0.25));">⭐</div>
+                    <div style="font-size:14px; color:var(--text-main); font-weight:700; margin-bottom:6px;">Yangi tovar — sharhlar hali yo'q</div>
+                    <div style="font-size:12px; color:var(--text-muted); line-height:1.55;">Xarid qilgandan so'ng birinchi bo'lib<br>fikringizni qoldiring 🌟</div>
+                </div>
+            `;
+        } else {
             reviews.sort((a, b) => b.timestamp - a.timestamp);
             reviewsList.innerHTML = reviews.map(r => `<div class="review-card"><div class="r-head"><span class="r-name">${r.userName || 'Mijoz'}</span><span class="r-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span></div>${r.text ? `<div class="r-text">${r.text}</div>` : ''}<div class="r-date">${r.date || ''}</div></div>`).join('');
         }
