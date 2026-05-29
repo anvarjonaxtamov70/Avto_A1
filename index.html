@@ -7694,39 +7694,45 @@ document.addEventListener('click', function(e) {
     setTimeout(() => circle.remove(), 600);
 });
 
-let lastScrollTop = 0; 
-let isScrolling = false; // Yangi qulf
+// Elementlarni BIR MARTA topib saqlaymiz
+// Endi scroll bo'lganida qayta qidirish shart emas
+const bottomNavEl = document.querySelector('.bottom-nav');
+const aiBtnEl = document.querySelector('.ai-luxury-btn');
+
+let lastScrollTop = 0;
+let isScrolling = false;
 
 window.addEventListener("scroll", function() {
     if (!isScrolling) {
         window.requestAnimationFrame(function() {
             let st = window.pageYOffset || document.documentElement.scrollTop;
             
+            // Sahifa biroz pastga tushganda header kichrayadi
             if (st > 40) {
                 document.body.classList.add("scrolled");
             } else {
                 document.body.classList.remove("scrolled");
             }
 
+            // Modal ochiq bo'lmasa menyuni yashiramiz/ko'rsatamiz
             if (!activeModal) {
-                let bottomNav = document.querySelector('.bottom-nav');
-                let aiBtn = document.querySelector('.ai-luxury-btn');
-
                 if (st > lastScrollTop && st > 50) {
-                    if(bottomNav) bottomNav.classList.add("nav-hidden");
-                    if(aiBtn) aiBtn.classList.add("ai-hidden");
+                    // Pastga scroll — menyuni yashiramiz
+                    if(bottomNavEl) bottomNavEl.classList.add("nav-hidden");
+                    if(aiBtnEl) aiBtnEl.classList.add("ai-hidden");
                 } else {
-                    if(bottomNav) bottomNav.classList.remove("nav-hidden");
-                    if(aiBtn) aiBtn.classList.remove("ai-hidden");
+                    // Tepaga scroll — menyuni qaytaramiz
+                    if(bottomNavEl) bottomNavEl.classList.remove("nav-hidden");
+                    if(aiBtnEl) aiBtnEl.classList.remove("ai-hidden");
                 }
             }
-            lastScrollTop = st <= 0 ? 0 : st;
             
-            isScrolling = false; // Qulfni ochamiz
+            lastScrollTop = st <= 0 ? 0 : st;
+            isScrolling = false;
         });
-        isScrolling = true; // Qulfni yopamiz
+        isScrolling = true;
     }
-}, { passive: true });
+}, { passive: true }); // passive: true — scroll hech qachon to'xtamaydi
 
 // ===================================================
 // 🎉 BAYRAMONA XARID (CONFETTI YOMG'IRI)
@@ -7818,14 +7824,26 @@ const revealObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             entry.target.classList.add('active');
-            observer.unobserve(entry.target); // Diqqat: Animatsiya bir marta ishlagach, yukni kamaytirish uchun uni kuzatishni to'xtatamiz!
+            // Element ko'ringandan keyin kuzatuvdan olib tashlaymiz
+            // Bu xotirani bo'shatadi va observer yengilroq ishlaydi
+            observer.unobserve(entry.target);
         }
     });
-}, { threshold: 0.1 });
+}, { 
+    threshold: 0.05,  // 0.1 dan 0.05 ga — element biroz ko'ringanoq animatsiya boshlanadi
+    rootMargin: '0px 0px -20px 0px'  // Pastdan 20px oldin "ko'rindi" deb hisoblanadi
+});
 
 function initReveal() {
-    // Barcha kartochkalarni kuzatuvga olamiz
     document.querySelectorAll('.luxury-card, .section-title, .neon-brand-card').forEach(el => {
+        
+        // Agar bu element allaqachon animatsiyalangan bo'lsa
+        // uni qayta kuzatuvga qo'shmaymiz — xotirani tejaydi
+        if (el.classList.contains('active')) return;
+        
+        // Agar allaqachon kuzatuvda bo'lsa ham o'tkazib yuboramiz
+        if (el.classList.contains('reveal-item')) return;
+        
         el.classList.add('reveal-item');
         revealObserver.observe(el);
     });
