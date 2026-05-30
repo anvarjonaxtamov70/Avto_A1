@@ -6494,10 +6494,23 @@ window.clearAppCache = () => {
                 myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
                 saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge();
                 window.myOrders = myOrders;
-                try { if (window.Phase2) window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB); } catch(e){ console.warn('[Phase2] onOrderPlaced xato:', e); }
+                // 🎁 Cashback + kafolat — VA Firebase yozuvi tugashini KUTAMIZ (tg.close oldidan)
+                var _p2flush = Promise.resolve();
+                try { if (window.Phase2) _p2flush = window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB) || Promise.resolve(); } catch(e){ console.warn('[Phase2] onOrderPlaced xato:', e); }
                 loadingOverlay.classList.remove('active'); 
                 showToast("Qabul qilindi!");
-                setTimeout(() => { if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); tg.close(); }, 2000);
+                // Cashback Firebase'ga yozilib bo'lgach (yoki eng ko'pi 3.5s) ilovani yopamiz —
+                // shunda Telegramda cashback yo'qolmaydi. Konfetti uchun ham vaqt qoladi.
+                var _closed = false;
+                var _doClose = function () {
+                    if (_closed) return; _closed = true;
+                    try { if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch(e){}
+                    try { tg.close(); } catch(e){}
+                };
+                Promise.race([
+                    _p2flush.then(function(){ return new Promise(function(r){ setTimeout(r, 1800); }); }),
+                    new Promise(function(r){ setTimeout(r, 3500); })  // xavfsizlik chegarasi
+                ]).then(_doClose);
             } else {
                 loadingOverlay.classList.remove('active');
                 showToast("Xatolik! Adminga xabar bering.", "warning");
@@ -12200,14 +12213,20 @@ document.addEventListener('click', function (e) {
         } catch (e) {}
     }
     function saveRemote() {
-        if (!P.uid || !hasFB()) return;
+        if (!P.uid || !hasFB()) return Promise.resolve();
         P._writing = true;
         try {
-            firebase.database().ref('users/' + P.uid + '/phase2').set(clean(P.state))
+            return firebase.database().ref('users/' + P.uid + '/phase2').set(clean(P.state))
                 .then(function () { P._writing = false; })
                 .catch(function () { P._writing = false; });
-        } catch (e) { P._writing = false; }
+        } catch (e) { P._writing = false; return Promise.resolve(); }
     }
+    // 🔐 Firebase yozuvi TUGASHINI kutish uchun (tg.close() oldidan ishlatiladi).
+    // Telegramda ilova tez yopilgani uchun cashback yo'qolmasligi shu orqali kafolatlanadi.
+    P.flush = function () {
+        saveLocal();
+        try { return saveRemote() || Promise.resolve(); } catch (e) { return Promise.resolve(); }
+    };
     function save() { saveLocal(); saveRemote(); }
     function clean(obj) { try { return JSON.parse(JSON.stringify(obj)); } catch (e) { return obj; } }
 
@@ -12965,13 +12984,15 @@ document.addEventListener('click', function (e) {
     // Asosiy ishonchli yo'l: P.sync ichidagi processNewOrders.
     P.onOrderPlaced = function (order, productsDB) {
         if (productsDB) P.productsDB = productsDB;
-        if (!order) return;
+        if (!order) return Promise.resolve();
         if (Array.isArray(window.myOrders) && !window.myOrders.some(function (o) { return o && o.id === order.id; })) {
             window.myOrders.unshift(order);
         }
         processNewOrders([order]);
         evaluateAchievements();
         renderProfile();
+        // 🔐 Firebase yozuvi tugashini kutib qaytaramiz — chaqiruvchi tg.close() oldidan kutishi mumkin
+        return P.flush();
     };
 
     // Firebase'dan ma'lumot kelganda (mavjud listener ichidan)
@@ -12982,14 +13003,30 @@ document.addEventListener('click', function (e) {
             P.orders = toArray(data.orders);
             P.wishlistCount = toArray(data.wishlist).length;
             if (data.phase2 && !P._writing) {
-                // Remote source-of-truth, lekin maydonlarni ehtiyotkorlik bilan birlashtiramiz
+                // Remote source-of-truth, lekin maydonlarni ehtiyotkorlik bilan birlashtiramiz.
+                // 🔐 Cashback YO'QOLMASLIGI uchun: lokal va remote qiymatlarning KATTASINI olamiz.
+                // (Telegram ilovani tez yopgani uchun ba'zan remote eskiroq bo'lishi mumkin.)
                 var r = data.phase2;
-                P.state.cashback = (typeof r.cashback === 'number') ? r.cashback : P.state.cashback;
-                P.state.cashbackTotal = (typeof r.cashbackTotal === 'number') ? r.cashbackTotal : P.state.cashbackTotal;
-                if (r.cashbackHistory) P.state.cashbackHistory = toArray(r.cashbackHistory);
-                if (r.achievements) P.state.achievements = r.achievements;
-                if (typeof r.achSeen === 'number') P.state.achSeen = r.achSeen;
-                if (r.processedOrders) P.state.processedOrders = r.processedOrders;
+                if (typeof r.cashback === 'number') P.state.cashback = Math.max(P.state.cashback || 0, r.cashback);
+                if (typeof r.cashbackTotal === 'number') P.state.cashbackTotal = Math.max(P.state.cashbackTotal || 0, r.cashbackTotal);
+                // cashbackHistory: ikkala manbani birlashtirib, takrorlarni olib tashlaymiz
+                if (r.cashbackHistory) {
+                    var remoteHist = toArray(r.cashbackHistory);
+                    var localHist = Array.isArray(P.state.cashbackHistory) ? P.state.cashbackHistory : [];
+                    var seen = {}, merged = [];
+                    remoteHist.concat(localHist).forEach(function (h) {
+                        if (!h) return;
+                        var k = String(h.date) + '|' + String(h.amount) + '|' + String(h.type || '');
+                        if (seen[k]) return; seen[k] = 1; merged.push(h);
+                    });
+                    merged.sort(function (a, b) { return (b.date || 0) - (a.date || 0); });
+                    if (merged.length > 80) merged.length = 80;
+                    P.state.cashbackHistory = merged;
+                }
+                if (r.achievements) P.state.achievements = Object.assign({}, r.achievements, P.state.achievements);
+                if (typeof r.achSeen === 'number') P.state.achSeen = Math.max(P.state.achSeen || 0, r.achSeen);
+                // processedOrders: ikkala manbani birlashtiramiz (cashback ikki marta berilmasligi uchun)
+                if (r.processedOrders) P.state.processedOrders = Object.assign({}, r.processedOrders, P.state.processedOrders || {});
                 if (r.referralCode) P.state.referralCode = r.referralCode;
                 if (r.referredBy) P.state.referredBy = r.referredBy;
                 if (r.referrals) P.state.referrals = toArray(r.referrals);
