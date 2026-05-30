@@ -3551,8 +3551,8 @@
         .cart-row .swipe-delete { position:absolute; right:0; top:0; bottom:0; width:80px; background: linear-gradient(135deg, #ff453a, #c9302c); color:#fff; display:flex; align-items:center; justify-content:center; font-size: 22px; transform: translateX(100%); transition: transform 0.25s ease; cursor:pointer; }
         .cart-row.show-delete .swipe-delete { transform: translateX(0); }
         .cart-row.show-delete .cart-content-wrap { transform: translateX(-80px); }
-        #compare-bar { position:fixed; bottom: 80px; left:0; right:0; z-index: 1499; background: rgba(28,28,30,0.95); backdrop-filter: blur(16px); border-top: 1px solid rgba(212,175,55,0.25); padding: 10px 14px; display: none; box-shadow: 0 -8px 24px rgba(0,0,0,0.3); }
-        #compare-bar.show { display: flex; align-items: center; gap: 10px; }
+        #compare-bar { position:fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left:0; right:0; z-index: 2500; background: rgba(28,28,30,0.97); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid rgba(212,175,55,0.35); padding: 12px 16px; display: none; box-shadow: 0 -8px 30px rgba(0,0,0,0.5); }
+        #compare-bar.show { display: flex; align-items: center; gap: 10px; animation: cardFadeIn 0.3s ease; }
         #compare-bar .cmp-thumbs { display: flex; gap: 6px; flex: 1; }
         #compare-bar .cmp-thumbs img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; border: 1px solid var(--glass-border); background: #fff; padding: 2px; }
         #compare-bar .cmp-btn { background: linear-gradient(135deg, #F0D060, #C9A84C); color: #000; border: none; padding: 9px 14px; border-radius: 12px; font-weight: 800; font-size: 12px; cursor: pointer; }
@@ -10717,10 +10717,16 @@ window.toggleCompare = (productId, e) => {
     const idx = window.compareList.indexOf(productId);
     if (idx >= 0) {
         window.compareList.splice(idx, 1);
+        showToast("⚖️ Taqqoslashdan chiqarildi", "warning");
     } else {
         if (window.compareList.length >= 2) window.compareList.shift();
         window.compareList.push(productId);
         _hap('light');
+        if (window.compareList.length === 1) {
+            showToast("⚖️ 1/2 belgilandi. Yana bitta tanlang!", "success");
+        } else {
+            showToast("⚖️ 2 ta tayyor! Pastdagi tugmani bosing", "success");
+        }
     }
     updateCompareBar();
     updateCompareBtnStates();
