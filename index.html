@@ -5155,8 +5155,29 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     </div>
 <script>
 window.currentUser = null;
-    let tg = window.Telegram.WebApp;
-    tg.expand();
+    // 🛡 Telegram WebApp himoyali yuklash — brauzerda yoki Telegram yuklanmasa ham xato bermaydi
+    let tg;
+    try {
+        tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+    } catch(e) { tg = null; }
+    if (!tg) {
+        // Brauzerda yoki Telegram script bloklangan bo'lsa — bo'sh "stub" yaratamiz
+        // Shunda keyingi kod tg.xxx() chaqirsa ham, hech qaysi narsa portlamaydi
+        tg = {
+            initDataUnsafe: {},
+            expand: function(){}, ready: function(){},
+            isVersionAtLeast: function(){ return false; },
+            HapticFeedback: { notificationOccurred: function(){}, impactOccurred: function(){}, selectionChanged: function(){} },
+            BackButton: { show: function(){}, hide: function(){}, onClick: function(){} },
+            MainButton: { show: function(){}, hide: function(){}, onClick: function(){}, setText: function(){} },
+            close: function(){}, sendData: function(){},
+            colorScheme: 'dark', themeParams: {},
+            platform: 'browser', version: '0.0'
+        };
+        console.warn('[TG] WebApp mavjud emas — brauzer rejimida ishlamoqda (stub yoqildi)');
+    }
+    try { tg.expand && tg.expand(); } catch(e) { console.warn('[TG] expand xato:', e.message); }
+    try { tg.ready && tg.ready(); } catch(e) {}
     // iOS dagi 300ms kechikishni o'chiramiz
 // Endi tugmalar darhol javob beradi
 document.addEventListener('touchstart', function() {}, {passive: true});
@@ -5188,29 +5209,39 @@ document.addEventListener('touchmove', function(e) {
     // ==========================================
     
     // 1. iPhone'da chapdan o'ngga surib orqaga qaytishni yoqish
-    if (tg.isVersionAtLeast('7.0') && tg.enableSwipeBack) {
-        tg.enableSwipeBack();
-    }
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && tg.enableSwipeBack) {
+            tg.enableSwipeBack();
+        }
+    } catch(e) { console.warn('[TG] enableSwipeBack qo\'llab-quvvatlanmaydi:', e.message); }
 
     // 2. Tepadagi soat/batareya qismini (Status Bar) qora fon bilan bir xil qilish
-    if (tg.setHeaderColor) {
-        tg.setHeaderColor('#000000'); // Yoki sizning fonga mos to'q qora
-    }
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1') && tg.setHeaderColor) {
+            tg.setHeaderColor('#000000'); // Yoki sizning fonga mos to'q qora
+        }
+    } catch(e) { console.warn('[TG] setHeaderColor qo\'llab-quvvatlanmaydi:', e.message); }
     
     // 3. Pastki qism (Home Indicator) fonini moslash
-    if (tg.setBackgroundColor) {
-        tg.setBackgroundColor('#000000');
-    }
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1') && tg.setBackgroundColor) {
+            tg.setBackgroundColor('#000000');
+        }
+    } catch(e) { console.warn('[TG] setBackgroundColor qo\'llab-quvvatlanmaydi:', e.message); }
     
-    // 4. Ekranni to'liq egallash (Yangi WebApp funksiyasi)
-    if (tg.requestFullscreen) {
-        tg.requestFullscreen();
-    }
+    // 4. Ekranni to'liq egallash (faqat Telegram 8.0+ uchun)
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('8.0') && tg.requestFullscreen) {
+            tg.requestFullscreen();
+        }
+    } catch(e) { console.warn('[TG] requestFullscreen qo\'llab-quvvatlanmaydi:', e.message); }
 
     // 🛑 1. Tepadan pastga tortganda yopilib ketishini TO'LIQ BLOKLASH
-    if (tg.disableVerticalSwipes) {
-        tg.disableVerticalSwipes();
-    }
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && tg.disableVerticalSwipes) {
+            tg.disableVerticalSwipes();
+        }
+    } catch(e) { console.warn('[TG] disableVerticalSwipes qo\'llab-quvvatlanmaydi:', e.message); }
 
     // 🛡 2. QO'SHIMCHA HIMOYA (Ixtiyoriy): 
     // Agar mijoz "x" ni adashib bosib yuborsa, darrov yopilmaydi, 
