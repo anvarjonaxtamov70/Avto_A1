@@ -4027,7 +4027,7 @@
         </div>
     </div>
     
-    <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openPaymentModal()">Buyurtma</button>
+    <button class="btn-checkout" id="main-checkout-btn" style="display: none;" onclick="openDeliveryModal()">Buyurtma berish</button>
 </div>
 
 <div class="modal-standard" id="paymentModal">
@@ -7227,9 +7227,22 @@ if (currentUser && (!myProfile.address || myProfile.address === "Noma'lum")) {
 }
 
 let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
+        // 🚚 YETKAZIB BERISH ma'lumotini qo'shamiz (delivery step'dan)
+        let deliveryLine = "";
+        let _dlv = window.selectedDelivery;
+        if (_dlv) {
+            if (_dlv.method === 'courier') {
+                fetchedAddress = _dlv.address || fetchedAddress;
+                deliveryLine = `🚚 <b>Yetkazish:</b> Kuryer (manzilga)`;
+                if (_dlv.mapLink) deliveryLine += `\n🗺 <b>Xaritada:</b> ${_dlv.mapLink}`;
+            } else if (_dlv.method === 'bts') {
+                fetchedAddress = (_dlv.branch || "") + (_dlv.region ? (", " + _dlv.region) : "");
+                deliveryLine = `📦 <b>Yetkazish:</b> BTS Pochta filiali`;
+            }
+        }
         let cUser = currentUser || "Noma'lum";
         
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${profName}\n📞 <b>Telefon:</b> <code>${profPhone}</code>\n💬 <b>Telegram:</b> ${userTgLink}\n📍 <b>Manzil:</b> ${fetchedAddress}\n🆔 <b>ID:</b> <code>${cUser}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
+        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${profName}\n📞 <b>Telefon:</b> <code>${profPhone}</code>\n💬 <b>Telegram:</b> ${userTgLink}\n📍 <b>Manzil:</b> ${fetchedAddress}\n${deliveryLine ? deliveryLine + '\n' : ''}🆔 <b>ID:</b> <code>${cUser}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
         
         let total = 0; 
         let savedItems = {};
@@ -7297,7 +7310,9 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                 id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), 
                 time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, 
                 status: 'kutilmoqda', customerName: profName, customerPhone: profPhone,
-                customerAddress: fetchedAddress, customerUsername: userTgLink
+                customerAddress: fetchedAddress, customerUsername: userTgLink,
+                deliveryMethod: (window.selectedDelivery ? window.selectedDelivery.method : ''),
+                deliveryMapLink: (window.selectedDelivery && window.selectedDelivery.mapLink) || ''
             }); 
             
             saveLocalOrders(); 
@@ -11220,6 +11235,260 @@ if (typeof window.showProfile === 'function' && !window._origShowProfile_v3) {
         return r;
     };
 }
+
+// ============================================================
+// 🚚 YETKAZIB BERISH MODULI (Kuryer + Xarita + BTS Pochta)
+// ============================================================
+window.selectedDelivery = null;
+
+// BTS Pochta filiallari (viloyatlar bo'yicha). Admin Firebase 'bts_branches' orqali yangilashi mumkin.
+window.BTS_BRANCHES = {
+    "Toshkent shahri": ["BTS Chilonzor filiali", "BTS Yunusobod filiali", "BTS Sergeli filiali", "BTS Yashnobod filiali"],
+    "Toshkent viloyati": ["BTS Nurafshon filiali", "BTS Chirchiq filiali", "BTS Angren filiali", "BTS Olmaliq filiali"],
+    "Samarqand": ["BTS Samarqand markaziy", "BTS Kattaqo'rg'on filiali", "BTS Urgut filiali"],
+    "Buxoro": ["BTS Buxoro markaziy", "BTS G'ijduvon filiali", "BTS Kogon filiali"],
+    "Andijon": ["BTS Andijon markaziy", "BTS Asaka filiali", "BTS Xonobod filiali"],
+    "Farg'ona": ["BTS Farg'ona markaziy", "BTS Qo'qon filiali", "BTS Marg'ilon filiali"],
+    "Namangan": ["BTS Namangan markaziy", "BTS Chust filiali", "BTS Pop filiali"],
+    "Qashqadaryo": ["BTS Qarshi markaziy", "BTS Shahrisabz filiali"],
+    "Surxondaryo": ["BTS Termiz markaziy", "BTS Denov filiali"],
+    "Jizzax": ["BTS Jizzax markaziy", "BTS G'allaorol filiali"],
+    "Sirdaryo": ["BTS Guliston markaziy", "BTS Yangiyer filiali"],
+    "Navoiy": ["BTS Navoiy markaziy", "BTS Zarafshon filiali"],
+    "Xorazm": ["BTS Urganch markaziy", "BTS Xiva filiali"],
+    "Qoraqalpog'iston": ["BTS Nukus markaziy", "BTS Xo'jayli filiali"]
+};
+
+// Firebase'dan BTS filiallarini (agar admin sozlagan bo'lsa) o'qish
+try {
+    db.ref('bts_branches').once('value', (snap) => {
+        if (snap.exists()) { let d = snap.val(); if (d && typeof d === 'object') window.BTS_BRANCHES = d; }
+    });
+} catch(e) {}
+
+window._dlvMethod = null;
+
+window.openDeliveryModal = () => {
+    if (Object.keys(cart).length === 0) { showToast("Savat bo'sh", "warning"); return; }
+    if (!myProfile.phone) {
+        showToast("Avval telefon raqamingizni kiriting!", "warning");
+        setTimeout(() => { closeModal(); showProfile(); setTimeout(() => openModal('profileEditModal'), 300); }, 1500);
+        return;
+    }
+    let m = document.getElementById('deliveryModal');
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'deliveryModal';
+        m.className = 'modal-standard';
+        document.body.appendChild(m);
+    }
+    m.innerHTML = `
+        <div class="modal-header" style="align-items:flex-start;">
+            <div><h2 style="font-size:22px;font-weight:800;margin:0;">🚚 Yetkazib berish</h2><p style="color:var(--text-muted);font-size:12px;margin:5px 0 0;">Qanday qabul qilmoqchisiz?</p></div>
+            <button class="close-btn" style="font-size:24px;background:rgba(255,255,255,0.05);" onclick="backToCartFromDelivery()">←</button>
+        </div>
+        <div style="padding:0 4px;">
+            <div class="dlv-method-card" id="dlv-courier" onclick="selectDeliveryMethod('courier')">
+                <div style="font-size:30px;">🚖</div>
+                <div style="flex:1;"><h4 style="margin:0 0 3px;font-size:15px;color:#fff;">Kuryer — manzilga</h4><p style="margin:0;font-size:12px;color:var(--text-muted);">Shahar ichida 1–2 kun · taksi orqali</p></div>
+                <div class="dlv-check">✓</div>
+            </div>
+            <div class="dlv-method-card" id="dlv-bts" onclick="selectDeliveryMethod('bts')">
+                <div style="font-size:30px;">📦</div>
+                <div style="flex:1;"><h4 style="margin:0 0 3px;font-size:15px;color:#fff;">BTS Pochta filialiga</h4><p style="margin:0;font-size:12px;color:var(--text-muted);">Viloyatlarga 2–4 kun · filialdan olasiz</p></div>
+                <div class="dlv-check">✓</div>
+            </div>
+
+            <div id="dlv-courier-box" style="display:none; margin-top:16px;">
+                <div style="font-size:11px;font-weight:800;color:var(--luxury-gold);letter-spacing:1px;margin-bottom:10px;">📍 MANZILNI TANLANG</div>
+                <div id="dlv-addresses"></div>
+                <button onclick="openMapPicker()" style="width:100%;padding:14px;border-radius:14px;background:rgba(0,122,255,0.1);border:1px solid rgba(0,122,255,0.35);color:#0a84ff;font-weight:800;cursor:pointer;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;">🗺 Xaritadan belgilash</button>
+            </div>
+
+            <div id="dlv-bts-box" style="display:none; margin-top:16px;">
+                <div style="font-size:11px;font-weight:800;color:var(--luxury-gold);letter-spacing:1px;margin-bottom:10px;">📦 VILOYAT VA FILIAL</div>
+                <select id="dlv-bts-region" class="admin-input" style="padding:15px;margin-bottom:12px;" onchange="updateBtsBranches()"><option value="">-- Viloyatni tanlang --</option></select>
+                <div id="dlv-bts-branch-box" style="display:none;">
+                    <select id="dlv-bts-branch" class="admin-input" style="padding:15px;margin-bottom:12px;"></select>
+                    <input type="text" id="dlv-bts-custom" class="admin-input" placeholder="Boshqa filial (ixtiyoriy)" style="padding:14px;display:none;">
+                </div>
+            </div>
+
+            <button id="dlv-continue-btn" onclick="confirmDelivery()" style="width:100%;padding:17px;background:var(--gold-gradient);color:#000;border:none;border-radius:16px;font-weight:800;font-size:15px;cursor:pointer;margin-top:20px;box-shadow:0 8px 22px rgba(212,175,55,0.3);">To'lovga o'tish →</button>
+        </div>`;
+    // CSS bir marta
+    if (!document.getElementById('dlv-style')) {
+        let st = document.createElement('style');
+        st.id = 'dlv-style';
+        st.textContent = `
+            .dlv-method-card{display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);border:1.5px solid var(--glass-border);border-radius:18px;padding:16px;margin-bottom:12px;cursor:pointer;transition:0.2s;}
+            .dlv-method-card.selected{background:rgba(212,175,55,0.1);border-color:var(--luxury-gold);}
+            .dlv-method-card .dlv-check{width:24px;height:24px;border-radius:50%;border:2px solid var(--glass-border);display:flex;align-items:center;justify-content:center;color:transparent;font-size:13px;font-weight:800;flex-shrink:0;}
+            .dlv-method-card.selected .dlv-check{background:var(--luxury-gold);border-color:var(--luxury-gold);color:#000;}
+            .dlv-addr-item{display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.03);border:1.5px solid var(--glass-border);border-radius:12px;margin-bottom:8px;cursor:pointer;transition:0.2s;}
+            .dlv-addr-item.selected{background:rgba(48,209,88,0.1);border-color:#30d158;}
+            .dlv-addr-radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--glass-border);flex-shrink:0;}
+            .dlv-addr-item.selected .dlv-addr-radio{border-color:#30d158;background:radial-gradient(circle,#30d158 40%,transparent 45%);}
+            #map-picker-overlay{position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;}
+            #map-picker-map{flex:1;width:100%;}
+            #map-picker-bar{padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:rgba(15,15,17,0.97);display:flex;gap:10px;align-items:center;}
+        `;
+        document.head.appendChild(st);
+    }
+    // Region select to'ldirish
+    let regSel = document.getElementById('dlv-bts-region');
+    if (regSel) { for (let r in window.BTS_BRANCHES) { let o = document.createElement('option'); o.value = r; o.textContent = r; regSel.appendChild(o); } }
+
+    document.getElementById('cartModal').style.display = 'none';
+    m.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    activeModal = 'deliveryModal';
+    window.history.replaceState({ modal: 'deliveryModal' }, "");
+    if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show();
+    updateBtns();
+    // Avvalgi tanlovni tiklash
+    window._dlvMethod = null;
+};
+
+window.backToCartFromDelivery = () => {
+    document.getElementById('deliveryModal').style.display = 'none';
+    let cM = document.getElementById('cartModal');
+    cM.style.display = 'flex';
+    activeModal = 'cartModal';
+    window.history.replaceState({ modal: 'cartModal' }, "");
+    if (typeof renderCartItems === 'function') renderCartItems();
+    updateBtns();
+};
+
+window.selectDeliveryMethod = (method) => {
+    window._dlvMethod = method;
+    document.getElementById('dlv-courier').classList.toggle('selected', method === 'courier');
+    document.getElementById('dlv-bts').classList.toggle('selected', method === 'bts');
+    document.getElementById('dlv-courier-box').style.display = method === 'courier' ? 'block' : 'none';
+    document.getElementById('dlv-bts-box').style.display = method === 'bts' ? 'block' : 'none';
+    if (method === 'courier') renderCourierAddresses();
+    _hap('selection');
+};
+
+window._dlvSelectedAddr = null;
+window.renderCourierAddresses = () => {
+    let box = document.getElementById('dlv-addresses');
+    if (!box) return;
+    let addrs = (typeof getAddresses === 'function') ? getAddresses() : [];
+    if (addrs.length === 0) {
+        box.innerHTML = `<div style="color:var(--text-muted);font-size:12px;padding:8px;text-align:center;">Saqlangan manzil yo'q. Xaritadan belgilang yoki profilda qo'shing.</div>`;
+        return;
+    }
+    box.innerHTML = addrs.map((a, i) => `
+        <div class="dlv-addr-item ${window._dlvSelectedAddr===i?'selected':''}" onclick="pickDlvAddress(${i})">
+            <div class="dlv-addr-radio"></div>
+            <span style="font-size:17px;">${a.type==='home'?'🏠':a.type==='work'?'🏢':'📍'}</span>
+            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#fff;">${a.label||(a.type==='home'?'Uy':a.type==='work'?'Ish':'Manzil')}</div><div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.address}</div></div>
+        </div>`).join('');
+};
+window.pickDlvAddress = (idx) => {
+    window._dlvSelectedAddr = idx;
+    renderCourierAddresses();
+    _hap('light');
+};
+
+window.updateBtsBranches = () => {
+    let reg = document.getElementById('dlv-bts-region').value;
+    let box = document.getElementById('dlv-bts-branch-box');
+    let sel = document.getElementById('dlv-bts-branch');
+    if (!reg) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    let branches = window.BTS_BRANCHES[reg] || [];
+    sel.innerHTML = branches.map(b => `<option value="${b}">${b}</option>`).join('') + '<option value="__custom__">✏️ Boshqa filial (qo\'lda)</option>';
+    sel.onchange = () => {
+        let ci = document.getElementById('dlv-bts-custom');
+        ci.style.display = sel.value === '__custom__' ? 'block' : 'none';
+    };
+    document.getElementById('dlv-bts-custom').style.display = 'none';
+};
+
+window.confirmDelivery = () => {
+    if (!window._dlvMethod) { showToast("Yetkazish usulini tanlang!", "warning"); return; }
+    if (window._dlvMethod === 'courier') {
+        let addrs = (typeof getAddresses === 'function') ? getAddresses() : [];
+        if (window._dlvSelectedAddr === null || !addrs[window._dlvSelectedAddr]) { showToast("Manzilni tanlang yoki xaritadan belgilang!", "warning"); return; }
+        let a = addrs[window._dlvSelectedAddr];
+        window.selectedDelivery = { method: 'courier', address: a.address, mapLink: a.mapLink || '' };
+    } else if (window._dlvMethod === 'bts') {
+        let reg = document.getElementById('dlv-bts-region').value;
+        if (!reg) { showToast("Viloyatni tanlang!", "warning"); return; }
+        let sel = document.getElementById('dlv-bts-branch');
+        let branch = sel ? sel.value : '';
+        if (branch === '__custom__') { branch = (document.getElementById('dlv-bts-custom').value || '').trim(); if (!branch) { showToast("Filial nomini yozing!", "warning"); return; } }
+        window.selectedDelivery = { method: 'bts', region: reg, branch: branch };
+    }
+    // To'lovga o'tish
+    document.getElementById('deliveryModal').style.display = 'none';
+    _hap('success');
+    if (typeof openPaymentModal === 'function') openPaymentModal();
+};
+
+// 🗺 XARITADAN MANZIL TANLASH (Leaflet + OpenStreetMap, bepul)
+let _leafletLoading = null;
+function ensureLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (_leafletLoading) return _leafletLoading;
+    _leafletLoading = new Promise((resolve, reject) => {
+        let css = document.createElement('link'); css.rel='stylesheet'; css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(css);
+        let js = document.createElement('script'); js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        js.onload = () => resolve(); js.onerror = () => reject(new Error('xarita yuklanmadi'));
+        document.head.appendChild(js);
+    });
+    return _leafletLoading;
+}
+window._mapPickerObj = null;
+window._mapMarker = null;
+window.openMapPicker = async () => {
+    try { await ensureLeaflet(); } catch(e) { showToast("Xarita yuklanmadi. Internetni tekshiring.", "warning"); return; }
+    let ov = document.getElementById('map-picker-overlay');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'map-picker-overlay';
+        ov.innerHTML = `<div id="map-picker-map"></div><div id="map-picker-bar"><button onclick="closeMapPicker()" style="padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.1);color:#fff;border:none;font-weight:700;cursor:pointer;">Bekor</button><button onclick="confirmMapLocation()" style="flex:1;padding:14px;border-radius:12px;background:var(--gold-gradient);color:#000;border:none;font-weight:800;cursor:pointer;">📍 Shu manzilni tanlash</button></div>`;
+        document.body.appendChild(ov);
+    }
+    ov.style.display = 'flex';
+    setTimeout(() => {
+        if (!window._mapPickerObj) {
+            window._mapPickerObj = L.map('map-picker-map').setView([41.3111, 69.2797], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(window._mapPickerObj);
+            window._mapPickerObj.on('click', (e) => {
+                if (window._mapMarker) window._mapMarker.setLatLng(e.latlng);
+                else window._mapMarker = L.marker(e.latlng).addTo(window._mapPickerObj);
+            });
+            // Joriy lokatsiyani urinib ko'rish
+            if (navigator.geolocation) navigator.geolocation.getCurrentPosition((pos) => {
+                let ll = [pos.coords.latitude, pos.coords.longitude];
+                window._mapPickerObj.setView(ll, 15);
+                if (window._mapMarker) window._mapMarker.setLatLng(ll); else window._mapMarker = L.marker(ll).addTo(window._mapPickerObj);
+            }, () => {}, { timeout: 5000 });
+        }
+        window._mapPickerObj.invalidateSize();
+    }, 200);
+};
+window.closeMapPicker = () => { let ov = document.getElementById('map-picker-overlay'); if (ov) ov.style.display = 'none'; };
+window.confirmMapLocation = () => {
+    if (!window._mapMarker) { showToast("Xaritada nuqtani belgilang", "warning"); return; }
+    let ll = window._mapMarker.getLatLng();
+    let mapLink = `https://www.google.com/maps?q=${ll.lat.toFixed(6)},${ll.lng.toFixed(6)}`;
+    let addrText = `📍 Xarita: ${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
+    // Manzilni saqlaymiz (profil manzillariga)
+    if (typeof getAddresses === 'function') {
+        let arr = getAddresses();
+        arr.push({ type: 'map', label: 'Xaritadagi manzil', address: addrText, mapLink: mapLink });
+        if (typeof saveAddresses === 'function') saveAddresses(arr);
+        window._dlvSelectedAddr = arr.length - 1;
+        renderCourierAddresses();
+    }
+    closeMapPicker();
+    showToast("📍 Manzil belgilandi!", "success");
+    _hap('success');
+};
 
 
 </script> 
