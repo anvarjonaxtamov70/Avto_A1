@@ -3551,8 +3551,12 @@
         .cart-row .swipe-delete { position:absolute; right:0; top:0; bottom:0; width:80px; background: linear-gradient(135deg, #ff453a, #c9302c); color:#fff; display:flex; align-items:center; justify-content:center; font-size: 22px; transform: translateX(100%); transition: transform 0.25s ease; cursor:pointer; }
         .cart-row.show-delete .swipe-delete { transform: translateX(0); }
         .cart-row.show-delete .cart-content-wrap { transform: translateX(-80px); }
-        #compare-bar { position:fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left:0; right:0; z-index: 2500; background: rgba(28,28,30,0.97); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid rgba(212,175,55,0.35); padding: 12px 16px; display: none; box-shadow: 0 -8px 30px rgba(0,0,0,0.5); }
-        #compare-bar.show { display: flex; align-items: center; gap: 10px; animation: cardFadeIn 0.3s ease; }
+        #compare-bar { position:fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); right: 16px; left: auto; z-index: 2500; display: none; }
+        #compare-bar.show { display: block; animation: cardFadeIn 0.3s ease; }
+        .cmp-fab { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(145deg, #F0D060 0%, #C9A84C 50%, #96720A 100%); color: #000; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 20px rgba(212,175,55,0.5), 0 2px 6px rgba(0,0,0,0.3); transition: 0.2s; position: relative; }
+        .cmp-fab:active { transform: scale(0.9); }
+        .cmp-fab svg { width: 24px; height: 24px; }
+        .cmp-fab-badge { position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; border-radius: 50%; background: #ff453a; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #000; }
         #compare-bar .cmp-thumbs { display: flex; gap: 6px; flex: 1; }
         #compare-bar .cmp-thumbs img { width: 40px; height: 40px; object-fit: cover; border-radius: 10px; border: 1.5px solid rgba(212,175,55,0.4); background: #fff; padding: 3px; }
         #compare-bar .cmp-btn { background: linear-gradient(135deg, #F0D060 0%, #C9A84C 50%, #96720A 100%); color: #000; border: none; padding: 10px 18px; border-radius: 12px; font-weight: 800; font-size: 13px; cursor: pointer; box-shadow: 0 4px 12px rgba(212,175,55,0.35); letter-spacing: 0.3px; }
@@ -10714,20 +10718,18 @@ window.notifyMeForProduct = (productId) => {
 window.compareList = [];
 window.toggleCompare = (productId, e) => {
     if (e) { e.stopPropagation(); e.preventDefault(); }
+    let product = (window.productsDB || []).find(x => x.id == productId);
+    if (!product) { showToast("Tovar topilmadi. Sahifani yangilang.", "warning"); return; }
     let pid = String(productId);
     const idx = window.compareList.indexOf(pid);
     if (idx >= 0) {
         window.compareList.splice(idx, 1);
-        showToast("⚖️ Taqqoslashdan chiqarildi", "warning");
+        showToast("Taqqoslashdan chiqarildi", "warning");
     } else {
         if (window.compareList.length >= 2) window.compareList.shift();
         window.compareList.push(pid);
         _hap('light');
-        if (window.compareList.length === 1) {
-            showToast("⚖️ 1/2 belgilandi. Yana bitta tanlang!", "success");
-        } else {
-            showToast("⚖️ 2 ta tayyor! Pastdagi tugmani bosing", "success");
-        }
+        showToast(window.compareList.length === 1 ? "1/2 tanlandi — yana bitta bosing" : "Tayyor! Pastdagi dumaloq tugmani bosing", "success");
     }
     updateCompareBar();
     updateCompareBtnStates();
@@ -10740,12 +10742,8 @@ window.updateCompareBar = () => {
         document.body.appendChild(bar);
     }
     if (window.compareList.length < 2) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
-    let imgs = window.compareList.map(pid => {
-        let p = (window.productsDB || []).find(x => String(x.id) === pid);
-        return p ? p.img : '';
-    }).filter(Boolean);
     bar.classList.add('show');
-    bar.innerHTML = '<div class="cmp-thumbs">' + imgs.map(i => '<img src="' + i + '">').join('') + '</div><button class="cmp-btn" onclick="openCompareModal()">⚖️ Taqqoslash</button><button class="cmp-btn cmp-clear" onclick="window.compareList=[];updateCompareBar();updateCompareBtnStates();">✕</button>';
+    bar.innerHTML = '<div class="cmp-fab" onclick="openCompareModal()"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z"/></svg><span class="cmp-fab-badge">2</span></div>';
 };
 window.updateCompareBtnStates = () => {
     document.querySelectorAll('.btn-compare, .btn-compare-card').forEach(btn => {
@@ -10762,8 +10760,8 @@ window.openCompareModal = () => {
     if (window.compareList.length < 2) { showToast('2 ta tovar belgilang', 'warning'); return; }
     let m = document.getElementById('compareModal');
     if (!m) { m = document.createElement('div'); m.id = 'compareModal'; m.className = 'modal-standard'; document.body.appendChild(m); }
-    const products = window.compareList.map(pid => (window.productsDB || []).find(x => String(x.id) === pid)).filter(Boolean);
-    if (products.length < 2) { showToast("Tovarlar bazada topilmadi. Qaytadan tanlang.", "warning"); window.compareList=[]; updateCompareBar(); return; }
+    const products = window.compareList.map(pid => (window.productsDB || []).find(x => x.id == pid)).filter(Boolean);
+    if (products.length < 2) { showToast("Sahifani yangilang va qaytadan belgilang.", "warning"); window.compareList=[]; updateCompareBar(); return; }
     const [a, b] = products;
     const priceDiff = Math.abs(a.price - b.price);
     const cheaperIdx = a.price <= b.price ? 0 : 1;
