@@ -13,7 +13,7 @@
 
     /* ----------------------- Sozlamalar ----------------------- */
     var LS_KEY = 'avto_phase2';
-    var CASHBACK_RATE = 0.005;    // har xariddan 0.5% cashback
+    var CASHBACK_RATE = 0.01;     // har xariddan 1% cashback
     var REFERRAL_BONUS = 20000;   // referral uchun ikki tomonga ham bonus (so'm)
     var WARRANTY_DAYS = 14;       // standart kafolat muddati (kun)
     var DAY = 86400000;
@@ -28,6 +28,7 @@
             cashbackHistory: [],
             achievements: {},   // {id: unlockedTimestamp}
             achSeen: 0,         // foydalanuvchi ko'rgan yutuqlar soni (badge uchun)
+            processedOrders: {},// {orderId: {t, cb}} — cashback/kafolat berilgan buyurtmalar (ikki marta bermaslik uchun)
             referralCode: '',
             referredBy: '',
             referrals: [],      // [{uid, date}]
@@ -252,18 +253,21 @@
         if (!order || !order.items) return;
         var start = order.id || Date.now();
         Object.keys(order.items).forEach(function (fullId) {
-            var baseId = String(fullId).split('||')[0];
+            var parts = String(fullId).split('||');
+            var baseId = parts[0];
+            var size = (parts[1] || '').replace(/_dot_/g, '.');
             var p = findProduct(baseId);
             var name = p ? p.name : 'Mahsulot';
-            var size = String(fullId).split('||')[1];
             if (size && size !== 'Universal' && size !== 'undefined') name += ' (' + size + ')';
+            var wid = 'w' + start + '_' + baseId + (parts[1] ? '_' + parts[1] : '');
+            if (P.state.warranties.some(function (w) { return w.id === wid; })) return; // takror emas
             P.state.warranties.unshift({
-                id: 'w' + start + baseId,
+                id: wid,
                 name: name, code: order.code || ('#' + order.id),
                 start: start, days: WARRANTY_DAYS, qty: order.items[fullId], notified: false
             });
         });
-        if (P.state.warranties.length > 60) P.state.warranties.length = 60;
+        if (P.state.warranties.length > 80) P.state.warranties.length = 80;
     }
     function warrStatus(w) {
         var end = w.start + (w.days || WARRANTY_DAYS) * DAY;
@@ -811,26 +815,62 @@
             inner + '</div>';
     }
 
+    // YANGI buyurtmalarni aniqlab cashback + kafolat beradi (idempotent — processedOrders guard).
+    // confirmOrder bir necha marta override qilingani uchun hook ishonchsiz —
+    // shuning uchun Firebase sync orqali kelgan buyurtmalardan ishonchli aniqlaymiz.
+    function processNewOrders(orders) {
+        if (!Array.isArray(orders) || !orders.length) return false;
+        if (!P.state.processedOrders) P.state.processedOrders = {};
+        var firstRun = (P._synced !== true);   // birinchi sync = eski buyurtmalar (jim catch-up)
+        var changed = false;
+        var sessionNew = [];
+        orders.forEach(function (o) {
+            if (!o || o.id == null) return;
+            var key = String(o.id);
+            if (P.state.processedOrders[key]) return;     // allaqachon berilgan
+            var earned = Math.round((parseInt(o.total) || 0) * CASHBACK_RATE);
+            if (earned > 0) addCashback(earned, 'Buyurtma ' + (o.code || '#' + o.id), 'earn');
+            createWarranties(o);
+            P.state.processedOrders[key] = { t: Date.now(), cb: earned };
+            changed = true;
+            if (firstRun) {
+                if (earned > 0) pushNotif('🎁', 'Cashback', '+' + fmtSom(earned) + " so'm — buyurtma " + (o.code || ''), { silent: true });
+            } else {
+                sessionNew.push({ o: o, earned: earned });
+            }
+        });
+        // processedOrders ro'yxatini cheklash (eng so'nggi 200 ta)
+        var keys = Object.keys(P.state.processedOrders);
+        if (keys.length > 200) { keys.slice(0, keys.length - 200).forEach(function (k) { delete P.state.processedOrders[k]; }); }
+        if (changed) {
+            sessionNew.forEach(function (x) {
+                pushNotif('📦', 'Buyurtma qabul qilindi', 'Buyurtma ' + (x.o.code || '') + ' rasmiylashtirildi. Rahmat!', { silent: true });
+                if (x.earned > 0) pushNotif('🎁', 'Cashback qo\'shildi', '+' + fmtSom(x.earned) + " so'm hisobingizga tushdi.", { silent: true });
+            });
+            save();
+            if (sessionNew.length) {
+                var tot = sessionNew.reduce(function (s, x) { return s + x.earned; }, 0);
+                if (tot > 0) { toast('🎁 +' + fmtSom(tot) + " so'm cashback!", 'success'); confettiBurst(); hap('success'); }
+            }
+        }
+        return changed;
+    }
+    P.processNewOrders = processNewOrders;
+
     /* ============================================================
        INTEGRATSIYA HOOK'LARI
        ============================================================ */
-    // Buyurtma berilganda chaqiriladi (confirmOrder ichidan)
+    // Buyurtma berilganda chaqiriladi (confirmOrder ichidan — agar ishlasa).
+    // Asosiy ishonchli yo'l: P.sync ichidagi processNewOrders.
     P.onOrderPlaced = function (order, productsDB) {
         if (productsDB) P.productsDB = productsDB;
         if (!order) return;
-        // orderni mahalliy ro'yxatga ham qo'shamiz (sync gacha)
-        if (!P.orders.some(function (o) { return o.id === order.id; })) P.orders.unshift(order);
-        var earned = Math.round((order.total || 0) * CASHBACK_RATE);
-        if (earned > 0) {
-            addCashback(earned, 'Buyurtma ' + (order.code || '#' + order.id), 'earn');
-            pushNotif('🎁', 'Cashback qo\'shildi', '+' + fmtSom(earned) + " so'm cashback hisobingizga tushdi.", { silent: true });
+        if (Array.isArray(window.myOrders) && !window.myOrders.some(function (o) { return o && o.id === order.id; })) {
+            window.myOrders.unshift(order);
         }
-        pushNotif('📦', 'Buyurtma qabul qilindi', 'Buyurtmangiz ' + (order.code || '') + ' rasmiylashtirildi. Rahmat!', { silent: true });
-        createWarranties(order);
-        save();
+        processNewOrders([order]);
         evaluateAchievements();
         renderProfile();
-        toast('🎁 +' + fmtSom(earned) + " so'm cashback!", 'success');
     };
 
     // Firebase'dan ma'lumot kelganda (mavjud listener ichidan)
@@ -847,6 +887,8 @@
                 P.state.cashbackTotal = (typeof r.cashbackTotal === 'number') ? r.cashbackTotal : P.state.cashbackTotal;
                 if (r.cashbackHistory) P.state.cashbackHistory = toArray(r.cashbackHistory);
                 if (r.achievements) P.state.achievements = r.achievements;
+                if (typeof r.achSeen === 'number') P.state.achSeen = r.achSeen;
+                if (r.processedOrders) P.state.processedOrders = r.processedOrders;
                 if (r.referralCode) P.state.referralCode = r.referralCode;
                 if (r.referredBy) P.state.referredBy = r.referredBy;
                 if (r.referrals) P.state.referrals = toArray(r.referrals);
@@ -859,6 +901,8 @@
         }
         applyTheme(P.state.theme);
         ensureReferralCode();
+        // 🎁 YANGI buyurtmalardan cashback + kafolat (ishonchli yo'l)
+        processNewOrders(getOrders());
         updateBell(false);
         checkExpiringWarranties();
         // Birinchi sync'da overlay/confetti ko'rsatmaymiz (eski yutuqlar uchun), keyin ko'rsatamiz
