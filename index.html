@@ -10714,14 +10714,14 @@ window.notifyMeForProduct = (productId) => {
 window.compareList = [];
 window.toggleCompare = (productId, e) => {
     if (e) { e.stopPropagation(); e.preventDefault(); }
-    productId = parseInt(productId);
-    const idx = window.compareList.findIndex(x => x == productId);
+    let pid = String(productId);
+    const idx = window.compareList.indexOf(pid);
     if (idx >= 0) {
         window.compareList.splice(idx, 1);
         showToast("⚖️ Taqqoslashdan chiqarildi", "warning");
     } else {
         if (window.compareList.length >= 2) window.compareList.shift();
-        window.compareList.push(productId);
+        window.compareList.push(pid);
         _hap('light');
         if (window.compareList.length === 1) {
             showToast("⚖️ 1/2 belgilandi. Yana bitta tanlang!", "success");
@@ -10737,30 +10737,33 @@ window.updateCompareBar = () => {
     if (!bar) {
         bar = document.createElement('div');
         bar.id = 'compare-bar';
-        bar.innerHTML = '<div class="cmp-thumbs"></div><button class="cmp-btn" onclick="openCompareModal()">⚖️ Taqqoslash</button><button class="cmp-btn cmp-clear" onclick="window.compareList=[];updateCompareBar();updateCompareBtnStates();">✕</button>';
         document.body.appendChild(bar);
     }
-    const thumbs = bar.querySelector('.cmp-thumbs');
-    if (window.compareList.length === 0) { bar.classList.remove('show'); return; }
+    if (window.compareList.length < 2) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
+    let imgs = window.compareList.map(pid => {
+        let p = (window.productsDB || []).find(x => String(x.id) === pid);
+        return p ? p.img : '';
+    }).filter(Boolean);
     bar.classList.add('show');
-    thumbs.innerHTML = window.compareList.map(id => {
-        const p = (window.productsDB || []).find(x => x.id === id);
-        return p ? `<img src="${p.img || window._brandPlaceholder('A1')}" alt="">` : '';
-    }).join('');
+    bar.innerHTML = '<div class="cmp-thumbs">' + imgs.map(i => '<img src="' + i + '">').join('') + '</div><button class="cmp-btn" onclick="openCompareModal()">⚖️ Taqqoslash</button><button class="cmp-btn cmp-clear" onclick="window.compareList=[];updateCompareBar();updateCompareBtnStates();">✕</button>';
 };
 window.updateCompareBtnStates = () => {
     document.querySelectorAll('.btn-compare, .btn-compare-card').forEach(btn => {
-        const id = parseInt(btn.getAttribute('data-id') || btn.closest('[onclick]')?.getAttribute('onclick')?.match(/\d+/)?.[0]);
-        if (window.compareList.includes(id)) btn.classList.add('active');
-        else btn.classList.remove('active');
+        let oc = btn.getAttribute('onclick') || '';
+        let match = oc.match(/toggleCompare\((\d+)/);
+        if (match) {
+            let id = match[1];
+            if (window.compareList.includes(id)) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
     });
 };
 window.openCompareModal = () => {
-    if (window.compareList.length < 2) { showToast('Taqqoslash uchun 2 ta tovar belgilang', 'warning'); return; }
+    if (window.compareList.length < 2) { showToast('2 ta tovar belgilang', 'warning'); return; }
     let m = document.getElementById('compareModal');
     if (!m) { m = document.createElement('div'); m.id = 'compareModal'; m.className = 'modal-standard'; document.body.appendChild(m); }
-    const products = window.compareList.map(id => (window.productsDB || []).find(x => x.id == id)).filter(Boolean);
-    if (products.length < 2) { showToast("Tovarlar topilmadi. Qaytadan 2 ta belgilang.", "warning"); window.compareList=[]; updateCompareBar(); return; }
+    const products = window.compareList.map(pid => (window.productsDB || []).find(x => String(x.id) === pid)).filter(Boolean);
+    if (products.length < 2) { showToast("Tovarlar bazada topilmadi. Qaytadan tanlang.", "warning"); window.compareList=[]; updateCompareBar(); return; }
     const [a, b] = products;
     const priceDiff = Math.abs(a.price - b.price);
     const cheaperIdx = a.price <= b.price ? 0 : 1;
