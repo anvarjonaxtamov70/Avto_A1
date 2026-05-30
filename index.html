@@ -3568,6 +3568,9 @@
         .btn-compare { background: rgba(255,255,255,0.06); color: var(--luxury-gold); border: 1px solid rgba(212,175,55,0.3); padding: 10px; border-radius: 12px; font-weight: 700; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; }
         .btn-compare.active { background: rgba(212,175,55,0.18); border-color: var(--luxury-gold); }
         .btn-compare:active { transform: scale(0.95); }
+        .btn-compare-card { position:absolute; top:8px; left:8px; z-index:3; width:30px; height:30px; border-radius:50%; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; backdrop-filter:blur(4px); transition:0.2s; }
+        .btn-compare-card.active { background:rgba(212,175,55,0.25); border-color:var(--luxury-gold); box-shadow:0 0 8px rgba(212,175,55,0.4); }
+        .btn-compare-card:active { transform:scale(0.85); }
         .btn-notify { width: 100%; padding: 14px; border-radius: 14px; background: rgba(212,175,55,0.12); color: var(--luxury-gold); border: 1px solid rgba(212,175,55,0.4); font-weight: 800; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
         .btn-notify:active { transform: scale(0.97); }
         #broadcastModal textarea { width: 100%; min-height: 140px; padding: 14px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--glass-border); border-radius: 14px; font-size: 14px; resize: vertical; outline: none; font-family: inherit; box-sizing: border-box; }
@@ -5424,6 +5427,7 @@ function cardHTML(p) {
 
     return `<div class="luxury-card" onclick="openProduct(${p.id})">
         ${bH}${heartBtn}
+        <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">⚖️</div>
         <div class="img-wrap" style="${oosStyle}">
         <img src="${p.img}" 
      loading="lazy" 
@@ -8855,6 +8859,7 @@ window.renderCartItems = () => {
         
         c.innerHTML += `
             <div class="cart-row">
+                <div class="cart-content-wrap">
                 <img src="${p.img}" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src=window._brandPlaceholder('A1')">
                 
                 <div class="cart-info">
@@ -8867,6 +8872,8 @@ window.renderCartItems = () => {
                     <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
                     <button onclick="chg('${safeId}',1)">+</button>
                 </div>
+                </div>
+                <div class="swipe-delete" onclick="chg('${safeId}', -${qty})">🗑</div>
             </div>`; 
     } 
     
@@ -8992,6 +8999,7 @@ window.renderCartItems = () => {
         
         _rows.push(`
             <div class="cart-row">
+                <div class="cart-content-wrap">
                 <img src="${p.img}" loading="lazy" decoding="async" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src=window._brandPlaceholder('A1')">
                 <div class="cart-info">
                     <h4 style="line-height: 1.4;">${displayName}</h4>
@@ -9003,6 +9011,8 @@ window.renderCartItems = () => {
                     <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
                     <button onclick="chg('${safeId}',1)">+</button>
                 </div>
+                </div>
+                <div class="swipe-delete" onclick="chg('${safeId}', -${qty})">🗑</div>
             </div>`); 
     } 
     c.innerHTML = _rows.join(''); // ⚡ bir marta yozish — DOM bir marta yangilanadi
@@ -10732,8 +10742,8 @@ window.updateCompareBar = () => {
     }).join('');
 };
 window.updateCompareBtnStates = () => {
-    document.querySelectorAll('.btn-compare').forEach(btn => {
-        const id = parseInt(btn.getAttribute('data-id'));
+    document.querySelectorAll('.btn-compare, .btn-compare-card').forEach(btn => {
+        const id = parseInt(btn.getAttribute('data-id') || btn.closest('[onclick]')?.getAttribute('onclick')?.match(/\d+/)?.[0]);
         if (window.compareList.includes(id)) btn.classList.add('active');
         else btn.classList.remove('active');
     });
