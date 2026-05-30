@@ -10751,29 +10751,38 @@ window.updateCompareBtnStates = () => {
 window.openCompareModal = () => {
     if (window.compareList.length < 2) { showToast('Taqqoslash uchun 2 ta tovar belgilang', 'warning'); return; }
     let m = document.getElementById('compareModal');
-    if (!m) {
-        m = document.createElement('div');
-        m.id = 'compareModal';
-        m.className = 'modal-standard';
-        m.innerHTML = '<div class="modal-header"><h2 style="color:var(--luxury-gold);">⚖️ Taqqoslash</h2><button class="close-btn" onclick="closeModal()">×</button></div><div id="cmp-grid-content"></div>';
-        document.body.appendChild(m);
-    }
-    const cont = document.getElementById('cmp-grid-content');
+    if (!m) { m = document.createElement('div'); m.id = 'compareModal'; m.className = 'modal-standard'; document.body.appendChild(m); }
     const products = window.compareList.map(id => (window.productsDB || []).find(x => x.id === id)).filter(Boolean);
-    cont.innerHTML = '<div class="cmp-grid">' + products.map(p => {
-        const stock = (p.stock || 0);
-        const stHtml = stock > 0 ? '✅ Bor' : '❌ Yo\'q';
-        return `<div class="cmp-col">
-            <img src="${p.img || window._brandPlaceholder('A1')}" onerror="this.src=window._brandPlaceholder('A1')">
-            <h4>${p.name}</h4>
-            <div class="cmp-price">${(p.price || 0).toLocaleString()} so'm</div>
-            <div class="cmp-row"><span class="cmp-k">Kod</span><span class="cmp-v">${p.code || '—'}</span></div>
-            <div class="cmp-row"><span class="cmp-k">Birlik</span><span class="cmp-v">${p.unit === 'komplekt' ? 'Komplekt' : 'Dona'}</span></div>
-            <div class="cmp-row"><span class="cmp-k">Holati</span><span class="cmp-v">${stHtml}</span></div>
-            <div class="cmp-row"><span class="cmp-k">Ombor</span><span class="cmp-v">${stock} ta</span></div>
-            <button onclick="closeModal();setTimeout(()=>openProduct(${p.id}),120)" style="width:100%;margin-top:10px;padding:10px;background:var(--gold-gradient);color:#000;border:none;border-radius:10px;font-weight:800;font-size:12px;">Ko'rish</button>
-        </div>`;
-    }).join('') + '</div>';
+    if (products.length < 2) { showToast("Tovarlar topilmadi", "warning"); return; }
+    const [a, b] = products;
+    const priceDiff = Math.abs(a.price - b.price);
+    const cheaperIdx = a.price <= b.price ? 0 : 1;
+    const pctDiff = Math.round((priceDiff / Math.max(a.price, b.price)) * 100);
+    const diffLabel = priceDiff > 0 ? (pctDiff + '% arzonroq (' + priceDiff.toLocaleString() + " so'm farq)") : "Narxlari teng";
+    const stockA = a.stock !== undefined ? a.stock : ((a.sizes||[]).reduce((s,x)=>s+(x.stock||0),0));
+    const stockB = b.stock !== undefined ? b.stock : ((b.sizes||[]).reduce((s,x)=>s+(x.stock||0),0));
+    const carNames = {'gazel-biznes':'Gazel Biznes','gazel-next':'Gazel Next','gazel-eski':'Gazel Eski','volga-2401':'Volga 2401','volga-2410':'Volga 2410','volga-3110':'Volga 3110','volga-31105':'Volga 31105','volga-31029':'Volga 31029','sobol':'Sobol','chevy-damas':'Damas','chevy-cobalt':'Cobalt','chevy-gentra':'Gentra','chevy-lacetti':'Lacetti','chevy-malibu1':'Malibu 1','chevy-malibu2':'Malibu 2','chevy-tracker2':'Tracker 2','chevy-nexia3':'Nexia 3','chevy-spark':'Spark','chevy-onix':'Onix','chevy-captiva1':'Captiva 1','chevy-labo':'Labo','chevy-matiz':'Matiz','chevy-epica':'Epica','daewoo-nexia1':'Nexia 1','daewoo-nexia2':'Nexia 2','daewoo-matiz':'Matiz','daewoo-tico':'Tico','uaz-patriot':'Patriot','uaz-hunter':'Hunter'};
+    const getCars = (p) => (p.categories || [p.category]).map(c => carNames[c] || c).filter(Boolean).join(', ') || 'Universal';
+    const rows = [
+        ['Narx', a.price.toLocaleString()+" so'm", b.price.toLocaleString()+" so'm", cheaperIdx===0, cheaperIdx===1],
+        ['Kod', a.code||'—', b.code||'—', false, false],
+        ['Birlik', a.unit==='komplekt'?'Komplekt':'Dona', b.unit==='komplekt'?'Komplekt':'Dona', false, false],
+        ['Ombor', stockA>0?stockA+' ta':'Tugagan', stockB>0?stockB+' ta':'Tugagan', stockA>stockB, stockB>stockA],
+        ['Mashina', getCars(a), getCars(b), false, false],
+        ['Turi', a.product_type==='razmerli'?'Razmerli':'Oddiy', b.product_type==='razmerli'?'Razmerli':'Oddiy', false, false]
+    ];
+    const rowsHtml = rows.map(r => '<div style="display:grid;grid-template-columns:90px 1fr 1fr;gap:6px;padding:10px 12px;border-top:1px solid rgba(255,255,255,0.05);">' +
+        '<div style="font-size:11px;color:var(--text-muted);font-weight:700;">' + r[0] + '</div>' +
+        '<div style="font-size:12px;font-weight:700;color:' + (r[3]?'#30d158':'#fff') + ';">' + r[1] + '</div>' +
+        '<div style="font-size:12px;font-weight:700;color:' + (r[4]?'#30d158':'#fff') + ';">' + r[2] + '</div></div>').join('');
+    m.innerHTML = '<div class="modal-header" style="position:sticky;top:0;z-index:10;background:rgba(10,10,12,0.95);backdrop-filter:blur(10px);"><h2 style="color:var(--luxury-gold);margin:0;font-size:18px;">⚖️ Taqqoslash</h2><button class="close-btn" onclick="closeModal()">×</button></div>' +
+        '<div style="padding:16px;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
+        '<div style="text-align:center;"><img src="'+(a.img||window._brandPlaceholder('A1'))+'" onerror="this.src=window._brandPlaceholder(\'A1\')" style="width:100%;aspect-ratio:1/1;object-fit:contain;background:#fff;border-radius:14px;padding:8px;box-sizing:border-box;"><h4 style="font-size:13px;color:#fff;margin:8px 0 4px;line-height:1.3;">'+a.name.split('·')[0].trim()+'</h4><div style="color:var(--luxury-gold);font-weight:800;font-size:16px;">'+a.price.toLocaleString()+' so\'m</div></div>' +
+        '<div style="text-align:center;"><img src="'+(b.img||window._brandPlaceholder('A1'))+'" onerror="this.src=window._brandPlaceholder(\'A1\')" style="width:100%;aspect-ratio:1/1;object-fit:contain;background:#fff;border-radius:14px;padding:8px;box-sizing:border-box;"><h4 style="font-size:13px;color:#fff;margin:8px 0 4px;line-height:1.3;">'+b.name.split('·')[0].trim()+'</h4><div style="color:var(--luxury-gold);font-weight:800;font-size:16px;">'+b.price.toLocaleString()+' so\'m</div></div></div>' +
+        (priceDiff > 0 ? '<div style="background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);border-radius:12px;padding:10px 14px;margin-bottom:14px;text-align:center;"><span style="color:#30d158;font-weight:800;font-size:13px;">✅ '+products[cheaperIdx].name.split('·')[0].trim()+' — '+diffLabel+'</span></div>' : '') +
+        '<div style="border-radius:14px;overflow:hidden;border:1px solid var(--glass-border);margin-bottom:16px;">' +
+        '<div style="display:grid;grid-template-columns:90px 1fr 1fr;gap:6px;padding:10px 12px;background:rgba(255,255,255,0.03);"><div style="font-size:10px;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Xususiyat</div><div style="font-size:10px;color:var(--luxury-gold);font-weight:800;">1-tovar</div><div style="font-size:10px;color:var(--luxury-gold);font-weight:800;">2-tovar</div></div>' + rowsHtml + '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><button onclick="closeModal();setTimeout(()=>openProduct('+a.id+'),150)" style="padding:13px;background:var(--gold-gradient);color:#000;border:none;border-radius:12px;font-weight:800;font-size:12px;cursor:pointer;">🛒 Ochish</button><button onclick="closeModal();setTimeout(()=>openProduct('+b.id+'),150)" style="padding:13px;background:var(--gold-gradient);color:#000;border:none;border-radius:12px;font-weight:800;font-size:12px;cursor:pointer;">🛒 Ochish</button></div></div>';
     if (typeof openModal === 'function') openModal('compareModal');
     else { m.style.display='flex'; window.activeModal='compareModal'; }
 };
