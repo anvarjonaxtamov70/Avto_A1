@@ -3554,9 +3554,10 @@
         #compare-bar { position:fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left:0; right:0; z-index: 2500; background: rgba(28,28,30,0.97); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid rgba(212,175,55,0.35); padding: 12px 16px; display: none; box-shadow: 0 -8px 30px rgba(0,0,0,0.5); }
         #compare-bar.show { display: flex; align-items: center; gap: 10px; animation: cardFadeIn 0.3s ease; }
         #compare-bar .cmp-thumbs { display: flex; gap: 6px; flex: 1; }
-        #compare-bar .cmp-thumbs img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; border: 1px solid var(--glass-border); background: #fff; padding: 2px; }
-        #compare-bar .cmp-btn { background: linear-gradient(135deg, #F0D060, #C9A84C); color: #000; border: none; padding: 9px 14px; border-radius: 12px; font-weight: 800; font-size: 12px; cursor: pointer; }
-        #compare-bar .cmp-btn.cmp-clear { background: rgba(255,255,255,0.08); color: #fff; padding: 9px 12px; }
+        #compare-bar .cmp-thumbs img { width: 40px; height: 40px; object-fit: cover; border-radius: 10px; border: 1.5px solid rgba(212,175,55,0.4); background: #fff; padding: 3px; }
+        #compare-bar .cmp-btn { background: linear-gradient(135deg, #F0D060 0%, #C9A84C 50%, #96720A 100%); color: #000; border: none; padding: 10px 18px; border-radius: 12px; font-weight: 800; font-size: 13px; cursor: pointer; box-shadow: 0 4px 12px rgba(212,175,55,0.35); letter-spacing: 0.3px; }
+        #compare-bar .cmp-btn:active { transform: scale(0.95); }
+        #compare-bar .cmp-btn.cmp-clear { background: rgba(255,69,58,0.12); color: #ff453a; padding: 10px 14px; box-shadow: none; border: 1px solid rgba(255,69,58,0.3); }
         .cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px; }
         .cmp-col { background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: 14px; padding: 12px; }
         .cmp-col img { width: 100%; aspect-ratio: 1/1; object-fit: contain; padding: 10px; background: #fff; border-radius: 10px; }
@@ -3568,8 +3569,8 @@
         .btn-compare { background: rgba(255,255,255,0.06); color: var(--luxury-gold); border: 1px solid rgba(212,175,55,0.3); padding: 10px; border-radius: 12px; font-weight: 700; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; }
         .btn-compare.active { background: rgba(212,175,55,0.18); border-color: var(--luxury-gold); }
         .btn-compare:active { transform: scale(0.95); }
-        .btn-compare-card { position:absolute; top:8px; left:8px; z-index:3; width:30px; height:30px; border-radius:50%; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; backdrop-filter:blur(4px); transition:0.2s; }
-        .btn-compare-card.active { background:rgba(212,175,55,0.25); border-color:var(--luxury-gold); box-shadow:0 0 8px rgba(212,175,55,0.4); }
+        .btn-compare-card { position:absolute; top:8px; left:8px; z-index:3; width:32px; height:32px; border-radius:10px; background:linear-gradient(145deg, rgba(28,28,30,0.9), rgba(10,10,12,0.95)); border:1.5px solid rgba(212,175,55,0.4); display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); transition:all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+        .btn-compare-card.active { background:linear-gradient(135deg, rgba(240,208,96,0.2), rgba(201,168,76,0.25)); border-color:var(--luxury-gold); box-shadow:0 2px 12px rgba(212,175,55,0.35); }
         .btn-compare-card:active { transform:scale(0.85); }
         .btn-notify { width: 100%; padding: 14px; border-radius: 14px; background: rgba(212,175,55,0.12); color: var(--luxury-gold); border: 1px solid rgba(212,175,55,0.4); font-weight: 800; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
         .btn-notify:active { transform: scale(0.97); }
@@ -10714,7 +10715,7 @@ window.compareList = [];
 window.toggleCompare = (productId, e) => {
     if (e) { e.stopPropagation(); e.preventDefault(); }
     productId = parseInt(productId);
-    const idx = window.compareList.indexOf(productId);
+    const idx = window.compareList.findIndex(x => x == productId);
     if (idx >= 0) {
         window.compareList.splice(idx, 1);
         showToast("⚖️ Taqqoslashdan chiqarildi", "warning");
@@ -10758,8 +10759,8 @@ window.openCompareModal = () => {
     if (window.compareList.length < 2) { showToast('Taqqoslash uchun 2 ta tovar belgilang', 'warning'); return; }
     let m = document.getElementById('compareModal');
     if (!m) { m = document.createElement('div'); m.id = 'compareModal'; m.className = 'modal-standard'; document.body.appendChild(m); }
-    const products = window.compareList.map(id => (window.productsDB || []).find(x => x.id === id)).filter(Boolean);
-    if (products.length < 2) { showToast("Tovarlar topilmadi", "warning"); return; }
+    const products = window.compareList.map(id => (window.productsDB || []).find(x => x.id == id)).filter(Boolean);
+    if (products.length < 2) { showToast("Tovarlar topilmadi. Qaytadan 2 ta belgilang.", "warning"); window.compareList=[]; updateCompareBar(); return; }
     const [a, b] = products;
     const priceDiff = Math.abs(a.price - b.price);
     const cheaperIdx = a.price <= b.price ? 0 : 1;
