@@ -11242,22 +11242,29 @@ if (typeof window.showProfile === 'function' && !window._origShowProfile_v3) {
 window.selectedDelivery = null;
 
 // BTS Pochta filiallari (viloyatlar bo'yicha). Admin Firebase 'bts_branches' orqali yangilashi mumkin.
-window.BTS_BRANCHES = {
-    "Toshkent shahri": ["BTS Chilonzor filiali", "BTS Yunusobod filiali", "BTS Sergeli filiali", "BTS Yashnobod filiali"],
-    "Toshkent viloyati": ["BTS Nurafshon filiali", "BTS Chirchiq filiali", "BTS Angren filiali", "BTS Olmaliq filiali"],
-    "Samarqand": ["BTS Samarqand markaziy", "BTS Kattaqo'rg'on filiali", "BTS Urgut filiali"],
-    "Buxoro": ["BTS Buxoro markaziy", "BTS G'ijduvon filiali", "BTS Kogon filiali"],
-    "Andijon": ["BTS Andijon markaziy", "BTS Asaka filiali", "BTS Xonobod filiali"],
-    "Farg'ona": ["BTS Farg'ona markaziy", "BTS Qo'qon filiali", "BTS Marg'ilon filiali"],
-    "Namangan": ["BTS Namangan markaziy", "BTS Chust filiali", "BTS Pop filiali"],
-    "Qashqadaryo": ["BTS Qarshi markaziy", "BTS Shahrisabz filiali"],
-    "Surxondaryo": ["BTS Termiz markaziy", "BTS Denov filiali"],
-    "Jizzax": ["BTS Jizzax markaziy", "BTS G'allaorol filiali"],
-    "Sirdaryo": ["BTS Guliston markaziy", "BTS Yangiyer filiali"],
-    "Navoiy": ["BTS Navoiy markaziy", "BTS Zarafshon filiali"],
-    "Xorazm": ["BTS Urganch markaziy", "BTS Xiva filiali"],
-    "Qoraqalpog'iston": ["BTS Nukus markaziy", "BTS Xo'jayli filiali"]
-};
+// 📦 BTS Pochta filiallari — barcha 14 viloyat + shahar/tumanlar (keng qamrov).
+// Admin Firebase 'bts_branches' orqali aniq manzillar bilan yangilashi mumkin.
+window.BTS_BRANCHES = (function(){
+    const cities = {
+        "Toshkent shahri": ["Bektemir","Chilonzor","Mirobod","Mirzo Ulug'bek","Olmazor","Sergeli","Shayxontohur","Uchtepa","Yakkasaroy","Yashnobod","Yunusobod"],
+        "Toshkent viloyati": ["Nurafshon","Angren","Bekobod","Chirchiq","Olmaliq","Ohangaron","Yangiyo'l","G'azalkent","Keles","Parkent","Piskent","Bo'ka","Zangiota","Qibray","Oqqo'rg'on","Chinoz","Yuqori Chirchiq","O'rta Chirchiq"],
+        "Andijon": ["Andijon shahri","Asaka","Xonobod","Shahrixon","Marhamat","Qo'rg'ontepa","Paxtaobod","Baliqchi","Bo'ston","Buloqboshi","Izboskan","Jalaquduq","Oltinko'l","Ulug'nor","Xo'jaobod","Qo'rg'ontepa"],
+        "Farg'ona": ["Farg'ona shahri","Qo'qon","Marg'ilon","Quvasoy","Beshariq","Bog'dod","Buvayda","Dang'ara","Furqat","Yozyovon","Quva","Oltiariq","Rishton","So'x","Toshloq","Uchko'prik","Qo'shtepa"],
+        "Namangan": ["Namangan shahri","Chust","Pop","Chortoq","Kosonsoy","Mingbuloq","Norin","To'raqo'rg'on","Uchqo'rg'on","Uychi","Yangiqo'rg'on","Davlatobod"],
+        "Samarqand": ["Samarqand shahri","Kattaqo'rg'on","Urgut","Bulung'ur","Ishtixon","Jomboy","Qo'shrabot","Narpay","Nurobod","Oqdaryo","Past Darg'om","Paxtachi","Payariq","Tayloq"],
+        "Buxoro": ["Buxoro shahri","Kogon","G'ijduvon","Vobkent","Olot","Jondor","Qorako'l","Qorovulbozor","Peshku","Romitan","Shofirkon"],
+        "Qashqadaryo": ["Qarshi","Shahrisabz","Kitob","G'uzor","Kasbi","Koson","Mirishkor","Muborak","Nishon","Chiroqchi","Dehqonobod","Yakkabog'","Qamashi"],
+        "Surxondaryo": ["Termiz","Denov","Sho'rchi","Boysun","Sherobod","Sariosiyo","Angor","Bandixon","Jarqo'rg'on","Qiziriq","Qumqo'rg'on","Muzrabot","Oltinsoy","Uzun"],
+        "Jizzax": ["Jizzax shahri","G'allaorol","Dashtobod","Zomin","Zafarobod","Arnasoy","Baxmal","Do'stlik","Forish","Mirzacho'l","Paxtakor","Zarbdor"],
+        "Sirdaryo": ["Guliston","Yangiyer","Shirin","Sirdaryo","Boyovut","Sayxunobod","Sardoba","Mirzaobod","Oqoltin","Xovos"],
+        "Navoiy": ["Navoiy shahri","Zarafshon","Konimex","Karmana","Navbahor","Nurota","Tomdi","Uchquduq","Xatirchi","Qiziltepa"],
+        "Xorazm": ["Urganch","Xiva","Hazorasp","Bog'ot","Gurlan","Qo'shko'pir","Shovot","Xonqa","Yangiariq","Yangibozor","Pitnak"],
+        "Qoraqalpog'iston": ["Nukus","Xo'jayli","Beruniy","Chimboy","To'rtko'l","Ellikqal'a","Kegeyli","Mo'ynoq","Qo'ng'irot","Qonliko'l","Qorao'zak","Shumanay","Taxtako'pir","Taxiatosh","Amudaryo"]
+    };
+    const out = {};
+    for (let region in cities) { out[region] = cities[region].map(c => "BTS " + c + " filiali"); }
+    return out;
+})();
 
 // Firebase'dan BTS filiallarini (agar admin sozlagan bo'lsa) o'qish
 try {
@@ -11428,7 +11435,29 @@ window.confirmDelivery = () => {
     if (typeof openPaymentModal === 'function') openPaymentModal();
 };
 
-// 🗺 XARITADAN MANZIL TANLASH (Leaflet + OpenStreetMap, bepul)
+// 🗺 XARITADAN MANZIL TANLASH — Yandex Maps (asosiy) + Leaflet (zaxira)
+// Yandex professionalroq ko'rinadi. Ishlashi uchun BEPUL API kalit kerak:
+//   developer.tech.yandex.ru -> JavaScript API -> kalit oling -> pastga qo'ying.
+// Kalit bo'sh bo'lsa avtomatik OpenStreetMap (Leaflet) ishlatiladi (kalitsiz ishlaydi).
+window.YANDEX_API_KEY = ""; // <-- bu yerga Yandex kalitini qo'ying
+
+window._pickedCoords = null;
+
+let _yandexLoading = null;
+function ensureYandex() {
+    if (!window.YANDEX_API_KEY) return Promise.reject(new Error('kalit yo\'q'));
+    if (window.ymaps && window.ymaps.Map) return Promise.resolve();
+    if (_yandexLoading) return _yandexLoading;
+    _yandexLoading = new Promise((resolve, reject) => {
+        let js = document.createElement('script');
+        js.src = 'https://api-maps.yandex.ru/2.1/?apikey=' + encodeURIComponent(window.YANDEX_API_KEY) + '&lang=ru_RU';
+        js.onload = () => { try { ymaps.ready(resolve); } catch(e) { reject(e); } };
+        js.onerror = () => reject(new Error('yandex yuklanmadi'));
+        document.head.appendChild(js);
+    });
+    return _yandexLoading;
+}
+
 let _leafletLoading = null;
 function ensureLeaflet() {
     if (window.L) return Promise.resolve();
@@ -11441,10 +11470,13 @@ function ensureLeaflet() {
     });
     return _leafletLoading;
 }
+
 window._mapPickerObj = null;
 window._mapMarker = null;
+window._mapEngine = null;
+
 window.openMapPicker = async () => {
-    try { await ensureLeaflet(); } catch(e) { showToast("Xarita yuklanmadi. Internetni tekshiring.", "warning"); return; }
+    // Overlay yaratamiz
     let ov = document.getElementById('map-picker-overlay');
     if (!ov) {
         ov = document.createElement('div');
@@ -11453,31 +11485,63 @@ window.openMapPicker = async () => {
         document.body.appendChild(ov);
     }
     ov.style.display = 'flex';
-    setTimeout(() => {
-        if (!window._mapPickerObj) {
-            window._mapPickerObj = L.map('map-picker-map').setView([41.3111, 69.2797], 12);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(window._mapPickerObj);
-            window._mapPickerObj.on('click', (e) => {
-                if (window._mapMarker) window._mapMarker.setLatLng(e.latlng);
-                else window._mapMarker = L.marker(e.latlng).addTo(window._mapPickerObj);
+    window._pickedCoords = null;
+
+    // 1) Yandex'ni urinib ko'ramiz (kalit bo'lsa)
+    let useYandex = false;
+    if (window.YANDEX_API_KEY) {
+        try { await ensureYandex(); useYandex = true; } catch(e) { useYandex = false; }
+    }
+
+    if (useYandex) {
+        window._mapEngine = 'yandex';
+        setTimeout(() => {
+            let mapEl = document.getElementById('map-picker-map');
+            if (window._mapPickerObj && window._mapPickerObj.destroy) { try { window._mapPickerObj.destroy(); } catch(e){} window._mapPickerObj = null; }
+            mapEl.innerHTML = '';
+            window._mapPickerObj = new ymaps.Map(mapEl, { center: [41.3111, 69.2797], zoom: 12, controls: ['zoomControl','geolocationControl'] });
+            let placemark = null;
+            window._mapPickerObj.events.add('click', (e) => {
+                let coords = e.get('coords');
+                window._pickedCoords = { lat: coords[0], lng: coords[1] };
+                if (placemark) placemark.geometry.setCoordinates(coords);
+                else { placemark = new ymaps.Placemark(coords, {}, { preset: 'islands#redDotIcon', draggable: true }); window._mapPickerObj.geoObjects.add(placemark); placemark.events.add('dragend', () => { let c = placemark.geometry.getCoordinates(); window._pickedCoords = { lat: c[0], lng: c[1] }; }); }
             });
-            // Joriy lokatsiyani urinib ko'rish
+            // Joriy lokatsiya
             if (navigator.geolocation) navigator.geolocation.getCurrentPosition((pos) => {
-                let ll = [pos.coords.latitude, pos.coords.longitude];
-                window._mapPickerObj.setView(ll, 15);
-                if (window._mapMarker) window._mapMarker.setLatLng(ll); else window._mapMarker = L.marker(ll).addTo(window._mapPickerObj);
+                let c = [pos.coords.latitude, pos.coords.longitude];
+                window._mapPickerObj.setCenter(c, 15);
             }, () => {}, { timeout: 5000 });
-        }
+        }, 200);
+        return;
+    }
+
+    // 2) Zaxira: Leaflet (OpenStreetMap, kalitsiz)
+    try { await ensureLeaflet(); } catch(e) { showToast("Xarita yuklanmadi. Internetni tekshiring.", "warning"); return; }
+    window._mapEngine = 'leaflet';
+    setTimeout(() => {
+        let mapEl = document.getElementById('map-picker-map');
+        if (window._mapPickerObj && window._mapPickerObj.remove) { try { window._mapPickerObj.remove(); } catch(e){} window._mapPickerObj = null; window._mapMarker = null; }
+        window._mapPickerObj = L.map(mapEl).setView([41.3111, 69.2797], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(window._mapPickerObj);
+        window._mapPickerObj.on('click', (e) => {
+            window._pickedCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+            if (window._mapMarker) window._mapMarker.setLatLng(e.latlng);
+            else window._mapMarker = L.marker(e.latlng).addTo(window._mapPickerObj);
+        });
+        if (navigator.geolocation) navigator.geolocation.getCurrentPosition((pos) => {
+            let ll = [pos.coords.latitude, pos.coords.longitude];
+            window._mapPickerObj.setView(ll, 15);
+        }, () => {}, { timeout: 5000 });
         window._mapPickerObj.invalidateSize();
     }, 200);
 };
 window.closeMapPicker = () => { let ov = document.getElementById('map-picker-overlay'); if (ov) ov.style.display = 'none'; };
 window.confirmMapLocation = () => {
-    if (!window._mapMarker) { showToast("Xaritada nuqtani belgilang", "warning"); return; }
-    let ll = window._mapMarker.getLatLng();
-    let mapLink = `https://www.google.com/maps?q=${ll.lat.toFixed(6)},${ll.lng.toFixed(6)}`;
-    let addrText = `📍 Xarita: ${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
-    // Manzilni saqlaymiz (profil manzillariga)
+    if (!window._pickedCoords) { showToast("Xaritada nuqtani belgilang", "warning"); return; }
+    let lat = window._pickedCoords.lat, lng = window._pickedCoords.lng;
+    let mapLink = `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
+    let addrText = `📍 Xarita: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     if (typeof getAddresses === 'function') {
         let arr = getAddresses();
         arr.push({ type: 'map', label: 'Xaritadagi manzil', address: addrText, mapLink: mapLink });
@@ -11489,6 +11553,8 @@ window.confirmMapLocation = () => {
     showToast("📍 Manzil belgilandi!", "success");
     _hap('success');
 };
+
+
 
 
 </script> 
