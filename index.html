@@ -4912,11 +4912,13 @@ function toggleWishlist(e, id) {
     if(idx === -1) { 
         wishlist.push(id); 
         showToast("Saqlandi!", "success"); 
-        if(btn) btn.classList.add('active'); // Faqatgina shu yurakchani qizartiramiz
+        if(btn) { btn.classList.add('active'); if(typeof _burstHeart==='function') _burstHeart(btn); }
+        if(typeof _hap==='function') _hap('light');
     } else { 
         wishlist.splice(idx, 1); 
         showToast("O'chirildi", "warning"); 
-        if(btn) btn.classList.remove('active'); // Qizil rangni olib tashlaymiz
+        if(btn) btn.classList.remove('active');
+        if(typeof _hap==='function') _hap('selection');
     }
     
     saveLocalWishlist();
@@ -5588,7 +5590,7 @@ function openProduct(id) {
         let extraStockTotal = (p.stock !== undefined ? p.stock : ((p.sizes||[]).reduce((s,x)=>s+(x.stock||0),0)));
         let notifyHtml = (extraStockTotal <= 0) ? `<button class="btn-notify" onclick="notifyMeForProduct(${p.id})">🔔 Sotuvga kirsa xabar bering</button>` : '';
         let inCmp = (window.compareList||[]).includes(p.id);
-        let cmpHtml = `<button class="btn-compare ${inCmp?'active':''}" data-id="${p.id}" onclick="toggleCompare(${p.id}, event)" style="width:100%;">⚖️ ${inCmp?'Taqqoslashdan olib tashlash':'Taqqoslashga qoʻshish'}</button>`;
+        let cmpHtml = `<button class="btn-compare ${inCmp?'active':''}" data-id="${p.id}" onclick="toggleCompare(${p.id}, event)" style="width:100%; margin-bottom:8px;">⚖️ ${inCmp?'Taqqoslashdan chiqarish':'Taqqoslashga qoʻshish (2 ta belgilang)'}</button>`;
         extra.innerHTML = cmpHtml + notifyHtml;
     }
     let mod = document.getElementById('productModal'); mod.style.display = 'flex'; document.body.style.overflow = 'hidden'; activeModal = 'productModal'; window.history.pushState({ modal: 'productModal' }, ""); tg.BackButton.show(); updateBtns();
@@ -5815,7 +5817,7 @@ window.clearAppCache = () => {
                 t += p.price * cart[fullId]; 
                 let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
                 // DIQQAT: Xatolik aynan shu tugmada yashiringan edi, to'g'irlandi!
-                c.innerHTML += `<div class="cart-row"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[fullId]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${fullId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[fullId]}</span><button onclick="chg('${fullId}',1)">+</button></div></div>`; 
+                c.innerHTML += `<div class="cart-row"><div class="cart-content-wrap"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[fullId]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${fullId}',-1)">-</button><span style="color:white; font-weight:bold; width:20px; text-align:center;">${cart[fullId]}</span><button onclick="chg('${fullId}',1)">+</button></div></div><div class="swipe-delete" onclick="chg('${fullId}', -${cart[fullId]})">🗑</div></div>`; 
             } 
             if(b) b.style.display = 'block';
         } 
@@ -10668,17 +10670,23 @@ window._renderOrderTimeline = (status) => {
 window._renderProfileStats = () => {
     const box = document.getElementById('pf-stats-box');
     if (!box) return;
-    const orders = window.myOrders || [];
-    const totalOrders = orders.length;
-    const totalSpent = orders.filter(o => o && o.status === 'yetkazildi').reduce((s, o) => s + (o.total || 0), 0);
-    const wishCount = (window.wishlist || []).length;
-    const fmt = (n) => n >= 1000000 ? (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M' : (n >= 1000 ? Math.round(n/1000) + 'K' : n);
-    box.innerHTML = `
-        <div class="pf-stats">
-            <div class="pf-stat-card"><div class="pf-stat-num">${totalOrders}</div><div class="pf-stat-lbl">Buyurtma</div></div>
-            <div class="pf-stat-card"><div class="pf-stat-num">${fmt(totalSpent)}</div><div class="pf-stat-lbl">Sarflangan</div></div>
-            <div class="pf-stat-card"><div class="pf-stat-num">${wishCount}</div><div class="pf-stat-lbl">Saqlangan</div></div>
-        </div>`;
+    if (!window.currentUser) return;
+    // myOrders lokal let o'zgaruvchisi -> window'dan foydalanib bo'lmaydi.
+    // Firebase'dan qayta o'qiymiz (yengil, bir marta)
+    db.ref('users/' + window.currentUser + '/orders').once('value', (snap) => {
+        const orders = snap.val() || [];
+        const totalOrders = Array.isArray(orders) ? orders.length : Object.keys(orders).length;
+        const ordersArr = Array.isArray(orders) ? orders : Object.values(orders);
+        const totalSpent = ordersArr.filter(o => o && o.status === 'yetkazildi').reduce((s, o) => s + (o.total || 0), 0);
+        const wishCount = (document.querySelectorAll && document.querySelectorAll('.btn-wishlist.active') || []).length || 0;
+        const fmt = (n) => n >= 1000000 ? (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M' : (n >= 1000 ? Math.round(n/1000) + 'K' : n);
+        box.innerHTML = `
+            <div class="pf-stats">
+                <div class="pf-stat-card"><div class="pf-stat-num">${totalOrders}</div><div class="pf-stat-lbl">Buyurtma</div></div>
+                <div class="pf-stat-card"><div class="pf-stat-num">${fmt(totalSpent)}</div><div class="pf-stat-lbl">Sarflangan</div></div>
+                <div class="pf-stat-card"><div class="pf-stat-num">${wishCount}</div><div class="pf-stat-lbl">Saqlangan</div></div>
+            </div>`;
+    });
 };
 
 // 4.3 NOTIFY ME — tugagan tovar uchun
