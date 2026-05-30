@@ -5157,7 +5157,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 <script>
 window.currentUser = null;
     // 🏷 BUILD VERSIYA — telefon qaysi kodni yuklayotganini bilish uchun (kesh diagnostikasi)
-    window.AVTO_BUILD = 'v2026.05.30-3';
+    window.AVTO_BUILD = 'v2026.05.30-4';
     try { console.log('%c[Avto A1] BUILD ' + window.AVTO_BUILD + ' — ' + new Date().toISOString(), 'color:#C9A84C;font-weight:bold;'); } catch(e){}
     // 🛡 Telegram WebApp himoyali yuklash — brauzerda yoki Telegram yuklanmasa ham xato bermaydi
     let tg;
@@ -7832,21 +7832,35 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             cart = {}; 
             saveLocalCart(); 
             updateCartBadge();
+            window.myOrders = myOrders;
             
             if(loadingOverlay) loadingOverlay.classList.remove('active'); 
             showToast("Qabul qilindi!");
             
              shootConfetti();
-            
-            setTimeout(() => { 
-                if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
-                tg.close(); 
-            }, 2500); // Sal ko'proq kutamiz (2500ms), mijoz konfettini tomosha qilishi uchun!
-            
-            setTimeout(() => { 
-                if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); 
-                tg.close(); 
-            }, 2000);
+
+            // 🎁 CASHBACK + KAFOLAT — VA Firebase yozuvi tugashini KUTAMIZ (tg.close oldidan)
+            // MUHIM: window.confirmOrder asl confirmOrder'ni override qilgani uchun,
+            // Phase2 hook AYNAN shu yerda chaqirilishi shart — aks holda cashback ishlamaydi.
+            var _p2flush = Promise.resolve();
+            try {
+                if (window.Phase2 && typeof window.Phase2.onOrderPlaced === 'function') {
+                    _p2flush = window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB) || Promise.resolve();
+                }
+            } catch(e){ console.warn('[Phase2] onOrderPlaced xato:', e); }
+
+            // Cashback Firebase'ga yozilib bo'lgach (yoki eng ko'pi 3.5s) ilovani yopamiz —
+            // shunda Telegramda cashback yo'qolmaydi. Konfetti uchun ham vaqt qoladi.
+            var _closed = false;
+            var _doClose = function () {
+                if (_closed) return; _closed = true;
+                try { if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch(e){}
+                try { tg.close(); } catch(e){}
+            };
+            Promise.race([
+                _p2flush.then(function(){ return new Promise(function(r){ setTimeout(r, 2000); }); }),
+                new Promise(function(r){ setTimeout(r, 3500); })  // xavfsizlik chegarasi
+            ]).then(_doClose);
         } else {
             throw new Error("API xatosi");
         }
