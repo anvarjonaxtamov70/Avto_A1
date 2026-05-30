@@ -4896,9 +4896,10 @@ const Haptics = {
                 cart = data.cart || {}; 
                 myOrders = data.orders || []; 
                 wishlist = data.wishlist || [];
+                window.myOrders = myOrders; window.wishlist = wishlist; // Phase2 doim yangi ma'lumot o'qishi uchun
                 if(data.profile) { myProfile = data.profile; updateProfileUI(); }
                 _updateVipStatus(); // ⭐ VIP holatini buyurtma tarixi bo'yicha yangilash
-                try { if (window.Phase2) window.Phase2.sync(data, window.currentUser, productsDB); } catch(e){}
+                try { if (window.Phase2) window.Phase2.sync(data, window.currentUser, window.productsDB || productsDB); } catch(e){ console.warn('[Phase2] sync xato:', e); }
                 
                 if(!isDataLoaded) { 
                     updateCartBadge(); 
@@ -6010,7 +6011,8 @@ window.clearAppCache = () => {
                 }
                 myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
                 saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge();
-                try { if (window.Phase2) window.Phase2.onOrderPlaced(myOrders[0], productsDB); } catch(e){}
+                window.myOrders = myOrders;
+                try { if (window.Phase2) window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB); } catch(e){ console.warn('[Phase2] onOrderPlaced xato:', e); }
                 loadingOverlay.classList.remove('active'); 
                 showToast("Qabul qilindi!");
                 setTimeout(() => { if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); tg.close(); }, 2000);
