@@ -13,7 +13,7 @@
 
     /* ----------------------- Sozlamalar ----------------------- */
     var LS_KEY = 'avto_phase2';
-    var CASHBACK_RATE = 0.03;     // har xariddan 3% cashback
+    var CASHBACK_RATE = 0.005;    // har xariddan 0.5% cashback
     var REFERRAL_BONUS = 20000;   // referral uchun ikki tomonga ham bonus (so'm)
     var WARRANTY_DAYS = 14;       // standart kafolat muddati (kun)
     var DAY = 86400000;
@@ -27,6 +27,7 @@
             cashbackTotal: 0,
             cashbackHistory: [],
             achievements: {},   // {id: unlockedTimestamp}
+            achSeen: 0,         // foydalanuvchi ko'rgan yutuqlar soni (badge uchun)
             referralCode: '',
             referredBy: '',
             referrals: [],      // [{uid, date}]
@@ -67,6 +68,23 @@
         if (d < DAY) return Math.floor(d / 3600000) + ' soat oldin';
         if (d < DAY * 7) return Math.floor(d / DAY) + ' kun oldin';
         return new Date(ts).toLocaleDateString('uz-UZ');
+    }
+
+    /* ----------------------- Yangi (fresh) ma'lumot manbalari -----------------------
+       Asosiy ilovadagi myOrders/productsDB/wishlist 'let' bilan e'lon qilingani uchun
+       ularni window orqali jonli o'qiymiz. Bu modal ochilganda har doim eng so'nggi
+       ma'lumot bilan ishlashni kafolatlaydi (sync vaqtidan qat'i nazar).            */
+    function getOrders() {
+        if (Array.isArray(window.myOrders)) { P.orders = window.myOrders; return window.myOrders; }
+        return Array.isArray(P.orders) ? P.orders : [];
+    }
+    function getProducts() {
+        if (Array.isArray(window.productsDB) && window.productsDB.length) { P.productsDB = window.productsDB; return window.productsDB; }
+        return Array.isArray(P.productsDB) ? P.productsDB : [];
+    }
+    function getWishCount() {
+        if (Array.isArray(window.wishlist)) return window.wishlist.length;
+        return P.wishlistCount || 0;
     }
 
     /* ----------------------- Saqlash ----------------------- */
@@ -210,7 +228,7 @@
                 '<div class="p2-cb-icon">🎁</div>' +
                 '<div class="p2-cb-label">Cashback balansi</div>' +
                 '<div class="p2-cb-balance">' + fmtSom(P.state.cashback) + ' <small>so\'m</small></div>' +
-                '<div class="p2-cb-sub">Jami yig\'ilgan: ' + fmtSom(P.state.cashbackTotal) + " so'm · har xariddan " + Math.round(CASHBACK_RATE * 100) + '%</div>' +
+                '<div class="p2-cb-sub">Jami yig\'ilgan: ' + fmtSom(P.state.cashbackTotal) + " so'm · har xariddan " + (+(CASHBACK_RATE * 100).toFixed(2)) + '%</div>' +
                 '</div>' +
                 '<div style="background:rgba(48,209,88,0.10);border:1px solid rgba(48,209,88,0.25);border-radius:14px;padding:13px 15px;margin-bottom:18px;font-size:12px;color:var(--text-muted);line-height:1.5;">' +
                 '💡 Cashback har bir buyurtmangizdan avtomatik yig\'iladi. Keyingi xaridda operatorga aytib, balansingizdan foydalanishingiz mumkin.</div>' +
@@ -310,19 +328,20 @@
     P._ACH = ACH;
 
     function computeContext() {
-        var delivered = P.orders.filter(function (o) { return o && o.status === 'yetkazildi'; });
-        var spent = P.orders.reduce(function (s, o) { return s + (parseInt(o && o.total) || 0); }, 0);
+        var orders = getOrders();
+        var delivered = orders.filter(function (o) { return o && o.status === 'yetkazildi'; });
+        var spent = orders.reduce(function (s, o) { return s + (parseInt(o && o.total) || 0); }, 0);
         return {
-            orders: P.orders.length,
+            orders: orders.length,
             delivered: delivered.length,
             spent: spent,
-            wish: P.wishlistCount,
+            wish: getWishCount(),
             referrals: (P.state.referrals || []).length,
             cashbackTotal: P.state.cashbackTotal,
             themeSwitched: P.state.themeSwitched
         };
     }
-    function evaluateAchievements() {
+    function evaluateAchievements(showOverlay) {
         var c = computeContext();
         var newly = [];
         ACH.forEach(function (a) {
@@ -334,10 +353,11 @@
         if (newly.length) {
             newly.forEach(function (a) {
                 pushNotif('🏆', 'Yangi yutuq!', a.t + ' — ' + a.d, { silent: true });
-                P._unlockQueue.push(a);
+                if (showOverlay !== false) P._unlockQueue.push(a);
             });
             save();
-            drainUnlockQueue();
+            if (showOverlay !== false) drainUnlockQueue();
+            updateTileBadges();
         }
         return newly;
     }
@@ -411,18 +431,22 @@
             });
         }
         if (typeof openModal === 'function') openModal('p2AchievementsModal');
+        // Ko'rilgan deb belgilaymiz — badge yo'qoladi
+        P.state.achSeen = unlockedAchCount();
+        saveLocal(); saveRemote();
+        updateTileBadges();
     };
 
     /* ============================================================
        📊 4. SHAXSIY ANALITIKA
        ============================================================ */
     function findProduct(id) {
-        var db = P.productsDB || [];
+        var db = getProducts();
         for (var i = 0; i < db.length; i++) { if (db[i] && String(db[i].id) === String(id)) return db[i]; }
         return null;
     }
     function computeAnalytics() {
-        var orders = P.orders;
+        var orders = getOrders();
         var totalOrders = orders.length;
         var totalSpent = orders.reduce(function (s, o) { return s + (parseInt(o && o.total) || 0); }, 0);
         var avg = totalOrders ? totalSpent / totalOrders : 0;
@@ -677,10 +701,10 @@
             '<div class="p2-cb-sub">Jami yig\'ilgan: ' + fmtSom(P.state.cashbackTotal) + " so'm</div>" +
             '</div>' +
             '<div class="p2-grid">' +
-            tile('🏆', 'Yutuqlar', 'Phase2.openAchievements()', achCountBadge()) +
+            tile('🏆', 'Yutuqlar', 'Phase2.openAchievements()', achBadgeHTML()) +
             tile('📊', 'Analitika', 'Phase2.openAnalytics()', '') +
             tile('🔗', 'Referral', 'Phase2.openReferral()', '') +
-            tile('🛡', 'Kafolat', 'Phase2.openWarranty()', warrBadge()) +
+            tile('🛡', 'Kafolat', 'Phase2.openWarranty()', warrBadgeHTML()) +
             tile('🔔', 'Xabarlar', 'Phase2.openNotifs()', '<span class="p2-tile-badge" id="p2-tile-notif-badge"></span>') +
             tile(P.state.theme === 'light' ? '🌙' : '☀️', 'Mavzu', 'Phase2.toggleTheme(event)', '') +
             '</div>';
@@ -712,13 +736,22 @@
         return '<div class="p2-tile" onclick="' + fn + '">' + (badge || '') +
             '<div class="p2-tile-ic">' + ic + '</div><div class="p2-tile-lbl">' + lbl + '</div></div>';
     }
-    function achCountBadge() {
-        var done = ACH.filter(function (a) { return P.state.achievements[a.id]; }).length;
-        return done ? '<span class="p2-tile-badge show" style="background:var(--luxury-gold);color:#000;">' + done + '</span>' : '';
+    function unlockedAchCount() { return ACH.filter(function (a) { return P.state.achievements[a.id]; }).length; }
+    function unseenAchCount() { return Math.max(0, unlockedAchCount() - (P.state.achSeen || 0)); }
+    function warrSoonCount() { return P.state.warranties.filter(function (w) { return warrStatus(w).state === 'soon'; }).length; }
+    function achBadgeHTML() {
+        var n = unseenAchCount();
+        return '<span class="p2-tile-badge' + (n ? ' show' : '') + '" id="p2-tile-ach-badge" style="background:var(--luxury-gold);color:#000;">' + (n || '') + '</span>';
     }
-    function warrBadge() {
-        var active = P.state.warranties.filter(function (w) { return warrStatus(w).state !== 'expired'; }).length;
-        return active ? '<span class="p2-tile-badge show" style="background:#30d158;">' + active + '</span>' : '';
+    function warrBadgeHTML() {
+        var n = warrSoonCount();
+        return '<span class="p2-tile-badge' + (n ? ' show' : '') + '" id="p2-tile-warr-badge" style="background:#ff9f0a;">' + (n || '') + '</span>';
+    }
+    function updateTileBadges() {
+        var a = document.getElementById('p2-tile-ach-badge');
+        if (a) { var n = unseenAchCount(); a.textContent = n || ''; a.classList.toggle('show', n > 0); }
+        var w = document.getElementById('p2-tile-warr-badge');
+        if (w) { var m = warrSoonCount(); w.textContent = m || ''; w.classList.toggle('show', m > 0); }
     }
 
     /* ============================================================
@@ -828,7 +861,10 @@
         ensureReferralCode();
         updateBell(false);
         checkExpiringWarranties();
-        var newly = evaluateAchievements();
+        // Birinchi sync'da overlay/confetti ko'rsatmaymiz (eski yutuqlar uchun), keyin ko'rsatamiz
+        evaluateAchievements(P._synced === true);
+        P._synced = true;
+        updateTileBadges();
         // profil ochiq bo'lsa yangilaymiz
         var pf = document.getElementById('profile-section');
         if (pf && !pf.classList.contains('hidden')) renderProfile();
