@@ -1,0 +1,42 @@
+name: Deploy to GitHub Pages
+
+# Har safar main'ga push bo'lganda avtomatik ishlaydi.
+# Qo'lda ham ishga tushirish mumkin (workflow_dispatch).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# GitHub Pages uchun zarur ruxsatlar
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Bir vaqtda faqat bitta deploy borishini kafolatlash
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Repodagi hamma fayl (index.html, ...) deploy qilinadi
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
