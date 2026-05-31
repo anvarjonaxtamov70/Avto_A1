@@ -4584,6 +4584,256 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         .bc-stats { display: flex; gap: 10px; margin-top: 12px; background: rgba(255,255,255,0.04); border-radius: 12px; padding: 10px; }
         .bc-stat { flex: 1; text-align: center; font-size: 11px; color: var(--text-muted); }
         .bc-stat strong { color: var(--luxury-gold); font-size: 18px; display: block; margin-bottom: 2px; }
+
+        /* ============================================================
+           ✨ ADMIN UI 2.0 — zamonaviy / professional skin (FAQAT VIZUAL)
+           - Markup, id, onclick, funksiyalar O'ZGARMAYDI; bu qatlam ustidan
+             stillaydi (yuqori specificity + !important inline'ni yengadi).
+           - Rang/fon qoidalari faqat QORA temaga cheklangan
+             (html:not([data-theme="light"])) — yorug' tema buzilmaydi.
+           - Tuzilma/animatsiya/layout qoidalari ikkala temada ishlaydi.
+           - prefers-reduced-motion to'liq hurmat qilinadi.
+           ============================================================ */
+
+        /* ——— Animatsiya kalit kadrlari ——— */
+        @keyframes auiRise   { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+        @keyframes auiPop    { 0% { transform: scale(0.9); } 55% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        @keyframes auiSheen  { 0% { background-position: -160% 0; } 100% { background-position: 280% 0; } }
+        @keyframes auiGoldPulse {
+            0%, 100% { box-shadow: 0 10px 28px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(212,175,55,0.22), 0 0 18px rgba(212,175,55,0.10); }
+            50%      { box-shadow: 0 14px 36px rgba(0,0,0,0.34), inset 0 0 0 1px rgba(212,175,55,0.42), 0 0 30px rgba(212,175,55,0.22); }
+        }
+
+        /* ===== ADMIN PANEL (asosiy grid) ===== */
+        /* Sarlavha: ko'zni og'ritadigan qizil → nafis tilla */
+        #adminModal .modal-header h2 { color: var(--luxury-gold) !important; letter-spacing: 0.3px; }
+        #adminModal .admin-grid { gap: 14px; }
+
+        /* Kartalar — tuzilma (ikkala tema) */
+        #adminModal .admin-card,
+        #adminDraftsModal .admin-card {
+            border-radius: 22px;
+            padding: 22px 12px;
+            position: relative;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform .24s cubic-bezier(.2,.85,.25,1), box-shadow .24s ease, border-color .24s ease, background .24s ease;
+        }
+        /* Yuqori "shisha aksi" chizig'i */
+        #adminModal .admin-card::after,
+        #adminDraftsModal .admin-card::after {
+            content: ''; position: absolute; top: 0; left: 16%; right: 16%; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            opacity: .55; pointer-events: none;
+        }
+        #adminModal .admin-card:active,
+        #adminDraftsModal .admin-card:active { transform: scale(0.955); }
+        @media (hover: hover) {
+            #adminModal .admin-card:hover,
+            #adminDraftsModal .admin-card:hover { transform: translateY(-4px); }
+        }
+        /* Ikonka plitkasi — uchib turgan emojilar → nafis "squircle" plitka (tuzilma) */
+        #adminModal .admin-card .a-icon,
+        #adminDraftsModal .admin-card .a-icon {
+            width: 56px; height: 56px; margin: 0 auto 12px !important;
+            font-size: 26px !important; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 17px;
+        }
+        #adminModal .admin-card h3,
+        #adminDraftsModal .admin-card h3 { font-size: 12.5px; letter-spacing: .8px; }
+
+        /* Kartalar — QORA tema ranglari */
+        html:not([data-theme="light"]) #adminModal .admin-card,
+        html:not([data-theme="light"]) #adminDraftsModal .admin-card {
+            background: linear-gradient(162deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015)), rgba(26,26,30,0.6);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.30);
+        }
+        html:not([data-theme="light"]) #adminModal .admin-card .a-icon,
+        html:not([data-theme="light"]) #adminDraftsModal .admin-card .a-icon {
+            background: radial-gradient(circle at 32% 26%, rgba(255,255,255,0.16), rgba(255,255,255,0.03));
+            border: 1px solid rgba(255,255,255,0.10);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.14);
+        }
+        @media (hover: hover) {
+            html:not([data-theme="light"]) #adminModal .admin-card:hover,
+            html:not([data-theme="light"]) #adminDraftsModal .admin-card:hover {
+                border-color: rgba(212,175,55,0.42); box-shadow: 0 18px 40px rgba(0,0,0,0.42);
+            }
+        }
+        /* Kartalar — YORUG' tema ikonka plitkasi (fon buzilmasin) */
+        html[data-theme="light"] #adminModal .admin-card .a-icon,
+        html[data-theme="light"] #adminDraftsModal .admin-card .a-icon {
+            background: linear-gradient(135deg, #FBF4E6, #F2E8D2);
+            border: 1px solid rgba(150,120,55,0.22);
+            box-shadow: 0 5px 14px rgba(120,90,30,0.12), inset 0 1px 0 rgba(255,255,255,0.7);
+        }
+
+        /* "YANGI TOVAR" — premium tilla karta + nafis tirik nur */
+        #adminModal .admin-card.gold-dashed { border-style: solid !important; }
+        html:not([data-theme="light"]) #adminModal .admin-card.gold-dashed {
+            border: 1px solid rgba(212,175,55,0.5) !important;
+            background: linear-gradient(160deg, rgba(212,175,55,0.18), rgba(212,175,55,0.04)), rgba(26,26,30,0.6) !important;
+        }
+        #adminModal .admin-card.gold-dashed .a-icon {
+            color: var(--luxury-gold) !important;
+            background: linear-gradient(135deg, rgba(212,175,55,0.34), rgba(212,175,55,0.12)) !important;
+            border-color: rgba(212,175,55,0.55) !important;
+        }
+
+        /* AI OMMAVIY banner — yorqin ko'k → chuqur nafis ko'k + tilla hoshiya */
+        #adminModal div[onclick*="aiBulkModal"] {
+            background: linear-gradient(125deg, #1a2746 0%, #233a69 52%, #2e4d86 100%) !important;
+            border: 1px solid rgba(212,175,55,0.30) !important;
+            box-shadow: 0 12px 30px rgba(18,28,58,0.5) !important;
+            position: relative; overflow: hidden;
+            transition: transform .2s ease, box-shadow .2s ease !important;
+        }
+        #adminModal div[onclick*="aiBulkModal"]:active { transform: scale(0.98); }
+        #adminModal div[onclick*="aiBulkModal"]::after {
+            content: ''; position: absolute; inset: 0; pointer-events: none;
+            background: linear-gradient(110deg, transparent 35%, rgba(212,175,55,0.18) 50%, transparent 65%);
+            background-size: 220% 100%;
+        }
+
+        /* Kirish (entrance) — bosqichma-bosqich ko'tarilish */
+        @media (prefers-reduced-motion: no-preference) {
+            #adminModal .admin-card { animation: auiRise .5s both; }
+            #adminModal .admin-card:nth-child(1){ animation-delay:.03s; }
+            #adminModal .admin-card:nth-child(2){ animation-delay:.07s; }
+            #adminModal .admin-card:nth-child(3){ animation-delay:.11s; }
+            #adminModal .admin-card:nth-child(4){ animation-delay:.15s; }
+            #adminModal .admin-card:nth-child(5){ animation-delay:.19s; }
+            #adminModal .admin-card:nth-child(6){ animation-delay:.23s; }
+            #adminModal .admin-card:nth-child(7){ animation-delay:.27s; }
+            #adminModal div[onclick*="aiBulkModal"] { animation: auiRise .55s .3s both; }
+            #adminModal div[onclick*="aiBulkModal"]::after { animation: auiSheen 5.5s linear infinite; }
+            #adminModal .admin-card.gold-dashed { animation: auiRise .5s both, auiGoldPulse 3.6s ease-in-out .6s infinite; }
+        }
+
+        /* ===== YANGI TOVAR / TAHRIRLASH FORMASI ===== */
+        /* Forma bo'limlari — yumshoqroq, bitta izchil (tilla) urg'u */
+        #addProductModal .admin-form-group {
+            border-radius: 24px;
+            padding: 20px 18px;
+            transition: border-color .25s ease, box-shadow .25s ease;
+        }
+        html:not([data-theme="light"]) #addProductModal .admin-form-group {
+            background: linear-gradient(155deg, rgba(255,255,255,0.045), rgba(255,255,255,0.01));
+            border: 1px solid rgba(255,255,255,0.07);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+        }
+        /* Chap urg'u chizig'i — yumshoq tilla (qattiq neon glow o'rniga) */
+        #addProductModal .admin-form-group::before {
+            top: 22px !important; height: calc(100% - 44px) !important;
+            width: 3px !important; border-radius: 0 4px 4px 0 !important;
+            background: linear-gradient(180deg, var(--luxury-gold), rgba(212,175,55,0.25)) !important;
+            box-shadow: none !important;
+        }
+
+        /* Inputlar — kattaroq, tozaroq, yumshoq fokus halqasi */
+        #addProductModal .admin-input,
+        #addProductModal textarea.admin-input {
+            border-radius: 15px;
+            font-size: 15px;
+            transition: border-color .25s ease, box-shadow .25s ease, transform .2s ease, background .25s ease;
+        }
+        html:not([data-theme="light"]) #addProductModal .admin-input {
+            background: rgba(0,0,0,0.42);
+            border: 1px solid rgba(255,255,255,0.10);
+        }
+        html:not([data-theme="light"]) #addProductModal .admin-input:focus {
+            border-color: var(--luxury-gold);
+            background: rgba(212,175,55,0.06);
+            box-shadow: 0 8px 26px rgba(212,175,55,0.16), inset 0 0 0 1px rgba(212,175,55,0.25);
+            transform: translateY(-1px);
+        }
+        /* Maydon ichidagi mic/scan tugmalari — yaxlitroq, bosishda javob */
+        #addProductModal .field-mic-btn,
+        #addProductModal .field-scan-btn { border-radius: 12px; transition: transform .18s ease, background .2s ease; }
+
+        /* Chiplar (kategoriya / model / origin) — zamonaviy pill + tanlovda "pop" */
+        #addProductModal .cat-chip,
+        #addProductModal .model-chip,
+        #addProductModal .origin-chip {
+            border-radius: 999px;
+            padding: 9px 15px;
+            font-size: 12.5px;
+            transition: transform .18s ease, background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
+        }
+        #addProductModal .cat-chip:active,
+        #addProductModal .model-chip:active,
+        #addProductModal .origin-chip:active { transform: scale(0.92); }
+        @media (prefers-reduced-motion: no-preference) {
+            #addProductModal .cat-chip.selected,
+            #addProductModal .model-chip.selected,
+            #addProductModal .origin-chip.selected { animation: auiPop .32s ease; }
+        }
+        html:not([data-theme="light"]) #addProductModal .cat-chip.selected,
+        html:not([data-theme="light"]) #addProductModal .model-chip.selected,
+        html:not([data-theme="light"]) #addProductModal .origin-chip.selected {
+            background: linear-gradient(135deg, rgba(212,175,55,0.28), rgba(212,175,55,0.12)) !important;
+            border-color: var(--luxury-gold) !important;
+            box-shadow: 0 4px 14px rgba(212,175,55,0.22);
+        }
+
+        /* Razmer (size) qatorlari — inputlarni yaxlitlash */
+        #addProductModal .size-input-row .size-name,
+        #addProductModal .size-input-row .size-stock { border-radius: 12px !important; transition: border-color .2s ease; }
+
+        /* Saqlash paneli + tugma — premium tilla "sheen" effekti */
+        html:not([data-theme="light"]) #addProductModal .sticky-admin-footer {
+            background: linear-gradient(0deg, rgba(14,14,16,0.97) 62%, transparent) !important;
+        }
+        #addProductModal .sticky-admin-footer .btn-checkout {
+            position: relative; overflow: hidden;
+            transition: transform .18s ease, box-shadow .25s ease, filter .2s ease;
+        }
+        #addProductModal .sticky-admin-footer .btn-checkout:active { transform: translateY(1px) scale(0.99); }
+        #addProductModal .sticky-admin-footer .btn-checkout::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(110deg, transparent 38%, rgba(255,255,255,0.45) 50%, transparent 62%);
+            background-size: 220% 100%; pointer-events: none;
+        }
+        @media (prefers-reduced-motion: no-preference) {
+            #addProductModal .sticky-admin-footer .btn-checkout::after { animation: auiSheen 4.5s linear 1s infinite; }
+            #addProductModal .admin-form-group { animation: auiRise .5s both; }
+            #addProductModal .admin-form-group:nth-of-type(1){ animation-delay:.04s; }
+            #addProductModal .admin-form-group:nth-of-type(2){ animation-delay:.10s; }
+            #addProductModal .admin-form-group:nth-of-type(3){ animation-delay:.16s; }
+            #addProductModal .admin-form-group:nth-of-type(4){ animation-delay:.22s; }
+            #addProductModal .admin-form-group:nth-of-type(5){ animation-delay:.28s; }
+        }
+
+        /* ===== OMBOR (INVENTORY) + DRAFTS + AI BULK — izchillik ===== */
+        #adminInventoryModal .modal-header h2,
+        #adminDraftsModal .modal-header h2 { letter-spacing: 0.3px; }
+
+        /* Ombor filtr / bulk tugmalari — yaxlit, bosishda javob */
+        #adminInventoryModal .inv-fchip { border-radius: 999px; transition: transform .18s ease, background .2s ease, border-color .2s ease, color .2s ease; }
+        #adminInventoryModal .inv-fchip:active { transform: scale(0.93); }
+        #adminInventoryModal .inv-btn,
+        #adminDraftsModal .inv-btn { border-radius: 11px; transition: transform .16s ease, filter .2s ease; }
+        #adminInventoryModal .inv-btn:active { transform: scale(0.93); }
+        html:not([data-theme="light"]) #adminInventoryModal .inventory-item {
+            border-radius: 16px;
+            background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+            border: 1px solid rgba(255,255,255,0.07);
+            transition: border-color .2s ease, transform .18s ease;
+        }
+        #adminInventoryModal .inventory-item:active { transform: scale(0.99); }
+
+        /* AI menejer modal inputlari/tugmalari — yaxlitroq */
+        #aiBulkModal .ai-luxury-input { border-radius: 14px; transition: border-color .25s ease, box-shadow .25s ease; }
+        #aiBulkModal .btn-checkout { transition: transform .18s ease, filter .2s ease; }
+        #aiBulkModal .btn-checkout:active { transform: scale(0.97); }
+
+        /* Drafts: "barchasini tozalash" tugmasi + papka grid — bosish javobi */
+        #adminDraftsModal #draft-folders-list .admin-card { padding: 18px 10px; }
+        @media (prefers-reduced-motion: no-preference) {
+            #adminDraftsModal #draft-folders-list .admin-card { animation: auiRise .45s both; }
+        }
     </style>
 </head>
 <body ontouchstart="">
