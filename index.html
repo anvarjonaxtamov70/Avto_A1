@@ -11915,11 +11915,18 @@ if (typeof window.confirmOrder === 'function' && !window._origConfirmOrder_v2) {
 }
 
 // 2.3 + showProfile wrap (statistikani qo'shish)
-if (typeof window.showProfile === 'function' && !window._origShowProfile_v2) {
-    window._origShowProfile_v2 = window.showProfile;
+// Profil ochilganda qo'shimcha bo'limlarni render qilish.
+// (Avval v2 + v3 ikkita alohida wrapper edi — bitta wrapperga birlashtirildi,
+//  _renderProfileStats() endi ikki marta emas, bir marta chaqiriladi.)
+if (typeof window.showProfile === 'function' && !window._origShowProfileExt) {
+    window._origShowProfileExt = window.showProfile;
     window.showProfile = function() {
-        const r = window._origShowProfile_v2.apply(this, arguments);
-        setTimeout(() => { try { _renderProfileStats(); } catch (e) {} }, 30);
+        const r = window._origShowProfileExt.apply(this, arguments);
+        setTimeout(() => {
+            try { renderMyCar(); } catch(e) {}
+            try { renderAddresses(); } catch(e) {}
+            try { _renderProfileStats(); } catch(e) {}
+        }, 50);
         return r;
     };
 }
@@ -12061,18 +12068,7 @@ window.saveNewAddress = () => {
 };
 
 // PROFIL INIT — sahifa ochilganda mashinani va manzillarni ko'rsatish
-if (typeof window.showProfile === 'function' && !window._origShowProfile_v3) {
-    window._origShowProfile_v3 = window.showProfile;
-    window.showProfile = function() {
-        let r = window._origShowProfile_v3.apply(this, arguments);
-        setTimeout(() => {
-            try { renderMyCar(); } catch(e) {}
-            try { renderAddresses(); } catch(e) {}
-            try { _renderProfileStats(); } catch(e) {}
-        }, 50);
-        return r;
-    };
-}
+// (Eski v3 showProfile wrapperi yuqoridagi birlashtirilgan wrapperga ko'chirildi)
 
 // ============================================================
 // 🚚 YETKAZIB BERISH MODULI (Kuryer + Xarita + BTS Pochta)
