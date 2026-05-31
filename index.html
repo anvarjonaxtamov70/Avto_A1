@@ -4745,6 +4745,41 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         @media (prefers-reduced-motion: no-preference) {
             #adminDraftsModal #draft-folders-list .admin-card { animation: ap2Rise .45s both; }
         }
+
+        /* ===== YANGI TOVAR — WIZARD (bosqichli forma) ===== */
+        #addProductModal .apw-bar { padding: 16px 20px 2px; }
+        #addProductModal .apw-track { display: flex; gap: 7px; }
+        #addProductModal .apw-seg {
+            flex: 1; height: 6px; border-radius: 999px;
+            background: rgba(140,140,150,0.28);
+            transition: background .3s ease, box-shadow .3s ease, opacity .3s ease;
+        }
+        #addProductModal .apw-seg.done { background: var(--luxury-gold); opacity: .5; }
+        #addProductModal .apw-seg.active { background: var(--luxury-gold); box-shadow: 0 0 10px rgba(201,168,76,.55); }
+        #addProductModal .apw-step-title { margin-top: 11px; font-size: 12.5px; font-weight: 800; letter-spacing: .4px; color: var(--luxury-gold); }
+
+        /* Wizard navigatsiya tugmalari */
+        #addProductModal .apw-footer { display: flex; gap: 10px; align-items: stretch; }
+        #addProductModal .apw-nav-btn {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            border-radius: 18px; font-size: 15px; font-weight: 800; cursor: pointer;
+            padding: 18px 14px; border: 1px solid transparent;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform .16s ease, filter .2s ease, background .2s ease;
+        }
+        #addProductModal .apw-nav-btn:active { transform: scale(0.97); }
+        #addProductModal .apw-nav-btn svg { width: 18px; height: 18px; }
+        #addProductModal .apw-back-btn {
+            flex: 0 0 36%;
+            background: rgba(140,140,150,0.14); color: var(--text-main);
+            border-color: var(--glass-border);
+        }
+        #addProductModal .apw-next-btn {
+            flex: 1; border: none; color: #241a00;
+            background: var(--btn-gradient, var(--luxury-gold));
+            box-shadow: 0 10px 26px rgba(201,168,76,.34);
+        }
+        #addProductModal .apw-footer .btn-checkout { flex: 1; width: auto !important; margin: 0 !important; }
     </style>
 </head>
 <body ontouchstart="">
@@ -5551,6 +5586,17 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         <button class="close-btn" onclick="tryCloseAddProduct()">×</button>
     </div>
 
+    <!-- 🧭 WIZARD — bosqich indikatori -->
+    <div class="apw-bar">
+        <div class="apw-track">
+            <span class="apw-seg active"></span>
+            <span class="apw-seg"></span>
+            <span class="apw-seg"></span>
+            <span class="apw-seg"></span>
+        </div>
+        <div class="apw-step-title" id="apw-step-title">1/4 — Asosiy ma'lumotlar</div>
+    </div>
+
     <div style="padding: 20px;">
         <div style="margin-bottom:18px;">
             <div style="font-size:11px; font-weight:800; color:#0a84ff; letter-spacing:1.5px; margin-bottom:10px;">👁 MIJOZGA QANDAY KO'RINADI</div>
@@ -5692,8 +5738,16 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         </div>
     </div>
 
-    <div class="sticky-admin-footer">
-        <button class="btn-checkout" onclick="saveNewProduct()" style="box-shadow: 0 10px 30px rgba(212,175,55,0.4); border-radius: 20px; font-size: 16px; padding: 20px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;">
+    <div class="sticky-admin-footer apw-footer">
+        <button type="button" class="apw-nav-btn apw-back-btn" id="apw-back" onclick="apStepBack()" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Orqaga
+        </button>
+        <button type="button" class="apw-nav-btn apw-next-btn" id="apw-next" onclick="apStepNext()">
+            Keyingi
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </button>
+        <button class="btn-checkout" id="apw-save" onclick="saveNewProduct()" style="display:none; box-shadow: 0 10px 30px rgba(212,175,55,0.4); border-radius: 20px; font-size: 16px; padding: 20px; width: 100%; align-items: center; justify-content: center; gap: 10px;">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
             BAZAGA SAQLASH
         </button>
@@ -11205,6 +11259,7 @@ window.resetAddForm = () => {
     if (firstOrigin && typeof selectOrigin === 'function') selectOrigin(firstOrigin, 'add');
     updateImgPreviews('add');
     updateLivePreview('add');
+    if (window.apStepGo) window.apStepGo(1);
 };
 window.openAddProduct = () => {
     resetAddForm();
@@ -11212,6 +11267,55 @@ window.openAddProduct = () => {
     openModal('addProductModal');
     updateLivePreview('add');
 };
+
+// ===== YANGI TOVAR — BOSQICHLI WIZARD =====
+// Faqat KO'RSATISHni boshqaradi: barcha maydonlar DOM'da qoladi (display:none),
+// shuning uchun saveNewProduct() ularni avvalgidek o'qiydi. Hech qanday logika buzilmaydi.
+window._apStep = 1;
+window.apStepGo = function (n) {
+    var modal = document.getElementById('addProductModal');
+    if (!modal) return;
+    var groups = modal.querySelectorAll('.admin-form-group');
+    var total = groups.length || 1;
+    if (n < 1) n = 1;
+    if (n > total) n = total;
+    window._apStep = n;
+    for (var i = 0; i < groups.length; i++) {
+        groups[i].style.display = (i === n - 1) ? '' : 'none';
+    }
+    var segs = modal.querySelectorAll('.apw-seg');
+    for (var j = 0; j < segs.length; j++) {
+        segs[j].classList.toggle('done', j < n - 1);
+        segs[j].classList.toggle('active', j === n - 1);
+    }
+    var titles = ['Asosiy ma\'lumotlar', 'Rasmlar', 'Tavsif (AI)', 'Kategoriya'];
+    var titleEl = document.getElementById('apw-step-title');
+    if (titleEl) titleEl.textContent = n + '/' + total + ' — ' + (titles[n - 1] || '');
+    var back = document.getElementById('apw-back');
+    var next = document.getElementById('apw-next');
+    var save = document.getElementById('apw-save');
+    if (back) back.style.display = (n > 1) ? 'flex' : 'none';
+    if (next) next.style.display = (n < total) ? 'flex' : 'none';
+    if (save) save.style.display = (n >= total) ? 'flex' : 'none';
+    try { modal.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { modal.scrollTop = 0; }
+};
+window.apStepNext = function () {
+    // 1-bosqichda minimal tekshiruv: nom + narx (saveNewProduct ham shularni talab qiladi)
+    if (window._apStep === 1) {
+        var nmEl = document.getElementById('add-name');
+        var prEl = document.getElementById('add-price');
+        var nm = nmEl ? nmEl.value.trim() : '';
+        var pr = prEl ? prEl.value.trim() : '';
+        if (!nm || !pr) {
+            if (typeof showToast === 'function') showToast("Avval nom va narxni kiriting", "warning");
+            if (typeof Haptics !== 'undefined' && Haptics.warning) { try { Haptics.warning(); } catch (e) {} }
+            return;
+        }
+    }
+    window.apStepGo(window._apStep + 1);
+};
+window.apStepBack = function () { window.apStepGo(window._apStep - 1); };
+
 window.fillAddFormFromProduct = (p) => {
     resetAddForm();
     document.getElementById('add-name').value = (p.name || '') + ' (nusxa)';
