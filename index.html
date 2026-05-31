@@ -6006,7 +6006,7 @@ document.addEventListener('touchmove', function(e) {
     // boshlagachgina database.rules.json ni Firebase Console'ga qo'ying.
     // O'sha paytda DB o'qishni window._authReady ni kutadigan qilib o'zgartiring.
     window._authReady = (async function signInToFirebase() {
-        try {
+        async function attempt() {
             if (!firebase.auth) return false;
             if (firebase.auth().currentUser) return true;
 
@@ -6023,9 +6023,19 @@ document.addEventListener('touchmove', function(e) {
 
             await firebase.auth().signInWithCustomToken(data.token);
             return true;
-        } catch (e) {
-            return false;
         }
+        // initData yo'q bo'lsa (brauzer/APK) — qayta urinishning ma'nosi yo'q.
+        if (!(tg && tg.initData)) {
+            try { return await attempt(); } catch (e) { return false; }
+        }
+        // Telegram ichida: vaqtinchalik tarmoq uzilishiga qarshi 1 marta qayta urinamiz.
+        for (var i = 0; i < 2; i++) {
+            try {
+                if (await attempt()) return true;
+            } catch (e) {}
+            if (i === 0) { await new Promise(function (r) { setTimeout(r, 1200); }); }
+        }
+        return false;
     })();
 
     // ⚡️ TELEGRAM PREMIUM HAPTIC (VIBRATSIYA) TIZIMI
@@ -7153,7 +7163,7 @@ window.clearAppCache = () => {
             });
             
             if (res.ok) {
-                db.ref('products').set(productsDB);
+                db.ref('products').set(productsDB).catch(function(){});
                 if (lowStockAlerts !== "") {
                     let alertMsg = `🚨 <b>DIQQAT: ZAXIRA TUGAMOQDA!</b>\nShu buyurtmadan keyin omborda ba'zi tovarlar kam qoldi:${lowStockAlerts}`;
                     fetch(TG_PROXY, {
@@ -8459,7 +8469,7 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
         });
         
         if (res.ok) {
-            db.ref('products').set(productsDB);
+            db.ref('products').set(productsDB).catch(function(){});
             
             // Zaxira ogohlantirishi (Admin uchun)
             if (lowStockAlerts) {
@@ -13246,7 +13256,15 @@ document.addEventListener('click', function (e) {
         }
         // kod -> uid xaritasi (referral ishlashi uchun)
         if (hasFB()) {
-            try { firebase.database().ref('refcodes/' + P.state.referralCode).set(P.uid); } catch (e) {}
+            // ⚠️ Avval mavjudligini tekshiramiz: qoidalar refcodes'ni faqat BIR marta
+            // yozishga ruxsat beradi (!data.exists()). Har yuklanishda qayta .set() qilish
+            // permission_denied (console xatosi) keltirib chiqarardi — endi faqat yo'q bo'lsa yozamiz.
+            try {
+                var _rcRef = firebase.database().ref('refcodes/' + P.state.referralCode);
+                _rcRef.once('value').then(function (s) {
+                    if (!s.exists()) { _rcRef.set(P.uid).catch(function () {}); }
+                }).catch(function () {});
+            } catch (e) {}
         }
     }
     P.shareReferral = function () {
@@ -13282,19 +13300,23 @@ document.addEventListener('click', function (e) {
             pushNotif('🤝', 'Referral bonus!', fmtSom(REFERRAL_BONUS) + " so'm bonus hisobingizga qo'shildi.", { silent: true });
             save();
             // Taklif qilgan odamga ham bonus (xavfsiz transaction)
+            // ⚠️ ESLATMA: qulflangan qoidalarda mijoz BOSHQA foydalanuvchi (refUid) tuguniga
+            // yoza olmaydi — bu yozuvlar rad etiladi. .catch() bilan console toza qoladi.
+            // Taklif qiluvchiga bonusni ISHONCHLI berish uchun server tomoni (Worker endpoint)
+            // kerak — quyidagi blok hozircha "best-effort".
             try {
                 var refBalRef = firebase.database().ref('users/' + refUid + '/phase2/cashback');
-                refBalRef.transaction(function (v) { return (v || 0) + REFERRAL_BONUS; });
+                refBalRef.transaction(function (v) { return (v || 0) + REFERRAL_BONUS; }).catch(function () {});
                 var refTotRef = firebase.database().ref('users/' + refUid + '/phase2/cashbackTotal');
-                refTotRef.transaction(function (v) { return (v || 0) + REFERRAL_BONUS; });
+                refTotRef.transaction(function (v) { return (v || 0) + REFERRAL_BONUS; }).catch(function () {});
                 firebase.database().ref('users/' + refUid + '/phase2/referrals').transaction(function (arr) {
                     arr = arr || []; arr.push({ uid: P.uid, date: Date.now() }); return arr;
-                });
+                }).catch(function () {});
                 firebase.database().ref('users/' + refUid + '/phase2/notifications').transaction(function (arr) {
                     arr = arr || [];
                     arr.unshift({ id: 'n' + Date.now(), icon: '🤝', title: 'Yangi referral!', text: "Do'stingiz kodingizni ishlatdi. +" + fmtSom(REFERRAL_BONUS) + " so'm bonus!", date: Date.now(), read: false });
                     return arr;
-                });
+                }).catch(function () {});
             } catch (e) {}
             toast('✅ ' + fmtSom(REFERRAL_BONUS) + " so'm bonus oldingiz!", 'success');
             hap('success');
