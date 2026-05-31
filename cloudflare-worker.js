@@ -1,17 +1,12 @@
 // =============================================================
-//  AVTO A1 — Cloudflare Worker
-//  Ikki vazifa:
-//   1) "/"  (yoki boshqa yo'l) — Telegram xabar yuboruvchi PROXY
-//      Brauzer xabarni beradi, Worker MAXFIY tokenni qo'shib
-//      Telegram'ga uzatadi. Token mijozga hech qachon ko'rinmaydi.
-//   2) "/auth" — Telegram initData'ni HMAC bilan TEKSHIRIB,
-//      Firebase CUSTOM TOKEN qaytaradi (uid = Telegram user id).
-//      Shu token bilan mijoz Firebase'ga xavfsiz "login" qiladi.
-//
-//  Kerakli Cloudflare Secret'lar (Settings > Variables > Secrets):
-//   - BOT_TOKEN              : Telegram bot tokeni (allaqachon bor)
-//   - FIREBASE_CLIENT_EMAIL  : service-account email (...@...iam.gserviceaccount.com)
-//   - FIREBASE_PRIVATE_KEY   : service-account private_key (PEM, BEGIN/END qatorlari bilan)
+//  AVTO A1 — Cloudflare Worker  (paste-safe versiya)
+//  1) "/"     — Telegram xabar yuboruvchi PROXY (sendMessage)
+//  2) "/auth" — Telegram initData HMAC bilan tekshiriladi,
+//               Firebase CUSTOM TOKEN qaytaradi (uid = Telegram id)
+//  Secret'lar: BOT_TOKEN, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
+//  ESLATMA: bu faylda atayin backslash-n belgisi ishlatilmagan
+//  (ba'zi nusxalash vositalari uni buzadi). Newline kerak joyda
+//  String.fromCharCode(10) ishlatilgan.
 // =============================================================
 
 const cors = {
@@ -29,7 +24,6 @@ function json(obj, status = 200) {
 
 export default {
   async fetch(request, env) {
-    // Brauzer "ruxsatmi?" (preflight) so'rasa — ha
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: cors });
     }
@@ -39,19 +33,16 @@ export default {
 
     const path = new URL(request.url).pathname;
 
-    // ---------- 2) FIREBASE AUTH: initData -> custom token ----------
     if (path === "/auth") {
       try {
         const { initData } = await request.json();
         if (!initData || typeof initData !== "string") {
-          return json({ ok: false, error: "initData yo'q" }, 400);
+          return json({ ok: false, error: "initData yoq" }, 400);
         }
-
         const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
         if (!verified.ok) {
           return json({ ok: false, error: verified.error }, 401);
         }
-
         const uid = String(verified.user.id);
         const token = await createFirebaseCustomToken(uid, env);
         return json({ ok: true, token, uid });
@@ -60,7 +51,6 @@ export default {
       }
     }
 
-    // ---------- 1) TELEGRAM PROXY (sendMessage) ----------
     try {
       const body = await request.json();
       const tgRes = await fetch(
@@ -79,36 +69,27 @@ export default {
   },
 };
 
-// =============================================================
-//  Telegram initData'ni tekshirish (rasmiy HMAC algoritmi)
-//  https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
-// =============================================================
 async function verifyTelegramInitData(initData, botToken) {
   if (!botToken) return { ok: false, error: "BOT_TOKEN sozlanmagan" };
 
   const params = new URLSearchParams(initData);
   const hash = params.get("hash");
-  if (!hash) return { ok: false, error: "hash yo'q" };
+  if (!hash) return { ok: false, error: "hash yoq" };
   params.delete("hash");
 
-  // data_check_string: kalitlar alifbo tartibida, "key=value" \n bilan
+  const NL = String.fromCharCode(10);
   const pairs = [];
   for (const [k, v] of params) pairs.push(`${k}=${v}`);
   pairs.sort();
-  const dataCheckString = pairs.join("\n");
+  const dataCheckString = pairs.join(NL);
 
   const enc = new TextEncoder();
-
-  // secret_key = HMAC_SHA256(key="WebAppData", message=botToken)
   const secretKey = await hmacSha256(enc.encode("WebAppData"), enc.encode(botToken));
-
-  // computed = HMAC_SHA256(key=secret_key, message=dataCheckString) -> hex
   const computed = await hmacSha256(secretKey, enc.encode(dataCheckString));
   const computedHex = toHex(computed);
 
   if (computedHex !== hash) return { ok: false, error: "imzo mos kelmadi" };
 
-  // auth_date eskirganini tekshirish (24 soat)
   const authDate = parseInt(params.get("auth_date") || "0", 10);
   const now = Math.floor(Date.now() / 1000);
   if (!authDate || now - authDate > 86400) {
@@ -121,12 +102,11 @@ async function verifyTelegramInitData(initData, botToken) {
   } catch {
     user = null;
   }
-  if (!user || !user.id) return { ok: false, error: "user yo'q" };
+  if (!user || !user.id) return { ok: false, error: "user yoq" };
 
   return { ok: true, user };
 }
 
-// HMAC-SHA256: keyBytes bilan messageBytes'ni imzolaydi -> ArrayBuffer
 async function hmacSha256(keyBytes, messageBytes) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -142,10 +122,6 @@ function toHex(buf) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// =============================================================
-//  Firebase custom token yaratish (RS256 JWT, service-account bilan)
-//  Mijoz buni signInWithCustomToken() ga beradi.
-// =============================================================
 async function createFirebaseCustomToken(uid, env) {
   const clientEmail = env.FIREBASE_CLIENT_EMAIL;
   const privateKeyPem = env.FIREBASE_PRIVATE_KEY;
@@ -163,8 +139,8 @@ async function createFirebaseCustomToken(uid, env) {
     sub: clientEmail,
     aud,
     iat: now,
-    exp: now + 3600, // 1 soat
-    uid, // <-- Firebase auth.uid shu bo'ladi
+    exp: now + 3600,
+    uid,
   };
 
   const enc = new TextEncoder();
@@ -183,13 +159,13 @@ async function createFirebaseCustomToken(uid, env) {
   return `${signingInput}.${sigB64}`;
 }
 
-// PEM (PKCS#8) private key -> CryptoKey
 async function importPrivateKey(pem) {
-  const clean = pem
-    .replace(/\\n/g, "\n") // Secret'da \n literal bo'lsa, haqiqiy newline'ga aylantiramiz
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\s+/g, "");
+  const NL = String.fromCharCode(10);
+  const BSL_N = String.fromCharCode(92) + "n";
+  let clean = pem.split(BSL_N).join(NL);
+  clean = clean.split("-----BEGIN PRIVATE KEY-----").join("");
+  clean = clean.split("-----END PRIVATE KEY-----").join("");
+  clean = clean.replace(/\s+/g, "");
   const der = base64ToBytes(clean);
   return crypto.subtle.importKey(
     "pkcs8",
@@ -200,7 +176,6 @@ async function importPrivateKey(pem) {
   );
 }
 
-// ---- base64 yordamchilar ----
 function base64url(bytes) {
   let bin = "";
   const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);

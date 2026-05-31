@@ -5813,32 +5813,69 @@ document.addEventListener('touchmove', function(e) {
     // ishlashda davom etadi (DB qoidalari hali ochiq). Auth barqaror ishlay
     // boshlagachgina database.rules.json ni Firebase Console'ga qo'ying.
     // O'sha paytda DB o'qishni window._authReady ni kutadigan qilib o'zgartiring.
+    // 🩺 VAQTINCHALIK DIAGNOSTIKA — ekranda ko'rinadigan log (telefonda konsol ko'rinmaydi).
+    // Auth ishlaganidan keyin bu blok olib tashlanadi.
+    function _authDbg(msg, color) {
+        try {
+            var box = document.getElementById('auth-debug-box');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'auth-debug-box';
+                box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:999999;background:rgba(0,0,0,0.92);color:#fff;font:12px/1.4 monospace;padding:10px 12px;border:1px solid #C9A84C;border-radius:10px;max-height:45vh;overflow:auto;white-space:pre-wrap;';
+                var close = document.createElement('div');
+                close.textContent = '✕ yopish';
+                close.style.cssText = 'position:sticky;top:0;float:right;color:#C9A84C;cursor:pointer;font-weight:bold;';
+                close.onclick = function(){ box.remove(); };
+                box.appendChild(close);
+                document.body.appendChild(box);
+            }
+            var line = document.createElement('div');
+            line.style.color = color || '#fff';
+            line.textContent = msg;
+            box.appendChild(line);
+        } catch (e) {}
+    }
+
     window._authReady = (async function signInToFirebase() {
         try {
-            if (!firebase.auth) return false; // SDK yuklanmagan bo'lsa
-            // Allaqachon kirgan bo'lsa qayta urinmaymiz
-            if (firebase.auth().currentUser) return true;
-            // Faqat haqiqiy Telegram (imzolangan initData) uchun
+            _authDbg('1) Auth boshlandi...', '#9ad');
+            if (!firebase.auth) { _authDbg('❌ firebase.auth YO\'Q (firebase-auth.js yuklanmagan)', '#f88'); return false; }
+            if (firebase.auth().currentUser) { _authDbg('✅ allaqachon kirilgan', '#8f8'); return true; }
+
+            // apiKey borligini tekshiramiz (Auth uchun SHART)
+            try {
+                var opts = firebase.app().options || {};
+                if (!opts.apiKey) {
+                    _authDbg('⚠️ firebaseConfig\'da apiKey YO\'Q — Auth ishlamaydi! (databaseURL yetarli emas)', '#fd6');
+                }
+            } catch(e){}
+
             var initData = (tg && tg.initData) ? tg.initData : "";
+            _authDbg('2) tg.initData uzunligi: ' + (initData ? initData.length : 0), '#9ad');
             if (!initData) {
-                console.warn('[Auth] tg.initData yo\'q — auth o\'tkazib yuborildi (brauzer/APK rejimi).');
+                _authDbg('❌ tg.initData BO\'SH — bot Web App sifatida ochilmagan (oddiy havola/brauzer?).', '#f88');
                 return false;
             }
+
+            _authDbg('3) Worker /auth ga so\'rov yuborilyapti...', '#9ad');
             var res = await fetch(TG_PROXY + '/auth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ initData: initData })
             });
+            _authDbg('4) Worker javob status: ' + res.status, '#9ad');
             var data = await res.json();
             if (!data || !data.ok || !data.token) {
-                console.warn('[Auth] custom token olinmadi:', data && data.error);
+                _authDbg('❌ Worker token bermadi. error = ' + (data && data.error), '#f88');
                 return false;
             }
+            _authDbg('5) Token olindi (uid=' + data.uid + '). signInWithCustomToken...', '#9ad');
+
             await firebase.auth().signInWithCustomToken(data.token);
-            console.log('%c[Auth] Firebase\'ga kirildi (uid=' + data.uid + ')', 'color:#2ecc71;font-weight:bold;');
+            _authDbg('🎉 MUVAFFAQIYAT! Firebase\'ga kirildi. uid=' + data.uid, '#8f8');
             return true;
         } catch (e) {
-            console.warn('[Auth] signIn xato (ilova ochiq rejimda davom etadi):', e && e.message);
+            _authDbg('❌ XATO: ' + ((e && e.code) ? e.code + ' — ' : '') + (e && e.message), '#f88');
             return false;
         }
     })();
