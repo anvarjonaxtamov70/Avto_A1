@@ -7,8 +7,8 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <!-- ⚡ OPTIMIZATSIYA: Lottie olib tashlandi (ishlatilmasdi).
-         Cropper.js (rasm kesish) faqat admin kerak bo'lganda yuklanadi (lazy-load, pastda ensureCropper()). -->
+    <!-- ⚡ OPTIMIZATSIYA: Lottie va eski Cropper.js (rasm kesish) olib tashlandi — ishlatilmas edi.
+         Rasm yuklash endi handleMultiImgUpload orqali (ko'p rasmli, progress bilan). -->
     <!-- ⚡ Shrift og'irliklari 5 tadan 3 taga tushirildi (400/600/800) — tezroq yuklanadi -->
     <!-- 💎 PREMIUM TIPOGRAFIKA: Playfair Display (sarlavhalar - elegant serif) +
          Inter (asosiy matn - zamonaviy sans-serif). Joriy Montserrat saqlanadi
@@ -5555,13 +5555,6 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     </div>
 </div>
 
-<div class="modal-standard" id="cropModal" style="z-index: 3000; padding: 15px;">
-    <div class="modal-header"><h2>✂️ Kesish</h2><button class="close-btn" onclick="closeCropModal()">×</button></div>
-    <div style="width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 20px;">
-        <img id="cropper-image" src="" style="max-width: 100%; display: block;">
-    </div>
-    <button class="btn-checkout" id="crop-save-btn" onclick="uploadCroppedImage()">Saqlash</button>
-</div>
 
 <div class="modal-standard" id="adminStatsModal">
     <div class="modal-header"><h2 style="color: #34c759;">📊 Statistika</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
@@ -5816,7 +5809,6 @@ const Haptics = {
     selection: () => tg.HapticFeedback.selectionChanged()       // Menyu almashganda
 };
 
-    let currentCropper = null, currentTargetInput = "";
     
     // =====================================
     // 🧠 1. MIJOZNI DASTLABKI TANISH (Kutmasdan darhol o'qiydi)
@@ -6111,106 +6103,6 @@ function showToast(m, t = 'success') {
 
     function toggleChip(el) { el.classList.toggle('selected'); }
 
-    // ⚡ OPTIMIZATSIYA: Cropper.js faqat kerak bo'lganda (admin rasm kesganda) yuklanadi.
-    // Shu tarzda oddiy mijozlar 110 KB ortiqcha kod yuklamaydi.
-    let _cropperLoading = null;
-    function ensureCropper() {
-        if (window.Cropper) return Promise.resolve();
-        if (_cropperLoading) return _cropperLoading;
-        _cropperLoading = new Promise((resolve, reject) => {
-            const css = document.createElement('link');
-            css.rel = 'stylesheet';
-            css.href = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css';
-            document.head.appendChild(css);
-            const js = document.createElement('script');
-            js.src = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js';
-            js.onload = () => resolve();
-            js.onerror = () => reject(new Error('Cropper yuklanmadi'));
-            document.head.appendChild(js);
-        });
-        return _cropperLoading;
-    }
-
-    function handleFileSelect(e, t) {
-        const f = e.target.files[0]; if (!f) return; currentTargetInput = t; const r = new FileReader();
-        r.onload = function(ev) {
-            ensureCropper().then(() => {
-                document.getElementById('cropper-image').src = ev.target.result;
-                document.getElementById('cropModal').style.display = 'flex';
-                window._cropPrevActive = activeModal; // qaytadigan modalni saqlaymiz
-                activeModal = 'cropModal';
-                window.history.pushState({ modal: 'cropModal' }, ""); // ⚡ popstate'da yopiladi
-                tg.BackButton.show();
-                if(currentCropper) currentCropper.destroy(); currentCropper = new Cropper(document.getElementById('cropper-image'), { aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 0.9 });
-            }).catch(() => showToast("Rasm tahrirlagich yuklanmadi", "warning"));
-        };
-        r.readAsDataURL(f); e.target.value = '';
-    }
-
-    function uploadCroppedImage() {
-            if(!currentCropper) return;
-            let btn = document.getElementById('crop-save-btn');
-            let oldT = btn.innerText;
-            btn.innerText = "Kuting...";
-            btn.disabled = true;
-    
-            try {
-                // Rasmni telefon qotmaydigan o'lchamda kesib olish
-                const canvas = currentCropper.getCroppedCanvas({ 
-                    width: 600, 
-                    height: 600,
-                    imageSmoothingEnabled: true,
-                    imageSmoothingQuality: 'medium'
-                });
-    
-                // Og'ir Base64 o'rniga yengil Blob (fayl) formatidan foydalanamiz
-                canvas.toBlob(async (blob) => {
-                    const fd = new FormData();
-                    fd.append("image", blob, "product_image.jpg");
-    
-                    try {
-                        const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { 
-                            method: "POST", 
-                            body: fd 
-                        });
-                        const r = await res.json();
-                        
-                        if(r.success) { 
-                            let base = currentTargetInput.startsWith('add') ? 'add' : 'edit';
-                            let num = currentTargetInput.replace(base, ''); 
-                            let urlInp = document.getElementById(`${base}-img-url${num}`);
-                            let prevImg = document.getElementById(`${base}-img-preview${num}`);
-                            
-                            if(urlInp && prevImg) {
-                                urlInp.value = r.data.url;
-                                prevImg.src = r.data.url;
-                                prevImg.style.display = 'block';
-                            }
-                            showToast("Rasm yuklandi!"); 
-                            closeCropModal(); 
-                        } else {
-                            showToast("Xatolik: ImgBB qabul qilmadi!", "warning");
-                        }
-                    } catch (err) { 
-                        console.error(err);
-                        showToast("Internetni tekshiring!", "warning");
-                    } finally { 
-                        btn.innerText = oldT; 
-                        btn.disabled = false; 
-                    }
-                }, 'image/jpeg', 0.8); // 0.8 bu rasm sifati (80%), telefonni qiynamaydi
-    
-            } catch (error) {
-                showToast("Rasmni kesishda xato yuz berdi!", "warning");
-                btn.innerText = oldT; 
-                btn.disabled = false; 
-            }
-        }
-    function closeCropModal() {
-        // Agar cropModal history'da bo'lsa — back orqali yopamiz (popstate cleanup qiladi)
-        if (activeModal === 'cropModal') { window.history.back(); }
-        else { if(currentCropper) currentCropper.destroy(); document.getElementById('cropModal').style.display = 'none'; }
-    }
     function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
 
     function openAdminInventory() {
@@ -7525,20 +7417,6 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     return;
                 }
 
-                // 🆕 0b. CROPPER (rasm kesish) — oldingi modalga qaytadi (asosiy ekranga emas)
-                if (current === 'cropModal') {
-                    if (typeof currentCropper !== 'undefined' && currentCropper) { try { currentCropper.destroy(); } catch(e2){} }
-                    document.getElementById('cropModal').style.display = 'none';
-                    activeModal = window._cropPrevActive || null;
-                    window._cropPrevActive = null;
-                    // Oldingi modal hali DOMda ochiq edi — boshqa hech narsa kerak emas
-                    if (!activeModal) {
-                        document.body.style.overflow = '';
-                        let cont = document.querySelector('.container'); if(cont) cont.classList.remove('blur-bg');
-                    }
-                    updateBtns();
-                    return;
-                }
 
                 document.getElementById(current).style.display = 'none';
     
@@ -8960,119 +8838,6 @@ window.updateImgPreviews = (prefix) => {
             <span style="position:absolute; top:-7px; right:-7px; background:var(--luxury-gold); color:#000; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">${i+1}</span>
         </div>
     `).join('');
-};
-
-// Rasmni base64 orqali ImgBB ga yuklash (iOS uchun ishonchli usul)
-async function uploadToImgBBBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async () => {
-            try {
-                const base64 = reader.result.split(',')[1];
-                const formData = new FormData();
-                formData.append('image', base64);
-                
-                const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                
-                const data = await res.json();
-                if (data.success) {
-                    resolve(data.data.url);
-                } else {
-                    reject(new Error('ImgBB rad etdi: ' + JSON.stringify(data.error)));
-                }
-            } catch (e) {
-                reject(e);
-            }
-        };
-        reader.onerror = () => reject(new Error('Fayl o\'qilmadi'));
-        reader.readAsDataURL(file);
-    });
-}
-
-window.handleMultiImgUpload = async function(event, prefix) {
-    const files = Array.from(event.target.files).slice(0, 3);
-    event.target.value = '';
-    if (files.length === 0) return;
-
-    ['', '2', '3'].forEach(suf => {
-        let el = document.getElementById(`${prefix}-img-url${suf}`);
-        if (el) el.value = '';
-    });
-
-    const previewBox = document.getElementById(`${prefix}-img-previews`);
-    if (previewBox) {
-        previewBox.innerHTML = `<div style="color:var(--luxury-gold);font-size:12px;padding:10px;">⏳ Yuklanmoqda...</div>`;
-    }
-
-    let uploadedUrls = [];
-
-    for (let i = 0; i < files.length; i++) {
-        try {
-            showToast(`📤 ${i + 1}/${files.length} yuklanyapti...`);
-
-            // Faylni base64 ga aylantiramiz
-            const base64 = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = () => reject(new Error('Fayl o\'qilmadi'));
-                reader.readAsDataURL(files[i]);
-            });
-
-            // Base64 ni form-data orqali yuboramiz
-            const fd = new FormData();
-            fd.append('key', IMGBB_API_KEY);
-            fd.append('image', base64);
-
-            const res = await fetch('https://api.imgbb.com/1/upload', {
-                method: 'POST',
-                body: fd
-            });
-
-            const json = await res.json();
-            console.log('ImgBB javob:', JSON.stringify(json));
-
-            if (json.success) {
-                const url = json.data.url;
-                uploadedUrls.push(url);
-
-                const suffix = i === 0 ? '' : String(i + 1);
-                const inputEl = document.getElementById(`${prefix}-img-url${suffix}`);
-                if (inputEl) inputEl.value = url;
-
-                if (previewBox) {
-                    previewBox.innerHTML = uploadedUrls.map((u, idx) => `
-                        <div style="position:relative;display:inline-block;">
-                            <img src="${u}" style="width:75px;height:75px;object-fit:cover;border-radius:12px;border:2px solid var(--luxury-gold);background:#fff;">
-                            <span style="position:absolute;top:-7px;right:-7px;background:var(--luxury-gold);color:#000;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;">${idx + 1}</span>
-                        </div>
-                    `).join('');
-                }
-            } else {
-                // Aniq xato sababini ko'rsatamiz
-                const errorMsg = json.error?.message || JSON.stringify(json.error) || 'Noma\'lum';
-                console.error('ImgBB xato:', errorMsg);
-                showToast(`⚠️ ImgBB: ${errorMsg}`, 'warning');
-            }
-
-        } catch (err) {
-            console.error(`${i + 1}-rasm xatosi:`, err.message);
-            showToast(`❌ ${err.message}`, 'warning');
-        }
-
-        await new Promise(r => setTimeout(r, 500));
-    }
-
-    if (uploadedUrls.length > 0) {
-        showToast(`✅ ${uploadedUrls.length} ta rasm yuklandi!`, 'success');
-    } else {
-        if (previewBox) previewBox.innerHTML = '';
-        showToast('❌ API kalitini yangilang: imgbb.com/dashboard', 'warning');
-    }
 };
 
 // ✅ TUZATILGAN: EditModal ochish (pushState ishlatadi)
