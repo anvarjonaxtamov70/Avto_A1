@@ -1,0 +1,24 @@
+name: PR Tekshiruv
+
+# Har bir PR (main'ga qaratilgan) ochilganda/yangilanganda ishlaydi.
+# Maqsad: merge qilishdan OLDIN xatolarni ushlash.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Sintaksis va maxfiy kalit tekshiruvi
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js o'rnatish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Tekshiruvlarni ishga tushirish
+        run: node .github/validate.js
