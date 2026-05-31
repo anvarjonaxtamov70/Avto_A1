@@ -6,6 +6,7 @@
     <title>Avto A1 Shop</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <!-- ⚡ OPTIMIZATSIYA: Lottie va eski Cropper.js (rasm kesish) olib tashlandi — ishlatilmas edi.
          Rasm yuklash endi handleMultiImgUpload orqali (ko'p rasmli, progress bilan). -->
@@ -5800,6 +5801,48 @@ document.addEventListener('touchmove', function(e) {
     const firebaseConfig = { databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/" };
     if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
     const db = firebase.database();
+
+    // =====================================
+    // 🔐 FIREBASE AUTH (Telegram initData -> custom token)
+    // =====================================
+    // Worker (/auth) initData'ni HMAC bilan tekshirib, Firebase custom token
+    // qaytaradi. So'ng signInWithCustomToken bilan auth.uid = Telegram ID bo'ladi.
+    //
+    // ⚠️ MUHIM: Hozircha bu "best-effort" (fonda) ishlaydi — agar Worker /auth
+    // hali deploy qilinmagan yoki Secret'lar sozlanmagan bo'lsa, ilova AVVALGIDEK
+    // ishlashda davom etadi (DB qoidalari hali ochiq). Auth barqaror ishlay
+    // boshlagachgina database.rules.json ni Firebase Console'ga qo'ying.
+    // O'sha paytda DB o'qishni window._authReady ni kutadigan qilib o'zgartiring.
+    window._authReady = (async function signInToFirebase() {
+        try {
+            if (!firebase.auth) return false; // SDK yuklanmagan bo'lsa
+            // Allaqachon kirgan bo'lsa qayta urinmaymiz
+            if (firebase.auth().currentUser) return true;
+            // Faqat haqiqiy Telegram (imzolangan initData) uchun
+            var initData = (tg && tg.initData) ? tg.initData : "";
+            if (!initData) {
+                console.warn('[Auth] tg.initData yo\'q — auth o\'tkazib yuborildi (brauzer/APK rejimi).');
+                return false;
+            }
+            var res = await fetch(TG_PROXY + '/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ initData: initData })
+            });
+            var data = await res.json();
+            if (!data || !data.ok || !data.token) {
+                console.warn('[Auth] custom token olinmadi:', data && data.error);
+                return false;
+            }
+            await firebase.auth().signInWithCustomToken(data.token);
+            console.log('%c[Auth] Firebase\'ga kirildi (uid=' + data.uid + ')', 'color:#2ecc71;font-weight:bold;');
+            return true;
+        } catch (e) {
+            console.warn('[Auth] signIn xato (ilova ochiq rejimda davom etadi):', e && e.message);
+            return false;
+        }
+    })();
+
     // ⚡️ TELEGRAM PREMIUM HAPTIC (VIBRATSIYA) TIZIMI
 const Haptics = {
     light: () => tg.HapticFeedback.impactOccurred('light'),     // Mayin (tugma uchun)
