@@ -32,11 +32,19 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: cors });
     }
-    if (request.method !== "POST") {
-      return new Response("Ivy Worker ishlayapti. Faqat POST.", { status: 200, headers: cors });
-    }
+    const reqUrl = new URL(request.url);
+    const path = reqUrl.pathname;
 
-    const path = new URL(request.url).pathname;
+    // ---------- 0) QULAY: webhook'ni ulash (brauzerda ochiladi, token URL'da EMAS) ----------
+    if (request.method === "GET" && path === "/set-webhook") {
+      return setWebhookSelf(env, reqUrl.origin);
+    }
+    if (request.method === "GET") {
+      return new Response("Ivy Worker ishlayapti ✅", { status: 200, headers: cors });
+    }
+    if (request.method !== "POST") {
+      return new Response("Faqat POST", { status: 405, headers: cors });
+    }
 
     // ---------- 1) TELEGRAM WEBHOOK ----------
     if (path === "/webhook") {
@@ -178,6 +186,25 @@ async function handleWebhook(request, env) {
   }
 
   return new Response("ok", { headers: cors });
+}
+
+// Webhook'ni o'zini-o'zi ulaydi (brauzerda /set-webhook ochilganda). Token env'dan olinadi.
+async function setWebhookSelf(env, origin) {
+  if (!env.BOT_TOKEN) return json({ ok: false, error: "BOT_TOKEN sozlanmagan" }, 400);
+  const hookUrl = origin + "/webhook";
+  const payload = { url: hookUrl, drop_pending_updates: true, allowed_updates: ["message", "edited_message"] };
+  if (env.WEBHOOK_SECRET) payload.secret_token = env.WEBHOOK_SECRET;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/setWebhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    return json({ ok: !!(d && d.ok), webhook: hookUrl, telegram: d });
+  } catch (e) {
+    return json({ ok: false, error: String(e) }, 500);
+  }
 }
 
 // =============================================================
