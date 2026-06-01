@@ -733,6 +733,7 @@ html[data-theme="dark"] .bottom-nav { background:linear-gradient(180deg, rgba(35
                     <button id="th-dark" onclick="setTheme('dark')">🌙 Noir</button>
                 </div>
             </div>
+            <div class="pf-menu-item hidden" id="pf-admin-entry" onclick="openAdmin()" style="border-color:rgba(183,110,121,0.4); background:linear-gradient(135deg, var(--rose-tint), var(--surface));"><span class="mi-ic">🛠</span><span class="mi-t" style="color:var(--rose-deep); font-weight:700;">Boshqaruv markazi (Admin)</span><span class="mi-ar" style="color:var(--rose-deep);">›</span></div>
             <div class="pf-menu-item" onclick="clearAppCache()" style="border-color:rgba(217,106,114,0.3);"><span class="mi-ic">🧹</span><span class="mi-t" style="color:var(--danger);">Ilovani yangilash</span><span class="mi-ar">↻</span></div>
         </div>
 
@@ -835,6 +836,27 @@ html[data-theme="dark"] .bottom-nav { background:linear-gradient(180deg, rgba(35
     </div>
 </div>
 
+<!-- ===== ADMIN PANEL (Boshqaruv markazi) ===== -->
+<div class="modal-overlay" id="adminModal">
+    <div class="modal-standard" style="max-height:94vh;">
+        <div class="modal-grab"></div>
+        <div class="modal-header">
+            <h2 id="admin-title">🛠 Boshqaruv markazi</h2>
+            <button class="close-btn" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body" id="admin-body"></div>
+    </div>
+</div>
+
+<!-- ===== ADMIN: mahsulot qo'shish / tahrirlash ===== -->
+<div class="modal-overlay" id="adminFormModal">
+    <div class="modal-standard" style="max-height:94vh;">
+        <div class="modal-grab"></div>
+        <div class="modal-header"><h2 id="af-title">Yangi mahsulot</h2><button class="close-btn" onclick="closeAdminForm()">✕</button></div>
+        <div class="modal-body" id="admin-form-body"></div>
+    </div>
+</div>
+
 
 <script>
 /* ============================================================
@@ -880,7 +902,7 @@ const Haptics = {
 /* ---------- Konfiguratsiya (o'zingiznikiga moslang) ---------- */
 const ADMIN_IDS = [1209673004, 5105291033]; // <-- buyurtma xabarlarini oladigan Telegram ID(lar)ni yozing
 const ADMIN_ID = ADMIN_IDS[0];
-const TG_PROXY = "[https://ivy.anvaraxtamov70.workers.dev/](https://ivy.anvaraxtamov70.workers.dev/)"; // <-- Cloudflare Worker URL
+const TG_PROXY = "https://ivy.anvaraxtamov70.workers.dev"; // <-- Cloudflare Worker URL
 const firebaseConfig = {
   apiKey: "AIzaSyDthmvS4AJrE7_4YcjSSZXiFCgC87IhV_0",
   authDomain: "ivyj-6d8e4.firebaseapp.com",
@@ -1768,10 +1790,254 @@ function boot(){
     }, 1500);
 
     updateProfileUI();
+    revealAdmin();
     updateBtns();
 }
 document.addEventListener('DOMContentLoaded', boot);
 if (document.readyState !== 'loading') boot();
+</script>
+
+<script>
+/* ============================================================
+   IVY — ADMIN PANEL (Boshqaruv markazi)
+   Faqat ADMIN_IDS uchun. Mahsulot CRUD + buyurtmalar boshqaruvi + statistika.
+   Firebase to'liq ishlaganda mahsulotlar/buyurtmalar bulutga yoziladi.
+   ============================================================ */
+let adminAllOrders = [];   // [{uid, name, phone, oid, order, idx}]
+let afEditId = null;       // tahrirlanayotgan mahsulot id (yangi uchun null)
+
+function isAdmin(){
+    const u = window.currentUser;
+    return ADMIN_IDS.some(a => String(a) === String(u) || a === parseInt(u));
+}
+function revealAdmin(){
+    const e = document.getElementById('pf-admin-entry');
+    if (e) e.classList.toggle('hidden', !isAdmin());
+}
+function openAdmin(){
+    if (!isAdmin()){ showToast('Bu bo\'lim faqat admin uchun','warning'); return; }
+    if (activeModal && activeModal!=='adminModal') closeModal();
+    renderAdminDashboard();
+    openModal('adminModal');
+}
+
+/* ---------- DASHBOARD ---------- */
+function adminStats(){
+    const total = productsDB.length;
+    const low = productsDB.filter(p => typeof p.stock==='number' && p.stock>0 && p.stock<=3).length;
+    const out = productsDB.filter(p => typeof p.stock==='number' && p.stock===0).length;
+    return { total, low, out };
+}
+function renderAdminDashboard(){
+    document.getElementById('admin-title').innerText = '🛠 Boshqaruv markazi';
+    const s = adminStats();
+    const mode = firebaseReady ? '<span style="color:var(--ok);">● Firebase ulangan</span>' : '<span style="color:var(--warn);">● Demo rejim (Firebase ulanmagan)</span>';
+    document.getElementById('admin-body').innerHTML = `
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">${mode}</div>
+        <div class="pf-stats" style="margin:0 0 16px;padding:0;">
+            <div class="pf-stat"><div class="n">${s.total}</div><div class="l">Mahsulot</div></div>
+            <div class="pf-stat"><div class="n" style="color:var(--warn);">${s.low}</div><div class="l">Kam qoldi</div></div>
+            <div class="pf-stat"><div class="n" style="color:var(--danger);">${s.out}</div><div class="l">Tugagan</div></div>
+        </div>
+        <button class="btn-primary" style="margin-bottom:11px;" onclick="openAdminForm(null)">➕ Yangi mahsulot qo'shish</button>
+        <div class="pf-menu-item" style="margin:0 0 10px;" onclick="adminGoProducts()"><span class="mi-ic">🛍</span><span class="mi-t">Mahsulotlar / Ombor</span><span class="mi-ar">›</span></div>
+        <div class="pf-menu-item" style="margin:0 0 10px;" onclick="adminGoOrders()"><span class="mi-ic">📦</span><span class="mi-t">Buyurtmalar</span><span class="mi-ar">›</span></div>
+        <p class="section-sub" style="padding:10px 0 0;text-align:center;">Ivy admin · ${ADMIN_IDS.length} ta admin</p>
+    `;
+}
+
+/* ---------- PRODUCTS LIST ---------- */
+function adminGoProducts(){
+    document.getElementById('admin-title').innerText = '🛍 Mahsulotlar';
+    const rows = productsDB.slice().sort((a,b)=>{
+        const sa = (typeof a.stock==='number')?a.stock:99, sb=(typeof b.stock==='number')?b.stock:99;
+        return sa - sb; // kam qolganlar tepada
+    }).map(p => {
+        const st = (typeof p.stock==='number')?p.stock:'∞';
+        const stColor = (p.stock===0)?'var(--danger)':(p.stock<=3?'var(--warn)':'var(--text-muted)');
+        return `<div class="cart-row">
+            <div class="cart-thumb">${ p.img ? `<img src="${p.img}">` : (p.emoji||'🛍️') }</div>
+            <div class="cart-info">
+                <h4>${p.name}</h4>
+                <div class="opt">${(CATEGORIES.find(c=>c.key===p.cat)||{}).title||p.cat} · ${p.sub||''}</div>
+                <div class="cp">${fmt(p.price)} so'm · <span style="color:${stColor};">ombor: ${st}</span></div>
+            </div>
+            <div class="cart-ctrl" style="flex-direction:column;gap:6px;">
+                <button onclick="openAdminForm('${p.id}')" title="Tahrirlash" style="background:var(--rose-tint);color:var(--rose-deep);">✏️</button>
+                <button onclick="deleteAdminProduct('${p.id}')" title="O'chirish" style="color:var(--danger);">🗑</button>
+            </div>
+        </div>`;
+    }).join('');
+    document.getElementById('admin-body').innerHTML = `
+        <div style="display:flex;gap:10px;margin-bottom:14px;">
+            <button class="btn-ghost" style="width:auto;padding:0 16px;" onclick="renderAdminDashboard()">‹ Orqaga</button>
+            <button class="btn-primary" style="flex:1;" onclick="openAdminForm(null)">➕ Yangi mahsulot</button>
+        </div>
+        ${ productsDB.length ? rows : emptyHTML('Hali mahsulot yo\'q','🛍️') }
+    `;
+}
+
+/* ---------- PRODUCT FORM (add/edit) ---------- */
+function openAdminForm(id){
+    afEditId = id;
+    const p = id ? getProduct(id) : null;
+    const catOpts = CATEGORIES.map(c => `<option value="${c.key}" ${p&&p.cat===c.key?'selected':''}>${c.ic} ${c.title}</option>`).join('');
+    document.getElementById('af-title').innerText = p ? 'Mahsulotni tahrirlash' : 'Yangi mahsulot';
+    const lbl = (t)=>`<label style="font-size:12px;font-weight:700;color:var(--text-muted);display:block;margin:8px 0 5px;">${t}</label>`;
+    document.getElementById('admin-form-body').innerHTML = `
+        ${lbl('Nomi *')}<input id="af-name" class="lux-input" style="margin:0 0 4px;" placeholder="Masalan: Velvet Matte lab bo'yog'i" value="${p?escAttr(p.name):''}">
+        ${lbl('Brend')}<input id="af-brand" class="lux-input" style="margin:0 0 4px;" placeholder="Ivy Paris" value="${p?escAttr(p.brand||''):''}">
+        ${lbl('Kategoriya *')}<select id="af-cat" class="lux-input" style="margin:0 0 4px;">${catOpts}</select>
+        ${lbl('Subkategoriya (masalan: Lab, Serum, Sirg\'a)')}<input id="af-sub" class="lux-input" style="margin:0 0 4px;" placeholder="Lab" value="${p?escAttr(p.sub||''):''}">
+        <div style="display:flex;gap:10px;">
+            <div style="flex:1;">${lbl('Narx (so\'m) *')}<input id="af-price" type="number" class="lux-input" style="margin:0;" placeholder="89000" value="${p?(p.price||''):''}"></div>
+            <div style="flex:1;">${lbl('Eski narx (ixtiyoriy)')}<input id="af-old" type="number" class="lux-input" style="margin:0;" placeholder="119000" value="${p&&p.oldPrice?p.oldPrice:''}"></div>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <div style="flex:1;">${lbl('Ombor (dona)')}<input id="af-stock" type="number" class="lux-input" style="margin:0;" placeholder="10" value="${p&&typeof p.stock==='number'?p.stock:''}"></div>
+            <div style="flex:1;">${lbl('Emoji')}<input id="af-emoji" class="lux-input" style="margin:0;" placeholder="💄" value="${p?escAttr(p.emoji||''):''}"></div>
+        </div>
+        ${lbl('Rasm URL (ixtiyoriy)')}<input id="af-img" class="lux-input" style="margin:0 0 4px;" placeholder="https://..." value="${p?escAttr(p.img||''):''}">
+        ${lbl('Tavsif')}<textarea id="af-desc" class="lux-input" style="margin:0 0 4px;min-height:70px;" placeholder="Mahsulot haqida qisqa, jozibali tavsif">${p?escHtml(p.desc||''):''}</textarea>
+        ${lbl('Ranglar / o\'lchamlar (vergul bilan: Rose,Mauve)')}<input id="af-shades" class="lux-input" style="margin:0 0 4px;" placeholder="Rose Nude, Cherry, Mauve" value="${p&&p.shades?escAttr(p.shades.join(', ')):''}">
+        <label style="display:flex;align-items:center;gap:10px;margin:12px 0;font-size:13px;font-weight:600;color:var(--text);">
+            <input id="af-trending" type="checkbox" style="width:20px;height:20px;accent-color:var(--rose-deep);" ${p&&p.trending?'checked':''}> 🔥 Trendda ko'rsatilsin
+        </label>
+        <button class="btn-primary" style="margin-top:6px;" onclick="saveAdminProduct()">${p?'💾 Saqlash':'➕ Qo\'shish'}</button>
+        ${ p ? `<button class="btn-ghost" style="margin-top:10px;color:var(--danger);" onclick="deleteAdminProduct('${p.id}')">🗑 O'chirish</button>` : '' }
+    `;
+    if (activeModal !== 'adminFormModal') openModal('adminFormModal');
+}
+function closeAdminForm(){ closeModal(); }
+function escAttr(s){ return String(s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function escHtml(s){ return String(s).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function saveAdminProduct(){
+    const v = id => (document.getElementById(id)?document.getElementById(id).value:'').trim();
+    const name = v('af-name'); const price = parseInt(v('af-price'))||0;
+    if (!name || !price){ showToast('Nom va narx majburiy','warning'); Haptics.warning(); return; }
+    const shades = v('af-shades') ? v('af-shades').split(',').map(s=>s.trim()).filter(Boolean) : null;
+    const obj = {
+        name, brand: v('af-brand')||'Ivy', cat: v('af-cat')||'makeup', sub: v('af-sub')||'',
+        price, oldPrice: parseInt(v('af-old'))||0,
+        stock: v('af-stock')!=='' ? (parseInt(v('af-stock'))||0) : 99,
+        emoji: v('af-emoji')||'🛍️', img: v('af-img')||'', desc: v('af-desc')||'',
+        shades: (shades && shades.length)?shades:null,
+        trending: document.getElementById('af-trending').checked,
+        rating: 5.0, reviews: 0, soldToday: 0, related: []
+    };
+    if (afEditId){
+        const i = productsDB.findIndex(p => String(p.id)===String(afEditId));
+        if (i!==-1){ obj.id = productsDB[i].id; obj.rating = productsDB[i].rating||5.0; obj.reviews = productsDB[i].reviews||0; obj.related = productsDB[i].related||[]; productsDB[i] = obj; }
+    } else {
+        obj.id = 'p' + Date.now();
+        productsDB.push(obj);
+    }
+    persistProducts();
+    closeAdminForm();
+    showToast(afEditId?'Saqlandi 💾':'Qo\'shildi ✨','success'); Haptics.success();
+    // mijoz ko'rinishlarini yangilash
+    renderCats(); renderHome();
+    setTimeout(()=>{ openModal('adminModal'); adminGoProducts(); }, 300);
+}
+function deleteAdminProduct(id){
+    const p = getProduct(id); if (!p) return;
+    const i = productsDB.findIndex(x => String(x.id)===String(id));
+    if (i===-1) return;
+    productsDB.splice(i,1);
+    persistProducts();
+    if (activeModal==='adminFormModal') closeAdminForm();
+    showToast('O\'chirildi','warning'); Haptics.warning();
+    renderCats(); renderHome();
+    setTimeout(()=>{ openModal('adminModal'); adminGoProducts(); }, 300);
+}
+function persistProducts(){
+    if (firebaseReady && db){
+        (window._authReady||Promise.resolve()).then(()=> db.ref('products').set(productsDB).catch(e=>{ console.warn('[admin] products.set rad etildi:', e&&e.message); showToast('Firebase yozish rad etildi — admin huquqini tekshiring','warning'); }));
+    }
+}
+
+/* ---------- ORDERS MANAGEMENT ---------- */
+function adminGoOrders(){
+    document.getElementById('admin-title').innerText = '📦 Buyurtmalar';
+    document.getElementById('admin-body').innerHTML = `
+        <div style="display:flex;gap:10px;margin-bottom:14px;">
+            <button class="btn-ghost" style="width:auto;padding:0 16px;" onclick="renderAdminDashboard()">‹ Orqaga</button>
+            <button class="btn-ghost" style="flex:1;" onclick="adminLoadOrders()">🔄 Yangilash</button>
+        </div>
+        <div id="admin-orders"></div>`;
+    adminLoadOrders();
+}
+function adminLoadOrders(){
+    const box = document.getElementById('admin-orders'); if (!box) return;
+    box.innerHTML = `<div class="skeleton sk-card" style="height:80px;margin-bottom:10px;"></div><div class="skeleton sk-card" style="height:80px;"></div>`;
+    if (!firebaseReady || !db){
+        // demo: faqat o'z buyurtmalarim
+        adminAllOrders = (myOrders||[]).map((o,idx)=>({ uid:window.currentUser, name:myProfile.name, phone:myProfile.phone, oid:o.id, order:o, idx }));
+        renderAdminOrders(true);
+        return;
+    }
+    (window._authReady||Promise.resolve()).then(()=>{
+        db.ref('users').once('value').then(snap=>{
+            adminAllOrders = [];
+            const all = snap.val()||{};
+            Object.keys(all).forEach(uid=>{
+                const u = all[uid]; const orders = u && u.orders;
+                if (Array.isArray(orders)){
+                    orders.forEach((o,idx)=>{ if(o) adminAllOrders.push({ uid, name:(u.profile&&u.profile.name)||'Mijoz', phone:(u.profile&&u.profile.phone)||'', oid:o.id, order:o, idx }); });
+                }
+            });
+            adminAllOrders.sort((a,b)=> (b.oid||0)-(a.oid||0));
+            renderAdminOrders(false);
+        }).catch(e=>{
+            console.warn('[admin] users o\'qish rad etildi:', e&&e.message);
+            const box2 = document.getElementById('admin-orders');
+            if (box2) box2.innerHTML = emptyHTML('Buyurtmalarni o\'qib bo\'lmadi.<br>Admin huquqi (Firebase admins/'+(window.currentUser||'')+'=true) va auth kerak.','🔒');
+        });
+    });
+}
+const ADMIN_STATUSES = [['kutilmoqda','⏳ Kutilmoqda'],['qabul','✅ Qabul'],['yolda','🚚 Yo\'lda'],['yetkazildi','🏁 Yetkazildi']];
+function renderAdminOrders(demo){
+    const box = document.getElementById('admin-orders'); if (!box) return;
+    if (!adminAllOrders.length){ box.innerHTML = emptyHTML('Hozircha buyurtma yo\'q','📭'); return; }
+    box.innerHTML = (demo?`<div style="font-size:11px;color:var(--warn);margin-bottom:10px;">Demo rejim: faqat shu qurilmadagi buyurtmalar</div>`:'') + adminAllOrders.map(rec=>{
+        const o = rec.order;
+        let items='';
+        for (const k in (o.items||{})){ const [bid]=k.split('||'); const p=getProduct(bid); items += `<div style="font-size:11.5px;color:var(--text-muted);">• ${p?p.name:k} × ${o.items[k]}</div>`; }
+        const opts = ADMIN_STATUSES.map(([val,label])=>`<option value="${val}" ${o.status===val?'selected':''}>${label}</option>`).join('');
+        return `<div class="order-card" style="margin:0 0 12px;">
+            <div class="oc-top"><span class="oc-date">📅 ${o.date||''} ${o.time||''}</span>${statusHTML(o.status)}</div>
+            <div class="oc-code">#${o.code||o.oid}</div>
+            <div style="font-size:12px;color:var(--text);margin:4px 0;">👤 ${rec.name} · 📞 ${rec.phone||'—'}</div>
+            <div style="margin:6px 0;">${items}</div>
+            <div class="oc-total" style="margin-bottom:10px;">${fmt(o.total)} so'm · ${o.payment||''}</div>
+            <select class="lux-input" style="margin:0;" onchange="adminSetOrderStatus('${rec.uid}',${rec.idx},this.value)">${opts}</select>
+        </div>`;
+    }).join('');
+}
+function adminSetOrderStatus(uid, idx, status){
+    const rec = adminAllOrders.find(r => String(r.uid)===String(uid) && r.idx===idx);
+    if (rec) rec.order.status = status;
+    Haptics.select();
+    if (firebaseReady && db){
+        (window._authReady||Promise.resolve()).then(()=>{
+            db.ref('users/'+uid+'/orders/'+idx+'/status').set(status)
+                .then(()=>{
+                    showToast('Holat yangilandi','success');
+                    // mijozga xabar (ixtiyoriy)
+                    const label = (ADMIN_STATUSES.find(s=>s[0]===status)||['',''])[1];
+                    if (TG_PROXY.indexOf('YOUR-WORKER')===-1 && rec){
+                        fetch(TG_PROXY, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ chat_id: uid, text:`📦 Buyurtmangiz #${rec.order.code||rec.oid} holati: ${label}` }) }).catch(()=>{});
+                    }
+                })
+                .catch(e=>{ console.warn('[admin] status yozish rad etildi:', e&&e.message); showToast('Yozib bo\'lmadi (huquq?)','warning'); });
+        });
+    } else {
+        // demo: agar o'z buyurtmam bo'lsa, lokal saqlayman
+        if (String(uid)===String(window.currentUser)){ const o = myOrders.find(x=>x.id===rec.oid); if(o){ o.status=status; saveOrders(); } }
+        showToast('Holat yangilandi (demo)','success');
+    }
+}
 </script>
 </body>
 </html>
