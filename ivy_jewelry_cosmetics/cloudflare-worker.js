@@ -1,13 +1,18 @@
 // =============================================================
 //  IVY — Jewelry & Cosmetics — Cloudflare Worker  (paste-safe)
-//  1) "/"     — Telegram xabar yuboruvchi PROXY (sendMessage)
-//  2) "/auth" — Telegram initData HMAC bilan tekshiriladi,
-//               Firebase CUSTOM TOKEN qaytaradi (uid = Telegram id)
+//  ENDPOINTLAR:
+//   1) "/webhook" — Telegram BOT webhook: /start ga chiroyli javob,
+//                   boshqa matnga AI/iliq javob + "Butikni ochish" tugma.
+//                   (Bot 24/7 ishlaydi — kompyuter kerak emas!)
+//   2) "/auth"    — Telegram initData HMAC bilan tekshirib,
+//                   Firebase CUSTOM TOKEN qaytaradi (uid = Telegram id)
+//   3) "/"        — Telegram sendMessage PROXY (Mini App ishlatadi)
 //  Secret'lar: BOT_TOKEN, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
-//  ESLATMA: bu faylda atayin backslash-n belgisi ishlatilmagan
-//  (ba'zi nusxalash vositalari uni buzadi). Newline kerak joyda
-//  String.fromCharCode(10) ishlatilgan.
+//              (ixtiyoriy: GROQ_API_KEY, GROQ_MODEL, WEBHOOK_SECRET)
 // =============================================================
+
+// Do'kon (Mini App) manzili — GitHub Pages
+const MINI_APP_URL = "https://anvarjonaxtamov70.github.io/Avto_A1/ivy_jewelry_cosmetics/";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -28,11 +33,17 @@ export default {
       return new Response(null, { headers: cors });
     }
     if (request.method !== "POST") {
-      return new Response("Faqat POST", { status: 405, headers: cors });
+      return new Response("Ivy Worker ishlayapti. Faqat POST.", { status: 200, headers: cors });
     }
 
     const path = new URL(request.url).pathname;
 
+    // ---------- 1) TELEGRAM WEBHOOK ----------
+    if (path === "/webhook") {
+      return handleWebhook(request, env);
+    }
+
+    // ---------- 2) FIREBASE AUTH ----------
     if (path === "/auth") {
       try {
         const { initData } = await request.json();
@@ -51,6 +62,7 @@ export default {
       }
     }
 
+    // ---------- 3) sendMessage PROXY (Mini App) ----------
     try {
       const body = await request.json();
       const tgRes = await fetch(
@@ -69,6 +81,108 @@ export default {
   },
 };
 
+// =============================================================
+//  TELEGRAM BOT (WEBHOOK) — suhbat qatlami
+// =============================================================
+const AI_SYSTEM =
+  "Sen 'Ivy — Jewelry & Cosmetics' nafis go'zallik va zargarlik butigining xushmuomala, " +
+  "iliq maslahatchisisan. Kosmetika, parvarish, taqinchoq va soch aksessuarlari bo'yicha " +
+  "qisqa, samimiy, ayollarga yoqadigan ohangda javob ber, 1-2 nozik emoji ishlat. " +
+  "Aniq mahsulot/narx so'ralsa 'Pastdagi tugma orqali butigimizga kiring' de. " +
+  "HECH QACHON ochiq havola yozma. Narxni o'zingdan to'qima.";
+
+function kbWebApp() {
+  return { inline_keyboard: [[{ text: "💎 Butikni ochish", web_app: { url: MINI_APP_URL } }]] };
+}
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function greeting(name) {
+  const hi = name ? (", <b>" + escapeHtml(name) + "</b>") : "";
+  return (
+    "Assalomu alaykum" + hi + " va <b>Ivy — Jewelry & Cosmetics</b> butigiga xush kelibsiz! 💄💎\n\n" +
+    "Bu yerda premium kosmetika, nozik parvarish vositalari va nafis taqinchoqlar sizni kutmoqda. " +
+    "Birinchi xaridingiz uchun maxsus sovg'a ham bor 🎁\n\n" +
+    "Pastdagi tugma orqali butigimizga kiring 👇"
+  );
+}
+
+async function tgSend(env, chatId, text, replyMarkup) {
+  const body = { chat_id: chatId, text, parse_mode: "HTML" };
+  if (replyMarkup) body.reply_markup = replyMarkup;
+  try {
+    await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e) { /* indamaymiz */ }
+}
+
+async function groqReply(env, userText) {
+  if (!env.GROQ_API_KEY) return null;
+  try {
+    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.GROQ_API_KEY },
+      body: JSON.stringify({
+        model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        temperature: 0.6,
+        messages: [
+          { role: "system", content: AI_SYSTEM },
+          { role: "user", content: String(userText).slice(0, 800) },
+        ],
+      }),
+    });
+    const d = await r.json();
+    if (d && d.choices && d.choices[0] && d.choices[0].message) {
+      return d.choices[0].message.content;
+    }
+  } catch (e) { /* fallback */ }
+  return null;
+}
+
+async function handleWebhook(request, env) {
+  // ixtiyoriy himoya: setWebhook'da secret_token bergan bo'lsangiz
+  if (env.WEBHOOK_SECRET) {
+    const got = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
+    if (got !== env.WEBHOOK_SECRET) {
+      return new Response("forbidden", { status: 403, headers: cors });
+    }
+  }
+
+  let update;
+  try { update = await request.json(); } catch (e) { return new Response("ok"); }
+
+  const msg = update && (update.message || update.edited_message);
+  if (msg && msg.chat) {
+    const chatId = msg.chat.id;
+    const text = (msg.text || "").trim();
+    const first = (msg.from && msg.from.first_name) ? msg.from.first_name : "";
+
+    if (text === "/start" || text.indexOf("/start ") === 0) {
+      await tgSend(env, chatId, greeting(first), kbWebApp());
+    } else if (text === "/help" || text === "/menu") {
+      await tgSend(env, chatId, "💎 Butigimizdan kosmetika, parvarish va taqinchoqlarni tanlang 👇", kbWebApp());
+    } else if (text === "/contact") {
+      await tgSend(env, chatId, "📞 <b>Ivy bilan aloqa</b>\n🕐 Har kuni 09:00–21:00\n🛡 14 kun kafolat · 100% original 💕", kbWebApp());
+    } else if (text) {
+      let reply = await groqReply(env, text);
+      if (!reply) reply = "Rahmat! 💕 Quyidagi tugma orqali butigimizga kiring 👇";
+      await tgSend(env, chatId, reply, kbWebApp());
+    } else {
+      await tgSend(env, chatId, "💕 Butigimizga marhamat 👇", kbWebApp());
+    }
+  }
+
+  return new Response("ok", { headers: cors });
+}
+
+// =============================================================
+//  FIREBASE CUSTOM TOKEN + initData HMAC
+// =============================================================
 async function verifyTelegramInitData(initData, botToken) {
   if (!botToken) return { ok: false, error: "BOT_TOKEN sozlanmagan" };
 
