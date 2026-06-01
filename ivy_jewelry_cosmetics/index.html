@@ -961,19 +961,27 @@ let db = null, firebaseReady = false;
     } catch(e){ console.warn('[Firebase] init xato — demo rejim:', e.message); db = null; firebaseReady = false; }
 })();
 
-window._authReady = (async function signInToFirebase(){
-    if (!firebaseReady || !firebase.auth) return false;
+/* ============================================================
+   FIREBASE AUTH — qayta chaqirilishi mumkin + aniq holat (diagnostika)
+   ============================================================ */
+let _authState = { tried:false, signedIn:false, uid:null, error:null };
+async function ensureAuth(){
+    if (!firebaseReady || !firebase.auth){ _authState = { tried:true, signedIn:false, uid:null, error:'firebase-off' }; return _authState; }
     try {
-        if (firebase.auth().currentUser) return true;
+        const cur = firebase.auth().currentUser;
+        if (cur){ _authState = { tried:true, signedIn:true, uid:String(cur.uid), error:null }; return _authState; }
         const initData = (tg && tg.initData) ? tg.initData : "";
-        if (!initData) return false;
+        if (!initData){ _authState = { tried:true, signedIn:false, uid:null, error:'no-initdata' }; return _authState; }
+        if (TG_PROXY.indexOf('YOUR-WORKER') !== -1){ _authState = { tried:true, signedIn:false, uid:null, error:'no-proxy' }; return _authState; }
         const res = await fetch(TG_PROXY + '/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ initData }) });
-        const data = await res.json();
-        if (!data || !data.ok || !data.token) return false;
-        await firebase.auth().signInWithCustomToken(data.token);
-        return true;
-    } catch(e){ return false; }
-})();
+        let data = null; try { data = await res.json(); } catch(e){}
+        if (!data || !data.ok || !data.token){ _authState = { tried:true, signedIn:false, uid:null, error:'auth-failed:' + ((data&&data.error)||('HTTP '+res.status)) }; return _authState; }
+        const cred = await firebase.auth().signInWithCustomToken(data.token);
+        _authState = { tried:true, signedIn:true, uid:String((cred&&cred.user&&cred.user.uid)||data.uid||''), error:null };
+        return _authState;
+    } catch(e){ _authState = { tried:true, signedIn:false, uid:null, error:String((e&&e.message)||e) }; return _authState; }
+}
+window._authReady = ensureAuth();   // ilk urinish (yuklanishda)
 
 /* ============================================================
    DEMO KATALOG (Firebase bo'lmasa ishlatiladi)
@@ -1976,6 +1984,47 @@ function revealAdmin(){ const e = document.getElementById('nav-admin'); if (e) e
 function escAttr(s){ return String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function escHtml(s){ return String(s==null?'':s).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+/* ---- Auth diagnostika + qayta urinish ---- */
+function adminRetryAuth(){
+    showToast('Qayta ulanmoqda...','success'); Haptics.light();
+    if (firebaseReady && firebase.auth){ try { firebase.auth().signOut().catch(()=>{}); } catch(e){} }
+    ensureAuth().then(function(){ renderAdminView(); });
+}
+function adminAuthErrHTML(r){
+    const st = r && r.auth;
+    let icon, title, msg, extra='';
+    if (!st || !st.signedIn){
+        icon='🔐'; title = "Firebase'ga kirilmadi";
+        const err = st ? st.error : '';
+        msg = (err==='no-proxy') ? "Worker manzili (TG_PROXY) sozlanmagan."
+            : (err==='no-initdata') ? "Ilovani Telegram bot ichidan oching (brauzerda auth ishlamaydi)."
+            : (err==='firebase-off') ? "Firebase ulanmagan (config tekshiring)."
+            : (err && err.indexOf('auth-failed')===0) ? ("Worker /auth javob bermadi. Cloudflare Worker'da <b>FIREBASE_CLIENT_EMAIL</b> va <b>FIREBASE_PRIVATE_KEY</b> Secret'larini qo'shing. ("+escHtml(err.replace('auth-failed:',''))+")")
+            : "Tarmoq yoki sozlama xatosi.";
+        extra = "Sizning Telegram ID: <b>"+(window.currentUser||'—')+"</b>";
+    } else {
+        icon='🔒'; title = "Ruxsat berilmadi";
+        msg = "Firebase'ga kirildingiz (uid: <b>"+(st.uid||'—')+"</b>), lekin ma'lumotlarni o'qishga ruxsat yo'q. Yangilangan <b>database.rules.json</b> ni Firebase Console → Realtime Database → Rules ga qo'yib <b>Publish</b> qiling (unda admin ID'laringiz yozilgan).";
+    }
+    return `<div style="text-align:center;padding:32px 16px;color:var(--text-muted);">
+        <div style="font-size:46px;margin-bottom:12px;">${icon}</div>
+        <h3 style="font-family:'Playfair Display',serif;font-size:18px;color:var(--text);margin-bottom:8px;">${title}</h3>
+        <p style="font-size:13px;line-height:1.55;">${msg}</p>
+        ${extra?`<p style="font-size:12px;margin-top:10px;">${extra}</p>`:''}
+        <button class="btn-primary" style="margin:16px auto 0;max-width:220px;" onclick="adminRetryAuth()">🔄 Qayta urinish</button>
+    </div>`;
+}
+function refreshAuthBanner(){
+    const el = document.getElementById('admin-auth-banner'); if (!el) return;
+    if (!firebaseReady){ el.innerHTML = '<span style="color:var(--warn);">● Demo rejim (Firebase ulanmagan)</span>'; return; }
+    el.innerHTML = '<span style="color:var(--text-muted);">🔐 Ulanish tekshirilmoqda...</span>';
+    ensureAuth().then(function(st){
+        const e2 = document.getElementById('admin-auth-banner'); if (!e2) return;
+        if (st.signedIn) e2.innerHTML = '<span style="color:var(--ok);">● Firebase: kirdingiz ✓ (admin uid: '+st.uid+')</span>';
+        else e2.innerHTML = '<span style="color:var(--danger);">● Firebase: kirilmagan ✗ — Buyurtma/Mijoz/Statistika ishlamaydi · <u onclick="adminRetryAuth()" style="cursor:pointer;">Qayta urinish</u></span>';
+    });
+}
+
 /* ============================ DASHBOARD ============================ */
 function adminTile(ic, ac, title, sub, fn){
     return `<div class="admin-tile" onclick="${fn}">
@@ -1987,10 +2036,9 @@ function renderAdminDashboard(){
     const total = productsDB.length;
     const low = productsDB.filter(p => typeof p.stock==='number' && p.stock>0 && p.stock<=3).length;
     const out = productsDB.filter(p => typeof p.stock==='number' && p.stock===0).length;
-    const mode = firebaseReady ? '<span style="color:var(--ok);">● Firebase ulangan</span>' : '<span style="color:var(--warn);">● Demo rejim</span>';
     document.getElementById('admin-body').innerHTML = `
         <div class="page">
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">${mode} · Ivy admin</div>
+        <div id="admin-auth-banner" style="font-size:11px;margin-bottom:14px;color:var(--text-muted);">🔐 Ulanish tekshirilmoqda...</div>
         <div class="pf-stats" style="margin:0 0 16px;padding:0;">
             <div class="pf-stat"><div class="n">${total}</div><div class="l">Mahsulot</div></div>
             <div class="pf-stat"><div class="n" style="color:var(--warn);">${low}</div><div class="l">Kam qoldi</div></div>
@@ -2004,6 +2052,7 @@ function renderAdminDashboard(){
         ${adminTile('👥','#ff9f0a','Mijozlar','Foydalanuvchilar bazasi',"adminShow('customers')")}
         ${adminTile('📝','#a855f7','Qoralamalar','Rasmsiz mahsulotlar',"adminShow('drafts')")}
         </div>`;
+    refreshAuthBanner();
 }
 
 /* ============================ MAHSULOT FORMASI + RASM YUKLASH ============================ */
@@ -2225,7 +2274,7 @@ function adminLoadUsers(){
             adminCustomers = window.currentUser ? [{ uid:window.currentUser, name:myProfile.name, phone:myProfile.phone, orders:(myOrders||[]).length, spent }] : [];
             resolve({demo:true}); return;
         }
-        (window._authReady||Promise.resolve()).then(()=>{
+        ensureAuth().then(function(st){
             db.ref('users').once('value').then(snap=>{
                 adminAllOrders=[]; adminCustomers=[];
                 const all = snap.val()||{};
@@ -2237,8 +2286,8 @@ function adminLoadUsers(){
                 });
                 adminAllOrders.sort((a,b)=>(b.oid||0)-(a.oid||0));
                 adminCustomers.sort((a,b)=>b.spent-a.spent);
-                resolve({demo:false});
-            }).catch(e=>{ resolve({error:e}); });
+                resolve({demo:false, auth:st});
+            }).catch(e=>{ resolve({error:e, auth:st}); });
         });
     });
 }
@@ -2255,7 +2304,7 @@ function renderOrdersView(){
 }
 function renderAdminOrders(r){
     const box = document.getElementById('admin-orders'); if (!box) return;
-    if (r && r.error){ box.innerHTML = emptyHTML("O'qib bo'lmadi.<br>Firebase admins/"+(window.currentUser||'')+"=true va auth kerak.",'🔒'); return; }
+    if (r && r.error){ box.innerHTML = adminAuthErrHTML(r); return; }
     if (!adminAllOrders.length){ box.innerHTML = emptyHTML("Hozircha buyurtma yo'q",'📭'); return; }
     box.innerHTML = (r&&r.demo?`<div style="font-size:11px;color:var(--warn);margin-bottom:10px;">Demo rejim: faqat shu qurilma</div>`:'') + adminAllOrders.map(rec=>{
         const o = rec.order; let items='';
@@ -2339,7 +2388,7 @@ function renderCustomersView(){
 }
 function renderAdminCustomers(r){
     const box = document.getElementById('cust-list'); if (!box) return;
-    if (r && r.error){ box.innerHTML = emptyHTML("O'qib bo'lmadi (admin huquqi kerak)",'🔒'); return; }
+    if (r && r.error){ box.innerHTML = adminAuthErrHTML(r); return; }
     const q = (document.getElementById('cust-search')?document.getElementById('cust-search').value:'').trim().toLowerCase();
     let list = adminCustomers.slice();
     if (q) list = list.filter(c => (c.name||'').toLowerCase().includes(q) || String(c.phone).toLowerCase().includes(q) || String(c.uid).toLowerCase().includes(q));
@@ -2377,7 +2426,7 @@ function renderStatsView(){
 }
 function renderAdminStats(r){
     const box = document.getElementById('stats-body'); if (!box) return;
-    if (r && r.error){ box.innerHTML = emptyHTML("O'qib bo'lmadi (admin huquqi kerak)",'🔒'); return; }
+    if (r && r.error){ box.innerHTML = adminAuthErrHTML(r); return; }
     const orders = adminAllOrders.map(x=>x.order);
     const revenue = orders.reduce((s,o)=>s+(o.total||0),0);
     const cnt = orders.length;
