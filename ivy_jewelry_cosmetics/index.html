@@ -898,7 +898,7 @@ html[data-theme="dark"] .admin-topbar { background:linear-gradient(180deg, rgba(
    Avto_A1 arxitekturasi asosida (Telegram WebApp + Firebase RTDB +
    Cloudflare Worker proxy), nafis butik uchun qayta ishlangan.
    ============================================================ */
-window.IVY_BUILD = 'ivy-v1.0.0';
+window.IVY_BUILD = 'ivy-v1.2.0';
 try { console.log('%c[Ivy] BUILD ' + window.IVY_BUILD, 'color:#B76E79;font-weight:bold;'); } catch(e){}
 
 /* ---------- Telegram WebApp (himoyali) ---------- */
@@ -1320,6 +1320,7 @@ function renderAdminView(){
     else if (top.v==='customers') renderCustomersView();
     else if (top.v==='drafts') renderDraftsView();
     else if (top.v==='stats') renderStatsView();
+    else if (top.v==='conntest') renderConnTest();
     else if (top.v==='form') renderProductForm(pr.id);
     else if (top.v==='chat') renderChatView(pr.uid, pr.idx);
     const body = document.getElementById('admin-body'); if (body) body.scrollTop = 0;
@@ -2025,6 +2026,51 @@ function refreshAuthBanner(){
     });
 }
 
+/* ---- 🔧 Ulanish diagnostikasi (Worker /auth ni bevosita sinaydi) ---- */
+function renderConnTest(){
+    adminSetTitle('🔧 Ulanish testi');
+    document.getElementById('admin-body').innerHTML = `<div class="page">
+        <div class="section-sub" style="padding:0 0 12px;">Har bir bosqich tekshirilmoqda. ❌ chiqsa — yonidagi izoh bo'yicha tuzating.</div>
+        <div id="ct-out"></div>
+        <button class="btn-ghost" style="margin-top:16px;" onclick="renderConnTest()">🔄 Qayta test</button>
+        </div>`;
+    const lines = [];
+    const out = ()=>{ const e=document.getElementById('ct-out'); if(e) e.innerHTML = lines.map(l=>`<div style="font-size:12.5px;line-height:1.5;padding:10px 12px;margin-bottom:8px;border-radius:11px;background:var(--surface-2);border:1px solid var(--border);">${l}</div>`).join(''); };
+    const add = (label,val,ok)=>{ lines.push((ok===true?'✅ ':ok===false?'❌ ':'• ')+'<b>'+label+':</b> '+escHtml(String(val))); out(); };
+    add('Worker manzili (TG_PROXY)', TG_PROXY, TG_PROXY.indexOf('YOUR-WORKER')===-1);
+    const initData = (tg && tg.initData) ? tg.initData : '';
+    add('Telegram initData', initData ? ('bor — '+initData.length+' belgi') : "YO'Q (ilovani Telegram bot ICHIDAN oching)", !!initData);
+    add('Sizning Telegram ID', window.currentUser||'—', !!window.currentUser);
+    add('Firebase config', firebaseReady ? 'ulangan' : "YO'Q", firebaseReady);
+    if (!firebaseReady){ add('Natija', 'Firebase config to\'ldirilmagan', false); return; }
+    if (!initData){ add('Natija', "Telegram initData yo'q — bot ichidan oching (Menu/▶️ tugma orqali)", false); return; }
+    if (TG_PROXY.indexOf('YOUR-WORKER')!==-1){ add('Natija', "TG_PROXY sozlanmagan", false); return; }
+    add('Worker /auth', "so'rov yuborilmoqda...", null);
+    fetch(TG_PROXY + '/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ initData }) })
+        .then(res => res.text().then(txt => ({ res, txt })))
+        .then(o => {
+            add('Worker /auth HTTP holati', o.res.status + (o.res.ok?' (OK)':' (xato)'), o.res.ok);
+            let data=null; try { data = JSON.parse(o.txt); } catch(e){}
+            if (data && data.ok && data.token){
+                add('Worker javobi', 'token olindi ✓', true);
+                firebase.auth().signInWithCustomToken(data.token)
+                    .then(c => { add('Firebase kirish', 'muvaffaqiyatli ✓ — uid=' + (c.user && c.user.uid), true); add('🎉 Natija', 'HAMMASI JOYIDA! Endi Buyurtma/Mijoz/Statistika ishlaydi. Orqaga qaytib qarang.', true); })
+                    .catch(e => { add('Firebase kirish', e.message, false); add('Tavsiya', "Token bor, lekin kirish xato — service account boshqa Firebase loyihasiniki bo'lishi mumkin (ivyj-6d8e4 bo'lsin).", false); });
+            } else {
+                const err = (data && data.error) ? data.error : (o.txt ? o.txt.slice(0,200) : 'bo\'sh javob');
+                add('Worker javobi', 'xato: ' + err, false);
+                let hint = '';
+                if (/imzo|hash/i.test(err)) hint = "BOT_TOKEN noto'g'ri (revoke qilingan yoki boshqa botniki). Worker'dagi BOT_TOKEN ni shu bot tokeniga yangilang.";
+                else if (/FIREBASE_/.test(err)) hint = "Worker'da FIREBASE_CLIENT_EMAIL va/yoki FIREBASE_PRIVATE_KEY Secret yo'q. Service account JSON'dan qo'shing.";
+                else if (/BOT_TOKEN/.test(err)) hint = "Worker'da BOT_TOKEN Secret yo'q.";
+                else if (/eskirgan|expired/i.test(err)) hint = "initData eskirgan — botni yopib, qayta oching.";
+                else hint = "Worker kodi to'liq (auth qismi bilan) deploy qilinmagan bo'lishi mumkin.";
+                add('💡 Tavsiya', hint, false);
+            }
+        })
+        .catch(e => { add('Worker /auth', "so'rov muvaffaqiyatsiz: " + e.message, false); add('💡 Tavsiya', "Worker deploy qilinmagan, URL xato, yoki CORS muammosi.", false); });
+}
+
 /* ============================ DASHBOARD ============================ */
 function adminTile(ic, ac, title, sub, fn){
     return `<div class="admin-tile" onclick="${fn}">
@@ -2039,6 +2085,7 @@ function renderAdminDashboard(){
     document.getElementById('admin-body').innerHTML = `
         <div class="page">
         <div id="admin-auth-banner" style="font-size:11px;margin-bottom:14px;color:var(--text-muted);">🔐 Ulanish tekshirilmoqda...</div>
+        <button class="btn-ghost" style="margin-bottom:14px;" onclick="adminShow('conntest')">🔧 Ulanishni tekshirish (diagnostika)</button>
         <div class="pf-stats" style="margin:0 0 16px;padding:0;">
             <div class="pf-stat"><div class="n">${total}</div><div class="l">Mahsulot</div></div>
             <div class="pf-stat"><div class="n" style="color:var(--warn);">${low}</div><div class="l">Kam qoldi</div></div>
