@@ -857,6 +857,21 @@ html[data-theme="dark"] .bottom-nav { background:linear-gradient(180deg, rgba(35
     </div>
 </div>
 
+<!-- ===== ADMIN: mijoz bilan chat ===== -->
+<div class="modal-overlay" id="adminChatModal">
+    <div class="modal-standard" style="max-height:88vh;">
+        <div class="modal-grab"></div>
+        <div class="modal-header"><h2 id="ac-title" style="font-size:17px;">💬 Mijoz bilan yozishma</h2><button class="close-btn" onclick="closeModal()">✕</button></div>
+        <div class="modal-body">
+            <div id="ac-messages" style="display:flex;flex-direction:column;gap:8px;min-height:220px;max-height:46vh;overflow-y:auto;padding:6px 2px 12px;"></div>
+            <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--bg);padding-top:8px;">
+                <input type="text" id="ac-input" class="lux-input" style="margin:0;flex:1;" placeholder="Javob yozing...">
+                <button class="btn-primary" style="width:auto;padding:0 18px;" onclick="sendAdminMessage()">➤</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <script>
 /* ============================================================
@@ -1597,10 +1612,11 @@ function renderOrders(){
 }
 function openOrderDetails(id){
     const o = myOrders.find(x => x.id === id); if (!o) return;
+    window.currentOpenOrderId = id;
     document.getElementById('od-code').innerText = '#' + o.code;
     let items = '';
     for (const k in o.items){ const [bid,opt]=k.split('||'); const p=getProduct(bid); if(!p) continue;
-        items += `<div class="cart-row"><div class="cart-thumb">${p.img?`<img src="${p.img}">`:(p.emoji||'🛍️')}</div><div class="cart-info"><h4>${p.name}</h4>${opt?`<div class="opt">${opt}</div>`:''}<div class="cp">${cart[k]||o.items[k]} x ${fmt(p.price)} so'm</div></div></div>`;
+        items += `<div class="cart-row"><div class="cart-thumb">${p.img?`<img src="${p.img}">`:(p.emoji||'🛍️')}</div><div class="cart-info"><h4>${p.name}</h4>${opt?`<div class="opt">${opt}</div>`:''}<div class="cp">${o.items[k]} x ${fmt(p.price)} so'm</div></div></div>`;
     }
     document.getElementById('od-body').innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -1608,9 +1624,39 @@ function openOrderDetails(id){
         </div>
         ${items}
         <div class="cart-line total" style="margin-top:14px;"><span>Jami</span><span class="v">${fmt(o.total)} so'm</span></div>
-        <div class="pf-menu-item" style="margin:16px 0 0;" onclick="tgLink('https://t.me/')"><span class="mi-ic">💬</span><span class="mi-t">Buyurtma bo'yicha yozish</span><span class="mi-ar">›</span></div>
+        <div style="margin-top:18px;font-family:'Playfair Display',serif;font-size:16px;font-weight:700;">💬 Do'kon bilan yozishma</div>
+        <div id="od-chat" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;min-height:60px;"></div>
+        <div style="display:flex;gap:8px;">
+            <input type="text" id="od-chat-input" class="lux-input" style="margin:0;flex:1;" placeholder="Savolingizni yozing...">
+            <button class="btn-primary" style="width:auto;padding:0 18px;" onclick="sendOrderMessage()">➤</button>
+        </div>
     `;
+    renderOrderChat();
     openModal('orderDetailModal');
+}
+function renderOrderChat(){
+    const box = document.getElementById('od-chat'); if (!box) return;
+    const o = myOrders.find(x => x.id === window.currentOpenOrderId); if (!o) return;
+    const msgs = o.messages || [];
+    if (!msgs.length){ box.innerHTML = `<div style="text-align:center;color:var(--text-faint);font-size:12px;padding:10px;">Savolingiz bo'lsa yozing — operator javob beradi 💕</div>`; return; }
+    box.innerHTML = msgs.map(m => {
+        const me = (m.sender==='user'||m.sender==='mijoz');
+        return `<div style="align-self:${me?'flex-end':'flex-start'};max-width:80%;background:${me?'var(--cta-gradient)':'var(--surface-2)'};color:${me?'#fff':'var(--text)'};padding:9px 13px;border-radius:${me?'16px 16px 4px 16px':'16px 16px 16px 4px'};font-size:13px;border:${me?'none':'1px solid var(--border)'};">${escHtml(m.text)}<div style="font-size:9px;opacity:.7;margin-top:3px;text-align:right;">${m.time||''}</div></div>`;
+    }).join('');
+    setTimeout(()=>{ box.scrollTop = box.scrollHeight; }, 30);
+}
+function sendOrderMessage(){
+    const inp = document.getElementById('od-chat-input'); if (!inp) return;
+    const text = inp.value.trim(); if (!text) return;
+    const idx = myOrders.findIndex(x => x.id === window.currentOpenOrderId); if (idx===-1) return;
+    if (!myOrders[idx].messages) myOrders[idx].messages = [];
+    const now = new Date(); const t = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    myOrders[idx].messages.push({ sender:'user', text, time:t });
+    saveOrders(); inp.value=''; renderOrderChat(); Haptics.light();
+    // adminga bildirish (ixtiyoriy)
+    if (TG_PROXY.indexOf('YOUR-WORKER')===-1 && ADMIN_ID){
+        fetch(TG_PROXY, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ chat_id: ADMIN_ID, text:`💬 #${myOrders[idx].code} — ${myProfile.name}: ${text}` }) }).catch(()=>{});
+    }
 }
 
 /* ============================================================
@@ -1797,87 +1843,72 @@ document.addEventListener('DOMContentLoaded', boot);
 if (document.readyState !== 'loading') boot();
 </script>
 
+
 <script>
 /* ============================================================
-   IVY — ADMIN PANEL (Boshqaruv markazi)
-   Faqat ADMIN_IDS uchun. Mahsulot CRUD + buyurtmalar boshqaruvi + statistika.
-   Firebase to'liq ishlaganda mahsulotlar/buyurtmalar bulutga yoziladi.
+   IVY — ADMIN PANEL (Boshqaruv markazi) — to'liq versiya
+   Avto_A1 admin funksiyalari asosida: Dashboard, Mahsulot (single)
+   qo'shish/tahrirlash, Ombor (qidiruv/filtr/bulk/tezkor saqlash),
+   Buyurtmalar + mijoz bilan chat, Mijozlar, Qoralamalar, Statistika.
+   (Ommaviy xabar va ommaviy/AI tovar qo'shish — qo'shilmagan, talab bo'yicha.)
    ============================================================ */
-let adminAllOrders = [];   // [{uid, name, phone, oid, order, idx}]
-let afEditId = null;       // tahrirlanayotgan mahsulot id (yangi uchun null)
+let adminAllOrders = [];      // [{uid, name, phone, oid, order, idx}]
+let adminCustomers = [];      // [{uid, name, phone, orders, spent}]
+let afEditId = null;          // tahrirlanayotgan mahsulot id
+let adminChatCtx = null;      // {uid, idx}
+let invFilter = 'all';
+let invSelected = {};         // {id:true}
 
 function isAdmin(){
     const u = window.currentUser;
     return ADMIN_IDS.some(a => String(a) === String(u) || a === parseInt(u));
 }
-function revealAdmin(){
-    const e = document.getElementById('pf-admin-entry');
-    if (e) e.classList.toggle('hidden', !isAdmin());
-}
+function revealAdmin(){ const e = document.getElementById('pf-admin-entry'); if (e) e.classList.toggle('hidden', !isAdmin()); }
 function openAdmin(){
-    if (!isAdmin()){ showToast('Bu bo\'lim faqat admin uchun','warning'); return; }
+    if (!isAdmin()){ showToast("Bu bo'lim faqat admin uchun",'warning'); return; }
     if (activeModal && activeModal!=='adminModal') closeModal();
     renderAdminDashboard();
     openModal('adminModal');
 }
+function escAttr(s){ return String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function escHtml(s){ return String(s==null?'':s).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function adminBackBar(extra){
+    return `<div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;">
+        <button class="btn-ghost" style="width:auto;padding:0 16px;" onclick="renderAdminDashboard()">‹ Bosh menyu</button>
+        ${extra||''}</div>`;
+}
 
-/* ---------- DASHBOARD ---------- */
-function adminStats(){
-    const total = productsDB.length;
-    const low = productsDB.filter(p => typeof p.stock==='number' && p.stock>0 && p.stock<=3).length;
-    const out = productsDB.filter(p => typeof p.stock==='number' && p.stock===0).length;
-    return { total, low, out };
+/* ============================ DASHBOARD ============================ */
+function adminTile(ic, ac, title, sub, fn){
+    return `<div class="pf-menu-item" style="margin:0 0 10px;" onclick="${fn}">
+        <span class="mi-ic" style="font-size:20px;width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:${ac}1f;color:${ac};">${ic}</span>
+        <span class="mi-t" style="display:flex;flex-direction:column;"><b style="font-weight:700;">${title}</b><i style="font-style:normal;font-size:11px;color:var(--text-muted);font-weight:500;">${sub}</i></span>
+        <span class="mi-ar">›</span></div>`;
 }
 function renderAdminDashboard(){
     document.getElementById('admin-title').innerText = '🛠 Boshqaruv markazi';
-    const s = adminStats();
-    const mode = firebaseReady ? '<span style="color:var(--ok);">● Firebase ulangan</span>' : '<span style="color:var(--warn);">● Demo rejim (Firebase ulanmagan)</span>';
+    const total = productsDB.length;
+    const low = productsDB.filter(p => typeof p.stock==='number' && p.stock>0 && p.stock<=3).length;
+    const out = productsDB.filter(p => typeof p.stock==='number' && p.stock===0).length;
+    const mode = firebaseReady ? '<span style="color:var(--ok);">● Firebase ulangan</span>' : '<span style="color:var(--warn);">● Demo rejim</span>';
     document.getElementById('admin-body').innerHTML = `
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">${mode}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">${mode} · Ivy admin</div>
         <div class="pf-stats" style="margin:0 0 16px;padding:0;">
-            <div class="pf-stat"><div class="n">${s.total}</div><div class="l">Mahsulot</div></div>
-            <div class="pf-stat"><div class="n" style="color:var(--warn);">${s.low}</div><div class="l">Kam qoldi</div></div>
-            <div class="pf-stat"><div class="n" style="color:var(--danger);">${s.out}</div><div class="l">Tugagan</div></div>
+            <div class="pf-stat"><div class="n">${total}</div><div class="l">Mahsulot</div></div>
+            <div class="pf-stat"><div class="n" style="color:var(--warn);">${low}</div><div class="l">Kam qoldi</div></div>
+            <div class="pf-stat"><div class="n" style="color:var(--danger);">${out}</div><div class="l">Tugagan</div></div>
         </div>
-        <button class="btn-primary" style="margin-bottom:11px;" onclick="openAdminForm(null)">➕ Yangi mahsulot qo'shish</button>
-        <div class="pf-menu-item" style="margin:0 0 10px;" onclick="adminGoProducts()"><span class="mi-ic">🛍</span><span class="mi-t">Mahsulotlar / Ombor</span><span class="mi-ar">›</span></div>
-        <div class="pf-menu-item" style="margin:0 0 10px;" onclick="adminGoOrders()"><span class="mi-ic">📦</span><span class="mi-t">Buyurtmalar</span><span class="mi-ar">›</span></div>
-        <p class="section-sub" style="padding:10px 0 0;text-align:center;">Ivy admin · ${ADMIN_IDS.length} ta admin</p>
+        <button class="btn-primary" style="margin-bottom:14px;" onclick="openAdminForm(null)">➕ Yangi mahsulot qo'shish</button>
+        <div class="section-sub" style="padding:0 0 8px;">Boshqaruv bo'limlari</div>
+        ${adminTile('📦','#3a8dff','Buyurtmalar','Barcha xaridlar va holatlar','adminGoOrders()')}
+        ${adminTile('📊','#34c759','Statistika','Savdo, foyda va hisobot','adminGoStats()')}
+        ${adminTile('🏬','#B76E79','Ombor','Zaxira, narx, tezkor tahrir','adminGoInventory()')}
+        ${adminTile('👥','#ff9f0a','Mijozlar','Foydalanuvchilar bazasi','adminGoCustomers()')}
+        ${adminTile('📝','#a855f7','Qoralamalar','Rasmsiz mahsulotlar','adminGoDrafts()')}
     `;
 }
 
-/* ---------- PRODUCTS LIST ---------- */
-function adminGoProducts(){
-    document.getElementById('admin-title').innerText = '🛍 Mahsulotlar';
-    const rows = productsDB.slice().sort((a,b)=>{
-        const sa = (typeof a.stock==='number')?a.stock:99, sb=(typeof b.stock==='number')?b.stock:99;
-        return sa - sb; // kam qolganlar tepada
-    }).map(p => {
-        const st = (typeof p.stock==='number')?p.stock:'∞';
-        const stColor = (p.stock===0)?'var(--danger)':(p.stock<=3?'var(--warn)':'var(--text-muted)');
-        return `<div class="cart-row">
-            <div class="cart-thumb">${ p.img ? `<img src="${p.img}">` : (p.emoji||'🛍️') }</div>
-            <div class="cart-info">
-                <h4>${p.name}</h4>
-                <div class="opt">${(CATEGORIES.find(c=>c.key===p.cat)||{}).title||p.cat} · ${p.sub||''}</div>
-                <div class="cp">${fmt(p.price)} so'm · <span style="color:${stColor};">ombor: ${st}</span></div>
-            </div>
-            <div class="cart-ctrl" style="flex-direction:column;gap:6px;">
-                <button onclick="openAdminForm('${p.id}')" title="Tahrirlash" style="background:var(--rose-tint);color:var(--rose-deep);">✏️</button>
-                <button onclick="deleteAdminProduct('${p.id}')" title="O'chirish" style="color:var(--danger);">🗑</button>
-            </div>
-        </div>`;
-    }).join('');
-    document.getElementById('admin-body').innerHTML = `
-        <div style="display:flex;gap:10px;margin-bottom:14px;">
-            <button class="btn-ghost" style="width:auto;padding:0 16px;" onclick="renderAdminDashboard()">‹ Orqaga</button>
-            <button class="btn-primary" style="flex:1;" onclick="openAdminForm(null)">➕ Yangi mahsulot</button>
-        </div>
-        ${ productsDB.length ? rows : emptyHTML('Hali mahsulot yo\'q','🛍️') }
-    `;
-}
-
-/* ---------- PRODUCT FORM (add/edit) ---------- */
+/* ============================ PRODUCT FORM ============================ */
 function openAdminForm(id){
     afEditId = id;
     const p = id ? getProduct(id) : null;
@@ -1885,33 +1916,30 @@ function openAdminForm(id){
     document.getElementById('af-title').innerText = p ? 'Mahsulotni tahrirlash' : 'Yangi mahsulot';
     const lbl = (t)=>`<label style="font-size:12px;font-weight:700;color:var(--text-muted);display:block;margin:8px 0 5px;">${t}</label>`;
     document.getElementById('admin-form-body').innerHTML = `
-        ${lbl('Nomi *')}<input id="af-name" class="lux-input" style="margin:0 0 4px;" placeholder="Masalan: Velvet Matte lab bo'yog'i" value="${p?escAttr(p.name):''}">
-        ${lbl('Brend')}<input id="af-brand" class="lux-input" style="margin:0 0 4px;" placeholder="Ivy Paris" value="${p?escAttr(p.brand||''):''}">
+        ${lbl('Nomi *')}<input id="af-name" class="lux-input" style="margin:0 0 4px;" placeholder="Velvet Matte lab bo'yog'i" value="${escAttr(p?p.name:'')}">
+        ${lbl('Brend')}<input id="af-brand" class="lux-input" style="margin:0 0 4px;" placeholder="Ivy Paris" value="${escAttr(p?(p.brand||''):'')}">
         ${lbl('Kategoriya *')}<select id="af-cat" class="lux-input" style="margin:0 0 4px;">${catOpts}</select>
-        ${lbl('Subkategoriya (masalan: Lab, Serum, Sirg\'a)')}<input id="af-sub" class="lux-input" style="margin:0 0 4px;" placeholder="Lab" value="${p?escAttr(p.sub||''):''}">
+        ${lbl("Subkategoriya (Lab, Serum, Sirg'a...)")}<input id="af-sub" class="lux-input" style="margin:0 0 4px;" placeholder="Lab" value="${escAttr(p?(p.sub||''):'')}">
         <div style="display:flex;gap:10px;">
-            <div style="flex:1;">${lbl('Narx (so\'m) *')}<input id="af-price" type="number" class="lux-input" style="margin:0;" placeholder="89000" value="${p?(p.price||''):''}"></div>
-            <div style="flex:1;">${lbl('Eski narx (ixtiyoriy)')}<input id="af-old" type="number" class="lux-input" style="margin:0;" placeholder="119000" value="${p&&p.oldPrice?p.oldPrice:''}"></div>
+            <div style="flex:1;">${lbl("Narx (so'm) *")}<input id="af-price" type="number" class="lux-input" style="margin:0;" placeholder="89000" value="${p?(p.price||''):''}"></div>
+            <div style="flex:1;">${lbl('Eski narx')}<input id="af-old" type="number" class="lux-input" style="margin:0;" placeholder="119000" value="${p&&p.oldPrice?p.oldPrice:''}"></div>
         </div>
         <div style="display:flex;gap:10px;">
             <div style="flex:1;">${lbl('Ombor (dona)')}<input id="af-stock" type="number" class="lux-input" style="margin:0;" placeholder="10" value="${p&&typeof p.stock==='number'?p.stock:''}"></div>
-            <div style="flex:1;">${lbl('Emoji')}<input id="af-emoji" class="lux-input" style="margin:0;" placeholder="💄" value="${p?escAttr(p.emoji||''):''}"></div>
+            <div style="flex:1;">${lbl('Emoji')}<input id="af-emoji" class="lux-input" style="margin:0;" placeholder="💄" value="${escAttr(p?(p.emoji||''):'')}"></div>
         </div>
-        ${lbl('Rasm URL (ixtiyoriy)')}<input id="af-img" class="lux-input" style="margin:0 0 4px;" placeholder="https://..." value="${p?escAttr(p.img||''):''}">
-        ${lbl('Tavsif')}<textarea id="af-desc" class="lux-input" style="margin:0 0 4px;min-height:70px;" placeholder="Mahsulot haqida qisqa, jozibali tavsif">${p?escHtml(p.desc||''):''}</textarea>
-        ${lbl('Ranglar / o\'lchamlar (vergul bilan: Rose,Mauve)')}<input id="af-shades" class="lux-input" style="margin:0 0 4px;" placeholder="Rose Nude, Cherry, Mauve" value="${p&&p.shades?escAttr(p.shades.join(', ')):''}">
+        ${lbl('Rasm URL (ixtiyoriy)')}<input id="af-img" class="lux-input" style="margin:0 0 4px;" placeholder="https://..." value="${escAttr(p?(p.img||''):'')}">
+        ${lbl('Tavsif')}<textarea id="af-desc" class="lux-input" style="margin:0 0 4px;min-height:70px;" placeholder="Qisqa, jozibali tavsif">${escHtml(p?(p.desc||''):'')}</textarea>
+        ${lbl("Ranglar / o'lchamlar (vergul bilan)")}<input id="af-shades" class="lux-input" style="margin:0 0 4px;" placeholder="Rose Nude, Cherry, Mauve" value="${escAttr(p&&p.shades?p.shades.join(', '):'')}">
         <label style="display:flex;align-items:center;gap:10px;margin:12px 0;font-size:13px;font-weight:600;color:var(--text);">
             <input id="af-trending" type="checkbox" style="width:20px;height:20px;accent-color:var(--rose-deep);" ${p&&p.trending?'checked':''}> 🔥 Trendda ko'rsatilsin
         </label>
-        <button class="btn-primary" style="margin-top:6px;" onclick="saveAdminProduct()">${p?'💾 Saqlash':'➕ Qo\'shish'}</button>
+        <button class="btn-primary" style="margin-top:6px;" onclick="saveAdminProduct()">${p?'💾 Saqlash':"➕ Qo'shish"}</button>
         ${ p ? `<button class="btn-ghost" style="margin-top:10px;color:var(--danger);" onclick="deleteAdminProduct('${p.id}')">🗑 O'chirish</button>` : '' }
     `;
     if (activeModal !== 'adminFormModal') openModal('adminFormModal');
 }
 function closeAdminForm(){ closeModal(); }
-function escAttr(s){ return String(s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-function escHtml(s){ return String(s).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
 function saveAdminProduct(){
     const v = id => (document.getElementById(id)?document.getElementById(id).value:'').trim();
     const name = v('af-name'); const price = parseInt(v('af-price'))||0;
@@ -1928,90 +1956,180 @@ function saveAdminProduct(){
     };
     if (afEditId){
         const i = productsDB.findIndex(p => String(p.id)===String(afEditId));
-        if (i!==-1){ obj.id = productsDB[i].id; obj.rating = productsDB[i].rating||5.0; obj.reviews = productsDB[i].reviews||0; obj.related = productsDB[i].related||[]; productsDB[i] = obj; }
-    } else {
-        obj.id = 'p' + Date.now();
-        productsDB.push(obj);
-    }
+        if (i!==-1){ obj.id = productsDB[i].id; obj.rating = productsDB[i].rating||5.0; obj.reviews = productsDB[i].reviews||0; obj.related = productsDB[i].related||[]; obj.soldToday = productsDB[i].soldToday||0; productsDB[i] = obj; }
+    } else { obj.id = 'p' + Date.now(); productsDB.push(obj); }
     persistProducts();
     closeAdminForm();
-    showToast(afEditId?'Saqlandi 💾':'Qo\'shildi ✨','success'); Haptics.success();
-    // mijoz ko'rinishlarini yangilash
+    showToast(afEditId?'Saqlandi 💾':"Qo'shildi ✨",'success'); Haptics.success();
     renderCats(); renderHome();
-    setTimeout(()=>{ openModal('adminModal'); adminGoProducts(); }, 300);
+    setTimeout(()=>{ openModal('adminModal'); adminGoInventory(); }, 300);
 }
 function deleteAdminProduct(id){
-    const p = getProduct(id); if (!p) return;
     const i = productsDB.findIndex(x => String(x.id)===String(id));
     if (i===-1) return;
     productsDB.splice(i,1);
     persistProducts();
     if (activeModal==='adminFormModal') closeAdminForm();
-    showToast('O\'chirildi','warning'); Haptics.warning();
+    showToast("O'chirildi",'warning'); Haptics.warning();
     renderCats(); renderHome();
-    setTimeout(()=>{ openModal('adminModal'); adminGoProducts(); }, 300);
+    setTimeout(()=>{ openModal('adminModal'); adminGoInventory(); }, 300);
 }
 function persistProducts(){
     if (firebaseReady && db){
-        (window._authReady||Promise.resolve()).then(()=> db.ref('products').set(productsDB).catch(e=>{ console.warn('[admin] products.set rad etildi:', e&&e.message); showToast('Firebase yozish rad etildi — admin huquqini tekshiring','warning'); }));
+        (window._authReady||Promise.resolve()).then(()=> db.ref('products').set(productsDB).catch(e=>{ console.warn('[admin] products.set rad:', e&&e.message); showToast("Yozish rad etildi — admin huquqini tekshiring",'warning'); }));
     }
 }
 
-/* ---------- ORDERS MANAGEMENT ---------- */
-function adminGoOrders(){
-    document.getElementById('admin-title').innerText = '📦 Buyurtmalar';
+/* ============================ OMBOR (INVENTORY) ============================ */
+function adminGoInventory(){
+    document.getElementById('admin-title').innerText = '🏬 Ombor';
+    const chips = [['all','Hammasi']].concat(CATEGORIES.map(c=>[c.key, c.ic+' '+c.title]));
     document.getElementById('admin-body').innerHTML = `
-        <div style="display:flex;gap:10px;margin-bottom:14px;">
-            <button class="btn-ghost" style="width:auto;padding:0 16px;" onclick="renderAdminDashboard()">‹ Orqaga</button>
-            <button class="btn-ghost" style="flex:1;" onclick="adminLoadOrders()">🔄 Yangilash</button>
+        ${adminBackBar(`<button class="btn-primary" style="flex:1;" onclick="openAdminForm(null)">➕ Yangi</button>`)}
+        <input type="text" id="inv-search" class="search-box" placeholder="🔍 Nomi yoki brend bo'yicha..." oninput="renderInventory()" style="margin-bottom:10px;">
+        <div class="quick-chips" style="padding:0 0 8px;" id="inv-chips">
+            ${chips.map(([f,t])=>`<span class="chip ${f===invFilter?'selected':''}" onclick="setInvFilter('${f}')">${t}</span>`).join('')}
         </div>
-        <div id="admin-orders"></div>`;
-    adminLoadOrders();
+        <div id="inv-bulk" style="display:none;background:var(--rose-tint);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:12px;"></div>
+        <div id="inv-list"></div>`;
+    renderInventory();
 }
-function adminLoadOrders(){
-    const box = document.getElementById('admin-orders'); if (!box) return;
-    box.innerHTML = `<div class="skeleton sk-card" style="height:80px;margin-bottom:10px;"></div><div class="skeleton sk-card" style="height:80px;"></div>`;
-    if (!firebaseReady || !db){
-        // demo: faqat o'z buyurtmalarim
-        adminAllOrders = (myOrders||[]).map((o,idx)=>({ uid:window.currentUser, name:myProfile.name, phone:myProfile.phone, oid:o.id, order:o, idx }));
-        renderAdminOrders(true);
-        return;
-    }
-    (window._authReady||Promise.resolve()).then(()=>{
-        db.ref('users').once('value').then(snap=>{
-            adminAllOrders = [];
-            const all = snap.val()||{};
-            Object.keys(all).forEach(uid=>{
-                const u = all[uid]; const orders = u && u.orders;
-                if (Array.isArray(orders)){
-                    orders.forEach((o,idx)=>{ if(o) adminAllOrders.push({ uid, name:(u.profile&&u.profile.name)||'Mijoz', phone:(u.profile&&u.profile.phone)||'', oid:o.id, order:o, idx }); });
-                }
-            });
-            adminAllOrders.sort((a,b)=> (b.oid||0)-(a.oid||0));
-            renderAdminOrders(false);
-        }).catch(e=>{
-            console.warn('[admin] users o\'qish rad etildi:', e&&e.message);
-            const box2 = document.getElementById('admin-orders');
-            if (box2) box2.innerHTML = emptyHTML('Buyurtmalarni o\'qib bo\'lmadi.<br>Admin huquqi (Firebase admins/'+(window.currentUser||'')+'=true) va auth kerak.','🔒');
+function setInvFilter(f){ invFilter = f; document.querySelectorAll('#inv-chips .chip').forEach(c=>c.classList.remove('selected')); Haptics.select(); const chips=document.querySelectorAll('#inv-chips .chip'); chips.forEach(c=>{ if(c.getAttribute('onclick').indexOf("'"+f+"'")>-1) c.classList.add('selected'); }); renderInventory(); }
+function invList(){
+    const q = (document.getElementById('inv-search')?document.getElementById('inv-search').value:'').trim().toLowerCase();
+    let list = productsDB.slice();
+    if (invFilter!=='all') list = list.filter(p=>p.cat===invFilter);
+    if (q) list = list.filter(p => (p.name||'').toLowerCase().includes(q) || (p.brand||'').toLowerCase().includes(q));
+    list.sort((a,b)=>{ const sa=(typeof a.stock==='number')?a.stock:99, sb=(typeof b.stock==='number')?b.stock:99; return sa-sb; });
+    return list;
+}
+function renderInventory(){
+    const box = document.getElementById('inv-list'); if (!box) return;
+    const list = invList();
+    if (!list.length){ box.innerHTML = emptyHTML('Mahsulot topilmadi','🔍'); invUpdateBulkBar(); return; }
+    box.innerHTML = list.map(p=>{
+        const st = (typeof p.stock==='number')?p.stock:99;
+        const stColor = (st===0)?'var(--danger)':(st<=3?'var(--warn)':'var(--ok)');
+        const tag = (st===0)?'Tugagan':(st<=3?'Kam qoldi':'');
+        const sel = invSelected[p.id]?'checked':'';
+        return `<div class="cart-row" style="border-left:3px solid ${stColor};padding-left:8px;">
+            <input type="checkbox" ${sel} onchange="invToggleSelect('${p.id}')" style="width:20px;height:20px;accent-color:var(--rose-deep);flex-shrink:0;">
+            <div class="cart-thumb" style="width:46px;height:46px;">${ p.img ? `<img src="${p.img}">` : (p.emoji||'🛍️') }</div>
+            <div class="cart-info">
+                <h4 style="font-size:13px;">${p.name}</h4>
+                <div class="opt">${fmt(p.price)} so'm ${tag?`· <b style="color:${stColor};">${tag}</b>`:''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <input type="number" id="inv-st-${p.id}" value="${st}" style="width:54px;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);text-align:center;font-weight:700;">
+                <button onclick="fastSaveStock('${p.id}')" style="background:var(--cta-gradient);color:#fff;width:34px;height:34px;border-radius:10px;font-size:15px;">✓</button>
+                <button onclick="openAdminForm('${p.id}')" style="color:var(--rose-deep);font-size:15px;">✏️</button>
+            </div>
+        </div>`;
+    }).join('');
+    invUpdateBulkBar();
+}
+function fastSaveStock(id){
+    const inp = document.getElementById('inv-st-'+id); if (!inp) return;
+    const val = parseInt(inp.value); if (isNaN(val)){ showToast('Raqam kiriting','warning'); return; }
+    const p = getProduct(id); if (!p) return;
+    p.stock = Math.max(0, val);
+    persistProducts(); renderCats(); renderHome();
+    showToast('Ombor yangilandi','success'); Haptics.success();
+    renderInventory();
+}
+function invToggleSelect(id){ if (invSelected[id]) delete invSelected[id]; else invSelected[id]=true; invUpdateBulkBar(); }
+function invClearSelection(){ invSelected = {}; renderInventory(); }
+function invSelectedIds(){ return Object.keys(invSelected); }
+function invUpdateBulkBar(){
+    const bar = document.getElementById('inv-bulk'); if (!bar) return;
+    const ids = invSelectedIds();
+    if (!ids.length){ bar.style.display='none'; return; }
+    bar.style.display='block';
+    bar.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <b style="font-size:12px;color:var(--rose-deep);">${ids.length} ta belgilandi</b>
+            <span onclick="invClearSelection()" style="font-size:11px;color:var(--text-muted);text-decoration:underline;">Bekor qilish</span>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
+            <input type="number" id="inv-bulk-price" placeholder="Yangi narx" style="width:100px;padding:9px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);">
+            <button class="btn-ghost" style="width:auto;padding:0 14px;" onclick="invBulkSetPrice()">Narx</button>
+            <input type="number" id="inv-bulk-pct" placeholder="%" style="width:56px;padding:9px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);">
+            <button class="btn-ghost" style="width:auto;padding:0 12px;color:var(--ok);" onclick="invBulkPercent(1)">＋%</button>
+            <button class="btn-ghost" style="width:auto;padding:0 12px;color:var(--warn);" onclick="invBulkPercent(-1)">−%</button>
+            <button class="btn-ghost" style="width:auto;padding:0 12px;color:var(--danger);" onclick="invBulkDelete()">🗑</button>
+        </div>`;
+}
+function invBulkSetPrice(){
+    const val = parseInt(document.getElementById('inv-bulk-price').value); if (isNaN(val)){ showToast('Narx kiriting','warning'); return; }
+    invSelectedIds().forEach(id=>{ const p=getProduct(id); if(p) p.price=Math.max(0,val); });
+    persistProducts(); renderCats(); renderHome(); renderInventory(); showToast('Narxlar yangilandi','success'); Haptics.success();
+}
+function invBulkPercent(sign){
+    const pct = parseFloat(document.getElementById('inv-bulk-pct').value); if (isNaN(pct)){ showToast('% kiriting','warning'); return; }
+    invSelectedIds().forEach(id=>{ const p=getProduct(id); if(p) p.price = Math.max(0, Math.round(p.price * (1 + sign*pct/100))); });
+    persistProducts(); renderCats(); renderHome(); renderInventory(); showToast('Narxlar o\'zgartirildi','success'); Haptics.success();
+}
+function invBulkDelete(){
+    const ids = invSelectedIds(); if (!ids.length) return;
+    productsDB = productsDB.filter(p => !invSelected[p.id]);
+    window.productsDB = productsDB;
+    invSelected = {};
+    persistProducts(); renderCats(); renderHome(); renderInventory(); showToast(ids.length+' ta o\'chirildi','warning'); Haptics.warning();
+}
+
+/* ============================ USERS LOADER (orders/customers/stats) ============================ */
+function adminLoadUsers(){
+    return new Promise(resolve=>{
+        if (!firebaseReady || !db){
+            adminAllOrders = (myOrders||[]).map((o,idx)=>({ uid:window.currentUser, name:myProfile.name, phone:myProfile.phone, oid:o.id, order:o, idx }));
+            const spent = (myOrders||[]).reduce((s,o)=>s+(o.total||0),0);
+            adminCustomers = window.currentUser ? [{ uid:window.currentUser, name:myProfile.name, phone:myProfile.phone, orders:(myOrders||[]).length, spent }] : [];
+            resolve({demo:true}); return;
+        }
+        (window._authReady||Promise.resolve()).then(()=>{
+            db.ref('users').once('value').then(snap=>{
+                adminAllOrders=[]; adminCustomers=[];
+                const all = snap.val()||{};
+                Object.keys(all).forEach(uid=>{
+                    const u=all[uid]||{}; const orders=u.orders; const prof=u.profile||{};
+                    let cnt=0, spent=0;
+                    if (Array.isArray(orders)){ orders.forEach((o,idx)=>{ if(o){ adminAllOrders.push({ uid, name:prof.name||'Mijoz', phone:prof.phone||'', oid:o.id, order:o, idx }); cnt++; spent+=o.total||0; } }); }
+                    adminCustomers.push({ uid, name:prof.name||'Mijoz', phone:prof.phone||'', orders:cnt, spent });
+                });
+                adminAllOrders.sort((a,b)=>(b.oid||0)-(a.oid||0));
+                adminCustomers.sort((a,b)=>b.spent-a.spent);
+                resolve({demo:false});
+            }).catch(e=>{ resolve({error:e}); });
         });
     });
 }
+
+/* ============================ BUYURTMALAR + CHAT ============================ */
 const ADMIN_STATUSES = [['kutilmoqda','⏳ Kutilmoqda'],['qabul','✅ Qabul'],['yolda','🚚 Yo\'lda'],['yetkazildi','🏁 Yetkazildi']];
-function renderAdminOrders(demo){
+function adminGoOrders(){
+    document.getElementById('admin-title').innerText = '📦 Buyurtmalar';
+    document.getElementById('admin-body').innerHTML = adminBackBar(`<button class="btn-ghost" style="flex:1;" onclick="adminGoOrders()">🔄 Yangilash</button>`) + `<div id="admin-orders"><div class="skeleton sk-card" style="height:90px;margin-bottom:10px;"></div><div class="skeleton sk-card" style="height:90px;"></div></div>`;
+    adminLoadUsers().then(r=> renderAdminOrders(r));
+}
+function renderAdminOrders(r){
     const box = document.getElementById('admin-orders'); if (!box) return;
+    if (r && r.error){ box.innerHTML = emptyHTML('O\'qib bo\'lmadi.<br>Firebase admins/'+(window.currentUser||'')+'=true va auth kerak.','🔒'); return; }
     if (!adminAllOrders.length){ box.innerHTML = emptyHTML('Hozircha buyurtma yo\'q','📭'); return; }
-    box.innerHTML = (demo?`<div style="font-size:11px;color:var(--warn);margin-bottom:10px;">Demo rejim: faqat shu qurilmadagi buyurtmalar</div>`:'') + adminAllOrders.map(rec=>{
-        const o = rec.order;
-        let items='';
+    box.innerHTML = (r&&r.demo?`<div style="font-size:11px;color:var(--warn);margin-bottom:10px;">Demo rejim: faqat shu qurilma</div>`:'') + adminAllOrders.map(rec=>{
+        const o = rec.order; let items='';
         for (const k in (o.items||{})){ const [bid]=k.split('||'); const p=getProduct(bid); items += `<div style="font-size:11.5px;color:var(--text-muted);">• ${p?p.name:k} × ${o.items[k]}</div>`; }
         const opts = ADMIN_STATUSES.map(([val,label])=>`<option value="${val}" ${o.status===val?'selected':''}>${label}</option>`).join('');
+        const unread = (o.messages||[]).filter(m=>m.sender==='user'||m.sender==='mijoz').length;
         return `<div class="order-card" style="margin:0 0 12px;">
             <div class="oc-top"><span class="oc-date">📅 ${o.date||''} ${o.time||''}</span>${statusHTML(o.status)}</div>
             <div class="oc-code">#${o.code||o.oid}</div>
             <div style="font-size:12px;color:var(--text);margin:4px 0;">👤 ${rec.name} · 📞 ${rec.phone||'—'}</div>
             <div style="margin:6px 0;">${items}</div>
             <div class="oc-total" style="margin-bottom:10px;">${fmt(o.total)} so'm · ${o.payment||''}</div>
-            <select class="lux-input" style="margin:0;" onchange="adminSetOrderStatus('${rec.uid}',${rec.idx},this.value)">${opts}</select>
+            <div style="display:flex;gap:8px;">
+                <select class="lux-input" style="margin:0;flex:1;" onchange="adminSetOrderStatus('${rec.uid}',${rec.idx},this.value)">${opts}</select>
+                <button class="btn-ghost" style="width:auto;padding:0 14px;position:relative;" onclick="openAdminChat('${rec.uid}',${rec.idx})">💬${unread?`<span style="position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;font-size:9px;border-radius:9px;padding:1px 5px;">${unread}</span>`:''}</button>
+            </div>
         </div>`;
     }).join('');
 }
@@ -2021,22 +2139,143 @@ function adminSetOrderStatus(uid, idx, status){
     Haptics.select();
     if (firebaseReady && db){
         (window._authReady||Promise.resolve()).then(()=>{
-            db.ref('users/'+uid+'/orders/'+idx+'/status').set(status)
-                .then(()=>{
-                    showToast('Holat yangilandi','success');
-                    // mijozga xabar (ixtiyoriy)
-                    const label = (ADMIN_STATUSES.find(s=>s[0]===status)||['',''])[1];
-                    if (TG_PROXY.indexOf('YOUR-WORKER')===-1 && rec){
-                        fetch(TG_PROXY, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ chat_id: uid, text:`📦 Buyurtmangiz #${rec.order.code||rec.oid} holati: ${label}` }) }).catch(()=>{});
-                    }
-                })
-                .catch(e=>{ console.warn('[admin] status yozish rad etildi:', e&&e.message); showToast('Yozib bo\'lmadi (huquq?)','warning'); });
+            db.ref('users/'+uid+'/orders/'+idx+'/status').set(status).then(()=>{
+                showToast('Holat yangilandi','success');
+                const label = (ADMIN_STATUSES.find(s=>s[0]===status)||['',''])[1];
+                if (TG_PROXY.indexOf('YOUR-WORKER')===-1 && rec){ fetch(TG_PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:uid,text:`📦 Buyurtmangiz #${rec.order.code||rec.oid} holati: ${label}`})}).catch(()=>{}); }
+            }).catch(()=>{ showToast("Yozib bo'lmadi (huquq?)",'warning'); });
         });
-    } else {
-        // demo: agar o'z buyurtmam bo'lsa, lokal saqlayman
-        if (String(uid)===String(window.currentUser)){ const o = myOrders.find(x=>x.id===rec.oid); if(o){ o.status=status; saveOrders(); } }
-        showToast('Holat yangilandi (demo)','success');
-    }
+    } else { if (String(uid)===String(window.currentUser)){ const o=myOrders.find(x=>x.id===rec.oid); if(o){o.status=status; saveOrders();} } showToast('Holat yangilandi (demo)','success'); }
+}
+/* --- mijoz bilan chat --- */
+function openAdminChat(uid, idx){
+    adminChatCtx = { uid, idx };
+    const rec = adminAllOrders.find(r => String(r.uid)===String(uid) && r.idx===idx);
+    document.getElementById('ac-title').innerText = '💬 ' + (rec?rec.name:'Mijoz') + ' · #' + (rec?(rec.order.code||rec.oid):'');
+    renderAdminChat();
+    openModal('adminChatModal');
+}
+function renderAdminChat(){
+    const box = document.getElementById('ac-messages'); if (!box || !adminChatCtx) return;
+    const rec = adminAllOrders.find(r => String(r.uid)===String(adminChatCtx.uid) && r.idx===adminChatCtx.idx);
+    const msgs = (rec && rec.order.messages) ? rec.order.messages : [];
+    if (!msgs.length){ box.innerHTML = `<div style="text-align:center;color:var(--text-faint);font-size:12px;padding:14px;">Xabarlar yo'q. Mijozga yozing.</div>`; return; }
+    box.innerHTML = msgs.map(m=>{
+        const adminSide = (m.sender==='admin');
+        return `<div style="align-self:${adminSide?'flex-end':'flex-start'};max-width:80%;background:${adminSide?'var(--cta-gradient)':'var(--surface-2)'};color:${adminSide?'#fff':'var(--text)'};padding:9px 13px;border-radius:${adminSide?'16px 16px 4px 16px':'16px 16px 16px 4px'};font-size:13px;border:${adminSide?'none':'1px solid var(--border)'};">${escHtml(m.text)}<div style="font-size:9px;opacity:.7;margin-top:3px;text-align:right;">${m.time||''}</div></div>`;
+    }).join('');
+    setTimeout(()=>{ box.scrollTop = box.scrollHeight; }, 30);
+}
+function sendAdminMessage(){
+    const inp = document.getElementById('ac-input'); if (!inp || !adminChatCtx) return;
+    const text = inp.value.trim(); if (!text) return;
+    const rec = adminAllOrders.find(r => String(r.uid)===String(adminChatCtx.uid) && r.idx===adminChatCtx.idx);
+    if (!rec) return;
+    if (!rec.order.messages) rec.order.messages = [];
+    const now = new Date(); const t = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    rec.order.messages.push({ sender:'admin', text, time:t });
+    inp.value=''; renderAdminChat(); Haptics.light();
+    if (firebaseReady && db){
+        (window._authReady||Promise.resolve()).then(()=> db.ref('users/'+adminChatCtx.uid+'/orders/'+adminChatCtx.idx+'/messages').set(rec.order.messages).catch(()=>{ showToast("Yozib bo'lmadi",'warning'); }));
+        if (TG_PROXY.indexOf('YOUR-WORKER')===-1){ fetch(TG_PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:adminChatCtx.uid,text:`💬 Ivy do'kon: ${text}`})}).catch(()=>{}); }
+    } else { if (String(adminChatCtx.uid)===String(window.currentUser)){ const o=myOrders.find(x=>x.id===rec.oid); if(o){o.messages=rec.order.messages; saveOrders();} } }
+}
+
+/* ============================ MIJOZLAR ============================ */
+function adminGoCustomers(){
+    document.getElementById('admin-title').innerText = '👥 Mijozlar';
+    document.getElementById('admin-body').innerHTML = adminBackBar() +
+        `<input type="text" id="cust-search" class="search-box" placeholder="🔍 Ism, telefon yoki ID..." oninput="renderAdminCustomers()" style="margin-bottom:12px;">
+         <div id="cust-list"><div class="skeleton sk-card" style="height:70px;margin-bottom:10px;"></div><div class="skeleton sk-card" style="height:70px;"></div></div>`;
+    adminLoadUsers().then(r=> renderAdminCustomers(r));
+}
+function renderAdminCustomers(r){
+    const box = document.getElementById('cust-list'); if (!box) return;
+    if (r && r.error){ box.innerHTML = emptyHTML('O\'qib bo\'lmadi (admin huquqi kerak)','🔒'); return; }
+    const q = (document.getElementById('cust-search')?document.getElementById('cust-search').value:'').trim().toLowerCase();
+    let list = adminCustomers.slice();
+    if (q) list = list.filter(c => (c.name||'').toLowerCase().includes(q) || String(c.phone).toLowerCase().includes(q) || String(c.uid).toLowerCase().includes(q));
+    if (!list.length){ box.innerHTML = emptyHTML('Mijoz topilmadi','👥'); return; }
+    box.innerHTML = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Jami: ${adminCustomers.length} ta mijoz</div>` + list.map(c=>`
+        <div class="cart-row">
+            <div class="pf-ava" style="width:44px;height:44px;font-size:18px;background:var(--rose-gradient);">${(c.name||'M').charAt(0).toUpperCase()}</div>
+            <div class="cart-info">
+                <h4 style="font-size:13.5px;">${c.name}</h4>
+                <div class="opt">📞 ${c.phone||'—'} · ID: ${c.uid}</div>
+                <div class="cp" style="font-size:12px;">${c.orders} buyurtma · ${fmt(c.spent)} so'm</div>
+            </div>
+        </div>`).join('');
+}
+
+/* ============================ QORALAMALAR (rasmsiz) ============================ */
+function adminGoDrafts(){
+    document.getElementById('admin-title').innerText = '📝 Qoralamalar';
+    const drafts = productsDB.filter(p => !p.img);
+    document.getElementById('admin-body').innerHTML = adminBackBar() +
+        `<div class="section-sub" style="padding:0 0 10px;">Rasmsiz mahsulotlar (emoji bilan ko'rinadi). Rasm qo'shsangiz — to'liq bo'ladi.</div>` +
+        (drafts.length ? drafts.map(p=>`
+            <div class="cart-row">
+                <div class="cart-thumb">${p.emoji||'🛍️'}</div>
+                <div class="cart-info"><h4 style="font-size:13px;">${p.name}</h4><div class="opt">${(CATEGORIES.find(c=>c.key===p.cat)||{}).title||p.cat} · ${fmt(p.price)} so'm</div></div>
+                <button class="btn-ghost" style="width:auto;padding:0 14px;color:var(--rose-deep);" onclick="openAdminForm('${p.id}')">🖼 Rasm</button>
+            </div>`).join('') : emptyHTML('Barcha mahsulotlarda rasm bor 🎉','✅'));
+}
+
+/* ============================ STATISTIKA ============================ */
+function adminGoStats(){
+    document.getElementById('admin-title').innerText = '📊 Statistika';
+    document.getElementById('admin-body').innerHTML = adminBackBar() + `<div id="stats-body"><div class="skeleton sk-card" style="height:120px;"></div></div>`;
+    adminLoadUsers().then(r=> renderAdminStats(r));
+}
+function renderAdminStats(r){
+    const box = document.getElementById('stats-body'); if (!box) return;
+    if (r && r.error){ box.innerHTML = emptyHTML('O\'qib bo\'lmadi (admin huquqi kerak)','🔒'); return; }
+    const orders = adminAllOrders.map(x=>x.order);
+    const revenue = orders.reduce((s,o)=>s+(o.total||0),0);
+    const cnt = orders.length;
+    const avg = cnt ? Math.round(revenue/cnt) : 0;
+    const delivered = orders.filter(o=>o.status==='yetkazildi').length;
+    // status breakdown
+    const stCount = {}; ADMIN_STATUSES.forEach(([v])=>stCount[v]=0);
+    orders.forEach(o=>{ const s=o.status||'kutilmoqda'; stCount[s]=(stCount[s]||0)+1; });
+    // top products
+    const prodQty = {};
+    orders.forEach(o=>{ for(const k in (o.items||{})){ const bid=k.split('||')[0]; prodQty[bid]=(prodQty[bid]||0)+o.items[k]; } });
+    const top = Object.keys(prodQty).map(id=>({p:getProduct(id),q:prodQty[id]})).filter(x=>x.p).sort((a,b)=>b.q-a.q).slice(0,5);
+    // last 7 days bar (by order.id timestamp)
+    const days = []; const today = new Date(); today.setHours(0,0,0,0);
+    for (let i=6;i>=0;i--){ const d=new Date(today); d.setDate(d.getDate()-i); days.push({ d, label:String(d.getDate()).padStart(2,'0'), rev:0 }); }
+    orders.forEach(o=>{ if(!o.id) return; const od=new Date(o.id); od.setHours(0,0,0,0); const day=days.find(x=>x.d.getTime()===od.getTime()); if(day) day.rev+=o.total||0; });
+    const maxRev = Math.max(1, ...days.map(d=>d.rev));
+    const bars = days.map(d=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div style="width:100%;display:flex;align-items:flex-end;height:90px;"><div style="width:70%;margin:0 auto;height:${Math.round((d.rev/maxRev)*100)}%;min-height:3px;background:var(--rose-gradient);border-radius:6px 6px 0 0;"></div></div>
+        <div style="font-size:9px;color:var(--text-muted);">${d.label}</div></div>`).join('');
+
+    box.innerHTML = `
+        ${(r&&r.demo)?`<div style="font-size:11px;color:var(--warn);margin-bottom:10px;">Demo rejim: faqat shu qurilma</div>`:''}
+        <div class="pf-stats" style="margin:0 0 12px;padding:0;">
+            <div class="pf-stat"><div class="n" style="font-size:15px;">${fmt(revenue)}</div><div class="l">Savdo (so'm)</div></div>
+            <div class="pf-stat"><div class="n">${cnt}</div><div class="l">Buyurtma</div></div>
+            <div class="pf-stat"><div class="n">${adminCustomers.length}</div><div class="l">Mijoz</div></div>
+        </div>
+        <div class="pf-stats" style="margin:0 0 16px;padding:0;">
+            <div class="pf-stat"><div class="n" style="font-size:15px;">${fmt(avg)}</div><div class="l">O'rtacha chek</div></div>
+            <div class="pf-stat"><div class="n" style="color:var(--ok);">${delivered}</div><div class="l">Yetkazilgan</div></div>
+            <div class="pf-stat"><div class="n">${productsDB.length}</div><div class="l">Mahsulot</div></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:var(--shadow-card);">
+            <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px;">📈 So'nggi 7 kun savdosi</div>
+            <div style="display:flex;gap:5px;align-items:flex-end;">${bars}</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:var(--shadow-card);">
+            <div style="font-size:12px;font-weight:700;margin-bottom:10px;">📦 Holatlar bo'yicha</div>
+            ${ADMIN_STATUSES.map(([v,l])=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--text-muted);margin-bottom:6px;"><span>${l}</span><b style="color:var(--text);">${stCount[v]||0}</b></div>`).join('')}
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow-card);">
+            <div style="font-size:12px;font-weight:700;margin-bottom:10px;">🏆 Eng ko'p sotilgan</div>
+            ${ top.length ? top.map((x,i)=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><b style="color:var(--rose-deep);">${i+1}</b><span style="font-size:18px;">${x.p.emoji||'🛍️'}</span><span style="flex:1;font-size:12.5px;">${x.p.name}</span><b style="font-size:12px;">${x.q} ta</b></div>`).join('') : `<div style="font-size:12px;color:var(--text-muted);">Hali sotuv yo'q</div>` }
+        </div>
+    `;
 }
 </script>
 </body>
