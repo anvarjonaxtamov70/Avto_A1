@@ -6642,7 +6642,54 @@ function showToast(m, t = 'success') {
         renderProducts();
         updateCartBadge();
         if(activeModal === 'adminInventoryModal') renderAdminInventory();
+        loadProductRatings(); // ⭐ Reytinglarni reviews bazasidan AVTOMAT hisoblab, kartalarga qo'shamiz
     });
+
+    // ⭐ MAHSULOT REYTINGLARINI AVTOMAT HISOBLASH
+    // reviews/{productId}/{uid} dan har bir mahsulotning o'rtacha bahosi va soni
+    // hisoblanadi -> window.productRatings -> cardHTML kartada yulduz ko'rsatadi.
+    // Qo'lda hech narsa kiritish SHART EMAS — sharhlar kelishi bilan avtomat chiqadi.
+    function loadProductRatings() {
+        try {
+            db.ref('reviews').once('value', function (snap) {
+                var map = {};
+                if (snap.exists()) {
+                    snap.forEach(function (prodSnap) {
+                        var pid = prodSnap.key;
+                        var sum = 0, cnt = 0;
+                        prodSnap.forEach(function (rSnap) {
+                            var r = rSnap.val();
+                            var rating = r && parseFloat(r.rating);
+                            if (rating && rating > 0) { sum += rating; cnt++; }
+                        });
+                        if (cnt > 0) map[pid] = { avg: Math.round((sum / cnt) * 10) / 10, count: cnt };
+                    });
+                }
+                window.productRatings = map;
+                // Kartalarga reytingni JOYIDA qo'shamiz (to'liq re-render YO'Q — miltillash bo'lmaydi)
+                try {
+                    document.querySelectorAll('.luxury-card[data-pid]').forEach(function (card) {
+                        var pid = card.getAttribute('data-pid');
+                        var info = map[pid];
+                        if (!info) return;
+                        if (card.querySelector('.card-rating')) return; // allaqachon bor
+                        var meta = card.querySelector('.card-meta');
+                        if (!meta) {
+                            var h4 = card.querySelector('.info h4');
+                            if (!h4 || !h4.parentNode) return;
+                            meta = document.createElement('div');
+                            meta.className = 'card-meta';
+                            h4.insertAdjacentElement('afterend', meta);
+                        }
+                        var span = document.createElement('span');
+                        span.className = 'card-rating';
+                        span.innerHTML = icon('star') + ' ' + info.avg + (info.count ? ' <i>(' + info.count + ')</i>' : '');
+                        meta.insertBefore(span, meta.firstChild);
+                    });
+                } catch (e) { console.warn('[ratings] DOM xato:', e); }
+            });
+        } catch (e) { console.warn('[ratings] xato:', e); }
+    }
 
     // 📦 QADAM 3: Tugagan tovarlarni oxirga suruvchi yordamchi
     // Mantiq: ichki tartib saqlanadi (yangidan-eskiga), faqat sotuvda
@@ -6951,10 +6998,12 @@ function cardHTML(p) {
         if (_pct > 0) discChip = `<span class="card-disc">-${_pct}%</span>`;
     }
     let _ratingHTML = '';
-    let _rv = parseFloat(p.rating);
+    let _rInfo = (window.productRatings && window.productRatings[p.id]) ? window.productRatings[p.id] : null;
+    let _rv = _rInfo ? _rInfo.avg : parseFloat(p.rating);
+    let _rc = _rInfo ? _rInfo.count : p.ratingCount;
     if (_rv && _rv > 0) {
         let _rr = Math.round(_rv * 10) / 10;
-        _ratingHTML = `<span class="card-rating">${icon('star')} ${_rr}${p.ratingCount ? ` <i>(${p.ratingCount})</i>` : ''}</span>`;
+        _ratingHTML = `<span class="card-rating">${icon('star')} ${_rr}${_rc ? ` <i>(${_rc})</i>` : ''}</span>`;
     }
     let _stockHTML = '';
     if (st > 0 && st <= 5) _stockHTML = `<span class="card-stock-low">${icon('box')} ${st} ta qoldi</span>`;
@@ -6979,7 +7028,7 @@ function cardHTML(p) {
         cartBtn = `<button class="btn-add-cart" style="background:rgba(255,255,255,0.05) !important; color:gray !important; box-shadow:none !important; justify-content:center !important;" disabled>Tugadi</button>`;
     }
 
-    return `<div class="luxury-card" onclick="openProduct(${p.id})">
+    return `<div class="luxury-card" data-pid="${p.id}" onclick="openProduct(${p.id})">
         ${bH}${heartBtn}
         <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">${icon('scale')}</div>
         <div class="img-wrap" style="${oosStyle}">
@@ -8869,7 +8918,7 @@ window.getTimelineHTML = (status) => {
     if (status === 'bekor_qilingan') {
         return `
         <div style="text-align:center; padding: 15px; background: rgba(255,69,58,0.1); border-radius: 16px; border: 1px dashed var(--accent-red); margin-top: 15px;">
-            <div style="font-size: 30px; margin-bottom: 5px;">❌</div>
+            <div style="font-size: 30px; margin-bottom: 5px; color: var(--accent-red, #ff453a);">${icon('cancel')}</div>
             <div style="color: var(--accent-red); font-weight: bold; font-size: 14px;">Buyurtma bekor qilingan</div>
             <div style="color: gray; font-size: 11px; margin-top: 5px;">Mablag' qaytarilgan yoki admin tomonidan bekor qilingan.</div>
         </div>`;
@@ -8889,19 +8938,19 @@ window.getTimelineHTML = (status) => {
         <div class="timeline-progress" style="width: ${progress};"></div>
         
         <div class="timeline-step ${s1}">
-            <div class="timeline-icon">⏳</div>
+            <div class="timeline-icon">${icon('clock')}</div>
             <div class="timeline-text">Kutilmoqda</div>
         </div>
         <div class="timeline-step ${s2}">
-            <div class="timeline-icon">📦</div>
+            <div class="timeline-icon">${icon('box')}</div>
             <div class="timeline-text">Qabul</div>
         </div>
         <div class="timeline-step ${s3}">
-            <div class="timeline-icon">🚚</div>
+            <div class="timeline-icon">${icon('truck')}</div>
             <div class="timeline-text">Yo'lda</div>
         </div>
         <div class="timeline-step ${s4}">
-            <div class="timeline-icon">🏁</div>
+            <div class="timeline-icon">${icon('flag')}</div>
             <div class="timeline-text">Yetkazildi</div>
         </div>
     </div>`;
@@ -9339,7 +9388,7 @@ window.submitReview = () => {
     let text = document.getElementById('review-text').value.trim(); let userName = myProfile.name || 'Mijoz'; let now = new Date();
     let reviewData = { userId: currentUser, userName: userName, rating: selectedReviewStar, text: text, date: now.toLocaleDateString('uz-UZ'), timestamp: now.getTime() };
     db.ref('reviews/' + currentReviewProductId + '/' + currentUser).set(reviewData).then(() => {
-        showToast("Rahmat! Bahongiz saqlandi ✅"); loadProductReviews(currentReviewProductId);
+        showToast("Rahmat! Bahongiz saqlandi ✅"); loadProductReviews(currentReviewProductId); if(typeof loadProductRatings==='function') loadProductRatings();
         if (document.getElementById('review-text')) document.getElementById('review-text').value = '';
         selectedReviewStar = 0; document.querySelectorAll('#review-stars span').forEach(s => s.classList.remove('active'));
     });
@@ -14132,6 +14181,9 @@ body, .info h4, .cart-info h4, button, input, textarea, select { font-family: va
 
 /* ——— Compare tugma ikonkasi ——— */
 .btn-compare-card .ico{ width:16px; height:16px; }
+
+/* ——— Timeline (buyurtma bosqichlari) ikonkalari ——— */
+.timeline-icon .ico{ width:17px; height:17px; }
 
 /* ——— Karta meta qatori: reyting / chegirma / "N ta qoldi" ——— */
 .card-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:1px 0 8px; padding:0 2px; }
