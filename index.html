@@ -6300,6 +6300,30 @@ document.addEventListener('touchmove', function(e) {
     window._decrementStock = _decrementStock;
 
     // =====================================
+    // 🎨 IKONKA TIZIMI (emoji o'rniga bitta SVG to'plami)
+    // Maqsad: har telefonda BIR XIL, premium ko'rinish (emoji turlicha render bo'ladi).
+    // SVG'lar currentColor oladi — joylashgan elementning rangiga moslashadi.
+    // =====================================
+    var ICONS = {
+        flame:   'M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z',
+        sparkle: 'M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z',
+        star:    'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
+        check:   'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z',
+        truck:   'M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
+        flag:    'M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z',
+        clock:   'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
+        cancel:  'M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z',
+        scale:   'M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z',
+        box:     'M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z'
+    };
+    function icon(name) {
+        var p = ICONS[name];
+        if (!p) return '';
+        return '<svg class="ico" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="' + p + '"/></svg>';
+    }
+    window.icon = icon;
+
+    // =====================================
     // 🔐 FIREBASE AUTH (Telegram initData -> custom token)
     // =====================================
     // Worker (/auth) initData'ni HMAC bilan tekshirib, Firebase custom token
@@ -6489,7 +6513,7 @@ const Haptics = {
     }
 
     function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
-    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">✅ Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">🚚 Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">🏁 Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">❌ Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">⏳ Kutilmoqda</span>'; }
+    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">' + icon('check') + ' Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">' + icon('truck') + ' Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">' + icon('flag') + ' Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">' + icon('cancel') + ' Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">' + icon('clock') + ' Kutilmoqda</span>'; }
     function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; _updateVipStatus(); }
 
     // ⭐ QADAM 2: VIP MEMBER yorlig'i faqat haqiqiy mijozlar uchun
@@ -6914,10 +6938,27 @@ function addToCartQuick(e, id) {
 function cardHTML(p) { 
     let st = p.stock !== undefined ? p.stock : 10;
     let bH = ''; 
-    if(st <= 0) bH = '<div class="badge" style="background:gray;">Tugagan</div>';
-    else if(p.badge === 'hot') bH = '<div class="badge hot">🔥 Top</div>'; 
-    else if(p.badge === 'new') bH = '<div class="badge new">✨ Yangi</div>'; 
+    if(st <= 0) bH = '<div class="badge badge-out">' + icon('box') + ' Tugagan</div>';
+    else if(p.badge === 'hot') bH = '<div class="badge hot">' + icon('flame') + ' Top</div>'; 
+    else if(p.badge === 'new') bH = '<div class="badge new">' + icon('sparkle') + ' Yangi</div>'; 
     let oosStyle = st <= 0 ? 'filter: grayscale(1); opacity:0.7;' : '';
+
+    // 💎 Karta boyitish — faqat mavjud maydonlar bo'lsa ko'rsatiladi (regressiyasiz)
+    let discChip = '', oldPriceHTML = '';
+    if (p.oldPrice && Number(p.oldPrice) > Number(p.price)) {
+        oldPriceHTML = `<small class="card-oldprice">${Number(p.oldPrice).toLocaleString()}</small>`;
+        let _pct = Math.round((1 - Number(p.price) / Number(p.oldPrice)) * 100);
+        if (_pct > 0) discChip = `<span class="card-disc">-${_pct}%</span>`;
+    }
+    let _ratingHTML = '';
+    let _rv = parseFloat(p.rating);
+    if (_rv && _rv > 0) {
+        let _rr = Math.round(_rv * 10) / 10;
+        _ratingHTML = `<span class="card-rating">${icon('star')} ${_rr}${p.ratingCount ? ` <i>(${p.ratingCount})</i>` : ''}</span>`;
+    }
+    let _stockHTML = '';
+    if (st > 0 && st <= 5) _stockHTML = `<span class="card-stock-low">${icon('box')} ${st} ta qoldi</span>`;
+    let metaHTML = (_ratingHTML || _stockHTML || discChip) ? `<div class="card-meta">${_ratingHTML}${discChip}${_stockHTML}</div>` : '';
     
     // Nuqta belgisi bo'yicha ajratish
     let nameParts = p.name.split('·');
@@ -6931,7 +6972,7 @@ function cardHTML(p) {
     if(st > 0) {
         cartBtn = `
         <button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})">
-            <span>${p.price.toLocaleString()} so'm</span>
+            <span class="cart-price">${p.price.toLocaleString()} so'm ${oldPriceHTML}</span>
             <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>`;
     } else {
@@ -6940,7 +6981,7 @@ function cardHTML(p) {
 
     return `<div class="luxury-card" onclick="openProduct(${p.id})">
         ${bH}${heartBtn}
-        <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">⚖️</div>
+        <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">${icon('scale')}</div>
         <div class="img-wrap" style="${oosStyle}">
         <img src="${p.img}" 
      loading="lazy" 
@@ -6950,6 +6991,7 @@ function cardHTML(p) {
         </div>
         <div class="info">
             <h4>${mainName}${carHint}</h4>
+            ${metaHTML}
             ${cartBtn}
         </div>
     </div>`; 
@@ -14055,6 +14097,63 @@ document.addEventListener('click', function (e) {
         });
     })();
 </script>
+
+<!-- ============================================================
+     ✨ DESIGN SYSTEM v2 — yagona tokenlar + ikonka/badge/karta nafisligi
+     Additiv qatlam: mavjud qoidalarni O'CHIRMAYDI, faqat aniqroq/yagona
+     qiymat beradi. Emoji o'rniga SVG ikonka, karta meta (reyting/chegirma/
+     qoldi), birlashtirilgan tipografika.
+     ============================================================ -->
+<style id="design-system-v2">
+:root{
+  /* Yagona harakat tokenlari */
+  --ds-ease: cubic-bezier(.2,.8,.2,1);
+  --ds-spring: cubic-bezier(.34,1.56,.64,1);
+  /* Tipografika tokenlari (mavjud shriftlardan) */
+  --font-sans: 'Inter','Montserrat',system-ui,-apple-system,sans-serif;
+  --font-display: 'Playfair Display',Georgia,serif;
+  /* Type scale */
+  --fs-display:26px; --fs-h2:20px; --fs-title:16px; --fs-body:14px; --fs-cap:12px; --fs-micro:10px;
+}
+
+/* ——— Tipografikani yagona qilish (Montserrat endi faqat fallback) ——— */
+body, .info h4, .cart-info h4, button, input, textarea, select { font-family: var(--font-sans); }
+.modal-header h2, .section-title { font-family: var(--font-display); letter-spacing:.2px; }
+
+/* ——— Inline SVG ikonka (currentColor — joylashgan rangga moslashadi) ——— */
+.ico{ width:1em; height:1em; vertical-align:-0.13em; flex:0 0 auto; display:inline-block; }
+
+/* ——— Mahsulot badge & status badge: pill + ikonka tekislash ——— */
+.luxury-card .badge{ display:inline-flex; align-items:center; gap:4px; letter-spacing:.2px; }
+.luxury-card .badge .ico{ font-size:.95em; }
+.luxury-card .badge.badge-out{ background:rgba(120,120,128,.88) !important; }
+.status-badge{ display:inline-flex; align-items:center; gap:5px; }
+.status-badge .ico{ font-size:1em; }
+
+/* ——— Compare tugma ikonkasi ——— */
+.btn-compare-card .ico{ width:16px; height:16px; }
+
+/* ——— Karta meta qatori: reyting / chegirma / "N ta qoldi" ——— */
+.card-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:1px 0 8px; padding:0 2px; }
+.card-rating{ display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:700; color:var(--luxury-gold,#C9A84C); }
+.card-rating .ico{ color:var(--luxury-gold,#C9A84C); }
+.card-rating i{ font-style:normal; color:var(--text-muted,#8a8a8a); font-weight:600; }
+.card-disc{ font-size:10px; font-weight:800; color:#0a0a0c; background:linear-gradient(135deg,#f2d98a,var(--luxury-gold,#C9A84C)); padding:2px 7px; border-radius:999px; letter-spacing:.3px; }
+.card-stock-low{ display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; color:#ff9f0a; background:rgba(255,159,10,.12); padding:2px 8px; border-radius:999px; }
+.card-stock-low .ico{ font-size:.9em; }
+.cart-price{ display:inline-flex; align-items:baseline; gap:6px; }
+.card-oldprice{ font-size:11px; font-weight:600; color:var(--text-muted,#8a8a8a); text-decoration:line-through; opacity:.8; }
+
+/* ——— Yorug' rejim moslamalari ——— */
+html[data-theme="light"] .card-rating,
+html[data-theme="light"] .card-rating .ico{ color:var(--luxury-gold-dark,#7A5E12); }
+html[data-theme="light"] .card-disc{ color:#2A1F06; }
+html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122,30,.12); }
+
+@media (prefers-reduced-motion: reduce){
+  :root{ --ds-spring: var(--ds-ease); }
+}
+</style>
 </body>    
 </html> 
 
