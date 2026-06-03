@@ -6259,6 +6259,47 @@ document.addEventListener('touchmove', function(e) {
     const db = firebase.database();
 
     // =====================================
+    // 🛡 XAVFSIZLIK YORDAMCHILARI
+    // =====================================
+    // 🔐 XSS himoyasi: foydalanuvchi matnini DOM (innerHTML) uchun xavfsizlashtirish.
+    //    Sharh va chat xabarlari shu orqali chiqarilishi SHART (aks holda saqlangan XSS).
+    function escHtml(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+    window.escHtml = escHtml;
+    // 🔐 Telegram parse_mode:"HTML" xabarlari uchun (& < > ). Mahsulot nomi/mijoz matni
+    //    HTML xabarga qo'shilishidan oldin shu orqali xavfsizlashtiriladi.
+    function escTg(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    window.escTg = escTg;
+    // 📨 Telegram proxy'ga xabar yuborish — Worker auth tekshirishi uchun initData qo'shamiz.
+    //    (Ochiq proxy yopildi: endi faqat tekshirilgan foydalanuvchi/admin yubora oladi.)
+    function tgProxySend(payload){
+        try { if (typeof tg !== 'undefined' && tg.initData) payload.initData = tg.initData; } catch(e){}
+        return fetch(TG_PROXY, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+    }
+    window.tgProxySend = tgProxySend;
+    // 📦 Stokni XAVFSIZ kamaytirish — butun 'products' massivini qayta yozish (.set) o'rniga
+    //    faqat sotilgan mahsulot/razmer stokiga ATOMIK transaction qo'llaymiz. Bu:
+    //      • boshqa adminlar qo'shgan mahsulotlarni o'chirib yuborilishining oldini oladi,
+    //      • bir vaqtdagi ikki buyurtmaning bir-birini ezib yozishini kamaytiradi.
+    //    changes: [{ idx, qty, sizeIdx? , fallback }]
+    function _decrementStock(changes){
+        if (!Array.isArray(changes)) return;
+        changes.forEach(function(ch){
+            try {
+                if (ch.idx == null || ch.idx < 0) return;
+                var path = (ch.sizeIdx != null && ch.sizeIdx >= 0)
+                    ? 'products/' + ch.idx + '/sizes/' + ch.sizeIdx + '/stock'
+                    : 'products/' + ch.idx + '/stock';
+                db.ref(path).transaction(function(cur){
+                    var base = (typeof cur === 'number') ? cur : (parseInt(ch.fallback) || 0);
+                    var nv = base - (parseInt(ch.qty) || 0);
+                    return nv < 0 ? 0 : nv;
+                });
+            } catch(e){ console.warn('[stock] update xato:', e); }
+        });
+    }
+    window._decrementStock = _decrementStock;
+
+    // =====================================
     // 🔐 FIREBASE AUTH (Telegram initData -> custom token)
     // =====================================
     // Worker (/auth) initData'ni HMAC bilan tekshirib, Firebase custom token
@@ -7382,37 +7423,41 @@ window.clearAppCache = () => {
         loadingOverlay.classList.add('active');
         let newOrderCode = generateOrderCode(); 
         
-        let addressText = myProfile.address ? `\n📍 <b>Manzil:</b> ${myProfile.address}` : "";
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${myProfile.name}\n📞 <b>Telefon:</b> ${myProfile.phone}${addressText}\n🆔 <b>ID:</b> <code>${currentUser || 'Noma\'lum'}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
+        let addressText = myProfile.address ? `\n📍 <b>Manzil:</b> ${escTg(myProfile.address)}` : "";
+        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${escTg(myProfile.name)}\n📞 <b>Telefon:</b> ${escTg(myProfile.phone)}${addressText}\n🆔 <b>ID:</b> <code>${escTg(currentUser || 'Noma\'lum')}</code>\n💳 <b>To'lov turi:</b> ${escTg(paymentMethod)}\n\n🛒 <b>Mahsulotlar:</b>\n`;
         let total = 0; 
         let savedItems = {};
         let lowStockAlerts = ""; 
+        let stockChanges = [];
         
         for (let fullId in cart) { 
             let [baseId, carOpt] = fullId.split('||');
             let p = productsDB.find(x => x.id == baseId); 
             if (p) { 
                 let sum = p.price * cart[fullId]; 
-                let dName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} (${carOpt})` : p.name;
+                let dName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${escTg(p.name)} (${escTg(carOpt)})` : escTg(p.name);
                 adminText += `▪️ ${dName}\n   ➖ ${cart[fullId]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
                 total += sum; 
                 savedItems[fullId] = cart[fullId]; 
                 
+                let pIdx = productsDB.indexOf(p);
                 if (p.product_type === 'razmerli' && p.sizes) {
                     let sIdx = p.sizes.findIndex(s => s.size === carOpt);
                     if (sIdx !== -1) {
-                        p.sizes[sIdx].stock -= cart[fullId];
-                        if (p.sizes[sIdx].stock < 0) p.sizes[sIdx].stock = 0;
+                        let _orig = (parseInt(p.sizes[sIdx].stock) || 0);
+                        p.sizes[sIdx].stock = (_orig - cart[fullId]) < 0 ? 0 : (_orig - cart[fullId]);
+                        stockChanges.push({ idx: pIdx, sizeIdx: sIdx, qty: cart[fullId], fallback: _orig });
                         if (p.sizes[sIdx].stock <= 3) {
-                            lowStockAlerts += `\n⚠️ <b>${p.name} (Razmer: ${carOpt})</b>: atigi ${p.sizes[sIdx].stock} ta qoldi!`;
+                            lowStockAlerts += `\n⚠️ <b>${escTg(p.name)} (Razmer: ${escTg(carOpt)})</b>: atigi ${p.sizes[sIdx].stock} ta qoldi!`;
                         }
                     }
-                    p.stock = p.sizes.reduce((sum, s) => sum + s.stock, 0);
+                    p.stock = p.sizes.reduce((sum, s) => sum + (parseInt(s.stock) || 0), 0);
                 } else {
-                    p.stock = (p.stock !== undefined ? p.stock : 10) - cart[fullId];
-                    if (p.stock < 0) p.stock = 0; 
+                    let _orig = (p.stock !== undefined ? (parseInt(p.stock) || 0) : 10);
+                    p.stock = (_orig - cart[fullId]) < 0 ? 0 : (_orig - cart[fullId]);
+                    stockChanges.push({ idx: pIdx, qty: cart[fullId], fallback: _orig });
                     if (p.stock <= 3) {
-                        lowStockAlerts += `\n⚠️ <b>${p.name}</b>: atigi ${p.stock} ta qoldi!`;
+                        lowStockAlerts += `\n⚠️ <b>${escTg(p.name)}</b>: atigi ${p.stock} ta qoldi!`;
                     }
                 }
             } 
@@ -7420,26 +7465,16 @@ window.clearAppCache = () => {
         adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
         
         try {
-            const res = await fetch(TG_PROXY, { 
-                method: "POST", 
-                headers: { "Content-Type": "application/json" }, 
-                body: JSON.stringify({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" }) 
-            });
+            const res = await tgProxySend({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" });
             
             if (res.ok) {
-                db.ref('products').set(productsDB).catch(function(){});
+                _decrementStock(stockChanges);
                 if (lowStockAlerts !== "") {
                     let alertMsg = `🚨 <b>DIQQAT: ZAXIRA TUGAMOQDA!</b>\nShu buyurtmadan keyin omborda ba'zi tovarlar kam qoldi:${lowStockAlerts}`;
-                    fetch(TG_PROXY, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" })
-                    });
+                    tgProxySend({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" });
                 }
                 if(currentUser) { 
-                    fetch(TG_PROXY, { 
-                        method: "POST", headers: { "Content-Type": "application/json" }, 
-                        body: JSON.stringify({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` }) 
-                    }); 
+                    tgProxySend({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` }); 
                 }
                 myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
                 saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge();
@@ -7531,8 +7566,8 @@ window.clearAppCache = () => {
             chatHtml += `
             <div style="display: flex; flex-direction: column; width: 100%; margin-bottom: 8px;">
                 <div class="chat-bubble ${isMe ? 'chat-user' : 'chat-admin'}">
-                    ${msg.text}
-                    <span class="chat-time">${msg.time || ''}</span>
+                    ${escHtml(msg.text)}
+                    <span class="chat-time">${escHtml(msg.time || '')}</span>
                 </div>
             </div>
             `;
@@ -7620,8 +7655,8 @@ window.openAdminChat = (uid, orderId) => {
                                 <div style="max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 13px; 
                                      background: ${isMe ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)'}; 
                                      color: ${isMe ? '#000' : 'white'}; border-bottom-${isMe ? 'right' : 'left'}-radius: 2px;">
-                                    ${msg.text}
-                                    <div style="font-size: 9px; opacity: 0.7; text-align: right; margin-top: 4px;">${msg.time}</div>
+                                    ${escHtml(msg.text)}
+                                    <div style="font-size: 9px; opacity: 0.7; text-align: right; margin-top: 4px;">${escHtml(msg.time)}</div>
                                 </div>
                             </div>
                         `;
@@ -7665,14 +7700,10 @@ window.openAdminChat = (uid, orderId) => {
                         
                         // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
                         let orderCode = orders[idx].code || currentAdminChatOrderId;
-                        fetch(TG_PROXY, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ 
-                                chat_id: currentAdminChatUid, 
-                                text: `📩 <b>#${orderCode}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${text}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`, 
-                                parse_mode: "HTML" 
-                            })
+                        tgProxySend({ 
+                            chat_id: currentAdminChatUid, 
+                            text: `📩 <b>#${escTg(orderCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`, 
+                            parse_mode: "HTML" 
                         });
                     });
                 }
@@ -7851,23 +7882,15 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                             }
 
                             // ADMINGA SMS DA HAM QISQA KOD ISHLATILADI
-                            let adminMsg = `🔄 <b>Diqqat!</b> WebApp orqali buyurtma holati o'zgardi.\n\n🆔 Buyurtma: <b>#${displayCode}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
+                            let adminMsg = `🔄 <b>Diqqat!</b> WebApp orqali buyurtma holati o'zgardi.\n\n🆔 Buyurtma: <b>#${escTg(displayCode)}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
 
                             try {
                                 // 1. ADMINGA SMS
-                                await fetch(TG_PROXY, {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ chat_id: ADMIN_ID, text: adminMsg, parse_mode: "HTML" })
-                                });
+                                await tgProxySend({ chat_id: ADMIN_ID, text: adminMsg, parse_mode: "HTML" });
 
                                 // 2. MIJOZGA SMS
                                 if (uid && uid !== "Noma'lum" && mijozMsg !== "") {
-                                    await fetch(TG_PROXY, {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({ chat_id: uid, text: mijozMsg })
-                                    });
+                                    await tgProxySend({ chat_id: uid, text: mijozMsg });
                                 }
                             } catch(e) {
                                 showToast("Xato: SMS jo'natilmadi!", "warning");
@@ -8678,7 +8701,7 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             if (_dlv.method === 'courier') {
                 fetchedAddress = _dlv.address || fetchedAddress;
                 deliveryLine = `🚚 <b>Yetkazish:</b> Kuryer (manzilga)`;
-                if (_dlv.mapLink) deliveryLine += `\n🗺 <b>Xaritada:</b> ${_dlv.mapLink}`;
+                if (_dlv.mapLink) deliveryLine += `\n🗺 <b>Xaritada:</b> ${escTg(_dlv.mapLink)}`;
             } else if (_dlv.method === 'bts') {
                 fetchedAddress = (_dlv.branch || "") + (_dlv.region ? (", " + _dlv.region) : "");
                 deliveryLine = `📦 <b>Yetkazish:</b> BTS Pochta filiali`;
@@ -8686,11 +8709,12 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
         }
         let cUser = currentUser || "Noma'lum";
         
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${profName}\n📞 <b>Telefon:</b> <code>${profPhone}</code>\n💬 <b>Telegram:</b> ${userTgLink}\n📍 <b>Manzil:</b> ${fetchedAddress}\n${deliveryLine ? deliveryLine + '\n' : ''}🆔 <b>ID:</b> <code>${cUser}</code>\n💳 <b>To'lov turi:</b> ${paymentMethod}\n\n🛒 <b>Mahsulotlar:</b>\n`;
+        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${escTg(profName)}\n📞 <b>Telefon:</b> <code>${escTg(profPhone)}</code>\n💬 <b>Telegram:</b> ${escTg(userTgLink)}\n📍 <b>Manzil:</b> ${escTg(fetchedAddress)}\n${deliveryLine ? deliveryLine + '\n' : ''}🆔 <b>ID:</b> <code>${escTg(cUser)}</code>\n💳 <b>To'lov turi:</b> ${escTg(paymentMethod)}\n\n🛒 <b>Mahsulotlar:</b>\n`;
         
         let total = 0; 
         let savedItems = {};
         let lowStockAlerts = ""; 
+        let stockChanges = [];
         
         for (let safeId in cart) { 
             if(!cart[safeId]) continue; 
@@ -8704,50 +8728,45 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                 let qty = parseInt(cart[safeId]) || 0;
                 if(qty <= 0) continue;
                 let sum = p.price * qty; 
-                let dName = carOpt && carOpt !== "Universal" ? `${p.name} (${carOpt})` : p.name;
+                let dName = carOpt && carOpt !== "Universal" ? `${escTg(p.name)} (${escTg(carOpt)})` : escTg(p.name);
                 adminText += `▪️ ${dName}\n   ➖ ${qty} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
                 total += sum; 
                 savedItems[safeId] = qty; 
                 
-                // Sklad (zaxira) nazorati
+                // Sklad (zaxira) nazorati — DB'ga atomik transaction orqali yoziladi (pastda)
+                let pIdx = productsDB.indexOf(p);
                 if (p.product_type === 'razmerli' && p.sizes) {
                     let sIdx = p.sizes.findIndex(s => s.size === carOpt);
                     if (sIdx !== -1) {
-                        p.sizes[sIdx].stock = (parseInt(p.sizes[sIdx].stock) || 0) - qty;
-                        if (p.sizes[sIdx].stock <= 3) lowStockAlerts += `\n⚠️ <b>${p.name} (${carOpt})</b>: ${p.sizes[sIdx].stock} ta qoldi!`;
+                        let _orig = (parseInt(p.sizes[sIdx].stock) || 0);
+                        p.sizes[sIdx].stock = (_orig - qty) < 0 ? 0 : (_orig - qty);
+                        stockChanges.push({ idx: pIdx, sizeIdx: sIdx, qty: qty, fallback: _orig });
+                        if (p.sizes[sIdx].stock <= 3) lowStockAlerts += `\n⚠️ <b>${escTg(p.name)} (${escTg(carOpt)})</b>: ${p.sizes[sIdx].stock} ta qoldi!`;
                     }
                     p.stock = p.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0);
                 } else {
-                    p.stock = (parseInt(p.stock) || 10) - qty;
-                    if (p.stock <= 3) lowStockAlerts += `\n⚠️ <b>${p.name}</b>: ${p.stock} ta qoldi!`;
+                    let _orig = (parseInt(p.stock) || 10);
+                    p.stock = (_orig - qty) < 0 ? 0 : (_orig - qty);
+                    stockChanges.push({ idx: pIdx, qty: qty, fallback: _orig });
+                    if (p.stock <= 3) lowStockAlerts += `\n⚠️ <b>${escTg(p.name)}</b>: ${p.stock} ta qoldi!`;
                 }
             } 
         }
         adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
         
         // 1. ADMINGA XABAR YUBORISH
-        const res = await fetch(TG_PROXY, { 
-            method: "POST", 
-            headers: { "Content-Type": "application/json" }, 
-            body: JSON.stringify({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" }) 
-        });
+        const res = await tgProxySend({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" });
         
         if (res.ok) {
-            db.ref('products').set(productsDB).catch(function(){});
+            _decrementStock(stockChanges);
             
             // Zaxira ogohlantirishi (Admin uchun)
             if (lowStockAlerts) {
-                fetch(TG_PROXY, {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chat_id: ADMIN_ID, text: `🚨 <b>OMBORDA KAM QOLDI:</b>${lowStockAlerts}`, parse_mode: "HTML" })
-                });
+                tgProxySend({ chat_id: ADMIN_ID, text: `🚨 <b>OMBORDA KAM QOLDI:</b>${lowStockAlerts}`, parse_mode: "HTML" });
             }
 
             // 2. MIJOZGA TASDIQLASH XABARI
-            fetch(TG_PROXY, { 
-                method: "POST", headers: { "Content-Type": "application/json" }, 
-                body: JSON.stringify({ chat_id: cUser, text: `✅ Buyurtmangiz qabul qilindi!\n🆔 Kod: #${newOrderCode}\n📞 Bog'lanish: ${profPhone}` }) 
-            }); 
+            tgProxySend({ chat_id: cUser, text: `✅ Buyurtmangiz qabul qilindi!\n🆔 Kod: #${newOrderCode}\n📞 Bog'lanish: ${profPhone}` }); 
             
             // 3. TARIXGA VA BAZAGA YOZISH
             myOrders.unshift({ 
@@ -9257,7 +9276,7 @@ window.loadProductReviews = (productId) => {
             `;
         } else {
             reviews.sort((a, b) => b.timestamp - a.timestamp);
-            reviewsList.innerHTML = reviews.map(r => `<div class="review-card"><div class="r-head"><span class="r-name">${r.userName || 'Mijoz'}</span><span class="r-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span></div>${r.text ? `<div class="r-text">${r.text}</div>` : ''}<div class="r-date">${r.date || ''}</div></div>`).join('');
+            reviewsList.innerHTML = reviews.map(r => `<div class="review-card"><div class="r-head"><span class="r-name">${escHtml(r.userName || 'Mijoz')}</span><span class="r-stars">${'★'.repeat(Math.max(0, Math.min(5, parseInt(r.rating) || 0)))}${'☆'.repeat(5 - Math.max(0, Math.min(5, parseInt(r.rating) || 0)))}</span></div>${r.text ? `<div class="r-text">${escHtml(r.text)}</div>` : ''}<div class="r-date">${escHtml(r.date || '')}</div></div>`).join('');
         }
         if (!currentUser) { loginMsg.classList.remove('hidden'); return; }
         let alreadyReviewed = reviews.some(r => r.userId == currentUser);
@@ -9285,19 +9304,13 @@ window.submitReview = () => {
 };
 
 // =====================================
-// 🛡️ ANTI-KLON VA KODNI HIMOYA QILISH
+// 🛡️ ESLATMA: avvalgi "anti-klon" himoyasi (F12 / o'ng tugma / Ctrl+U bloklash
+//   va body'da user-select:none) OLIB TASHLANDI. Sabablari:
+//     • client tomondagi bunday bloklash OSON chetlab o'tiladi — bu haqiqiy himoya emas;
+//     • mijozga buyurtma kodi / manzil / kartani nusxalashga to'sqinlik qilardi;
+//     • klaviatura/accessibility'ni buzardi.
+//   Haqiqiy himoya: Firebase Security Rules + Cloudflare Worker auth (initData HMAC).
 // =====================================
-document.addEventListener('contextmenu', event => event.preventDefault()); // O'ng tugmani bloklash
-document.onkeydown = function(e) {
-    if(e.keyCode == 123) return false; // F12 (Inspect) ni bloklash
-    if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) return false; // Ctrl+Shift+I
-    if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) return false; // Ctrl+Shift+C
-    if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) return false; // Ctrl+Shift+J
-    if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) return false; // Ctrl+U (Source kod)
-};
-// Telefonlarda matnni belgilashni taqiqlash
-document.body.style.userSelect = "none";
-document.body.style.webkitUserSelect = "none";
 
 // =====================================
 // 🛑 SPAM VA "BOMBA" HUJUMLARIDAN HIMOYA (ANTI-SPAM)
@@ -12242,11 +12255,7 @@ window._doBroadcast = async (text) => {
         const failEl = document.getElementById('bc-failed');
         for (const uid of ids) {
             try {
-                const res = await fetch(TG_PROXY, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: uid, text: text, parse_mode: 'HTML' })
-                });
+                const res = await tgProxySend({ chat_id: uid, text: text, parse_mode: 'HTML' });
                 const j = await res.json();
                 if (j && j.ok) sent++; else failed++;
                 if (sentEl) sentEl.innerText = sent;
@@ -13538,7 +13547,7 @@ document.addEventListener('click', function (e) {
             try {
                 var _rcRef = firebase.database().ref('refcodes/' + P.state.referralCode);
                 _rcRef.once('value').then(function (s) {
-                    if (!s.exists()) { _rcRef.set(P.uid).catch(function () {}); }
+                    if (!s.exists()) { _rcRef.set(String(P.uid)).catch(function () {}); }
                 }).catch(function () {});
             } catch (e) {}
         }
@@ -13575,24 +13584,20 @@ document.addEventListener('click', function (e) {
             addCashback(REFERRAL_BONUS, "Referral bonus (kod: " + code + ")", 'earn');
             pushNotif('🤝', 'Referral bonus!', fmtSom(REFERRAL_BONUS) + " so'm bonus hisobingizga qo'shildi.", { silent: true });
             save();
-            // Taklif qilgan odamga ham bonus (xavfsiz transaction)
-            // ⚠️ ESLATMA: qulflangan qoidalarda mijoz BOSHQA foydalanuvchi (refUid) tuguniga
-            // yoza olmaydi — bu yozuvlar rad etiladi. .catch() bilan console toza qoladi.
-            // Taklif qiluvchiga bonusni ISHONCHLI berish uchun server tomoni (Worker endpoint)
-            // kerak — quyidagi blok hozircha "best-effort".
+            // 🤝 Taklif qilgan odamga (inviter) bonus — SERVER (Worker) orqali beriladi.
+            //    ⚠️ Xavfsiz Firebase qoidalarida mijoz BOSHQA foydalanuvchi tuguniga yoza olmaydi,
+            //    shuning uchun avvalgi client-tomon transaction'lar har doim rad etilardi.
+            //    Endi Worker (/referral) admin huquqi bilan refUid ga bonus + bildirishnoma yozadi
+            //    (initData tekshiriladi, takror berilmasligi server tomonida kafolatlanadi).
             try {
-                var refBalRef = firebase.database().ref('users/' + refUid + '/phase2/cashback');
-                refBalRef.transaction(function (v) { return (v || 0) + REFERRAL_BONUS; }).catch(function () {});
-                var refTotRef = firebase.database().ref('users/' + refUid + '/phase2/cashbackTotal');
-                refTotRef.transaction(function (v) { return (v || 0) + REFERRAL_BONUS; }).catch(function () {});
-                firebase.database().ref('users/' + refUid + '/phase2/referrals').transaction(function (arr) {
-                    arr = arr || []; arr.push({ uid: P.uid, date: Date.now() }); return arr;
-                }).catch(function () {});
-                firebase.database().ref('users/' + refUid + '/phase2/notifications').transaction(function (arr) {
-                    arr = arr || [];
-                    arr.unshift({ id: 'n' + Date.now(), icon: '🤝', title: 'Yangi referral!', text: "Do'stingiz kodingizni ishlatdi. +" + fmtSom(REFERRAL_BONUS) + " so'm bonus!", date: Date.now(), read: false });
-                    return arr;
-                }).catch(function () {});
+                var _initData = (window.tg && tg.initData) ? tg.initData : '';
+                if (_initData) {
+                    fetch(TG_PROXY + '/referral', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ initData: _initData, code: code })
+                    }).catch(function () {});
+                }
             } catch (e) {}
             toast('✅ ' + fmtSom(REFERRAL_BONUS) + " so'm bonus oldingiz!", 'success');
             hap('success');
