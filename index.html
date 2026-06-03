@@ -5121,10 +5121,10 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     
     <div id="content-area" class="hidden">
         <div id="main-menu"><div class="section-title">Ommabop tovarlar</div><div id="home-products" class="items-grid">
-    <div class="skeleton" style="height: 180px;"></div>
-    <div class="skeleton" style="height: 180px;"></div>
-    <div class="skeleton" style="height: 180px;"></div>
-    <div class="skeleton" style="height: 180px;"></div>
+    <div class="sk-card"><div class="sk-bone sk-img"></div><div class="sk-bone sk-line"></div><div class="sk-bone sk-line short"></div><div class="sk-bone sk-line tall"></div></div>
+    <div class="sk-card"><div class="sk-bone sk-img"></div><div class="sk-bone sk-line"></div><div class="sk-bone sk-line short"></div><div class="sk-bone sk-line tall"></div></div>
+    <div class="sk-card"><div class="sk-bone sk-img"></div><div class="sk-bone sk-line"></div><div class="sk-bone sk-line short"></div><div class="sk-bone sk-line tall"></div></div>
+    <div class="sk-card"><div class="sk-bone sk-img"></div><div class="sk-bone sk-line"></div><div class="sk-bone sk-line short"></div><div class="sk-bone sk-line tall"></div></div>
 </div><div id="scroll-loader" class="scroll-loader hidden"></div></div>
         
 <div id="katalog-menu" class="hidden" style="padding: 0 20px;">
@@ -6717,7 +6717,13 @@ function toggleWishlist(e, id) {
     function renderWishlist() {
         let c = document.getElementById('wishlist-items-container');
         if(wishlist.length === 0) {
-            c.innerHTML = `<div style="grid-column: span 2; text-align:center; color:gray; padding-top:40px; font-size:14px;">Hali hech narsa saqlamadingiz.</div>`;
+            c.innerHTML = `<div style="grid-column: span 2;">` + window._emptyState({
+                icon: '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>',
+                title: "Saqlanganlar bo'sh",
+                desc: "Yoqqan tovarlarni yurakcha (❤) tugmasi orqali saqlang — keyin shu yerda topasiz.",
+                btnText: "Katalogga o'tish",
+                btnAction: "showCatalog()"
+            }) + `</div>`;
             return;
         }
         let items = wishlist.map(id => productsDB.find(x => x.id === id)).filter(x => x);
@@ -7088,7 +7094,13 @@ document.addEventListener('visibilitychange', function() {
                 if(items.length > 0) {
                     c.innerHTML = items.map(x => cardHTML(x)).join(''); 
                 } else {
-                    c.innerHTML = `<div style="grid-column: span 2; text-align: center; color: gray; padding: 30px 10px;">Bu mashina uchun hali tovarlar kiritilmagan.</div>`;
+                    c.innerHTML = `<div style="grid-column: span 2;">` + window._emptyState({
+                        icon: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>',
+                        title: "Hali tovarlar yo'q",
+                        desc: "Bu mashina uchun tez orada tovarlar qo'shiladi. Qidiruv orqali boshqa qismlarni topishingiz mumkin.",
+                        btnText: "Qidirib ko'rish",
+                        btnAction: "var si=document.getElementById('searchInput'); if(si){si.focus(); searchProducts();}"
+                    }) + `</div>`;
                 }
             } 
         });
@@ -7585,7 +7597,13 @@ window.clearAppCache = () => {
         let t = 0; 
         c.innerHTML = '';
         if(Object.keys(cart).length === 0) { 
-            c.innerHTML = `<p style="text-align:center; color:gray; margin-top:30px;">Savat bo'sh.</p>`; 
+            c.innerHTML = window._emptyState({
+                icon: '<svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>',
+                title: "Savatingiz bo'sh",
+                desc: "Hozircha hech narsa qo'shmadingiz. Eng yaxshi tovarlarni tanlab, savatga qo'shing.",
+                btnText: "Xaridni boshlash",
+                btnAction: "closeModal(); showCatalog()"
+            }); 
             if(b) b.style.display = 'none'; 
         } else {
             for(let fullId in cart) { 
@@ -7765,7 +7783,7 @@ window.clearAppCache = () => {
         }
     }
 
-    function renderMyOrders() { let c = document.getElementById('orders-list-container'); if (myOrders.length === 0) { c.innerHTML = `<p style="text-align:center; color:gray; padding-top:40px;">Buyurtmalar yo'q.</p>`; return; } c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${o.total.toLocaleString()} so'm</div></div>`).join(''); }
+    function renderMyOrders() { let c = document.getElementById('orders-list-container'); if (myOrders.length === 0) { c.innerHTML = window._emptyState({ icon: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>', title: "Buyurtmalar yo'q", desc: "Hali buyurtma bermagansiz. Birinchi buyurtmangizni hoziroq bering!", btnText: "Xarid qilish", btnAction: "closeModal(); showCatalog()" }); return; } c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${o.total.toLocaleString()} so'm</div></div>`).join(''); }
 
 // =====================================
     // CHAT: BUYURTMA TAFSILOTI VA YOZISHMA
@@ -15035,6 +15053,44 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
   html[data-theme="light"] .pm-trust-item:not(:last-child)::after{ background:rgba(150,120,55,0.16); }
   html[data-theme="light"] .card-trust{ color:#796E58; }
   html[data-theme="light"] .card-trust .ico{ color:var(--luxury-gold-dark,#7A5E12); }
+</style>
+
+<!-- ============================================================
+     💀 DESIGN 8/9 — EMPTY STATE + SKELETON (ikkala mavzu)
+     ────────────────────────────────────────────────────────────
+     Maqsad: "bo'sh" va "yuklanmoqda" holatlarini professional qilish.
+       • Bo'sh holatlar (savat, saqlanganlar, buyurtmalar, kategoriya)
+         oddiy kulrang matn o'rniga yagona _emptyState komponenti:
+         ikonka + sarlavha + tavsif + harakat tugmasi.
+       • Skeleton: bosh sahifa endi haqiqiy karta shaklidagi .sk-card
+         (rasm + matn chiziqlari) bilan yuklanadi (avval tekis quti edi).
+     Bu blok faqat kichik MOSLAMALAR beradi (mavjud _emptyState/_skeleton
+     komponentlari allaqachon bor — JS edit'lar ularni JOYIDA chaqirdi):
+       1. Yorug' rejimда .sk-card foni (dark fon yorug'da xunuk edi).
+       2. empty-state ikkala mavzuda muvozanat + reduced-motion.
+     Rang faqat token orqali — dark va light alohida.
+     ============================================================ -->
+<style id="design-system-v8">
+  /* ——— 1) Yorug' rejimда skeleton karta foni (dark fon yorug'да xunuk) ——— */
+  html[data-theme="light"] .sk-card{
+    background:#FBF5EA !important;
+    border-color:rgba(150,120,55,0.16) !important;
+  }
+  html[data-theme="light"] .sk-bone,
+  html[data-theme="light"] .sk-img{
+    background:linear-gradient(100deg,#F1E8D8 30%,#FBF5EA 50%,#F1E8D8 70%) !important;
+    background-size:200% 100% !important;
+  }
+
+  /* ——— 2) Empty state: grid ichida ham markazda, nafis ——— */
+  .items-grid .empty-state-pro{ width:100%; }
+  .empty-state-pro .es-desc{ max-width:300px; }
+
+  /* ——— 3) Reduced-motion: shimmer va float to'xtaydi ——— */
+  @media (prefers-reduced-motion: reduce){
+    .sk-bone, .skeleton{ animation:none !important; }
+    .empty-state-pro .es-icon{ animation:none !important; }
+  }
 </style>
 </body>    
 </html> 
