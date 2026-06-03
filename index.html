@@ -2655,7 +2655,8 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         /* 🛑 LIQQILLASH VA YONGA SURILISHGA QARSHI QULF */
         /* ================================================= */
         body, html {
-            overscroll-behavior: none; /* Asosiy oyna sakramaydi */
+            overscroll-behavior: none !important; /* Asosiy oyna sakramaydi */
+            overscroll-behavior-y: none !important; /* Rezina (rubber-band) effekti — qat'iy bloklash */
             overflow-x: hidden !important; /* Butun ekran yonga surilmaydi */
             max-width: 100vw;
         }
@@ -6198,6 +6199,59 @@ document.addEventListener('touchmove', function(e) {
         }
     }
 }, {passive: false});
+
+// ====================================================================
+// 🛑 REZINA (RUBBER-BAND / OVERSCROLL) EFFEKTINI BLOKLASH
+// --------------------------------------------------------------------
+// Telegram Mini App'da hujjatni eng tepa yoki eng pastdan ortiqcha
+// tortganda "ko'rinmas oyna ochilgandek" cho'zilib qaytadi. Quyidagi
+// mantiq FAQAT hujjat chekkasida (eng tepa/eng past) ortiqcha
+// touchmove'ni bloklaydi. Asosiy window.scrollY skroll mantig'iga,
+// ichki skrollga (oyna, slayder, chat) va gorizontal slayderlarga
+// umuman tegmaydi. CSS overscroll-behavior:none yetmagan iOS WebView
+// (Telegram) holatlari uchun qo'shimcha sug'urta.
+// ====================================================================
+(function blockDocumentRubberBand() {
+    var touchStartY = 0;
+    // O'zi skroll bo'ladigan (ichki) elementlar — ularga aralashmaymiz
+    var SCROLLABLE_SEL =
+        '#productModal, .modal-standard, .pm-slider, .pm-info-section, ' +
+        '#ai-chat-box, #story-content, .chat-messages, .pm-similar-wrapper, ' +
+        '#admin-orders-list, #admin-customers-list, #admin-drafts-list, ' +
+        '#admin-inventory-list, #admin-stats-content, #od-chat-messages, ' +
+        '#admin-chat-messages, #pm-reviews-list, #pm-size-options, ' +
+        '#pm-car-options, .slider, .stories-container';
+
+    document.addEventListener('touchstart', function(e) {
+        if (e.touches && e.touches.length === 1) {
+            touchStartY = e.touches[0].clientY;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+        // Ikki barmoq (zoom/pinch) bo'lsa — aralashmaymiz
+        if (!e.touches || e.touches.length !== 1) return;
+        // Oyna ochiq bo'lsa — yuqoridagi handler hal qiladi
+        if (document.body.style.overflow === 'hidden') return;
+
+        var t = e.target;
+        // Barmoq ichki skroll bo'ladigan element ustida bo'lsa — to'liq ruxsat
+        // (CSS overscroll-behavior:contain skrollni tashqariga chiqarmaydi)
+        if (t && t.closest && t.closest(SCROLLABLE_SEL)) return;
+
+        var deltaY = e.touches[0].clientY - touchStartY;
+        var scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+        var atTop = scrollTop <= 0;
+        var atBottom = (window.innerHeight + scrollTop) >=
+                       (document.documentElement.scrollHeight - 1);
+
+        // Eng tepada turib pastga tortish (deltaY > 0) yoki
+        // eng pastda turib tepaga tortish (deltaY < 0) = rezina effekti.
+        if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+})();
     // ==========================================
     // 🍏 IOS NATIVE (HAQIQIY ILOVA) SOZLAMALARI
     // ==========================================
