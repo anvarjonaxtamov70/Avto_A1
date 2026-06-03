@@ -6324,6 +6324,45 @@ document.addEventListener('touchmove', function(e) {
     window.icon = icon;
 
     // =====================================
+    // 🖼️ RASM OPTIMIZATSIYASI (eng katta perf yutug'i)
+    // ImgBB to'liq o'lchamli (multi-MB) rasm saqlaydi — karta atigi ~180px.
+    // images.weserv.nl (bepul CDN proxy) orqali rasmni KERAKLI o'lchamga
+    // resize qilamiz + webp + sifat 80%. Bazaga TEGMAYDI (faqat ko'rsatishda).
+    // Natija: rasm hajmi 10-30x kichrayadi -> yuklash/dekod tez, qotish yo'q.
+    // =====================================
+    function _thumb(url, w) {
+        try {
+            if (!url || typeof url !== 'string') return url;
+            // data:, blob:, allaqachon weserv, yoki placeholder bo'lsa — tegmaymiz
+            if (url.indexOf('data:') === 0 || url.indexOf('blob:') === 0) return url;
+            if (url.indexOf('images.weserv.nl') !== -1) return url;
+            if (url.indexOf('http') !== 0) return url;
+            // DPR'ni hisobga olamiz (retina), lekin 2x bilan cheklaymiz (juda katta bo'lmasin)
+            var dpr = Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+            var tw = Math.round((w || 400) * dpr);
+            var clean = url.replace(/^https?:\/\//, '');
+            return 'https://images.weserv.nl/?url=' + encodeURIComponent(clean) +
+                   '&w=' + tw + '&output=webp&q=80&we';
+        } catch (e) { return url; }
+    }
+    window._thumb = _thumb;
+    // Rasm yuklanmasa: avval ORIGINAL (data-full) ga, u ham bo'lmasa brend placeholder
+    function _imgFallback(img) {
+        try {
+            if (!img) return;
+            var full = img.getAttribute('data-full');
+            if (full && img.src !== full && img.getAttribute('data-tried-full') !== '1') {
+                img.setAttribute('data-tried-full', '1');
+                img.src = full;
+                return;
+            }
+            img.onerror = null;
+            img.src = window._brandPlaceholder ? window._brandPlaceholder('A1') : '';
+        } catch (e) {}
+    }
+    window._imgFallback = _imgFallback;
+
+    // =====================================
     // 🔐 FIREBASE AUTH (Telegram initData -> custom token)
     // =====================================
     // Worker (/auth) initData'ni HMAC bilan tekshirib, Firebase custom token
@@ -7032,11 +7071,12 @@ function cardHTML(p) {
         ${bH}${heartBtn}
         <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">${icon('scale')}</div>
         <div class="img-wrap" style="${oosStyle}">
-        <img src="${p.img}" 
+        <img src="${_thumb(p.img, 240)}" 
      loading="lazy" 
      decoding="async"
      class="card-img-lazy"
-     onerror="this.src=window._brandPlaceholder('A1')">
+     data-full="${(p.img||'').replace(/"/g,'&quot;')}"
+     onerror="window._imgFallback(this)">
         </div>
         <div class="info">
             <h4>${mainName}${carHint}</h4>
@@ -7056,9 +7096,9 @@ function openProduct(id) {
     let dotsWrapper = document.getElementById('pm-slider-dots');
 
     if (imgs.length > 0) {
-        // ⚪ ASLIY ORIGINAL OQ FON (XATOSIZ YUKLASH)
+        // ⚪ ASLIY ORIGINAL OQ FON (XATOSIZ YUKLASH) — optimallashtirilgan thumbnail (w=820)
         sliderWrapper.innerHTML = imgs.map(src => `
-            <img src="${src}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:contain; padding:25px; box-sizing:border-box; display:block;" onerror="this.src=window._brandPlaceholder('Rasm')">
+            <img src="${_thumb(src, 820)}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:contain; padding:25px; box-sizing:border-box; display:block;" data-full="${(src||'').replace(/"/g,'&quot;')}" onerror="window._imgFallback(this)">
          `).join('');
          dotsWrapper.innerHTML = imgs.length > 1 ? imgs.map((_, i) => `<div class="pm-dot ${i===0?'active':''}"></div>`).join('') : '';
     } else {
@@ -7191,7 +7231,7 @@ function openProduct(id) {
     loadProductReviews(id);
     let edB = document.getElementById('pm-edit-btn'); if (ADMIN_IDS.includes(currentUser)) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
     let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
-    if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${x.img}" onload="this.style.opacity=1"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
+    if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${_thumb(x.img, 200)}" loading="lazy" decoding="async" data-full="${(x.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
     // 🆕 Compare tugmasi + Notify me (tugaganda)
     let extra = document.getElementById('pm-extra-actions');
     if (extra) {
@@ -7322,7 +7362,7 @@ window.searchProducts = () => {
                 let np = x.name.split('·');
                 let mn = np[0] ? np[0].trim() : x.name;
                 return `<div class="search-item" onclick="openProduct(${x.id})">
-                    <img src="${x.img}" loading="lazy" decoding="async" onload="this.style.opacity=1">
+                    <img src="${_thumb(x.img, 120)}" loading="lazy" decoding="async" data-full="${(x.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)">
                     <div class="search-info">
                         <h4>${mn}</h4>
                         <p class="price">${x.price.toLocaleString()} so'm</p>
@@ -10355,7 +10395,7 @@ window.renderCartItems = () => {
         c.innerHTML += `
             <div class="cart-row">
                 <div class="cart-content-wrap">
-                <img src="${p.img}" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src=window._brandPlaceholder('A1')">
+                <img src="${_thumb(p.img, 140)}" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" loading="lazy" decoding="async" data-full="${(p.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)">
                 
                 <div class="cart-info">
                     <h4 style="line-height: 1.4;">${displayName}</h4>
@@ -10495,7 +10535,7 @@ window.renderCartItems = () => {
         _rows.push(`
             <div class="cart-row">
                 <div class="cart-content-wrap">
-                <img src="${p.img}" loading="lazy" decoding="async" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" onload="this.style.opacity=1" onerror="this.src=window._brandPlaceholder('A1')">
+                <img src="${_thumb(p.img, 140)}" loading="lazy" decoding="async" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" data-full="${(p.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)">
                 <div class="cart-info">
                     <h4 style="line-height: 1.4;">${displayName}</h4>
                     <span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span>
@@ -14046,12 +14086,14 @@ document.addEventListener('click', function (e) {
         inset: 0;
         z-index: 9990;
         pointer-events: none;
-        opacity: 0.05;
+        opacity: 0.035;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
         background-size: 160px 160px;
-        mix-blend-mode: soft-light;
+        /* ⚡ mix-blend-mode OLIB TASHLANDI — u har frame'da butun ekranni qayta
+           kompozit qilib, mobil (hatto iPhone Pro) da jank keltirardi.
+           Endi oddiy past-opacity overlay — statik, GPU'ni band qilmaydi. */
     }
-    html[data-theme="light"] #polish-grain { opacity: 0.035; }
+    html[data-theme="light"] #polish-grain { opacity: 0.025; }
 
     /* ——— 2) Karta tilla hairline border-gradient ———
        .luxury-card::before BO'SH edi (tekshirildi) — xavfsiz.
@@ -14206,6 +14248,53 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
   :root{ --ds-spring: var(--ds-ease); }
 }
 </style>
+
+<!-- ============================================================
+     ⚡ PERFORMANCE TUNING v1 — mobil silliqlik (jankni yo'qotish)
+     Sabablar: (a) box-shadow'ni animate qiluvchi cheksiz animatsiyalar
+     har frame'da PAINT majburlaydi; (b) skroll paytida og'ir effektlar
+     GPU/CPU ni band qiladi. Yechim: shadow-glow'ni opacity (GPU) ga
+     ko'chiramiz va skroll davomida og'ir effektlarni pauza qilamiz.
+     ============================================================ -->
+<style id="perf-tuning-v1">
+  /* ——— 1) AI tugma glow ———
+     ESLATMA: kodda allaqachon .ai-luxury-btn{animation:none} qilingan
+     (ishlab chiquvchi "tinch, CPU tejash" uchun). Shuning uchun bu yerda
+     QO'SHIMCHA glow animatsiyasi QO'SHMAYMIZ — aks holda jank qaytadi.
+     Faqat luxuryGlow keyframe boshqa joyda qolgan bo'lsa ham, u tugmaga
+     ta'sir qilmaydi. */
+
+  /* ——— 2) Skroll paytida og'ir effektlarni pauza qilish ———
+     body.is-scrolling vaqtida cheksiz animatsiyalar va grain to'xtaydi,
+     shunda barmoq ostida skroll 60fps qoladi. Skroll tugagach tiklanadi. */
+  body.is-scrolling #polish-grain,
+  body.is-scrolling .slider .slide img,
+  body.is-scrolling .es-btn,
+  body.is-scrolling .tl-step.active .tl-dot,
+  body.is-scrolling .neon-brand-card,
+  body.is-scrolling .story-ring.new{
+    animation-play-state: paused !important;
+  }
+  /* Skroll paytida karta::before gradientini vaqtincha o'chirib paintni kamaytiramiz */
+  body.is-scrolling .luxury-card::before{ opacity:0 !important; }
+
+  @media (prefers-reduced-motion: reduce){
+    #polish-grain{ display:none; }
+  }
+</style>
+<script>
+  (function scrollPerf(){
+    // Skroll boshlanganda body.is-scrolling qo'shamiz, tugagach (140ms jim) olib tashlaymiz.
+    var t = null, on = false;
+    function start(){ if(!on){ document.body.classList.add('is-scrolling'); on = true; } }
+    function end(){ document.body.classList.remove('is-scrolling'); on = false; }
+    window.addEventListener('scroll', function(){
+      start();
+      if (t) clearTimeout(t);
+      t = setTimeout(end, 140);
+    }, { passive: true });
+  })();
+</script>
 </body>    
 </html> 
 
