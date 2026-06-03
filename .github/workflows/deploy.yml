@@ -31,11 +31,21 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Stage site (ivy_jewelry_cosmetics va CI fayllari chiqarib tashlanadi)
+        run: |
+          mkdir -p _site
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '_site' \
+            --exclude 'ivy_jewelry_cosmetics' \
+            ./ _site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Repodagi hamma fayl (index.html, banners/, ...) deploy qilinadi
-          path: '.'
+          # Faqat Avto A1 sayti (nested ivy loyiha va CI fayllarisiz)
+          path: '_site'
 
       - name: Deploy to GitHub Pages
         id: deployment

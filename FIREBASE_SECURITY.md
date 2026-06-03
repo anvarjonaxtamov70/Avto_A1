@@ -118,3 +118,36 @@ To'g'ri tartib:
 - ❌ Hozir: auth yo'q → DB faqat Console qoidalari bilan himoyalangan; ular ochiq bo'lsa — jiddiy PII va yaxlitlik xavfi.
 - ✅ Bu PR: auditni hujjatlashtiradi va xavfsiz `database.rules.json` (target) ni repoga qo'shadi.
 - ⏭️ Keyingi qadam: Worker custom-token auth'ni joriy qilib, shu qoidalarni faollashtirish.
+
+
+---
+
+## 8. 🆕 YANGILANISH — kod darajasidagi tuzatishlar (bu PR)
+
+> Quyidagilar **kodga allaqachon kiritildi**. Qolgani — Firebase Console va Cloudflare Worker'da **bir martalik qo'lda sozlash** (kod orqali bajarib bo'lmaydi).
+
+### Kodda bajarilgani
+- **Ochiq proxy yopildi.** `cloudflare-worker.js` ning `/` (sendMessage) yo'li endi `initData` HMAC bilan tekshiradi va `chat_id` ni cheklaydi:
+  - oddiy mijoz — faqat **o'ziga** yoki **adminga**;
+  - admin — istalgan chatga (mijozga javob, broadcast);
+  - `initData` yo'q (APK/brauzer) — faqat **adminga** (mijozlarni soxta xabar bilan aldash vektori yopildi).
+  - Mijoz tomonida barcha yuborishlar `tgProxySend()` orqali ketadi (`initData` avtomatik qo'shiladi).
+- **XSS yopildi.** Sharh (`r.text`, `r.userName`) va buyurtma chati (`msg.text`) endi `escHtml()` bilan chiqariladi.
+- **Telegram HTML inʼyeksiyasi yopildi.** `parse_mode:"HTML"` xabarlarda mahsulot nomi/mijoz matni `escTg()` bilan ekranlanadi (xabar `400` bilan rad etilmaydi).
+- **Stok data-loss tuzatildi.** Buyurtmada endi butun `products` massivi `.set()` bilan qayta yozilmaydi; faqat sotilgan mahsulot/razmer stoki **atomik `transaction`** bilan kamaytiriladi (`_decrementStock`).
+- **Referral ikki tomonlama bonus** endi Worker `/referral` endpoint orqali (admin huquqi bilan, idempotent) beriladi. `refcodes` qiymati `String(uid)` yoziladi (qoida `newData.val() === auth.uid` bilan mos).
+- **Anti-DevTools** (F12/o'ng tugma/`Ctrl+U`/`user-select:none`) olib tashlandi — UX/accessibility tiklandi.
+- Qoidalarga **`referralRedeemed`** tuguni qo'shildi (Worker takror bonusni bloklash uchun ishlatadi; mijoz yoza olmaydi).
+
+### Go-live (qo'lda) tartibi
+1. **Cloudflare Worker > Settings > Variables** (Secret):
+   - `BOT_TOKEN`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (allaqachon kerak edi).
+   - Ixtiyoriy: `ADMIN_IDS="5105291033,483425630"`, `FIREBASE_DB_URL="https://avtoa1shop-default-rtdb.firebaseio.com"`, `REFERRAL_BONUS="20000"`.
+   - Service account'da **Realtime Database** yozish huquqi borligiga ishonch hosil qiling (`/referral` admin yozuvi uchun).
+2. **Firebase Console > Realtime Database > Rules** — `database.rules.json` ni qo'ying.
+3. **DB'da admin allowlist** yarating (bir marta, import yoki qo'lda):
+   ```json
+   { "admins": { "5105291033": true, "483425630": true } }
+   ```
+4. Bitta sinov foydalanuvchi bilan tekshiring: buyurtma berish, sharh, chat, referral.
+5. (Ixtiyoriy, kelgusi bosqich) Cashback/balansni ham server-authoritative qilish — hozir egasi o'z tuguniga yozadi.
