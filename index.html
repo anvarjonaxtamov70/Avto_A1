@@ -5110,6 +5110,8 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         <button id="clearSearchBtn" class="clear-search-btn" onclick="clearSearch()">✕</button>   
     </div>
     <div class="quick-chips hidden" id="quick-chips">
+        <span class="chip" onclick="applyQuickSearch('Motor')" aria-label="Motor qismlari"><svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.49-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg> Motor</span>
+        <span class="chip" onclick="applyQuickSearch('Tormoz')" aria-label="Tormoz qismlari"><svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg> Tormoz</span>
         <span class="chip" onclick="applyQuickSearch('Porshen')"><svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg> Porshen</span>
         <span class="chip" onclick="applyQuickSearch('Val')"><svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.49-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg> Val</span>
         <span class="chip" onclick="applyQuickSearch('Salnik')"><svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg> Salnik</span>
@@ -13710,13 +13712,14 @@ document.addEventListener('click', function (e) {
     }
     function catLabel(cat) {
         if (!cat) return '';
-        var c = String(cat);
-        if (/motor/i.test(c)) return 'Motor';
-        if (/tashqi/i.test(c)) return 'Tashqi';
-        if (/xadav|xodav|salon/i.test(c)) return 'Xadavoy';
-        if (/part/i.test(c)) return 'Ehtiyot qism';
-        if (/tormoz/i.test(c)) return 'Tormoz';
-        return c.split('-').slice(-1)[0].replace(/^\w/, function (m) { return m.toUpperCase(); });
+        var c = String(cat).toLowerCase();
+        // 🗣️ 6/9: kategoriya jargonini mijoz tiliga o'giramiz (yagona lug'at = CAT_DICT)
+        var DICT = window.CAT_DICT || {};
+        for (var key in DICT) {
+            if (DICT.hasOwnProperty(key) && c.indexOf(key) !== -1) return DICT[key];
+        }
+        // Mos jargon topilmasa — oxirgi bo'lakni chiroyli ko'rsatamiz (masalan "chevy-cobalt" -> "Cobalt")
+        return String(cat).split('-').slice(-1)[0].replace(/^\w/, function (m) { return m.toUpperCase(); });
     }
     P.openAnalytics = function () {
         var box = document.getElementById('p2-an-body');
@@ -14902,6 +14905,52 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
       buildToolbar();
     }
   })();
+</script>
+
+<!-- ============================================================
+     🗣️ DESIGN 6/9 — KATEGORIYA NOMLARINI MIJOZ TILIGA (ikkala mavzu)
+     ────────────────────────────────────────────────────────────
+     Muammo: ilovada texnik/jargon kategoriya so'zlari ("Xadovoy",
+     "Tashqi") oddiy mijozga tushunarsiz. Mijoz "yurish qismi" yoki
+     "kuzov" deydi, "xodovoy"ni hamma ham bilmaydi.
+
+     Tahlil natijasi (muhim):
+       • "⚙️ Motor / 🛠️ Xadavoy / 🚘 Tashqi" kartalari — O'LIK markup:
+         renderProducts() har yuklanishda *-parts gridlarni qayta yozadi,
+         shuning uchun ularning matnini HTML'da o'zgartirish behuda
+         (mijozga ko'rinmaydi). Shuning uchun ularga TEGILMADI.
+       • Jonli yagona "kategoriya nomi" funksiyasi — catLabel()
+         (profil analitikasida). U avval "Xadavoy"/"Tashqi" jargon
+         qaytarardi → endi mijoz tiliga o'giradi.
+
+     Yechim — YAGONA markaziy lug'at (window.CAT_DICT). catLabel() shu
+     lug'atni o'qiydi (kalit topilmasa, model nomini chiroyli ko'rsatadi).
+     Kelajakda boshqa joyda kategoriya ko'rsatish kerak bo'lsa — shu
+     lug'atdan foydalanish kifoya (bitta manba, takror yo'q).
+
+     Rang ishlatilmagan (faqat matn/lug'at) — dark va light bir xil.
+     ============================================================ -->
+<script>
+  // 🗣️ 6/9 — Kategoriya jargonini mijoz tiliga o'giruvchi YAGONA lug'at.
+  // Kalitlar kichik harfда; catLabel(cat) cat.indexOf(key) bilan moslaydi.
+  // Eng aniq (uzun) kalitlar yuqorida turishi shart — birinchi moslik g'olib.
+  window.CAT_DICT = {
+    'dvigatel'  : 'Motor (dvigatel)',
+    'motor'     : 'Motor (dvigatel)',
+    'xodovoy'   : 'Yurish qismi (xodovoy)',
+    'xadovoy'   : 'Yurish qismi (xodovoy)',
+    'xadav'     : 'Yurish qismi (xodovoy)',
+    'podveska'  : 'Yurish qismi (xodovoy)',
+    'tormoz'    : 'Tormoz tizimi',
+    'tarmoz'    : 'Tormoz tizimi',
+    'kuzov'     : 'Tashqi (kuzov) qismlari',
+    'kabina'    : 'Tashqi (kuzov) qismlari',
+    'tashqi'    : 'Tashqi (kuzov) qismlari',
+    'salon'     : 'Salon (ichki) qismlari',
+    'elektr'    : 'Elektr jihozlari',
+    'fara'      : 'Faralar va optika',
+    'part'      : 'Ehtiyot qism'
+  };
 </script>
 </body>    
 </html> 
