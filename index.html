@@ -13939,6 +13939,122 @@ document.addEventListener('click', function (e) {
     else init();
 })();
 </script>
+
+<!-- ============================================================
+     ✨ PREMIUM POLISH LAYER (v1) — IZOLYATSIYALANGAN, ADDITIV
+     Mavjud CSS'ga tegmaydi. Faqat YANGI, alohida elementlar qo'shadi:
+       1) Atmosfera grain/noise (chuqurlik)
+       2) Karta tilla hairline border-gradient (.luxury-card::before — bo'sh edi)
+       3) Tepada nozik tilla scroll-progress chizig'i
+     prefers-reduced-motion hurmat qilinadi. pointer-events: none.
+     ============================================================ -->
+<style id="polish-layer-v1">
+    /* ——— 1) Atmosfera grain (juda mayin, butun ekran) ——— */
+    #polish-grain {
+        position: fixed;
+        inset: 0;
+        z-index: 9990;
+        pointer-events: none;
+        opacity: 0.05;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 160px 160px;
+        mix-blend-mode: soft-light;
+    }
+    html[data-theme="light"] #polish-grain { opacity: 0.035; }
+
+    /* ——— 2) Karta tilla hairline border-gradient ———
+       .luxury-card::before BO'SH edi (tekshirildi) — xavfsiz.
+       Faqat 1px chekka halqa (mask-composite) — kontentni qoplamaydi. */
+    .luxury-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        padding: 1px;
+        background: linear-gradient(
+            145deg,
+            rgba(212, 175, 55, 0.55) 0%,
+            rgba(212, 175, 55, 0.05) 38%,
+            rgba(255, 255, 255, 0.10) 100%
+        );
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+                mask-composite: exclude;
+        pointer-events: none;
+        z-index: 3;
+        opacity: 0.9;
+        transition: opacity 0.3s ease;
+    }
+    .luxury-card:active::before { opacity: 1; }
+    html[data-theme="light"] .luxury-card::before {
+        background: linear-gradient(
+            145deg,
+            rgba(154, 122, 30, 0.40) 0%,
+            rgba(154, 122, 30, 0.04) 42%,
+            rgba(0, 0, 0, 0.05) 100%
+        );
+    }
+
+    /* ——— 3) Tepa scroll-progress (nozik tilla chiziq) ——— */
+    #polish-progress {
+        position: fixed;
+        top: 0; left: 0;
+        height: 2px;
+        width: 0;
+        z-index: 9999;
+        background: linear-gradient(90deg, var(--luxury-gold, #C9A84C), #f2d98a);
+        box-shadow: 0 0 8px rgba(212, 175, 55, 0.55);
+        pointer-events: none;
+        transform-origin: left center;
+        transition: width 0.12s linear, opacity 0.3s ease;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        #polish-grain { display: none; }
+        #polish-progress { transition: none; }
+        .luxury-card::before { transition: none; }
+    }
+</style>
+<script>
+    (function polishLayer() {
+        function ready(fn) {
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+            else fn();
+        }
+        ready(function () {
+            try {
+                // 1) Grain qatlamini qo'shamiz (faqat bir marta)
+                if (!document.getElementById('polish-grain')) {
+                    var g = document.createElement('div');
+                    g.id = 'polish-grain';
+                    document.body.appendChild(g);
+                }
+                // 3) Scroll-progress chizig'i
+                var bar = document.getElementById('polish-progress');
+                if (!bar) {
+                    bar = document.createElement('div');
+                    bar.id = 'polish-progress';
+                    document.body.appendChild(bar);
+                }
+                var ticking = false;
+                function updateProgress() {
+                    var doc = document.documentElement;
+                    var st = window.pageYOffset || doc.scrollTop || 0;
+                    var h = (doc.scrollHeight - doc.clientHeight) || 1;
+                    var pct = Math.max(0, Math.min(100, (st / h) * 100));
+                    bar.style.width = pct + '%';
+                    bar.style.opacity = pct > 0.5 ? '1' : '0';
+                    ticking = false;
+                }
+                window.addEventListener('scroll', function () {
+                    if (!ticking) { window.requestAnimationFrame(updateProgress); ticking = true; }
+                }, { passive: true });
+                window.addEventListener('resize', updateProgress, { passive: true });
+                updateProgress();
+            } catch (e) { console.warn('[polish] xato:', e); }
+        });
+    })();
+</script>
 </body>    
 </html> 
 
