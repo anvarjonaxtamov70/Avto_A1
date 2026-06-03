@@ -3485,10 +3485,18 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         .modal-standard, #productModal, .sticky-admin-footer {
             padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
         }
-        /* 3. iOS Rubber-banding (Muzdek sirpanish va tortilish) */
-        .modal-standard, #productModal, .stories-container, .slider, #content-area, .pm-info-section, .chat-messages {
-            -webkit-overflow-scrolling: touch !important; 
-            overscroll-behavior-y: auto !important; /* Konteyner oxirida prujinadek tortiladi */
+        /* 3. iOS skroll silliqligi — AMMO rezina (rubber-band) YO'Q.
+           Avval bu yerda overscroll-behavior-y:auto edi ("prujinadek tortiladi"),
+           u body/html dagi none ni yengib, hujjatni cho'zardi. Endi: ichki
+           oynalar 'contain' (skroll tashqariga toshmaydi, lekin chekkada
+           cho'zilmaydi), hujjat darajasidagilar 'none'. */
+        .modal-standard, #productModal, .pm-info-section, .chat-messages {
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+        }
+        .stories-container, .slider, #content-area {
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: none !important; /* rezina effekti yo'q */
         }
 
         /* 4. Tepadagi shisha menyuni yanada tiniqroq "Apple Glass" ga aylantirish */
@@ -6246,44 +6254,58 @@ document.addEventListener('touchmove', function(e) {
 // (Telegram) holatlari uchun qo'shimcha sug'urta.
 // ====================================================================
 (function blockDocumentRubberBand() {
-    var touchStartY = 0;
-    // O'zi skroll bo'ladigan (ichki) elementlar — ularga aralashmaymiz
-    var SCROLLABLE_SEL =
-        '#productModal, .modal-standard, .pm-slider, .pm-info-section, ' +
-        '#ai-chat-box, #story-content, .chat-messages, .pm-similar-wrapper, ' +
-        '#admin-orders-list, #admin-customers-list, #admin-drafts-list, ' +
-        '#admin-inventory-list, #admin-stats-content, #od-chat-messages, ' +
-        '#admin-chat-messages, #pm-reviews-list, #pm-size-options, ' +
-        '#pm-car-options, .slider, .stories-container';
+    var startY = 0, startX = 0, scroller = null;
+
+    // Barmoq ostidan eng yaqin VERTIKAL skroll bo'ladigan ajdodni topamiz.
+    // (overflow-y auto/scroll VA scrollHeight > clientHeight bo'lsa — haqiqiy skroller)
+    function findScroller(node) {
+        while (node && node.nodeType === 1 && node !== document.body && node !== document.documentElement) {
+            var oy = '';
+            try { oy = getComputedStyle(node).overflowY; } catch (e) {}
+            if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight + 1) {
+                return node;
+            }
+            node = node.parentNode;
+        }
+        return null;
+    }
 
     document.addEventListener('touchstart', function(e) {
         if (e.touches && e.touches.length === 1) {
-            touchStartY = e.touches[0].clientY;
+            startY = e.touches[0].clientY;
+            startX = e.touches[0].clientX;
+            // Skroller'ni BIR MARTA (touchstart) aniqlaymiz — touchmove'da tez ishlaydi
+            scroller = findScroller(e.target);
         }
     }, { passive: true });
 
     document.addEventListener('touchmove', function(e) {
-        // Ikki barmoq (zoom/pinch) bo'lsa — aralashmaymiz
+        // Ikki barmoq (zoom/pinch) — aralashmaymiz
         if (!e.touches || e.touches.length !== 1) return;
-        // Oyna ochiq bo'lsa — yuqoridagi handler hal qiladi
+        // Oyna ochiq bo'lsa — yuqoridagi handler (orqa fonni muzlatish) hal qiladi
         if (document.body.style.overflow === 'hidden') return;
 
-        var t = e.target;
-        // Barmoq ichki skroll bo'ladigan element ustida bo'lsa — to'liq ruxsat
-        // (CSS overscroll-behavior:contain skrollni tashqariga chiqarmaydi)
-        if (t && t.closest && t.closest(SCROLLABLE_SEL)) return;
+        var dY = e.touches[0].clientY - startY;
+        var dX = e.touches[0].clientX - startX;
+        // Gorizontal imo (banner slider, storis lentasi) — vertikal rezinaga
+        // aralashmaymiz, slayder erkin suriladi.
+        if (Math.abs(dX) > Math.abs(dY)) return;
 
-        var deltaY = e.touches[0].clientY - touchStartY;
-        var scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
-        var atTop = scrollTop <= 0;
-        var atBottom = (window.innerHeight + scrollTop) >=
-                       (document.documentElement.scrollHeight - 1);
-
-        // Eng tepada turib pastga tortish (deltaY > 0) yoki
-        // eng pastda turib tepaga tortish (deltaY < 0) = rezina effekti.
-        if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
-            e.preventDefault();
+        if (scroller) {
+            // Ichki skroller: faqat O'Z chekkasida (rezina) bloklaymiz —
+            // ichki skroll erkin ishlaydi, lekin chekkada cho'zilmaydi.
+            var atTopS = scroller.scrollTop <= 0;
+            var atBotS = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+            if ((atTopS && dY > 0) || (atBotS && dY < 0)) e.preventDefault();
+            return;
         }
+
+        // Skroller topilmadi -> hujjat (window) skroli. Eng tepada pastga yoki
+        // eng pastda tepaga tortish = rezina effekti -> bloklaymiz.
+        var st = window.scrollY || document.documentElement.scrollTop || 0;
+        var atTop = st <= 0;
+        var atBottom = (window.innerHeight + st) >= (document.documentElement.scrollHeight - 1);
+        if ((atTop && dY > 0) || (atBottom && dY < 0)) e.preventDefault();
     }, { passive: false });
 })();
     // ==========================================
