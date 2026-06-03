@@ -14405,6 +14405,114 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
   html[data-theme="light"] .quick-chips .chip .ico{ color:var(--luxury-gold-dark,#7A5E12); }
   .story-item span .ico, .modal-header h2 .ico{ vertical-align:-0.15em; }
 </style>
+
+<!-- ============================================================
+     🏠 DESIGN 4/9 — BOSH SAHIFA: BANNER/SLIDER/BO'LIMLAR (ikkala mavzu)
+     ────────────────────────────────────────────────────────────
+     Maqsad:
+       • Banner sliderga POZITSIYA INDIKATORI (nuqtalar) — foydalanuvchi
+         nechta banner borligini va qaysisida turganini ko'radi.
+       • Faol nuqta tilla "pill" — slider scroll'iga sinxron.
+       • Bo'lim sarlavhalariga nafis TILLA AKSENT chiziq — "bo'limlar"
+         vizual ierarxiyasi kuchayadi.
+     Additiv qatlam — mavjud qoidalar/JS ni o'chirmaydi. Mavjud inline
+     onscroll="updatePartnerBadge()" va avtomat-slayd saqlanadi (yangi
+     scroll listener ADDITIV qo'shiladi). Dark va light bir xil ishlaydi
+     (slider tubida global qoraygan gradient bor — oq/tilla nuqta ikkala
+     mavzuda ham aniq ko'rinadi).
+     ============================================================ -->
+<style id="design-system-v4">
+  /* ——— 1) BANNER SLIDER NUQTA INDIKATORI ——— */
+  .slider-dots-bar{
+    position:absolute; left:0; bottom:10px; width:100%;
+    display:flex; justify-content:center; align-items:center; gap:6px;
+    z-index:6; pointer-events:none;
+  }
+  .slider-dot{
+    width:7px; height:7px; border-radius:50%;
+    background:rgba(255,255,255,0.45);
+    box-shadow:0 1px 3px rgba(0,0,0,0.45);
+    transition:width .3s var(--ds-ease,ease), background .3s var(--ds-ease,ease), border-radius .3s var(--ds-ease,ease);
+    pointer-events:auto; cursor:pointer;
+  }
+  .slider-dot.active{
+    width:20px; border-radius:4px;
+    background:linear-gradient(90deg,var(--luxury-gold-light,#f2d98a),var(--luxury-gold,#C9A84C));
+  }
+
+  /* ——— 2) BO'LIM SARLAVHASI — tilla aksent chiziq ———
+     ::before alohida quti (matnning background-clip:text fill'iga ta'sir
+     qilmaydi), shuning uchun chiziq to'liq tilla bo'lib chiqadi. */
+  .section-title{ position:relative; }
+  .section-title::before{
+    content:''; display:inline-block; width:4px; height:0.8em;
+    margin-right:9px; vertical-align:-0.05em; border-radius:2px;
+    background:linear-gradient(180deg,var(--luxury-gold-light,#f2d98a),var(--luxury-gold,#C9A84C));
+  }
+
+  /* ——— 3) BO'LIM KARTALARI (brendlar) — nafis nafas ——— */
+  .neon-brand-card{ gap: 4px; }
+  .neon-brand-card .pay-arrow{ transition: transform .25s var(--ds-ease,ease); }
+  .neon-brand-card:active .pay-arrow{ transform: translateX(3px); }
+
+  @media (prefers-reduced-motion: reduce){
+    .slider-dot{ transition:none; }
+    .neon-brand-card .pay-arrow{ transition:none; }
+  }
+</style>
+<script>
+  // 🏠 4/9 — Banner slider nuqta indikatori (sinxron, ikkala mavzu)
+  (function homeSliderDots(){
+    function init(){
+      var slider = document.getElementById('main-slider');
+      if(!slider) return;
+      var imgs = slider.querySelectorAll('img');
+      if(!imgs.length) return;
+
+      var cont = (slider.closest && slider.closest('.slider-container')) || slider.parentNode;
+      var bar = document.getElementById('main-slider-dots');
+      if(!bar){
+        bar = document.createElement('div');
+        bar.id = 'main-slider-dots';
+        bar.className = 'slider-dots-bar';
+        cont.appendChild(bar);
+      }
+      bar.innerHTML = '';
+
+      var dots = [];
+      for(var i=0;i<imgs.length;i++){
+        var d = document.createElement('span');
+        d.className = 'slider-dot' + (i===0 ? ' active' : '');
+        (function(idx){
+          d.addEventListener('click', function(){
+            var w = slider.clientWidth || 1;
+            slider.scrollTo({ left: idx * w, behavior: 'smooth' });
+          });
+        })(i);
+        bar.appendChild(d);
+        dots.push(d);
+      }
+
+      function update(){
+        var w = slider.clientWidth || 1;
+        var idx = Math.round(slider.scrollLeft / w);
+        for(var i=0;i<dots.length;i++){
+          dots[i].classList.toggle('active', i === idx);
+        }
+      }
+      // ADDITIV: mavjud inline onscroll="updatePartnerBadge()" saqlanadi
+      slider.addEventListener('scroll', update, { passive: true });
+      window.addEventListener('resize', update);
+      update();
+    }
+
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+</script>
 </body>    
 </html> 
 
