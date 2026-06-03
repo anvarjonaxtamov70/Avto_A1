@@ -5015,15 +5015,32 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 <body ontouchstart="">
     <div id="login-screen" class="login-overlay hidden">
         <div class="login-card">
-            <h2 style="color: var(--luxury-gold); margin-top: 0;">Avto A1</h2>
-            <p style="color: #888; font-size: 13px; margin-bottom: 25px;">Buyurtma berish va do'kondan foydalanish uchun raqamingizni kiriting</p>
-            
-            <input type="text" id="login-name" placeholder="Ismingiz (masalan: Anvar)" class="luxury-input">
-            <input type="tel" id="login-phone" placeholder="+998 90 123 45 67" class="luxury-input" value="+998">
-            
-            <button class="btn-add-cart" style="justify-content: center !important; font-size: 16px !important; margin-top: 10px !important;" onclick="manualLogin()">
+            <div class="login-logo" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>
+            </div>
+            <h2 class="login-title">Xush kelibsiz!</h2>
+            <p class="login-sub">Avto A1 do'koniga kirish uchun ism va telefon raqamingizni qoldiring — buyurtmalaringiz shu raqamga bog'lanadi.</p>
+
+            <div class="login-field">
+                <label for="login-name" class="login-label">Ismingiz</label>
+                <input type="text" id="login-name" placeholder="Masalan: Anvar" class="luxury-input" autocomplete="name" oninput="window._loginClearErr && window._loginClearErr('login-name')">
+                <span class="login-err" id="err-login-name"></span>
+            </div>
+
+            <div class="login-field">
+                <label for="login-phone" class="login-label">Telefon raqamingiz</label>
+                <input type="tel" id="login-phone" placeholder="+998 90 123 45 67" class="luxury-input" value="+998" inputmode="numeric" autocomplete="tel" maxlength="19" oninput="window._loginFormatPhone && window._loginFormatPhone(this)" onkeydown="window._loginPhoneKey && window._loginPhoneKey(event)">
+                <span class="login-err" id="err-login-phone"></span>
+            </div>
+
+            <button id="login-submit-btn" class="btn-add-cart login-btn" style="justify-content: center !important; font-size: 16px !important; margin-top: 6px !important;" onclick="manualLogin()">
                 Tizimga kirish
             </button>
+
+            <div class="login-trust">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+                Ma'lumotlaringiz xavfsiz saqlanadi
+            </div>
         </div>
     </div>
 <div class="toast-container" id="toast-container"></div>
@@ -6571,27 +6588,56 @@ const Haptics = {
     }
 
     window.manualLogin = function() {
-        let nameVal = document.getElementById('login-name').value.trim();
-        let phoneVal = document.getElementById('login-phone').value.trim();
-        
+        let nameEl = document.getElementById('login-name');
+        let phoneEl = document.getElementById('login-phone');
+        let nameVal = nameEl.value.trim();
+        let phoneVal = phoneEl.value.trim();
+        // Faqat raqamlar (+998 dan keyin 9 ta = O'zbekiston mobil raqami)
+        let digits = phoneVal.replace(/[^0-9]/g, '');
 
-    if(!nameVal || phoneVal.length < 9) { 
-        Haptics.warning(); // ⚠️ "Xato" tebranishi
-        showToast("Ism va telefonni kiriting!", "warning"); 
-        return; 
-    }        
-        let fakeId = "apk_" + phoneVal.replace(/[^0-9]/g, '');
+        // 🧈 9/9: qo'pol toast o'rniga maydon ostida yumshoq xatolik
+        let ok = true;
+        if (window._loginSetErr) {
+            if (!nameVal) { window._loginSetErr('login-name', "Ismingizni kiriting"); ok = false; }
+            // 998 + 9 raqam = 12 ta raqam
+            if (digits.length < 12) { window._loginSetErr('login-phone', "To'liq raqam kiriting: +998 90 123 45 67"); ok = false; }
+        } else if (!nameVal || digits.length < 12) {
+            ok = false;
+        }
+        if (!ok) {
+            try { Haptics.warning(); } catch(e) {}
+            // Birinchi xato maydonga fokus
+            if (!nameVal) nameEl.focus(); else phoneEl.focus();
+            return;
+        }
+
+        // Tugma "yuklanmoqda" holatiga o'tadi (ikki marta bosishning oldini oladi)
+        let btn = document.getElementById('login-submit-btn');
+        if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; btn.classList.add('is-loading'); btn.textContent = 'Kirilmoqda...'; }
+
+        let fakeId = "apk_" + digits;
         window.currentUser = fakeId;
         myProfile.name = nameVal;
         myProfile.phone = phoneVal;
-        
+
         localStorage.setItem('avto_a1_user', JSON.stringify({ id: fakeId, name: nameVal, phone: phoneVal }));
-        document.getElementById('login-screen').classList.add('hidden');
-        
-        updateProfileUI();
-        showToast("Tizimga muvaffaqiyatli kirdingiz!", "success");
-        initUserData(); // Mijoz qo'lda kirgandan keyin ruxsat beramiz
+
+        try { Haptics.success(); } catch(e) {}
+        // Kichik kechikish — tugma holati ko'rinib, o'tish silliq bo'ladi
+        setTimeout(function(){
+            let ls = document.getElementById('login-screen');
+            if (ls) ls.classList.add('login-leaving');
+            setTimeout(function(){
+                if (ls) { ls.classList.add('hidden'); ls.classList.remove('login-leaving'); }
+                if (btn) { btn.dataset.busy = '0'; btn.classList.remove('is-loading'); btn.textContent = 'Tizimga kirish'; }
+            }, 280);
+            updateProfileUI();
+            showToast("Xush kelibsiz, " + nameVal + "!", "success");
+            initUserData(); // Mijoz qo'lda kirgandan keyin ruxsat beramiz
+        }, 180);
     };
+
+    window._manualLogin_legacy_removed = null;
 
     // DARHOL TEKSHIRAMIZ
     checkUserLogin();
@@ -15092,6 +15138,139 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
     .empty-state-pro .es-icon{ animation:none !important; }
   }
 </style>
+
+<!-- ============================================================
+     🔑 DESIGN 9/9 — LOGIN OQIMINI YUMSHATISH (ikkala mavzu)
+     ────────────────────────────────────────────────────────────
+     Kontekst: Telegramда ochilsa — avtomat login (login ekrani
+     ko'rinmaydi). FAQAT APK/brauzerда login ekrani chiqadi.
+     Avval u qo'pol edi: oddiy inputlar, xato faqat toast, telefon
+     formatsiz, animatsiyasiz.
+
+     Maqsad — oqimni iliq va ishonchli qilish:
+       • Iliq sarlavha ("Xush kelibsiz!") + logo + tinchlantiruvchi
+         "ma'lumotlaringiz xavfsiz" yozuvi.
+       • Maydon yorliqlari (label) — nima yozishni aniq bildiradi.
+       • Telefon JONLI formatlanadi: +998 90 123 45 67 (kursor +998 ni
+         o'chira olmaydi).
+       • Xatolik maydon OSTIDA yumshoq ko'rsatiladi (qo'pol toast emas).
+       • Kirish tugmasi "Kirilmoqda..." holatiga o'tadi (ikki marta
+         bosish bloklanadi), so'ng silliq fade-out.
+       • Karta yumshoq "scale+fade" bilan ochiladi.
+     Mavjud manualLogin mantig'i (apk_ id, localStorage, initUserData)
+     SAQLANDI — faqat kuchaytirildi. prefers-reduced-motion hurmat.
+     ============================================================ -->
+<style id="design-system-v9">
+  /* ——— Karta ochilish animatsiyasi ——— */
+  #login-screen:not(.hidden) .login-card{ animation: loginCardIn .42s var(--ds-spring, cubic-bezier(.34,1.56,.64,1)) both; }
+  @keyframes loginCardIn{ from{ opacity:0; transform:translateY(16px) scale(.96); } to{ opacity:1; transform:none; } }
+  #login-screen{ transition: opacity .28s ease; }
+  #login-screen.login-leaving{ opacity:0; }
+
+  /* ——— Logo doirasi ——— */
+  .login-logo{
+    width:62px; height:62px; margin:0 auto 14px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--luxury-gold,#C9A84C);
+    background:radial-gradient(circle, rgba(201,168,76,0.20) 0%, rgba(201,168,76,0.05) 70%, transparent 100%);
+    border:1px solid rgba(201,168,76,0.30);
+  }
+  .login-title{ color:var(--text-main,#fff); margin:0 0 6px; font-size:22px; font-weight:800; }
+  .login-sub{ color:var(--text-muted,#8a8a8a); font-size:13px; line-height:1.5; margin:0 0 22px; }
+
+  /* ——— Maydon + yorliq + xato ——— */
+  .login-field{ text-align:left; margin-bottom:14px; }
+  .login-label{ display:block; font-size:12px; font-weight:700; color:var(--text-muted,#8a8a8a); margin:0 0 6px 2px; letter-spacing:.2px; }
+  .login-field .luxury-input{ margin-bottom:0; }
+  .login-err{ display:none; font-size:11.5px; font-weight:600; color:#ff6b6b; margin:6px 0 0 2px; }
+  .login-field.has-err .luxury-input{ border-color:#ff6b6b !important; background:rgba(255,107,107,0.06) !important; }
+  .login-field.has-err .login-err{ display:block; }
+
+  /* ——— Tugma yuklanish holati ——— */
+  .login-btn.is-loading{ opacity:.75; pointer-events:none; }
+
+  /* ——— Ishonch yozuvi ——— */
+  .login-trust{
+    display:flex; align-items:center; justify-content:center; gap:5px;
+    margin-top:16px; font-size:11px; font-weight:600;
+    color:var(--text-muted,#8a8a8a);
+  }
+  .login-trust svg{ fill:var(--luxury-gold,#C9A84C); opacity:.8; }
+
+  /* ——— Yorug' rejim ——— */
+  html[data-theme="light"] .login-title{ color:#211C12; }
+  html[data-theme="light"] .login-sub,
+  html[data-theme="light"] .login-label,
+  html[data-theme="light"] .login-trust{ color:#796E58; }
+  html[data-theme="light"] .login-logo{ color:var(--luxury-gold-dark,#7A5E12); border-color:rgba(154,122,30,0.30); }
+  html[data-theme="light"] .login-trust svg{ fill:var(--luxury-gold-dark,#7A5E12); }
+  html[data-theme="light"] .login-err{ color:#d8392b; }
+  html[data-theme="light"] .login-field.has-err .luxury-input{ border-color:#d8392b !important; background:rgba(216,57,43,0.05) !important; }
+
+  @media (prefers-reduced-motion: reduce){
+    #login-screen:not(.hidden) .login-card{ animation:none; }
+    #login-screen{ transition:none; }
+  }
+</style>
+<script>
+  // 🔑 9/9 — Login: telefon jonli format + maydon ostida yumshoq xatolik
+  (function loginFlowSoften(){
+    // Maydon ostida xatolik ko'rsatish/tozalash
+    window._loginSetErr = function(id, msg){
+      var el = document.getElementById(id);
+      var err = document.getElementById('err-' + id);
+      if (el && el.parentNode) el.parentNode.classList.add('has-err');
+      if (err) err.textContent = msg || '';
+    };
+    window._loginClearErr = function(id){
+      var el = document.getElementById(id);
+      if (el && el.parentNode) el.parentNode.classList.remove('has-err');
+    };
+
+    // Telefonni jonli formatlash: +998 90 123 45 67
+    // (faqat O'zbekiston formati; +998 prefiks himoyalangan)
+    window._loginFormatPhone = function(input){
+      window._loginClearErr('login-phone');
+      var d = (input.value || '').replace(/[^0-9]/g, '');
+      // 998 prefiksini ta'minlaymiz
+      if (d.indexOf('998') === 0) d = d.slice(3);
+      else if (d.length && '90'.indexOf(d[0]) === -1 && d[0] !== '9' && d[0] !== '8' && d[0] !== '7' && d[0] !== '3') {
+        // foydalanuvchi 998siz yozsa ham, raqamlarni operator kodi sifatida olamiz
+      }
+      d = d.slice(0, 9); // operator(2) + 7 raqam
+      var out = '+998';
+      if (d.length > 0) out += ' ' + d.slice(0, 2);
+      if (d.length > 2) out += ' ' + d.slice(2, 5);
+      if (d.length > 5) out += ' ' + d.slice(5, 7);
+      if (d.length > 7) out += ' ' + d.slice(7, 9);
+      input.value = out;
+    };
+
+    // Backspace bilan "+998 " ni o'chirib bo'lmasin (kursor himoyasi)
+    window._loginPhoneKey = function(e){
+      var input = e.target;
+      if ((e.key === 'Backspace' || e.key === 'Delete') &&
+          (input.value === '+998' || input.value === '+998 ')) {
+        e.preventDefault();
+      }
+    };
+
+    // Enter bilan kirish (ism yoki telefon maydonida)
+    function bindEnter(){
+      ['login-name','login-phone'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el && !el._enterBound){
+          el._enterBound = true;
+          el.addEventListener('keydown', function(ev){
+            if (ev.key === 'Enter'){ ev.preventDefault(); if (typeof manualLogin === 'function') manualLogin(); }
+          });
+        }
+      });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindEnter);
+    else bindEnter();
+  })();
+</script>
 </body>    
 </html> 
 
