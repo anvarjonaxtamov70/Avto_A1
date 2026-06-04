@@ -53,6 +53,17 @@ MINI_APP_URL = os.getenv("MINI_APP_URL", "https://anvarjonaxtamov70.github.io/Av
 FIREBASE_URL = os.getenv("FIREBASE_DB_URL", "https://avtoa1shop-default-rtdb.firebaseio.com").rstrip("/")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
+# Cloudflare Worker (storis media PROXY + sendMessage). Storis rasm/videolari
+# shu Worker orqali o'qiladi => link DOIMIY bo'ladi, token sirqib chiqmaydi.
+WORKER_URL = os.getenv("WORKER_URL", "https://avtoa1bot.anvaraxtamov70.workers.dev").rstrip("/")
+
+# Storis kategoriyalari — Mini App (index.html) dagi halqalar bilan bir xil bo'lishi SHART.
+# Admin shu hashteglardan birini caption qilib yuboradi (masalan: #aksiyalar).
+VALID_STORY_CATEGORIES = {
+    "aksiyalar", "bugun", "mijozlar", "dostavka",
+    "kafolat", "lokatsiya", "tolov", "aloqa",
+}
+
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "5105291033,483425630").replace(" ", "").split(",") if x]
 ADMIN_ID = ADMIN_IDS[0] if ADMIN_IDS else 0
 
@@ -654,37 +665,65 @@ async def handle_webapp_data(message: types.Message):
 
 
 # =====================================================================
-# STORIS QO'SHISH (rasm/video) — endi token bilan, 401 yo'q
+# STORIS QO'SHISH (rasm/video)
+#   - src endi DOIMIY proxy link (Worker /media?id=<file_id>)
+#   - Token Firebase'ga yozilmaydi (xavfsiz), link eskirmaydi
+#   - Videoga poster (muqova) — qora ekran o'rniga birinchi kadr
 # =====================================================================
 @dp.message((F.photo | F.video) & F.caption.startswith("#"))
 async def handle_stories(message: types.Message, bot: Bot):
     if message.from_user.id not in ADMIN_IDS:
         return
 
-    category = message.caption.strip().replace("#", "").strip().lower()
+    category = message.caption.strip().lstrip("#").strip().lower()
+    if category not in VALID_STORY_CATEGORIES:
+        await message.reply(
+            f"Noto'g'ri kategoriya: <b>#{category or '(bo`sh)'}</b>\n\n"
+            "Storis quyidagi hashteglardan biri bilan yuborilishi kerak:\n"
+            "<code>#aksiyalar  #bugun  #mijozlar  #dostavka</code>\n"
+            "<code>#kafolat  #lokatsiya  #tolov  #aloqa</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    poster = ""
     if message.photo:
         file_id = message.photo[-1].file_id
         media_type = "image"
     else:
         file_id = message.video.file_id
         media_type = "video"
+        # Video muqovasi (thumbnail) — qora ekran o'rniga ko'rinadi
+        thumb = getattr(message.video, "thumbnail", None) or getattr(message.video, "thumb", None)
+        if thumb:
+            poster = f"{WORKER_URL}/media?id={thumb.file_id}"
 
     msg = await message.reply("Storis tayyorlanmoqda, kuting...")
     try:
-        file_info = await bot.get_file(file_id)
-        direct_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_info.file_path}"
+        # get_file faqat metadata tekshiradi; >20MB bo'lsa shu yerda xato beradi
+        await bot.get_file(file_id)
+
+        # MUHIM: vaqtinchalik telegram URL EMAS — DOIMIY proxy URL saqlanadi.
+        # (Eski kodda src telegram fayl linki edi: ~1 soatdan keyin eskirib,
+        #  video/rasm "yo'qolib" qolardi. Endi link hech qachon eskirmaydi.)
+        src = f"{WORKER_URL}/media?id={file_id}"
         story_id = str(message.message_id)
         story_data = {
-            "id": story_id, "type": media_type, "src": direct_url,
+            "id": story_id,
+            "type": media_type,
+            "src": src,
+            "file_id": file_id,   # kerak bo'lsa qayta resolve qilish uchun
+            "poster": poster,
             "timestamp": int(message.date.timestamp() * 1000),
         }
 
-        # ENG MUHIM: token bilan yozamiz (aks holda 401)
+        # Token bilan yozamiz (aks holda 401)
         async with aiohttp.ClientSession() as session:
             async with session.put(fb_url(f"stories/{category}/{story_id}"), json=story_data) as resp:
                 if resp.status == 200:
                     await msg.edit_text(
-                        f"Muvaffaqiyatli! Bu {media_type} <b>#{category.capitalize()}</b> storisiga qo'shildi.",
+                        f"Muvaffaqiyatli! Bu {media_type} <b>#{category.capitalize()}</b> storisiga qo'shildi.\n"
+                        "Link DOIMIY — video endi o'chib ketmaydi.",
                         parse_mode="HTML",
                     )
                 else:
@@ -694,7 +733,8 @@ async def handle_stories(message: types.Message, bot: Bot):
         logging.error(f"Storis yuklash xatosi: {e}")
         await msg.edit_text(
             f"Xatolik: {str(e)}\n\n"
-            "(Eslatma: Telegram bot orqali fayl 20MB gacha. Videoni siqibroq tashlang)."
+            "Eslatma: Telegram bot orqali fayl 20MB gacha yuklanadi. "
+            "Kattaroq videoni siqib (compress) qayta yuboring."
         )
 
 
