@@ -6965,7 +6965,7 @@ function showToast(m, t = 'success') {
 
     function toggleChip(el) { el.classList.toggle('selected'); }
 
-    function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(ok) { productsDB = productsDB.filter(x => x.id !== id); db.ref('products').set(productsDB).then(() => { showToast("O'chirildi!"); closeModal(); }); } }); }
+    function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(!ok) return; window._rewriteProductsSafely(function(fresh){ return fresh.filter(x => x.id !== id); }).then(() => { showToast("O'chirildi!"); closeModal(); }).catch(() => showToast("Saqlashda xato!", "warning")); }); }
 
     function openAdminInventory() {
         document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.replaceState({ modal: 'adminInventoryModal' }, "");
@@ -10347,19 +10347,17 @@ window.deleteAllDrafts = () => {
 window.executeDeleteAllDrafts = () => {
     // 2. Bazadagi jami tovarlar sonini eslab qolamiz
     let originalCount = productsDB.length;
-    
-    // 3. Faqat qoralama bo'lmagan (is_draft yozuvi yo'q) tovarlarni saqlab qolamiz
-    productsDB = productsDB.filter(p => !p.is_draft);
-    
-    let deletedCount = originalCount - productsDB.length;
+    let deletedCount = productsDB.filter(p => p.is_draft).length;
 
     if (deletedCount === 0) {
         showToast("O'chirish uchun qoralamalar yo'q!", "warning");
         return;
     }
 
-    // 4. Tozalangan bazani Firebase'ga yuboramiz
-    db.ref('products').set(productsDB).then(() => {
+    // #7: eng so'nggi holatni o'qib, faqat qoralamalarni olib tashlab yozamiz
+    window._rewriteProductsSafely(function (fresh) {
+        return fresh.filter(p => !p.is_draft);
+    }).then(() => {
         showToast(`✅ ${deletedCount} ta qoralama o'chirildi!`, "success");
         filterAdminDrafts(); // Oynadagi ro'yxatni yangilab qo'yamiz (bo'm-bo'sh bo'lib qoladi)
     }).catch(err => {
@@ -10433,26 +10431,27 @@ window.deleteFolder = (e, batchId) => {
 };
 
 window.executeDeleteFolder = (batchId) => {
-    let itemsToDelete = productsDB.filter(p => p.is_draft && (p.batch_id || "Boshqalar") === batchId);
-    
-    itemsToDelete.forEach(draft => {
-        let draftIndex = productsDB.findIndex(p => p.id === draft.id);
-        if(draftIndex !== -1) {
-            productsDB.splice(draftIndex, 1);
-            if (draft.has_conflict) {
-                let oldIndex = productsDB.findIndex(p => p.name.toLowerCase() === draft.name.toLowerCase() && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
-                if (oldIndex !== -1) {
-                    delete productsDB[oldIndex].is_draft;
-                    productsDB[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+    // #7: eng so'nggi holat ustida ishlaymiz (begona tovarlar yo'qolmaydi)
+    window._rewriteProductsSafely(function (fresh) {
+        let itemsToDelete = fresh.filter(p => p.is_draft && (p.batch_id || "Boshqalar") === batchId);
+        itemsToDelete.forEach(draft => {
+            let draftIndex = fresh.findIndex(p => p.id === draft.id);
+            if (draftIndex !== -1) {
+                fresh.splice(draftIndex, 1);
+                if (draft.has_conflict) {
+                    let oldIndex = fresh.findIndex(p => p.name.toLowerCase() === draft.name.toLowerCase() && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
+                    if (oldIndex !== -1) {
+                        delete fresh[oldIndex].is_draft;
+                        fresh[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+                    }
                 }
             }
-        }
-    });
-
-    db.ref('products').set(productsDB).then(() => {
+        });
+        return fresh;
+    }).then(() => {
         showToast("Papka va uning ichidagi tovarlar o'chirildi!", "success");
         showDraftFolders();
-    });
+    }).catch(() => showToast("Saqlashda xato!", "warning"));
 };
 
 window.openDraftFolder = (batchId) => {
@@ -10480,18 +10479,21 @@ window.renameFolder = (e, oldName) => {
     if(!newName || newName.trim() === "" || newName === currentDisplay) return;
     
     let finalNewName = newName.trim();
-    let count = 0;
-    productsDB.forEach(p => {
+    // #7: butun massivni qayta yozmaymiz — faqat o'zgargan tovarlarning
+    // batch_id maydonini ATOMIK multi-path update() bilan yangilaymiz.
+    let updates = {};
+    productsDB.forEach((p, idx) => {
         if(p.is_draft && (p.batch_id || "Boshqalar") === oldName) {
-            p.batch_id = finalNewName; count++;
+            p.batch_id = finalNewName;
+            updates['products/' + idx + '/batch_id'] = finalNewName;
         }
     });
 
-    if(count > 0) {
-        db.ref('products').set(productsDB).then(() => {
+    if(Object.keys(updates).length > 0) {
+        db.ref().update(updates).then(() => {
             showToast("Papka nomi o'zgardi!", "success");
             showDraftFolders();
-        });
+        }).catch(() => showToast("Saqlashda xato!", "warning"));
     }
 };
 
@@ -10556,29 +10558,30 @@ window.deleteDraft = (id, hasConflict) => {
 };
 
 window.processDraftDeletion = (id, hasConflict) => {
-    let draftIndex = productsDB.findIndex(p => p.id === id);
-    let draftName = "";
-    if(draftIndex !== -1) {
-        draftName = productsDB[draftIndex].name.toLowerCase();
-        productsDB.splice(draftIndex, 1);
-    }
-    
-    if (hasConflict && draftName) {
-        let oldIndex = productsDB.findIndex(p => p.name.toLowerCase() === draftName && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
-        if (oldIndex !== -1) {
-            delete productsDB[oldIndex].is_draft;
-            productsDB[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+    // #7: eng so'nggi holat ustida (id bo'yicha) ishlaymiz — begona tovarlar yo'qolmaydi
+    window._rewriteProductsSafely(function (fresh) {
+        let draftIndex = fresh.findIndex(p => p.id === id);
+        let draftName = "";
+        if (draftIndex !== -1) {
+            draftName = fresh[draftIndex].name.toLowerCase();
+            fresh.splice(draftIndex, 1);
         }
-    }
-    
-    db.ref('products').set(productsDB).then(() => {
+        if (hasConflict && draftName) {
+            let oldIndex = fresh.findIndex(p => p.name.toLowerCase() === draftName && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
+            if (oldIndex !== -1) {
+                delete fresh[oldIndex].is_draft;
+                fresh[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+            }
+        }
+        return fresh;
+    }).then(() => {
         showToast(hasConflict ? "O'chirildi va eskisi tiklandi!" : "Qoralama o'chirildi!");
         filterAdminDrafts(); // Oynadagi tovarlarni yangilash
         
         // Agar papka bo'shab qolgan bo'lsa, avtomat orqaga qaytarish
         let draftsInFolder = productsDB.filter(p => p.is_draft === true && (p.batch_id || "Boshqalar") === window.currentDraftFolder);
         if(draftsInFolder.length === 0) backToFolders();
-    });
+    }).catch(() => showToast("Saqlashda xato!", "warning"));
 };
 
 // Mashina tugmalarini (chiplarni) bosganda belgilaydigan funksiya
@@ -11837,9 +11840,30 @@ window.saveProductAt = (idx) => {
     return db.ref('products/' + idx).set(productsDB[idx]);
 };
 window.generateProductId = () => {
-    let id = Date.now();
+    // #14: bot bilan BIR XIL sxema — ketma-ket (max + 1). Bot ham max(id)+1
+    // ishlatadi; ilgari bu yerda Date.now() edi (nomuvofiq). Collision guard saqlanadi.
+    let id = productsDB.reduce((mx, p) => Math.max(mx, parseInt(p.id) || 0), 0) + 1;
     while (productsDB.some(x => x.id === id)) id++;
     return id;
+};
+
+// ---------- #7: butun massivni KO'R-KO'RONA qayta yozmaslik ----------
+// Eski kodda o'chirish amallari db.ref('products').set(productsDB) bilan BUTUN
+// massivni xotiradagi (eskirgan bo'lishi mumkin) nusxa bilan qayta yozardi —
+// ayni paytda bot/boshqa admin qo'shgan tovar YO'QOLISHI mumkin edi.
+// Bu yordamchi avval ENG SO'NGGI holatni o'qiydi, o'zgartirishni (mutator,
+// id bo'yicha ishlaydi) o'shanga qo'llab yozadi. Shunday qilib begona
+// o'zgarishlar saqlanadi.
+window._rewriteProductsSafely = function (mutator) {
+    return db.ref('products').once('value').then(function (snap) {
+        var fresh = [];
+        if (snap.exists()) snap.forEach(function (c) { if (c.val()) fresh.push(c.val()); });
+        var out = mutator(fresh);
+        if (!Array.isArray(out)) out = fresh;
+        productsDB = out;
+        window.productsDB = out;
+        return db.ref('products').set(out);
+    });
 };
 
 // ---------- 7) ADD FORMANI TOZALASH / OCHISH / KLON ----------
@@ -12215,8 +12239,9 @@ window.invBulkDelete = () => {
     let ids = invSelectedIds();
     if (ids.length === 0) { showToast("Avval tovarlarni belgilang", "warning"); return; }
     let doDel = () => {
-        productsDB = productsDB.filter(p => !ids.includes(p.id));
-        db.ref('products').set(productsDB).then(() => { showToast(ids.length + " ta tovar o'chirildi!", "success"); _afterBulk(); }).catch(() => showToast("Saqlashda xato!", "warning"));
+        window._rewriteProductsSafely(function (fresh) { return fresh.filter(p => !ids.includes(p.id)); })
+            .then(() => { showToast(ids.length + " ta tovar o'chirildi!", "success"); _afterBulk(); })
+            .catch(() => showToast("Saqlashda xato!", "warning"));
     };
     if (typeof tg !== 'undefined' && tg.showConfirm) { tg.showConfirm(ids.length + " ta tovarni o'chirasizmi?", (ok) => { if (ok) doDel(); }); }
     else if (confirm(ids.length + " ta tovarni o'chirasizmi?")) doDel();
