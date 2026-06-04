@@ -6017,6 +6017,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <span class="chip inv-fchip" data-f="chevy" onclick="setInvFilter(this,'chevy')">🚘 Chevrolet</span>
             <span class="chip inv-fchip" data-f="daewoo" onclick="setInvFilter(this,'daewoo')">🚕 Daewoo</span>
             <span class="chip inv-fchip" data-f="uaz" onclick="setInvFilter(this,'uaz')">🚙 UAZ</span>
+            <span class="chip inv-fchip" data-f="low" onclick="setInvFilter(this,'low')" style="color:#ff9f0a;">⚠️ Kam qolgan</span>
         </div>
     </div>
     <div id="inv-bulk-bar" style="display:none; margin:0 15px 12px; padding:12px; border-radius:14px; background:rgba(10,132,255,0.08); border:1px solid rgba(10,132,255,0.3);">
@@ -12197,8 +12198,24 @@ window.renderAdminInventory = () => {
     let searchEl = document.getElementById('inv-search');
     let q = (searchEl ? searchEl.value : '').toLowerCase().trim();
     let f = window.invFilter || 'all';
+
+    // — Qoldiq hisoblagich (razmerli bo'lsa razmerlar yig'indisi) —
+    const _stockOf = (p) => (p.product_type === 'razmerli' && p.sizes)
+        ? p.sizes.reduce((a, x) => a + (x.stock || 0), 0)
+        : (p.stock !== undefined ? p.stock : 0);
+    const _rank = (s) => s <= 0 ? 0 : (s <= 3 ? 1 : 2); // tugagan -> kam -> yetarli
+
+    // #30: ombor xulosasi (qoralama bo'lmaganlar bo'yicha)
+    let _live = productsDB.filter(p => p && !p.is_draft);
+    let _lowCount = _live.filter(p => { let s = _stockOf(p); return s > 0 && s <= 3; }).length;
+    let _outCount = _live.filter(p => _stockOf(p) <= 0).length;
+
     let items = productsDB.filter(p => {
-        if (!_invMatchesBrand(p, f)) return false;
+        if (f === 'low') {                       // #30: faqat kam yoki tugagan qoldiq
+            if (_stockOf(p) > 3) return false;
+        } else if (!_invMatchesBrand(p, f)) {
+            return false;
+        }
         if (q) {
             let n = (p.name || '').toLowerCase();
             let code = (p.code || '').toLowerCase();
@@ -12207,20 +12224,22 @@ window.renderAdminInventory = () => {
         return true;
     });
 
-    // — Qoldiq hisoblagich + "kam qolganlar birinchi" tartiblash (Variant 5) —
-    const _stockOf = (p) => (p.product_type === 'razmerli' && p.sizes)
-        ? p.sizes.reduce((a, x) => a + (x.stock || 0), 0)
-        : (p.stock !== undefined ? p.stock : 0);
-    const _rank = (s) => s <= 0 ? 0 : (s <= 3 ? 1 : 2); // tugagan -> kam -> yetarli
     items = items.slice().sort((a, b) => _rank(_stockOf(a)) - _rank(_stockOf(b)));
 
+    // #30: yuqorida jami / kam qolgan / tugagan xulosasi
+    let summaryHtml = `<div class="inv2-summary" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:0 15px 12px;">
+        <div class="inv2-stat"><b>${_live.length}</b><span>Jami tovar</span></div>
+        <div class="inv2-stat inv2-stat-low"><b>${_lowCount}</b><span>Kam qoldi</span></div>
+        <div class="inv2-stat inv2-stat-out"><b>${_outCount}</b><span>Tugagan</span></div>
+    </div>`;
+
     if (items.length === 0) {
-        c.innerHTML = '<p style="text-align:center; color:gray; margin:30px 0;">Tovar topilmadi.</p>';
+        c.innerHTML = summaryHtml + '<p style="text-align:center; color:gray; margin:30px 0;">Tovar topilmadi.</p>';
         invUpdateBulkBar();
         return;
     }
 
-    c.innerHTML = items.map(p => {
+    c.innerHTML = summaryHtml + items.map(p => {
         let checked = window._invSelected[p.id] ? 'checked' : '';
         let checkbox = `<input type="checkbox" class="inv-check" ${checked} onchange="invToggleSelect(${p.id}, this.checked)" style="width:20px; height:20px; accent-color:var(--luxury-gold); margin-right:10px; flex-shrink:0;">`;
         let codeHint = p.code ? `<span class="inv-code">🔖 ${p.code}</span>` : '';
@@ -12561,12 +12580,13 @@ window.openBroadcastModal = () => {
         m.innerHTML = `
             <div class="modal-header"><h2 style="color:#0a84ff;">📢 Ommaviy xabar</h2><button class="close-btn" onclick="closeModal()">×</button></div>
             <div style="padding:20px;">
-                <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;line-height:1.5;">Bu xabar bot orqali barcha mijozlarga yuboriladi. HTML ishlatish mumkin.</p>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;line-height:1.5;">Bu xabar faqat <b>Telegram</b> orqali ro'yxatdan o'tgan mijozlarga yuboriladi (APK/brauzer foydalanuvchilari o'tkazib yuboriladi). HTML ishlatish mumkin.</p>
                 <textarea id="bc-text" placeholder="Salom! Bizning yangi chegirmalarimiz bilan tanishing..."></textarea>
                 <div class="bc-stats">
-                    <div class="bc-stat"><strong id="bc-count">0</strong>Mijozlar</div>
+                    <div class="bc-stat"><strong id="bc-count">0</strong>Telegram</div>
                     <div class="bc-stat"><strong id="bc-sent">0</strong>Yuborildi</div>
                     <div class="bc-stat"><strong id="bc-failed">0</strong>Xato</div>
+                    <div class="bc-stat"><strong id="bc-skipped">0</strong>O'tkazildi</div>
                 </div>
                 <button onclick="sendBroadcast()" id="bc-send-btn" style="width:100%;margin-top:14px;padding:14px;background:var(--gold-gradient);color:#000;border:none;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">📤 YUBORISH</button>
             </div>`;
@@ -12577,7 +12597,7 @@ window.openBroadcastModal = () => {
     db.ref('users').once('value', (snap) => {
         const users = snap.val() || {};
         const cnt = document.getElementById('bc-count');
-        if (cnt) cnt.innerText = Object.keys(users).length;
+        if (cnt) cnt.innerText = Object.keys(users).filter(window._isTelegramId).length;
     });
 };
 window.sendBroadcast = async () => {
@@ -12588,28 +12608,44 @@ window.sendBroadcast = async () => {
         tg.showConfirm("Hammaga yuborilsinmi?", (ok) => { if (ok) _doBroadcast(text); });
     } else if (confirm("Hammaga yuborilsinmi?")) _doBroadcast(text);
 };
+// Faqat HAQIQIY Telegram chat_id (sof raqamli). Soxta ID (apk_*, tg_url_*) — skip.
+window._isTelegramId = function (uid) { return /^\d+$/.test(String(uid)); };
 window._doBroadcast = async (text) => {
     const btn = document.getElementById('bc-send-btn');
     if (btn) { btn.disabled = true; btn.innerText = '⏳ Yuborilmoqda...'; }
-    let sent = 0, failed = 0;
+    let sent = 0, failed = 0, skipped = 0;
     try {
         const snap = await db.ref('users').once('value');
         const users = snap.val() || {};
-        const ids = Object.keys(users);
+        const allIds = Object.keys(users);
+        const ids = allIds.filter(window._isTelegramId);     // faqat Telegram
+        skipped = allIds.length - ids.length;                // soxta/APK — o'tkazib yuboriladi
         const sentEl = document.getElementById('bc-sent');
         const failEl = document.getElementById('bc-failed');
+        const skipEl = document.getElementById('bc-skipped');
+        if (skipEl) skipEl.innerText = skipped;
         for (const uid of ids) {
-            try {
-                const res = await tgProxySend({ chat_id: uid, text: text, parse_mode: 'HTML' });
-                const j = await res.json();
-                if (j && j.ok) sent++; else failed++;
-                if (sentEl) sentEl.innerText = sent;
-                if (failEl) failEl.innerText = failed;
-                await new Promise(r => setTimeout(r, 50));
-            } catch (e) { failed++; if (failEl) failEl.innerText = failed; }
+            let ok = false;
+            // 2 urinish: 429 (Too Many Requests) bo'lsa retry_after kutib qayta yuboramiz
+            for (let attempt = 0; attempt < 2 && !ok; attempt++) {
+                try {
+                    const res = await tgProxySend({ chat_id: uid, text: text, parse_mode: 'HTML' });
+                    const j = await res.json();
+                    if (j && j.ok) { ok = true; break; }
+                    if (j && j.error_code === 429 && j.parameters && j.parameters.retry_after) {
+                        await new Promise(r => setTimeout(r, (j.parameters.retry_after * 1000) + 250));
+                        continue; // qayta urinamiz
+                    }
+                    break; // boshqa xato (mas. user botni bloklagan) — qayta urinmaymiz
+                } catch (e) { break; }
+            }
+            if (ok) sent++; else failed++;
+            if (sentEl) sentEl.innerText = sent;
+            if (failEl) failEl.innerText = failed;
+            await new Promise(r => setTimeout(r, 60)); // ~16/s — Telegram limitidan past
         }
-        showToast(`✅ Yuborildi: ${sent}, Xato: ${failed}`, 'success');
-        try { db.ref('broadcasts').push({ text, sent, failed, time: Date.now() }); } catch(e) {}
+        showToast(`✅ Yuborildi: ${sent} | Xato: ${failed} | O'tkazildi: ${skipped}`, 'success');
+        try { db.ref('broadcasts').push({ text, sent, failed, skipped, time: Date.now() }); } catch(e) {}
     } catch (e) {
         showToast("Xato: " + (e.message || e), 'warning');
     } finally {
