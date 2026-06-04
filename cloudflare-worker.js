@@ -25,8 +25,8 @@
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Range",
 };
 
 const DEFAULT_ADMIN_IDS = ["5105291033", "483425630"];
@@ -50,16 +50,109 @@ function getAdminIds(env) {
   return DEFAULT_ADMIN_IDS;
 }
 
+// ===================== /media : Telegram fayl PROXY =====================
+// file_id -> getFile -> file_path -> faylni stream qiladi.
+// Har so'rovda file_path qaytadan olinadi => link eskirmaydi (DOIMIY).
+// BOT_TOKEN faqat shu serverda qoladi (Firebase'ga yozilmaydi => sirqib chiqmaydi).
+// Range (qisman yuklash) qo'llab-quvvatlanadi => video oldinga/orqaga suriladi.
+async function handleMedia(request, env) {
+  const mediaCors = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "Range, Content-Type",
+  };
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Faqat GET", { status: 405, headers: mediaCors });
+  }
+  if (!env.BOT_TOKEN) {
+    return new Response("BOT_TOKEN sozlanmagan", { status: 500, headers: mediaCors });
+  }
+
+  const fileId = new URL(request.url).searchParams.get("id");
+  if (!fileId) {
+    return new Response("file_id yo'q (?id=...)", { status: 400, headers: mediaCors });
+  }
+
+  try {
+    // 1) file_id -> file_path (har safar yangilanadi, shuning uchun link eskirmaydi)
+    const gfRes = await fetch(
+      `https://api.telegram.org/bot${env.BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`
+    );
+    const gf = await gfRes.json();
+    if (!gf || !gf.ok || !gf.result || !gf.result.file_path) {
+      return new Response("Fayl topilmadi (file_id noto'g'ri yoki >20MB)", {
+        status: 404,
+        headers: mediaCors,
+      });
+    }
+    const filePath = gf.result.file_path;
+
+    // 2) haqiqiy faylni Telegram CDN'dan olamiz (Range bo'lsa uzatamiz)
+    const range = request.headers.get("Range");
+    const upstream = await fetch(
+      `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${filePath}`,
+      { method: request.method, headers: range ? { Range: range } : {} }
+    );
+
+    // 3) javobni mijozga uzatamiz (to'g'ri Content-Type + kesh + Range)
+    const headers = new Headers();
+    headers.set("Access-Control-Allow-Origin", "*");
+    headers.set("Accept-Ranges", "bytes");
+    headers.set("Cache-Control", "public, max-age=86400");
+    const ct = upstream.headers.get("Content-Type");
+    headers.set(
+      "Content-Type",
+      ct && ct !== "application/octet-stream" ? ct : guessMime(filePath)
+    );
+    const cl = upstream.headers.get("Content-Length");
+    if (cl) headers.set("Content-Length", cl);
+    const cr = upstream.headers.get("Content-Range");
+    if (cr) headers.set("Content-Range", cr);
+
+    return new Response(upstream.body, { status: upstream.status, headers });
+  } catch (e) {
+    return new Response("Media xatosi: " + String(e), { status: 500, headers: mediaCors });
+  }
+}
+
+// Fayl kengaytmasidan MIME turini taxminlaymiz (video to'g'ri o'ynashi uchun muhim)
+function guessMime(p) {
+  const ext = (p.split(".").pop() || "").toLowerCase();
+  const map = {
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    webm: "video/webm",
+    m4v: "video/x-m4v",
+    "3gp": "video/3gpp",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: cors });
     }
+
+    const path = new URL(request.url).pathname;
+
+    // ---------- /media : Telegram fayl PROXY (DOIMIY, token yashirin) ----------
+    // Storis rasm/videolari shu yerdan o'qiladi. file_id har safar yangidan
+    // file_path'ga aylantirilgani uchun link HECH QACHON eskirmaydi (eski
+    // "1 soatdan keyin video o'chib ketardi" muammosi shu bilan hal bo'ladi).
+    if (path === "/media" || path === "/file") {
+      return handleMedia(request, env);
+    }
+
     if (request.method !== "POST") {
       return new Response("Faqat POST", { status: 405, headers: cors });
     }
-
-    const path = new URL(request.url).pathname;
 
     // ---------- /auth : initData -> Firebase custom token ----------
     if (path === "/auth") {
