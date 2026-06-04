@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Avto A1 Shop</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
     <!-- ⚡ OPTIMIZATSIYA: Lottie va eski Cropper.js (rasm kesish) olib tashlandi — ishlatilmas edi.
          Rasm yuklash endi handleMultiImgUpload orqali (ko'p rasmli, progress bilan). -->
     <!-- ⚡ Shrift og'irliklari 5 tadan 3 taga tushirildi (400/600/800) — tezroq yuklanadi -->
@@ -5818,7 +5818,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <span class="ap2-tile-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             </span>
-            <span class="ap2-tile-tx"><b>Statistika</b><i>Foyda va hisobot</i></span>
+            <span class="ap2-tile-tx"><b>Statistika</b><i>Savdo va hisobot</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
         <div class="ap2-tile" style="--ac:#d4af37" onclick="openAdminInventory()" role="button" tabindex="0">
@@ -6189,9 +6189,15 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     </div>
 <script>
 window.currentUser = null;
+    // 🔇 #16: PRODUCTION'da konsol toza bo'lsin. Diagnostika kerak bo'lsa
+    //   localStorage.avto_debug = '1' qo'ying (yoki window.AVTO_DEBUG = true) —
+    //   shunda _dlog/_dwarn yana ishlaydi. Xatolar yo'qolmaydi, faqat yashiriladi.
+    window.AVTO_DEBUG = (function () { try { return localStorage.getItem('avto_debug') === '1'; } catch (e) { return false; } })();
+    window._dlog = function () { if (window.AVTO_DEBUG) { try { console['log'].apply(console, arguments); } catch (e) {} } };
+    window._dwarn = function () { if (window.AVTO_DEBUG) { try { console['warn'].apply(console, arguments); } catch (e) {} } };
     // 🏷 BUILD VERSIYA — telefon qaysi kodni yuklayotganini bilish uchun (kesh diagnostikasi)
     window.AVTO_BUILD = 'v2026.05.30-7';
-    try { console.log('%c[Avto A1] BUILD ' + window.AVTO_BUILD + ' — ' + new Date().toISOString(), 'color:#C9A84C;font-weight:bold;'); } catch(e){}
+    try { _dlog('%c[Avto A1] BUILD ' + window.AVTO_BUILD + ' — ' + new Date().toISOString(), 'color:#C9A84C;font-weight:bold;'); } catch(e){}
     // 🛡 Telegram WebApp himoyali yuklash — brauzerda yoki Telegram yuklanmasa ham xato bermaydi
     let tg;
     try {
@@ -6211,9 +6217,9 @@ window.currentUser = null;
             colorScheme: 'dark', themeParams: {},
             platform: 'browser', version: '0.0'
         };
-        console.warn('[TG] WebApp mavjud emas — brauzer rejimida ishlamoqda (stub yoqildi)');
+        _dwarn('[TG] WebApp mavjud emas — brauzer rejimida ishlamoqda (stub yoqildi)');
     }
-    try { tg.expand && tg.expand(); } catch(e) { console.warn('[TG] expand xato:', e.message); }
+    try { tg.expand && tg.expand(); } catch(e) { _dwarn('[TG] expand xato:', e.message); }
     try { tg.ready && tg.ready(); } catch(e) {}
     // iOS dagi 300ms kechikishni o'chiramiz
 // Endi tugmalar darhol javob beradi
@@ -6317,35 +6323,35 @@ document.addEventListener('touchmove', function(e) {
         if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && tg.enableSwipeBack) {
             tg.enableSwipeBack();
         }
-    } catch(e) { console.warn('[TG] enableSwipeBack qo\'llab-quvvatlanmaydi:', e.message); }
+    } catch(e) { _dwarn('[TG] enableSwipeBack qo\'llab-quvvatlanmaydi:', e.message); }
 
     // 2. Tepadagi soat/batareya qismini (Status Bar) qora fon bilan bir xil qilish
     try {
         if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1') && tg.setHeaderColor) {
             tg.setHeaderColor('#000000'); // Yoki sizning fonga mos to'q qora
         }
-    } catch(e) { console.warn('[TG] setHeaderColor qo\'llab-quvvatlanmaydi:', e.message); }
+    } catch(e) { _dwarn('[TG] setHeaderColor qo\'llab-quvvatlanmaydi:', e.message); }
     
     // 3. Pastki qism (Home Indicator) fonini moslash
     try {
         if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1') && tg.setBackgroundColor) {
             tg.setBackgroundColor('#000000');
         }
-    } catch(e) { console.warn('[TG] setBackgroundColor qo\'llab-quvvatlanmaydi:', e.message); }
+    } catch(e) { _dwarn('[TG] setBackgroundColor qo\'llab-quvvatlanmaydi:', e.message); }
     
     // 4. Ekranni to'liq egallash (faqat Telegram 8.0+ uchun)
     try {
         if (tg.isVersionAtLeast && tg.isVersionAtLeast('8.0') && tg.requestFullscreen) {
             tg.requestFullscreen();
         }
-    } catch(e) { console.warn('[TG] requestFullscreen qo\'llab-quvvatlanmaydi:', e.message); }
+    } catch(e) { _dwarn('[TG] requestFullscreen qo\'llab-quvvatlanmaydi:', e.message); }
 
     // 🛑 1. Tepadan pastga tortganda yopilib ketishini TO'LIQ BLOKLASH
     try {
         if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && tg.disableVerticalSwipes) {
             tg.disableVerticalSwipes();
         }
-    } catch(e) { console.warn('[TG] disableVerticalSwipes qo\'llab-quvvatlanmaydi:', e.message); }
+    } catch(e) { _dwarn('[TG] disableVerticalSwipes qo\'llab-quvvatlanmaydi:', e.message); }
 
     // 🛡 2. QO'SHIMCHA HIMOYA (Ixtiyoriy): 
     // Agar mijoz "x" ni adashib bosib yuborsa, darrov yopilmaydi, 
@@ -6404,7 +6410,7 @@ document.addEventListener('touchmove', function(e) {
                     var nv = base - (parseInt(ch.qty) || 0);
                     return nv < 0 ? 0 : nv;
                 });
-            } catch(e){ console.warn('[stock] update xato:', e); }
+            } catch(e){ _dwarn('[stock] update xato:', e); }
         });
     }
     window._decrementStock = _decrementStock;
@@ -6701,7 +6707,7 @@ const Haptics = {
                 window.myOrders = myOrders; window.wishlist = wishlist; // Phase2 doim yangi ma'lumot o'qishi uchun
                 if(data.profile) { myProfile = data.profile; updateProfileUI(); }
                 _updateVipStatus(); // ⭐ VIP holatini buyurtma tarixi bo'yicha yangilash
-                try { if (window.Phase2) window.Phase2.sync(data, window.currentUser, window.productsDB || productsDB); } catch(e){ console.warn('[Phase2] sync xato:', e); }
+                try { if (window.Phase2) window.Phase2.sync(data, window.currentUser, window.productsDB || productsDB); } catch(e){ _dwarn('[Phase2] sync xato:', e); }
                 
                 if(!isDataLoaded) { 
                     updateCartBadge(); 
@@ -6898,9 +6904,9 @@ function showToast(m, t = 'success') {
                         span.innerHTML = icon('star') + ' ' + info.avg + (info.count ? ' <i>(' + info.count + ')</i>' : '');
                         meta.insertBefore(span, meta.firstChild);
                     });
-                } catch (e) { console.warn('[ratings] DOM xato:', e); }
+                } catch (e) { _dwarn('[ratings] DOM xato:', e); }
             });
-        } catch (e) { console.warn('[ratings] xato:', e); }
+        } catch (e) { _dwarn('[ratings] xato:', e); }
     }
 
     // 📦 QADAM 3: Tugagan tovarlarni oxirga suruvchi yordamchi
@@ -7826,7 +7832,7 @@ window.clearAppCache = () => {
                 window.myOrders = myOrders;
                 // 🎁 Cashback + kafolat — VA Firebase yozuvi tugashini KUTAMIZ (tg.close oldidan)
                 var _p2flush = Promise.resolve();
-                try { if (window.Phase2) _p2flush = window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB) || Promise.resolve(); } catch(e){ console.warn('[Phase2] onOrderPlaced xato:', e); }
+                try { if (window.Phase2) _p2flush = window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB) || Promise.resolve(); } catch(e){ _dwarn('[Phase2] onOrderPlaced xato:', e); }
                 loadingOverlay.classList.remove('active'); 
                 showToast("Qabul qilindi!");
                 // Cashback Firebase'ga yozilib bo'lgach (yoki eng ko'pi 3.5s) ilovani yopamiz —
@@ -8115,7 +8121,7 @@ window.openAdminChat = (uid, orderId) => {
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom: 15px;">
                     <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
                         <div style="font-size:26px; margin-bottom:5px;">📈</div>
-                        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi foyda</div>
+                        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi savdo</div>
                         <div style="font-size:14px; font-weight:800; color:#34c759; margin-top:5px;">${todayRevenue.toLocaleString()} so'm</div>
                     </div>
                     <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
@@ -8126,7 +8132,7 @@ window.openAdminChat = (uid, orderId) => {
                 </div>
                 
                 <div class="luxury-card" style="padding:20px; display:block; margin-bottom:25px; text-align:center; border: 1px solid rgba(212, 175, 55, 0.3);">
-                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy Sof Daromad</div>
+                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy savdo (tushum)</div>
                     <div style="font-size:26px; font-weight:800; color:var(--luxury-gold);">${totalRevenue.toLocaleString()} so'm</div>
                     <div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilgan buyurtmalar)</div>
                 </div>
@@ -9142,7 +9148,7 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                 if (window.Phase2 && typeof window.Phase2.onOrderPlaced === 'function') {
                     _p2flush = window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB) || Promise.resolve();
                 }
-            } catch(e){ console.warn('[Phase2] onOrderPlaced xato:', e); }
+            } catch(e){ _dwarn('[Phase2] onOrderPlaced xato:', e); }
 
             // Cashback Firebase'ga yozilib bo'lgach (yoki eng ko'pi 3.5s) ilovani yopamiz —
             // shunda Telegramda cashback yo'qolmaydi. Konfetti uchun ham vaqt qoladi.
@@ -9536,7 +9542,7 @@ window.openAdminStats = () => {
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:15px;">
                 <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
                     <div style="font-size:22px; margin-bottom:5px;">📈</div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi foyda</div>
+                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi savdo</div>
                     <div id="admin-today-rev" style="font-size:14px; font-weight:800; color:#34c759; margin-top:5px;">0 so'm</div>
                 </div>
                 <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
@@ -9546,7 +9552,7 @@ window.openAdminStats = () => {
                 </div>
             </div>
             <div class="luxury-card" style="padding:20px; display:block; margin-bottom:20px; text-align:center; border:1px solid rgba(212,175,55,0.3);">
-                <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy Sof Daromad</div>
+                <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy savdo (tushum)</div>
                 <div id="admin-total-rev" style="font-size:26px; font-weight:800; color:var(--luxury-gold);">0 so'm</div>
                 <div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilganlar)</div>
             </div>
@@ -14399,7 +14405,7 @@ document.addEventListener('click', function (e) {
                 }, { passive: true });
                 window.addEventListener('resize', updateProgress, { passive: true });
                 updateProgress();
-            } catch (e) { console.warn('[polish] xato:', e); }
+            } catch (e) { _dwarn('[polish] xato:', e); }
         });
     })();
 </script>
