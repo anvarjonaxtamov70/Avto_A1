@@ -6544,6 +6544,27 @@ document.addEventListener('touchmove', function(e) {
         return false;
     })();
 
+    // =====================================
+    // 🔐 ADMIN TEKSHIRUVI (himoya darajasi: defense-in-depth)
+    // =====================================
+    // Imkon bo'lsa — TASDIQLANGAN auth.uid bo'yicha (haqiqiy chegara baribir
+    // Firebase rules'da: faqat admins/{uid}==true yoza/o'qiy oladi). Auth hali
+    // tayyor bo'lmaganda (yoki APK/brauzer) — kosmetik fallback (currentUser).
+    // Shu sababli ADMIN_IDS ni brauzerda "soxtalashtirish" tugmalarni ko'rsatishi
+    // mumkin, ammo qoidalar yoqilgach DB amallari baribir rad etiladi.
+    window.isAdmin = function () {
+        try {
+            var adminStr = ADMIN_IDS.map(String);
+            var au = (window.firebase && firebase.auth && firebase.auth().currentUser)
+                ? String(firebase.auth().currentUser.uid) : null;
+            if (au) return adminStr.indexOf(au) !== -1;
+            return adminStr.indexOf(String(window.currentUser)) !== -1
+                || adminStr.indexOf(String(parseInt(window.currentUser))) !== -1;
+        } catch (e) {
+            return ADMIN_IDS.indexOf(parseInt(window.currentUser)) !== -1;
+        }
+    };
+
     // ⚡️ TELEGRAM PREMIUM HAPTIC (VIBRATSIYA) TIZIMI
 const Haptics = {
     light: () => tg.HapticFeedback.impactOccurred('light'),     // Mayin (tugma uchun)
@@ -6669,7 +6690,7 @@ const Haptics = {
     // =====================================
     async function initUserData() {
         // 1. Admin tekshiruvi (Mijoz topilgandan keyin) — DB kerak emas, darhol
-        if (ADMIN_IDS.includes(window.currentUser) || ADMIN_IDS.includes(parseInt(window.currentUser))) { 
+        if (window.isAdmin()) { 
             let adminBtn = document.getElementById('nav-admin'); 
             if(adminBtn) adminBtn.classList.remove('hidden'); 
             let scanBtn = document.getElementById('scanSearchBtn');
@@ -6680,6 +6701,16 @@ const Haptics = {
         // Shunda Firebase rules yoqilganda token tayyor bo'ladi (permission xatosi bo'lmaydi).
         // Auth muvaffaqiyatsiz bo'lsa ham (APK/brauzer) promise hal bo'ladi va davom etadi.
         try { if (window._authReady) await window._authReady; } catch (e) {}
+
+        // Auth tugagach admin tugmasini TASDIQLANGAN identifikator bo'yicha qayta baholaymiz.
+        // (Soxta currentUser tugmani ko'rsatgan bo'lsa, auth uid admin bo'lmasa — yashiriladi.)
+        try {
+            var _adminBtn2 = document.getElementById('nav-admin');
+            var _scanBtn2 = document.getElementById('scanSearchBtn');
+            var _amAdmin = window.isAdmin();
+            if (_adminBtn2) _adminBtn2.classList.toggle('hidden', !_amAdmin);
+            if (_scanBtn2) _scanBtn2.classList.toggle('hidden', !_amAdmin);
+        } catch (e) {}
 
         // 2. Telegramdagi ma'lumotlarni bazaga yozish
         if (isFromTelegram && tgUser) {

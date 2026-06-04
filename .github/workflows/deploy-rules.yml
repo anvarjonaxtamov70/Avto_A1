@@ -1,0 +1,58 @@
+name: Deploy Firebase qoidalari
+
+# ⚠️ FAQAT QO'LDA ishga tushadi (workflow_dispatch). Avtomatik EMAS.
+# Maqsad: database.rules.json ni bir tugma bilan Firebase'ga joriy qilish —
+# Console'ga qo'lda nusxalash shart emas (xato/eskirgan qoida xavfi kamayadi).
+#
+# OLDINDAN (bir martalik) SOZLASH:
+#   1) Firebase Console -> Project Settings -> Service accounts ->
+#      "Generate new private key" -> JSON faylni yuklab oling.
+#      Service account'da "Firebase Realtime Database Admin" roli bo'lsin.
+#   2) GitHub repo -> Settings -> Secrets and variables -> Actions ->
+#      New repository secret:
+#         Nomi:  FIREBASE_SERVICE_ACCOUNT
+#         Qiymat: yuklab olingan JSON faylning TO'LIQ matni
+#
+# ⚠️ Qoidalarni joriy qilishdan OLDIN auth barqaror ishlashiga ishonch hosil
+#    qiling (FIREBASE_SECURITY.md ga qarang) — aks holda jonli ilova "permission
+#    denied" berishi mumkin.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-rules:
+    name: database.rules.json -> Firebase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js o'rnatish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: firebase-tools o'rnatish
+        run: npm install -g firebase-tools
+
+      - name: Service account faylini yozish
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA_JSON" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT secret sozlanmagan. README/workflow izohiga qarang."
+            exit 1
+          fi
+          printf '%s' "$SA_JSON" > "$RUNNER_TEMP/sa.json"
+
+      - name: Qoidalarni joriy qilish (database)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: firebase deploy --only database --project avtoa1shop --non-interactive
+
+      - name: Service account faylini o'chirish
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

@@ -151,3 +151,40 @@ To'g'ri tartib:
    ```
 4. Bitta sinov foydalanuvchi bilan tekshiring: buyurtma berish, sharh, chat, referral.
 5. (Ixtiyoriy, kelgusi bosqich) Cashback/balansni ham server-authoritative qilish — hozir egasi o'z tuguniga yozadi.
+
+
+---
+
+## 9. 🆕 Qoidalarni bir tugma bilan joriy qilish (avtomatlashtirish)
+
+Endi `database.rules.json` ni Console'ga **qo'lda nusxalash shart emas**. Repoga quyidagilar qo'shildi:
+
+- `firebase.json` — qoidalar fayli manzili (`database.rules`).
+- `.firebaserc` — standart loyiha (`avtoa1shop`).
+- `.github/workflows/deploy-rules.yml` — **faqat qo'lda** (workflow_dispatch) ishga tushadigan deploy.
+
+### Bir martalik sozlash
+1. Firebase Console → Project Settings → **Service accounts** → *Generate new private key* → JSON yuklab oling. Service account'da **Firebase Realtime Database Admin** roli bo'lsin.
+2. GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**:
+   - Nomi: `FIREBASE_SERVICE_ACCOUNT`
+   - Qiymati: yuklab olingan JSON faylning **to'liq matni**.
+
+### Joriy qilish
+GitHub → **Actions → "Deploy Firebase qoidalari" → Run workflow**. Tugagach qoidalar jonli bo'ladi.
+
+> Qoida o'zgartirilganda — faylni tahrirlab, PR/commit qiling, so'ng workflow'ni qayta ishga tushiring. Workflow **avtomatik emas**, shuning uchun tasodifan joriy bo'lib ketmaydi.
+
+---
+
+## 10. ⚠️ MUHIM: Telegram'dan tashqari (APK / brauzer) foydalanuvchilar
+
+Qoidalar yoqilganda `users/{uid}` ga yozish **`auth.uid`** talab qiladi. Auth esa **Telegram `initData`** orqali (Worker `/auth`) ishlaydi. Demak:
+
+- **Telegram ichidagi** foydalanuvchilar — to'liq ishlaydi (auth bor).
+- **APK / oddiy brauzer** foydalanuvchilari — `initData` yo'q → auth yo'q → soxta ID (`apk_...`, `tg_url_...`) bilan ishlaydi. Qoidalar yoqilsa, ular **o'z savati/buyurtmasini saqlay olmaydi** (faqat ommaviy `products` ni o'qiy oladi).
+
+### Tavsiyalar (joriy qilishdan oldin tanlang)
+1. **Telegram-only yozuv (eng oddiy):** xarid/buyurtma faqat Telegram Mini App'da bo'lsin; brauzer/APK — faqat ko'rish (read-only katalog). Hozirgi qoidalar shunga mos.
+2. **Anonim auth:** APK/brauzer uchun Firebase **Anonymous Authentication** yoqilsa, ular ham `auth.uid` oladi. Bunda `users/{uid}` egaligi anonim uid bo'yicha ishlaydi (lekin Telegram profili bilan bog'lanmaydi).
+
+> Shu sababli `database.rules.json` ni joriy qilishdan oldin yuqoridagi ikki yo'ldan birini tanlang va **bitta sinov foydalanuvchi** bilan tekshiring.
