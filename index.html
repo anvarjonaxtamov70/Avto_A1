@@ -1053,19 +1053,46 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             --accent-green: #30d158;
         }
         /* 💎 PREMIUM ASOS VA FON */
+        /* 🔒 TELEGRAM MINI APP — "NATIVE" QOTIRISH:
+           Tashqi (hujjat / body) skroll BUTUNLAY o'chiriladi. Skroll endi
+           FAQAT ichki .container'da bo'ladi. Bu ikki muammoni hal qiladi:
+             • Kompyuterda paydo bo'ladigan IKKINCHI (ortiqcha) skroll chizig'i,
+             • Telefondagi "rezina" (overscroll bounce / oq fon) effekti. */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            height: 100dvh;              /* mobil brauzer paneli o'zgarsa ham aniq */
+            width: 100%;
+            overflow: hidden;            /* tashqi skrollni butunlay yo'q qiladi */
+            overscroll-behavior-y: none; /* iOS/Android rezina effektini o'chiradi */
+            -webkit-overflow-scrolling: auto;
+        }
         body { 
             font-family: 'Montserrat', sans-serif; 
-            margin: 0; 
-            padding: 0; 
             /* Fon mutlaqo qora bo'ladi, tepadan markazga yengil kulrang nur tushib turadi */
             background: #000000; 
             background-image: radial-gradient(circle at 50% 0%, #1a1a1c 0%, #000000 70%); 
             color: #E0E0E0; /* O'ta oq emas, ko'zni charchatmaydigan oq-kulrang */
-            min-height: 100vh; 
-            padding-bottom: 120px; 
-            overflow-x: hidden; 
         }
-        .container { padding: 15px 0; max-width: 500px; margin: 0 auto; overflow-x: hidden; }
+        /* 📜 ASOSIY SKROLL KONTEYNERI — endi FAQAT shu element harakatlanadi.
+           Ekran bo'yiga to'liq cho'ziladi, ichida vertikal skroll ishlaydi. */
+        .container {
+            box-sizing: border-box;
+            height: 100vh;
+            height: 100dvh;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 15px 0 120px;       /* pastki suzuvchi menyu kontentni to'smasin */
+            overflow-x: hidden;
+            overflow-y: auto;            /* faqat shu yerda vertikal skroll */
+            overscroll-behavior-y: none; /* ichki rezina effektini ham o'chiradi */
+            -webkit-overflow-scrolling: touch; /* iOS'da silliq (momentum) skroll */
+        }
+        /* Desktopda "native ilova" hissi uchun konteyner skroll chizig'ini
+           ko'rinmas qilamiz — skroll g'ildirak/trackpad bilan ishlayveradi. */
+        .container::-webkit-scrollbar { width: 0; height: 0; display: none; }
+        .container { scrollbar-width: none; -ms-overflow-style: none; }
         .hidden { display: none !important; }
         /* ================================================= */
         /* 🎬 5. CINEMATIC WELCOME SCREEN (YANGI USLUB) */
