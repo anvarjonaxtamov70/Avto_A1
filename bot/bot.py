@@ -22,6 +22,7 @@ import os
 import re
 import time
 import urllib.parse
+from collections import OrderedDict
 
 import aiohttp
 import pandas as pd
@@ -78,8 +79,69 @@ if not API_TOKEN:
     raise SystemExit("BOT_TOKEN .env faylda topilmadi. .env.example dan .env yarating.")
 
 groq_client = AsyncGroq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-ai_sessions = {}
-users_db = {}
+
+
+# =====================================================================
+# CHEKLANGAN, TTL bilan ESKIRADIGAN KESH (xotira oqishini oldini oladi)
+#   - Eski kodda ai_sessions/users_db oddiy dict edi va HECH QACHON
+#     tozalanmasdi => bot uzoq ishlasa xotira to'lib ketardi.
+#   - Endi: o'lcham chegarasi (LRU) + faolsizlik bo'yicha TTL eviction.
+# =====================================================================
+class BoundedTTLCache:
+    """dict kabi ishlatiladi (in / [] / []=), lekin o'lchami va yoshi cheklangan."""
+
+    def __init__(self, max_size=1000, ttl_seconds=3600):
+        self._store = OrderedDict()  # key -> [value, last_access_ts]
+        self._max = max_size
+        self._ttl = ttl_seconds
+
+    def _expired(self, ts):
+        return (time.time() - ts) > self._ttl
+
+    def _prune(self):
+        now = time.time()
+        for k in [k for k, (_, ts) in list(self._store.items()) if (now - ts) > self._ttl]:
+            self._store.pop(k, None)
+        while len(self._store) > self._max:
+            self._store.popitem(last=False)  # eng eski (LRU)
+
+    def __contains__(self, key):
+        item = self._store.get(key)
+        if item is None:
+            return False
+        if self._expired(item[1]):
+            self._store.pop(key, None)
+            return False
+        return True
+
+    def __getitem__(self, key):
+        item = self._store[key]
+        if self._expired(item[1]):
+            self._store.pop(key, None)
+            raise KeyError(key)
+        item[1] = time.time()
+        self._store.move_to_end(key)
+        return item[0]
+
+    def __setitem__(self, key, value):
+        self._store[key] = [value, time.time()]
+        self._store.move_to_end(key)
+        self._prune()
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+# AI suhbat tarixi: 1 soat faolsiz bo'lsa yoki 2000 tadan oshsa tozalanadi
+ai_sessions = BoundedTTLCache(max_size=2000, ttl_seconds=3600)
+# Profil keshi: kerak bo'lsa Firebase'dan qayta o'qiladi, shuning uchun evict xavfsiz
+users_db = BoundedTTLCache(max_size=5000, ttl_seconds=6 * 3600)
+# products tugunini o'qib-yozishni serializatsiya qiladi (ID poyga holatini oldini oladi).
+# To'g'ri event loop'ga bog'lanishi uchun main() ichida ishga tushiriladi.
+products_lock = None
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -153,6 +215,30 @@ async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
 # =====================================================================
 # MINI APP AI (mijoz chati)
 # =====================================================================
+# AI ga bir vaqtda yuboriladigan maksimal mahsulot soni (token/limit/tezlik
+# uchun). Butun katalogni yuborish katta katalogda modelni buzadi va qimmat.
+MAX_AI_PRODUCTS = 40
+
+
+def _select_relevant_products(products, query, limit=MAX_AI_PRODUCTS):
+    """So'rovga mos mahsulotlarni tanlaydi (nom bo'yicha). Mos kelmasa eng
+    boshidagi `limit` tasini qaytaradi. Qoralamalar (is_draft) tashlanadi."""
+    live = [p for p in (products or []) if p and not p.get("is_draft")]
+    tokens = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) >= 3]
+    if tokens:
+        scored = []
+        for p in live:
+            name = str(p.get("name", "")).lower()
+            score = sum(1 for t in tokens if t in name)
+            if score:
+                scored.append((score, p))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        chosen = [p for _, p in scored[:limit]]
+        if chosen:
+            return chosen
+    return live[:limit]
+
+
 async def process_mini_app_ai():
     async with aiohttp.ClientSession() as session:
         while True:
@@ -177,12 +263,17 @@ async def process_mini_app_ai():
                         async with session.get(fb_url("products")) as pr:
                             products = await pr.json()
 
-                        prod_info = []
-                        if products:
-                            for p in products:
-                                if p and not p.get("is_draft"):
-                                    prod_info.append(
-                                        f"ID: {p.get('id')} | Nomi: {p.get('name')} | Narxi: {p.get('price')} so'm")
+                        # So'rovga mos mahsulotlarnigina yuboramiz (butun katalogni emas)
+                        last_user_msg = ""
+                        for m in reversed(messages):
+                            if m.get("sender") == "user":
+                                last_user_msg = str(m.get("text", ""))
+                                break
+                        relevant = _select_relevant_products(products, last_user_msg)
+                        prod_info = [
+                            f"ID: {p.get('id')} | Nomi: {p.get('name')} | Narxi: {p.get('price')} so'm"
+                            for p in relevant
+                        ]
                         prod_context = "\n".join(prod_info)
 
                         groq_msgs = [{
@@ -425,29 +516,33 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
 
     try:
         partiya_nomi = f"Partiya_{time.strftime('%d_%m_%Y_%H_%M')}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(fb_url("products")) as resp:
-                current_products = await resp.json() or []
-                current_products = [p for p in current_products if p is not None]
-                next_id = max([p.get("id", 0) for p in current_products]) + 1 if current_products else 1
-
-        result = await asyncio.to_thread(
-            parse_excel_file, file_path, usd_rate, markup_pct, next_id, partiya_nomi
-        )
-
-        if not result["success"]:
-            if result.get("error_type") == "columns":
-                await msg.edit_text(f"'Nomi' yoki 'Narxi' ustuni topilmadi!\n\nO'qilgan ustunlar:\n{result['columns']}")
-            else:
-                await msg.edit_text(f"Xatolik: {result['error']}")
-            await state.clear()
-            return
-
-        new_products = result["new_products"]
-        if new_products:
-            current_products.extend(new_products)
+        # products'ni o'qish -> ID hisoblash -> yozishni LOCK ostida bajaramiz.
+        # Aks holda AI bulk import bilan ayni vaqtda ishlaganda bir xil ID
+        # berilishi yoki yozuvlar bir-birini o'chirib yuborishi mumkin (#15).
+        async with products_lock:
             async with aiohttp.ClientSession() as session:
-                await session.put(fb_url("products"), json=current_products)
+                async with session.get(fb_url("products")) as resp:
+                    current_products = await resp.json() or []
+                    current_products = [p for p in current_products if p is not None]
+                    next_id = max([p.get("id", 0) for p in current_products]) + 1 if current_products else 1
+
+            result = await asyncio.to_thread(
+                parse_excel_file, file_path, usd_rate, markup_pct, next_id, partiya_nomi
+            )
+
+            if not result["success"]:
+                if result.get("error_type") == "columns":
+                    await msg.edit_text(f"'Nomi' yoki 'Narxi' ustuni topilmadi!\n\nO'qilgan ustunlar:\n{result['columns']}")
+                else:
+                    await msg.edit_text(f"Xatolik: {result['error']}")
+                await state.clear()
+                return
+
+            new_products = result["new_products"]
+            if new_products:
+                current_products.extend(new_products)
+                async with aiohttp.ClientSession() as session:
+                    await session.put(fb_url("products"), json=current_products)
 
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -485,6 +580,25 @@ async def firebase_get(path):
         except Exception as e:
             logging.error(f"Firebase GET xatosi ({path}): {e}")
         return None
+
+
+# =====================================================================
+# TELEFON RAQAM VALIDATSIYASI
+# =====================================================================
+def normalize_phone(text):
+    """Matnli raqamni +998XXXXXXXXX ko'rinishiga keltiradi. Yaroqsiz bo'lsa None."""
+    if not text:
+        return None
+    digits = re.sub(r"\D", "", str(text))
+    if len(digits) == 12 and digits.startswith("998"):
+        core = digits[3:]
+    elif len(digits) == 9:
+        core = digits
+    else:
+        return None
+    if not re.fullmatch(r"\d{9}", core):
+        return None
+    return "+998" + core
 
 
 # =====================================================================
@@ -552,7 +666,15 @@ async def get_phone(message: types.Message, state: FSMContext):
         if not phone.startswith("+"):
             phone = "+" + phone
     else:
-        phone = message.text
+        phone = normalize_phone(message.text)
+        if not phone:
+            await message.answer(
+                "Raqam noto'g'ri ko'rinishda kiritildi.\n\n"
+                "Pastdagi <b>Raqamni yuborish</b> tugmasini bosing yoki "
+                "raqamni <code>+998 90 123 45 67</code> ko'rinishida yozing.",
+                reply_markup=phone_btn, parse_mode="HTML",
+            )
+            return  # holatda qolamiz — qayta so'raymiz
     await state.update_data(phone=phone)
     await message.answer("<b>Viloyatingizni tanlang:</b>", reply_markup=viloyatlar_menyu, parse_mode="HTML")
     await state.set_state(Register.region)
@@ -828,8 +950,10 @@ async def fetch_yandex_image(query):
 # =====================================================================
 async def main():
     logging.info("Bot ishga tushdi!")
+    global products_lock
+    products_lock = asyncio.Lock()  # event loop ishga tushgach yaratamiz
     asyncio.create_task(process_mini_app_ai())
-    asyncio.create_task(process_ai_bulk_requests_v2(bot, FIREBASE_URL, groq_client, fetch_yandex_image))
+    asyncio.create_task(process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_yandex_image, products_lock))
     asyncio.create_task(process_ai_admin_tasks(bot))
     asyncio.create_task(process_new_orders(bot))
     await dp.start_polling(bot)
