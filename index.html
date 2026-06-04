@@ -6750,6 +6750,55 @@ const Haptics = {
     }
 
     function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
+
+    // =====================================================================
+    // #5 / #6 — MARKAZIY 'orders' TUGUNI + ADMIN O'QISH KESHI
+    // =====================================================================
+    // Ilgari web app buyurtmani FAQAT users/{uid}/orders ga yozardi, bot esa
+    // markaziy 'orders' tugunini o'qirdi (hech qachon yozilmagani uchun — o'lik
+    // kod). Endi har buyurtma markaziy 'orders' ga HAM yoziladi (izolyatsiya
+    // qilingan — asosiy buyurtma oqimiga ta'sir qilmaydi). notified_admin=true:
+    // web allaqachon adminga to'g'ridan-to'g'ri xabar berdi, shuning uchun bot
+    // ikki marta yubormaydi (lekin boshqa manba yozsa — bot uni xabar qiladi).
+    window._centralOrderKey = function (uid, o) {
+        return String(uid || 'anon') + '_' + String((o && (o.code || o.id)) || Date.now());
+    };
+    window._mirrorOrderToCentral = function (order, extra) {
+        try {
+            if (!order) return;
+            extra = extra || {};
+            var key = window._centralOrderKey(extra.uid, order);
+            var rec = {
+                code: order.code || '',
+                id: order.id || 0,
+                uid: extra.uid != null ? String(extra.uid) : '',
+                customer_name: extra.name || '',
+                phone: extra.phone || '',
+                address: extra.address || '',
+                items: order.items || {},
+                total: order.total || 0,
+                status: order.status || 'kutilmoqda',
+                createdAt: Date.now(),
+                notified_admin: true
+            };
+            db.ref('orders/' + key).set(rec).catch(function () {});
+        } catch (e) {}
+    };
+
+    // #6: admin panelda stats/orders/customers ketma-ket ochilganda butun users
+    // daraxtini qayta-qayta yuklamaslik uchun qisqa muddatli umumiy kesh.
+    // Yozuvlardan keyin (holat o'zgartirish) _invalidateUsersCache() chaqiriladi.
+    window._usersSnapCache = null;
+    window._USERS_CACHE_TTL = 20000; // 20s — navigatsiya "burst"ini dedupe qiladi
+    window._getUsersSnap = function () {
+        var c = window._usersSnapCache;
+        if (c && (Date.now() - c.at) < window._USERS_CACHE_TTL) return Promise.resolve(c.snap);
+        return db.ref('users').once('value').then(function (snap) {
+            window._usersSnapCache = { at: Date.now(), snap: snap };
+            return snap;
+        });
+    };
+    window._invalidateUsersCache = function () { window._usersSnapCache = null; };
     function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">' + icon('check') + ' Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">' + icon('truck') + ' Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">' + icon('flag') + ' Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">' + icon('cancel') + ' Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">' + icon('clock') + ' Kutilmoqda</span>'; }
     function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; _updateVipStatus(); }
 
@@ -7855,6 +7904,8 @@ window.clearAppCache = () => {
                 myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
                 saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge();
                 window.myOrders = myOrders;
+                // #5: markaziy 'orders' tuguniga ham yozamiz (izolyatsiya — buyurtma oqimiga ta'sir qilmaydi)
+                try { window._mirrorOrderToCentral(myOrders[0], { uid: currentUser, name: myProfile.name, phone: myProfile.phone, address: myProfile.address }); } catch(e){}
                 // 🎁 Cashback + kafolat — VA Firebase yozuvi tugashini KUTAMIZ (tg.close oldidan)
                 var _p2flush = Promise.resolve();
                 try { if (window.Phase2) _p2flush = window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB) || Promise.resolve(); } catch(e){ console.warn('[Phase2] onOrderPlaced xato:', e); }
@@ -8194,7 +8245,7 @@ window.openAdminChat = (uid, orderId) => {
 
     window.allFetchedOrders = []; 
 
-    db.ref('users').once('value', (s) => { 
+    window._getUsersSnap().then((s) => { 
         let aO = []; 
         if(s.exists()) { 
             let us = s.val(); 
@@ -8231,6 +8282,9 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     
                     db.ref('users/' + uid + '/orders').set(userOrders).then(async () => {
                         showToast("Holat o'zgartirildi!");
+                        // #5/#6: markaziy 'orders' holatini ham yangilaymiz + admin keshini bekor qilamiz
+                        window._invalidateUsersCache();
+                        try { db.ref('orders/' + window._centralOrderKey(uid, userOrders[idx]) + '/status').set(newStatus).catch(function(){}); } catch(e){}
                         let hTitle = document.querySelector('#adminOrdersModal .modal-header h2').innerText;
                         if(hTitle === '📦 Buyurtmalar') {
                             openAdminOrders(); 
@@ -8531,7 +8585,7 @@ window.openAdminCustomers = () => {
     let listBox = document.getElementById('admin-customers-list');
     listBox.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
     
-    db.ref('users').once('value', (s) => {
+    window._getUsersSnap().then((s) => {
         allCustomersData = [];
         if(s.exists()) {
             let us = s.val();
@@ -9504,8 +9558,8 @@ window.openAdminStats = () => {
     // ⏳ 1. Yuklanish animatsiyasi chiziladi
     c.innerHTML = '<p style="text-align:center; margin-top:30px;"><span class="hourglass" style="transform:scale(0.5); display:inline-block;"></span><br><span style="color:var(--luxury-gold); font-size:12px; margin-top:10px; display:block;">Hisob-kitob qilinmoqda...</span></p>';
     
-    // 🧠 2. Firebase'dan barcha ma'lumotlarni o'qib, hisoblash boshlanadi
-    db.ref('users').once('value', (s) => {
+    // 🧠 2. Firebase'dan barcha ma'lumotlarni o'qib (qisqa muddatli kesh bilan), hisoblash boshlanadi
+    window._getUsersSnap().then((s) => {
         let totalRevenue = 0, todayRevenue = 0, totalCustomers = 0; 
         let productSales = {};
         let todayDate = new Date().toLocaleDateString('uz-UZ');
