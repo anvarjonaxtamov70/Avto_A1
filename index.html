@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Avto A1 Shop</title>
+    <!-- #24: yuklanish skeleton (shimmer) + #23 a11y fokus uslublari -->
+    <style>
+        .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.12) 37%, rgba(255,255,255,0.05) 63%); background-size: 400% 100%; animation: skelShimmer 1.4s ease infinite; border-radius: 14px; }
+        html[data-theme="light"] .skeleton { background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.09) 37%, rgba(0,0,0,0.04) 63%); background-size: 400% 100%; }
+        @keyframes skelShimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+        @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+        /* #23: klaviatura bilan navigatsiyada fokus ko'rinadigan bo'lsin */
+        [role="button"]:focus-visible, button:focus-visible, a:focus-visible, .nav-item:focus-visible { outline: 2px solid var(--luxury-gold, #d4af37); outline-offset: 2px; border-radius: 8px; }
+    </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
@@ -5051,7 +5060,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             </div>
         </div>
     </div>
-<div class="toast-container" id="toast-container"></div>
+<div class="toast-container" id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="order-loading-overlay" id="order-loading-overlay"><div class="hourglass"></div><div class="order-loading-text">Kuting...</div></div>
 <div id="welcome-screen"><h1>Assalomu alaykum, <br><span id="user-name-display"></span>!</h1><p style="letter-spacing:3px;font-weight:600;opacity:0.85;">AVTO A1 — Premium Ehtiyot Qismlar</p></div>
 <div class="floating-btn" id="back-btn" onclick="goBack()"><svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
@@ -5436,7 +5445,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 </div>
 
 <div class="modal-standard" id="orderDetailModal">
-    <div class="modal-header"><h2>📋 Tafsiloti</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-header"><h2>📋 Tafsiloti</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
     <div style="text-align: center; margin-bottom: 15px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px;">
         <div id="od-code" style="font-size: 20px; font-weight: 800; color: var(--luxury-gold); letter-spacing: 1px; margin-bottom: 5px;"></div>
         <div id="od-date" style="color: var(--text-muted); font-size: 12px; margin-bottom: 10px;"></div>
@@ -5464,7 +5473,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 </div>
 
 <div class="modal-standard" id="profileEditModal">
-    <div class="modal-header"><h2>👤 Ma'lumot</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-header"><h2>👤 Ma'lumot</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
     <span class="luxury-input-label">ISMINGIZ</span><input type="text" id="user-edit-name" class="search-box" style="margin-bottom: 15px;">
     <span class="luxury-input-label">RAQAMINGIZ</span><input type="tel" id="user-edit-phone" placeholder="+998 90 123 45 67" class="search-box" style="margin-bottom: 15px;">
     <span class="luxury-input-label">YETKAZIB BERISH MANZILI (Ixtiyoriy)</span><input type="text" id="user-edit-address" placeholder="Viloyat, shahar, ko'cha..." class="search-box" style="margin-bottom: 25px;">
@@ -5472,7 +5481,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 </div>
 
 <div class="modal-standard" id="cartModal">
-    <div class="modal-header"><h2>🛒 Savat</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-header"><h2>🛒 Savat</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
     
     <div id="cart-progress-wrap" style="display:none; padding: 0 5px;">
         <div class="cart-progress-text" id="cart-progress-msg">Tekin yetkazib berishga: 3 000 000 so'm qoldi</div>
@@ -5510,7 +5519,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <h2 style="font-size: 24px; font-weight: 800; margin: 0;">To'lov usuli</h2>
             <p style="color: var(--text-muted); font-size: 12px; margin: 5px 0 0 0;">Qanday to'lov qilishni xohlaysiz?</p>
         </div>
-        <button class="close-btn" style="font-size: 24px; background: rgba(255,255,255,0.05);" onclick="backToCart()">←</button>
+        <button class="close-btn" aria-label="Yopish" style="font-size: 24px; background: rgba(255,255,255,0.05);" onclick="backToCart()">←</button>
     </div>
     
     <div id="payment-options">
@@ -5553,7 +5562,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 </div>
 
 <div class="modal-standard" id="contactModal">
-    <div class="modal-header"><h2>📞 Aloqa</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-header"><h2>📞 Aloqa</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
     <div style="text-align: center;">
         <img src="https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png" style="width: 100%; border-radius: 16px; margin-bottom: 20px;">
         <a href="tel:+998882893030" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(0, 122, 255, 0.1); color: var(--primary-blue); border: 1px solid rgba(0, 122, 255, 0.3);">📱 +998 88 289 30 30</a>
@@ -5563,7 +5572,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 
 <!-- 🛡️ QADAM 4+5: KAFOLAT VA YETKAZIB BERISH (mijoz ishonchini oshiradi) -->
 <div class="modal-standard" id="trustModal">
-    <div class="modal-header"><h2>🛡️ Kafolat va Yetkazib berish</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-header"><h2>🛡️ Kafolat va Yetkazib berish</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
     <div style="padding-bottom: 30px;">
 
         <!-- 🚚 YETKAZIB BERISH MUDDATLARI -->
@@ -5621,7 +5630,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 <div class="modal-standard" id="editModal" style="z-index: 3000; display: none; padding: 0;">
     <div class="modal-header" style="padding: 20px 20px 15px; position: sticky; top: 0; background: rgba(10, 10, 12, 0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 0;">
         <h2 style="color: #30d158; margin: 0; font-size: 22px;">✏️ Tahrirlash</h2>
-        <button class="close-btn" onclick="closeEditGoBack()">×</button>
+        <button class="close-btn" aria-label="Yopish" onclick="closeEditGoBack()">×</button>
     </div>
 
     <input type="hidden" id="edit-id">
@@ -5786,7 +5795,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <h2>Boshqaruv markazi</h2>
             <span class="ap2-sub">Avto A1 — Admin</span>
         </div>
-        <button class="close-btn" onclick="closeModal()">×</button>
+        <button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button>
     </div>
 
     <!-- ⚡️ Asosiy amallar -->
@@ -5855,7 +5864,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
    <div class="modal-standard" id="addProductModal" style="z-index: 3000; display: none; padding: 0;">
     <div class="modal-header" style="padding: 20px 20px 15px; position: sticky; top: 0; background: rgba(10, 10, 12, 0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 0;">
         <h2 style="color: var(--luxury-gold); margin: 0; font-size: 22px;">➕ Yangi Tovar</h2>
-        <button class="close-btn" onclick="tryCloseAddProduct()">×</button>
+        <button class="close-btn" aria-label="Yopish" onclick="tryCloseAddProduct()">×</button>
     </div>
 
     <div style="padding: 20px;">
@@ -6008,7 +6017,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 </div>
 
 <div class="modal-standard" id="adminInventoryModal">
-    <div class="modal-header"><h2 style="color: var(--luxury-gold);">📊 Ombor</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div class="modal-header"><h2 style="color: var(--luxury-gold);">📊 Ombor</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div style="padding: 0 15px 10px;">
         <input type="text" id="inv-search" class="search-box" placeholder="🔍 Tovar nomi yoki kodi bo'yicha qidirish..." oninput="renderAdminInventory()" style="margin-bottom:12px;">
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;" id="inv-filter-chips">
@@ -6038,12 +6047,12 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 </div>
 
 <div class="modal-standard" id="adminOrdersModal">
-    <div class="modal-header"><h2 style="color: var(--primary-blue);">📦 Buyurtmalar</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div class="modal-header"><h2 style="color: var(--primary-blue);">📦 Buyurtmalar</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-orders-list"></div>
 </div>
 
 <div class="modal-standard" id="adminChatModal" style="z-index: 3500;">
-    <div class="modal-header"><h2 style="color: var(--luxury-gold);">💬 Mijoz bilan chat</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div class="modal-header"><h2 style="color: var(--luxury-gold);">💬 Mijoz bilan chat</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-chat-messages" style="height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
     <div style="display: flex; gap: 8px;">
         <input type="text" id="admin-chat-input" class="search-box" placeholder="Javob yozing..." style="padding: 12px; border-radius: 12px; flex: 1;">
@@ -6053,7 +6062,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 
 
 <div class="modal-standard" id="adminStatsModal">
-    <div class="modal-header"><h2 style="color: #34c759;">📊 Statistika</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div class="modal-header"><h2 style="color: #34c759;">📊 Statistika</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-stats-content" style="padding-bottom: 20px;">
         <p style="text-align:center;">Ma'lumotlar yuklanmoqda...</p>
     </div>
@@ -6071,7 +6080,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 </div>
     
     <div class="modal-standard" id="adminCustomersModal">
-    <div class="modal-header"><h2 style="color: #ff9500;">👥 Mijozlar Ro'yxati</h2><button class="close-btn" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div class="modal-header"><h2 style="color: #ff9500;">👥 Mijozlar Ro'yxati</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     
     <div style="display: flex; gap: 8px; margin-bottom: 15px;">
         <input type="text" id="customer-search-input" class="search-box" placeholder="Mijoz ismi yoki ID si..." oninput="searchCustomers()" style="flex: 1; padding: 10px 15px; border-radius: 12px; font-size: 13px;">
@@ -6086,7 +6095,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         <h2 style="color: #D4AF37; display: flex; align-items: center; gap: 10px; font-size: 20px;">
             <span style="font-size: 22px;">👑</span> AI Menejer
         </h2>
-        <button class="close-btn" style="color: #D4AF37; background: rgba(212, 175, 55, 0.1);" onclick="closeModal()">×</button>
+        <button class="close-btn" aria-label="Yopish" style="color: #D4AF37; background: rgba(212, 175, 55, 0.1);" onclick="closeModal()">×</button>
     </div>
 
     <div id="ai-bulk-content">
@@ -6128,7 +6137,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 <div class="modal-standard" id="adminDraftsModal" style="z-index: 3000; display: none;">
     <div class="modal-header">
         <h2 style="color: #ff9500;" id="drafts-modal-title">📝 Qoralamalar</h2>
-        <button class="close-btn" style="font-size: 24px;" onclick="closeDraftsModalCustom()">←</button>
+        <button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeDraftsModalCustom()">←</button>
     </div>
     
     <button onclick="deleteAllDrafts()" style="width: 100%; padding: 12px; background: rgba(255, 69, 58, 0.1); border: 1px solid var(--accent-red); color: var(--accent-red); border-radius: 10px; font-weight: bold; cursor: pointer; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -6173,7 +6182,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
                     <div style="font-size:11px; color:rgba(255,255,255,0.4); font-weight: 500;">Shaxsiy maslahatchi</div>
                 </div>
             </div>
-            <button class="close-btn" style="color:#D4AF37; font-size: 24px; font-weight: 300;" onclick="closeModal()">×</button>
+            <button class="close-btn" aria-label="Yopish" style="color:#D4AF37; font-size: 24px; font-weight: 300;" onclick="closeModal()">×</button>
         </div>
 
         <div id="ai-chat-box" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:15px; padding-bottom:100px;"></div>
@@ -8247,7 +8256,7 @@ window.openAdminChat = (uid, orderId) => {
             <button onclick="filterAdminOrders('yetkazildi', this)" style="background:var(--card-bg); color:#34c759; border:1px solid #34c759; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">🏁 Yetkazildi</button>
             <button onclick="filterAdminOrders('bekor_qilingan', this)" style="background:var(--card-bg); color:#ff453a; border:1px solid #ff453a; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">❌ Bekor</button>
         </div>
-        <div id="admin-orders-render-box"><p style="text-align:center;">Yuklanmoqda...</p></div>
+        <div id="admin-orders-render-box">${window._skel(6)}</div>
     `;
 
     window.allFetchedOrders = []; 
@@ -8590,7 +8599,7 @@ window.openAdminCustomers = () => {
     window.history.replaceState({ modal: 'adminCustomersModal' }, "");
     
     let listBox = document.getElementById('admin-customers-list');
-    listBox.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
+    listBox.innerHTML = window._skel(6);
     
     window._getUsersSnap().then((s) => {
         allCustomersData = [];
@@ -8702,7 +8711,7 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
             <button onclick="filterAdminOrders('yetkazildi', this)" style="background:rgba(52, 199, 89, 0.15); color:#34c759; border:1px solid #34c759; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🏁 Yetkazildi</button>
             <button onclick="filterAdminOrders('bekor_qilingan', this)" style="background:rgba(255, 69, 58, 0.15); color:#ff453a; border:1px solid #ff453a; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">❌ Bekor qilingan</button>
         </div>
-        <div id="admin-orders-render-box"><p style="text-align:center;">Yuklanmoqda...</p></div>
+        <div id="admin-orders-render-box">${window._skel(6)}</div>
     `;
 
     db.ref('users/' + uid).once('value', (s) => {
@@ -9728,7 +9737,7 @@ window.loadProductReviews = (productId) => {
     currentReviewProductId = productId; selectedReviewStar = 0;
     document.querySelectorAll('#review-stars span').forEach(s => s.classList.remove('active'));
     let reviewSection = document.getElementById('pm-review-section'); let reviewsList = document.getElementById('pm-reviews-list'); let addReview = document.getElementById('pm-add-review'); let loginMsg = document.getElementById('pm-review-login-msg'); let avgEl = document.getElementById('pm-avg-rating');
-    reviewsList.innerHTML = '<p style="color:gray; font-size:12px; text-align:center;">Yuklanmoqda...</p>'; if (addReview) addReview.classList.add('hidden'); if (loginMsg) loginMsg.classList.add('hidden');
+    reviewsList.innerHTML = window._skel(3, 70); if (addReview) addReview.classList.add('hidden'); if (loginMsg) loginMsg.classList.add('hidden');
 
     db.ref('reviews/' + productId).once('value', (snap) => {
         let reviews = []; if (snap.exists()) { let data = snap.val(); reviews = Object.values(data).filter(r => r && r.rating); }
@@ -12706,7 +12715,7 @@ window.openCompareModal = () => {
         '<div style="font-size:11px;color:var(--text-muted);font-weight:700;">' + r[0] + '</div>' +
         '<div style="font-size:12px;font-weight:700;color:' + (r[3]?'#30d158':'#fff') + ';">' + r[1] + '</div>' +
         '<div style="font-size:12px;font-weight:700;color:' + (r[4]?'#30d158':'#fff') + ';">' + r[2] + '</div></div>').join('');
-    m.innerHTML = '<div class="modal-header" style="position:sticky;top:0;z-index:10;background:rgba(10,10,12,0.95);backdrop-filter:blur(10px);"><h2 style="color:var(--luxury-gold);margin:0;font-size:18px;">⚖️ Taqqoslash</h2><button class="close-btn" onclick="closeModal()">×</button></div>' +
+    m.innerHTML = '<div class="modal-header" style="position:sticky;top:0;z-index:10;background:rgba(10,10,12,0.95);backdrop-filter:blur(10px);"><h2 style="color:var(--luxury-gold);margin:0;font-size:18px;">⚖️ Taqqoslash</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>' +
         '<div style="padding:16px;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
         '<div style="text-align:center;"><img src="'+(a.img||window._brandPlaceholder('A1'))+'" onerror="this.src=window._brandPlaceholder(\'A1\')" style="width:100%;aspect-ratio:1/1;object-fit:contain;background:#fff;border-radius:14px;padding:8px;box-sizing:border-box;"><h4 style="font-size:13px;color:#fff;margin:8px 0 4px;line-height:1.3;">'+a.name.split('·')[0].trim()+'</h4><div style="color:var(--luxury-gold);font-weight:800;font-size:16px;">'+a.price.toLocaleString()+' so\'m</div></div>' +
         '<div style="text-align:center;"><img src="'+(b.img||window._brandPlaceholder('A1'))+'" onerror="this.src=window._brandPlaceholder(\'A1\')" style="width:100%;aspect-ratio:1/1;object-fit:contain;background:#fff;border-radius:14px;padding:8px;box-sizing:border-box;"><h4 style="font-size:13px;color:#fff;margin:8px 0 4px;line-height:1.3;">'+b.name.split('·')[0].trim()+'</h4><div style="color:var(--luxury-gold);font-weight:800;font-size:16px;">'+b.price.toLocaleString()+' so\'m</div></div></div>' +
@@ -12726,7 +12735,7 @@ window.openBroadcastModal = () => {
         m.id = 'broadcastModal';
         m.className = 'modal-standard';
         m.innerHTML = `
-            <div class="modal-header"><h2 style="color:#0a84ff;">📢 Ommaviy xabar</h2><button class="close-btn" onclick="closeModal()">×</button></div>
+            <div class="modal-header"><h2 style="color:#0a84ff;">📢 Ommaviy xabar</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
             <div style="padding:20px;">
                 <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;line-height:1.5;">Bu xabar faqat <b>Telegram</b> orqali ro'yxatdan o'tgan mijozlarga yuboriladi (APK/brauzer foydalanuvchilari o'tkazib yuboriladi). HTML ishlatish mumkin.</p>
                 <textarea id="bc-text" placeholder="Salom! Bizning yangi chegirmalarimiz bilan tanishing..."></textarea>
@@ -13012,7 +13021,7 @@ window.openMyCarModal = () => {
         const brands = {gaz:['Gazel Biznes','Gazel Next','Gazel Eski','Volga 2401','Volga 2410','Volga 3110','Volga 31105','Sobol'],chevy:['Damas','Cobalt','Gentra','Lacetti','Malibu','Tracker','Nexia 3','Spark','Onix','Captiva','Labo','Matiz','Epica'],daewoo:['Nexia 1','Nexia 2','Matiz','Tico'],uaz:['Patriot','Hunter']};
         let optHtml = '<option value="">-- Tanlang --</option>';
         for (let b in brands) { let lbl = b==='gaz'?'GAZ':b==='chevy'?'Chevrolet':b==='daewoo'?'Daewoo':'UAZ'; brands[b].forEach(mod => { optHtml += `<option value="${b}-${mod}">${lbl} ${mod}</option>`; }); }
-        m.innerHTML = `<div class="modal-header"><h2 style="color:var(--luxury-gold);">🚗 Mening mashinam</h2><button class="close-btn" onclick="closeModal()">×</button></div><div style="padding:20px;"><p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Mashina modelingizni belgilang — biz sizga faqat shu mashinaga mos tovarlarni ko'rsatamiz.</p><select id="my-car-select" class="admin-input" style="padding:16px;font-size:15px;margin-bottom:16px;">${optHtml}</select><button onclick="saveMyCarChoice()" style="width:100%;padding:16px;background:var(--gold-gradient);color:#000;border:none;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">✅ Saqlash</button></div>`;
+        m.innerHTML = `<div class="modal-header"><h2 style="color:var(--luxury-gold);">🚗 Mening mashinam</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div><div style="padding:20px;"><p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Mashina modelingizni belgilang — biz sizga faqat shu mashinaga mos tovarlarni ko'rsatamiz.</p><select id="my-car-select" class="admin-input" style="padding:16px;font-size:15px;margin-bottom:16px;">${optHtml}</select><button onclick="saveMyCarChoice()" style="width:100%;padding:16px;background:var(--gold-gradient);color:#000;border:none;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">✅ Saqlash</button></div>`;
         document.body.appendChild(m);
     }
     let saved = localStorage.getItem('avto_my_car') || '';
@@ -13073,7 +13082,7 @@ window.addNewAddress = () => {
         m = document.createElement('div');
         m.id = 'addAddressModal';
         m.className = 'modal-standard';
-        m.innerHTML = `<div class="modal-header"><h2 style="color:#30d158;">📍 Manzil qo'shish</h2><button class="close-btn" onclick="closeModal()">×</button></div><div style="padding:20px;">
+        m.innerHTML = `<div class="modal-header"><h2 style="color:#30d158;">📍 Manzil qo'shish</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div><div style="padding:20px;">
             <div style="display:flex; gap:8px; margin-bottom:14px;">
                 <button class="addr-type-btn selected" data-t="home" onclick="selectAddrType(this)">🏠 Uy</button>
                 <button class="addr-type-btn" data-t="work" onclick="selectAddrType(this)">🏢 Ish</button>
@@ -13183,7 +13192,7 @@ window.openDeliveryModal = () => {
     m.innerHTML = `
         <div class="modal-header" style="align-items:flex-start;">
             <div><h2 style="font-size:22px;font-weight:800;margin:0;">🚚 Yetkazib berish</h2><p style="color:var(--text-muted);font-size:12px;margin:5px 0 0;">Qanday qabul qilmoqchisiz?</p></div>
-            <button class="close-btn" style="font-size:24px;background:rgba(255,255,255,0.05);" onclick="backToCartFromDelivery()">←</button>
+            <button class="close-btn" aria-label="Yopish" style="font-size:24px;background:rgba(255,255,255,0.05);" onclick="backToCartFromDelivery()">←</button>
         </div>
         <div style="padding:0 4px;">
             <div class="dlv-method-card" id="dlv-courier" onclick="selectDeliveryMethod('courier')">
@@ -14323,7 +14332,7 @@ document.addEventListener('click', function (e) {
     }
     function modal(id, title, inner) {
         return '<div class="modal-standard" id="' + id + '">' +
-            '<div class="modal-header"><h2>' + title + '</h2><button class="close-btn" onclick="closeModal()">×</button></div>' +
+            '<div class="modal-header"><h2>' + title + '</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>' +
             inner + '</div>';
     }
 
@@ -15476,6 +15485,49 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindEnter);
     else bindEnter();
   })();
+</script>
+<script>
+// =====================================================================
+// #24 — YUKLANISH SKELETONI (shimmer) yordamchisi
+//   window._skel(n, h) -> n ta skeleton qator (balandligi h px) qaytaradi.
+// =====================================================================
+window._skel = function (n, h) {
+    n = n || 4; h = h || 64;
+    var out = '';
+    for (var i = 0; i < n; i++) out += '<div class="skeleton" style="height:' + h + 'px; margin:0 0 10px;"></div>';
+    return out;
+};
+
+// =====================================================================
+// #23 — KLAVIATURA BILAN ISHLATISH (accessibility)
+//   1) [role="button"] elementlar Enter/Bo'shliq bilan bosiladi.
+//   2) Pastki navigatsiya (.nav-item) — fokuslanadigan va o'qiladigan bo'ladi.
+// =====================================================================
+(function a11yInit() {
+    try {
+        document.addEventListener('keydown', function (e) {
+            if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar')) {
+                var el = e.target;
+                if (el && el.getAttribute && el.getAttribute('role') === 'button') {
+                    e.preventDefault();
+                    el.click();
+                }
+            }
+        });
+        var setup = function () {
+            document.querySelectorAll('.nav-item').forEach(function (el) {
+                el.setAttribute('role', 'button');
+                if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+                if (!el.hasAttribute('aria-label')) {
+                    var lbl = el.querySelector('span');
+                    if (lbl) el.setAttribute('aria-label', lbl.textContent.trim());
+                }
+            });
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
+        else setup();
+    } catch (e) {}
+})();
 </script>
 </body>    
 </html> 
