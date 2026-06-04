@@ -23,6 +23,14 @@ python bot.py
 
 > `.env` va `serviceAccount.json` `.gitignore` da — ular hech qachon GitHub'ga ketmaydi.
 
-## Eslatma
+## AI ommaviy import (`bulk_import_fixed.py`)
 
-`bot.py` `bulk_import_fixed.py` modulini import qiladi (`process_ai_bulk_requests_v2`). Uni ham shu papkaga qo'ying — u o'zgartirilmadi.
+`bot.py` shu moduldagi `process_ai_bulk_requests_v2()` ni chaqiradi. Modul:
+
+- Firebase `ai_bulk_requests` tugunini poylaydi (admin Mini App'da yozgan erkin matnli ro'yxat).
+- Matnni **Groq AI** bilan `{nomi, narx_usd}` ko'rinishiga keltiradi (AI ishlamasa — regex zaxira tahlilchi).
+- `usd_rate` va `markup_pct` asosida so'mdagi narxni hisoblab, mahsulotlarni **qoralama** (`is_draft=true`) qilib `products` ga qo'shadi.
+- ID poyga holatini oldini olish uchun Excel import bilan **umumiy `products_lock`** ishlatadi.
+
+> Eslatma: avval bu fayl repoda yo'q edi va bot ishga tushmasdi (`ModuleNotFoundError`). Endi qaytadan qo'shildi.
+
