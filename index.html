@@ -9483,6 +9483,8 @@ window.openAdminStats = () => {
     db.ref('users').once('value', (s) => {
         let totalRevenue = 0, todayRevenue = 0, totalCustomers = 0; 
         let productSales = {};
+        let deliveredOrders = 0, returningCustomers = 0; // #28: sotuvlar soni va qaytgan mijozlar
+        let regionStats = {};                            // #28: hududlar bo'yicha taqsimot
         let todayDate = new Date().toLocaleDateString('uz-UZ');
         let dailyData = {}; let weeklyData = {}; let monthlyData = {};
         
@@ -9499,13 +9501,15 @@ window.openAdminStats = () => {
             
             for (let uid in us) {
                 if (!us[uid].orders) continue;
+                let _region = (us[uid].profile && us[uid].profile.address) ? us[uid].profile.address : "Noma'lum";
+                let _userDelivered = 0;
                 let ords = Array.isArray(us[uid].orders) ? us[uid].orders : Object.values(us[uid].orders);
                 ords.forEach(o => {
                     if (!o || !o.total) return; 
                     let amount = o.total || 0;
                     
                     if (o.status === 'yetkazildi') {
-                        totalRevenue += amount; 
+                        totalRevenue += amount; deliveredOrders++; _userDelivered++;
                         if (o.date === todayDate) todayRevenue += amount;
                         if (o.date && dailyData.hasOwnProperty(o.date)) dailyData[o.date] += amount;
                         if (o.date) { 
@@ -9524,6 +9528,8 @@ window.openAdminStats = () => {
                         } 
                     }
                 });
+                if (_userDelivered > 1) returningCustomers++;                                  // #28
+                if (_userDelivered > 0) regionStats[_region] = (regionStats[_region] || 0) + _userDelivered; // #28
             }
         }
         
@@ -9536,6 +9542,13 @@ window.openAdminStats = () => {
         }).join('');
         
         if (!topHtml) topHtml = "<p style='color:gray;font-size:13px;text-align:center;'>Hali sotilmagan.</p>";
+
+        // #28: o'rtacha chek + hududlar bo'yicha taqsimot (Top 5)
+        let avgCheck = deliveredOrders ? Math.round(totalRevenue / deliveredOrders) : 0;
+        let _esc = (typeof escHtml === 'function') ? escHtml : (function (x) { return x; });
+        let topRegions = Object.keys(regionStats).map(r => ({ r: r, c: regionStats[r] })).sort((a, b) => b.c - a.c).slice(0, 5);
+        let regionHtml = topRegions.map(x => `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:rgba(255,255,255,0.04); padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.05);"><span style="font-size:12px;">📍 ${_esc(x.r)}</span><span style="color:var(--luxury-gold); font-weight:800; font-size:12px;">${x.c} ta</span></div>`).join('');
+        if (!regionHtml) regionHtml = "<p style='color:gray;font-size:12px;text-align:center;'>Ma'lumot yo'q.</p>";
 
         // 🎨 3. Hamma narsa tayyor bo'lgach, ekranga chiziladi
         c.innerHTML = `
@@ -9556,6 +9569,25 @@ window.openAdminStats = () => {
                 <div id="admin-total-rev" style="font-size:26px; font-weight:800; color:var(--luxury-gold);">0 so'm</div>
                 <div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilganlar)</div>
             </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                    <div style="font-size:22px; margin-bottom:5px;">🧾</div>
+                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">O'rtacha chek</div>
+                    <div style="font-size:14px; font-weight:800; color:#fff; margin-top:5px;">${avgCheck.toLocaleString()} so'm</div>
+                </div>
+                <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                    <div style="font-size:22px; margin-bottom:5px;">📦</div>
+                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami sotuvlar</div>
+                    <div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${deliveredOrders} ta</div>
+                </div>
+            </div>
+            <div class="luxury-card" style="padding:14px 16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <span style="font-size:12px; color:var(--text-muted);">🔁 Qaytgan mijozlar (2+ xarid)</span>
+                <span style="font-size:16px; font-weight:800; color:#34c759;">${returningCustomers} kishi</span>
+            </div>
+            <h3 style="font-size:15px; margin-bottom:12px; color:white;">🗺️ Hududlar bo'yicha (Top 5)</h3>
+            ${regionHtml}
+            <div style="height:18px;"></div>
             <h3 style="font-size:15px; margin-bottom:12px; color:white;">🏆 Xit Savdolar (Top 5)</h3>
             ${topHtml}
         `;
