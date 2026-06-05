@@ -155,29 +155,62 @@ os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 # FIREBASE ADMIN TOKEN (service-account) — yozish 401 bermasligi uchun
 # =====================================================================
 _fb_creds = None
+_fb_token_logged_missing = False
+
+
+def _refresh_creds_blocking():
+    """BLOKLAYDIGAN: service-account'ni yuklaydi/yangilaydi va tokenni qaytaradi.
+    Sinxron tarmoq so'rovi bo'lgani uchun FAQAT asyncio.to_thread ichida chaqirilsin."""
+    global _fb_creds, _fb_token_logged_missing
+    if not os.path.exists(SERVICE_ACCOUNT_FILE):
+        if not _fb_token_logged_missing:
+            logging.warning("serviceAccount.json topilmadi — Firebase yozuvlari 401 berishi mumkin.")
+            _fb_token_logged_missing = True
+        return None
+    if _fb_creds is None:
+        _fb_creds = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE,
+            scopes=[
+                "https://www.googleapis.com/auth/firebase.database",
+                "https://www.googleapis.com/auth/userinfo.email",
+            ],
+        )
+    if not _fb_creds.valid:
+        _fb_creds.refresh(google.auth.transport.requests.Request())
+    return _fb_creds.token
+
+
+async def refresh_firebase_token():
+    """Tokenni event loop'ni BLOKLAMASDAN (alohida thread'da) yangilaydi."""
+    try:
+        return await asyncio.to_thread(_refresh_creds_blocking)
+    except Exception as e:
+        logging.error(f"Firebase token yangilashda xato: {e}")
+        return None
+
+
+async def firebase_token_refresher():
+    """Tokenni fonda muntazam yangilab turadi.
+
+    Token ~1 soat amal qiladi; muddati tugashidan ancha oldin (har 30 daqiqada)
+    yangilaymiz. Shu sababli hot-path'dagi get_firebase_token() hech qachon
+    bloklaydigan refresh() ni chaqirmaydi — bot "muzlab" qolmaydi.
+    """
+    while True:
+        token = await refresh_firebase_token()
+        await asyncio.sleep(30 * 60 if token else 60)  # xato bo'lsa tezroq qayta urin
 
 
 def get_firebase_token():
-    """RTDB admin access_token (avtomat yangilanadi). serviceAccount.json bo'lmasa None."""
-    global _fb_creds
-    if not os.path.exists(SERVICE_ACCOUNT_FILE):
-        logging.warning("serviceAccount.json topilmadi — Firebase yozuvlari 401 berishi mumkin.")
-        return None
-    try:
-        if _fb_creds is None:
-            _fb_creds = service_account.Credentials.from_service_account_file(
-                SERVICE_ACCOUNT_FILE,
-                scopes=[
-                    "https://www.googleapis.com/auth/firebase.database",
-                    "https://www.googleapis.com/auth/userinfo.email",
-                ],
-            )
-        if not _fb_creds.valid:
-            _fb_creds.refresh(google.auth.transport.requests.Request())
+    """Keshlangan admin tokenni qaytaradi (BLOKLAMAYDI).
+
+    Tokenni fon vazifasi (firebase_token_refresher) yangilab turadi va main()
+    pollerlardan oldin birinchi tokenni oladi, shuning uchun bu yerda tarmoq
+    so'rovi yo'q — event loop bloklanmaydi. serviceAccount.json bo'lmasa None.
+    """
+    if _fb_creds is not None and getattr(_fb_creds, "token", None):
         return _fb_creds.token
-    except Exception as e:
-        logging.error(f"Firebase token olishda xato: {e}")
-        return None
+    return None
 
 
 def fb_url(path):
@@ -185,6 +218,23 @@ def fb_url(path):
     token = get_firebase_token()
     base = f"{FIREBASE_URL}/{path}.json"
     return f"{base}?access_token={token}" if token else base
+
+
+def fb_items(node):
+    """Firebase tugunini (dict YOKI list) (kalit, qiymat) juftliklariga aylantiradi.
+
+    RTDB ketma-ket raqamli kalitlarni massiv (list) qilib qaytaradi. Eski kod
+    .items() ni to'g'ridan-to'g'ri chaqirardi va list kelganda AttributeError
+    berardi. Bu yordamchi har ikki holatni ham xavfsiz qo'llab-quvvatlaydi.
+    None elementlar (o'chirilgan yozuvlar) tashlab ketiladi.
+    """
+    if not node:
+        return []
+    if isinstance(node, dict):
+        return [(k, v) for k, v in node.items() if v is not None]
+    if isinstance(node, list):
+        return [(str(i), v) for i, v in enumerate(node) if v is not None]
+    return []
 
 
 # =====================================================================
@@ -250,8 +300,8 @@ async def process_mini_app_ai():
                     requests = await resp.json()
 
                 if requests:
-                    for uid, data in requests.items():
-                        if data.get("needs_processing") is not True:
+                    for uid, data in fb_items(requests):
+                        if not isinstance(data, dict) or data.get("needs_processing") is not True:
                             continue
 
                         await session.patch(fb_url(f"ai_requests/{uid}"),
@@ -328,7 +378,9 @@ async def process_ai_admin_tasks(bot: Bot):
                     if resp.status == 200:
                         data = await resp.json()
                         if data:
-                            for task_id, task_data in data.items():
+                            for task_id, task_data in fb_items(data):
+                                if not isinstance(task_data, dict):
+                                    continue
                                 if not (task_data.get("needs_processing") and task_data.get("action") == "generate_desc"):
                                     continue
 
@@ -522,9 +574,8 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
         async with products_lock:
             async with aiohttp.ClientSession() as session:
                 async with session.get(fb_url("products")) as resp:
-                    current_products = await resp.json() or []
-                    current_products = [p for p in current_products if p is not None]
-                    next_id = max([p.get("id", 0) for p in current_products]) + 1 if current_products else 1
+                    raw_products = await resp.json()
+                    next_id, next_index = product_offsets(raw_products)
 
             result = await asyncio.to_thread(
                 parse_excel_file, file_path, usd_rate, markup_pct, next_id, partiya_nomi
@@ -540,9 +591,15 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
 
             new_products = result["new_products"]
             if new_products:
-                current_products.extend(new_products)
+                # Butun massivni qayta yozmaymiz — faqat yangi indekslarni PATCH
+                # qilamiz, shunda admin boshqa mahsulotlarga kiritgan o'zgarishlar
+                # (tahrir/o'chirish) ustidan yozib yuborilmaydi.
                 async with aiohttp.ClientSession() as session:
-                    await session.put(fb_url("products"), json=current_products)
+                    ok = await firebase_append_products(session, new_products, next_index)
+                if not ok:
+                    await msg.edit_text("Mahsulotlar bazaga yozilmadi (Firebase xatosi). Qayta urinib ko'ring.")
+                    await state.clear()
+                    return
 
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -580,6 +637,47 @@ async def firebase_get(path):
         except Exception as e:
             logging.error(f"Firebase GET xatosi ({path}): {e}")
         return None
+
+
+# =====================================================================
+# PRODUCTS GA QO'SHISH (xavfsiz APPEND — butun massivni qayta yozmaydi)
+#   - Eski kod butun `products` massivini PUT qilardi. Agar admin ayni
+#     paytda Mini App'dan biror mahsulotni tahrirlasa/o'chirsa, bot eski
+#     nusxani yozib, admin o'zgarishini O'CHIRIB yuborardi (#race).
+#   - Endi faqat YANGI indekslar PATCH qilinadi — mavjud mahsulotlarga
+#     (boshqa indekslarga) tegilmaydi, shu sababli admin o'zgarishlari
+#     ustidan yozilmaydi.
+# =====================================================================
+def product_offsets(raw):
+    """RTDB'dan o'qilgan `products` (dict/list/None) dan (keyingi_id, keyingi_indeks)."""
+    if isinstance(raw, list):
+        items = [p for p in raw if isinstance(p, dict)]
+        next_index = len(raw)
+    elif isinstance(raw, dict):
+        items = [v for v in raw.values() if isinstance(v, dict)]
+        nums = [int(k) for k in raw.keys() if str(k).isdigit()]
+        next_index = (max(nums) + 1) if nums else len(raw)
+    else:
+        items, next_index = [], 0
+    next_id = max([p.get("id", 0) for p in items], default=0) + 1
+    return next_id, next_index
+
+
+async def firebase_append_products(session, new_products, next_index):
+    """Yangi mahsulotlarni FAQAT yangi indekslarga PATCH qiladi (append).
+    Mavjud mahsulotlar ustidan yozilmaydi. Muvaffaqiyatda True."""
+    if not new_products:
+        return True
+    payload = {str(next_index + i): p for i, p in enumerate(new_products)}
+    try:
+        async with session.patch(fb_url("products"), json=payload, timeout=30) as r:
+            if r.status == 200:
+                return True
+            logging.error(f"products PATCH muvaffaqiyatsiz (status={r.status})")
+        return False
+    except Exception as e:
+        logging.error(f"products PATCH xatosi: {e}")
+        return False
 
 
 # =====================================================================
@@ -913,7 +1011,9 @@ async def process_new_orders(bot: Bot):
                     if resp.status == 200:
                         orders = await resp.json()
                         if orders:
-                            for order_id, order_data in orders.items():
+                            for order_id, order_data in fb_items(orders):
+                                if not isinstance(order_data, dict):
+                                    continue
                                 if order_data.get("notified_admin"):
                                     continue
                                 customer_name = order_data.get("customer_name", "Noma'lum")
@@ -952,6 +1052,12 @@ async def main():
     logging.info("Bot ishga tushdi!")
     global products_lock
     products_lock = asyncio.Lock()  # event loop ishga tushgach yaratamiz
+
+    # Birinchi tokenni OLDINDAN olamiz (to_thread — event loop bloklanmaydi),
+    # so'ng fonda muntazam yangilab turuvchi vazifani ishga tushiramiz.
+    await refresh_firebase_token()
+    asyncio.create_task(firebase_token_refresher())
+
     asyncio.create_task(process_mini_app_ai())
     asyncio.create_task(process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_yandex_image, products_lock))
     asyncio.create_task(process_ai_admin_tasks(bot))
