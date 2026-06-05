@@ -7138,36 +7138,44 @@ document.addEventListener('visibilitychange', function() {
     let _isLoadingMore = false;   // bir vaqtda faqat BITTA batch yuklanadi (takror oldini oladi)
 
 // 🚀 SILLIQ SKROLL + ⚙️ PASTKI SHESTERNYA bilan 12talab yuklash
-    window.addEventListener('scroll', () => { 
+    // 🚀 SILLIQ SKROLL + ⚙️ PASTKI SHESTERNYA bilan 12talab yuklash
+    // 🔧 TUZATISH: html/body { overflow:hidden } => skroll WINDOW'da emas,
+    //    ".container" ICHIDA bo'ladi. Avval window.scrollY tinglangani uchun
+    //    pastga tushganda yangi tovar yuklanmasdi. Endi haqiqiy skroller
+    //    (.container) tinglanadi; window esa zaxira sifatida qoladi.
+    function _isNearListBottom() {
+        var sc = document.querySelector('.container');
+        if (sc && sc.scrollHeight > sc.clientHeight + 1) {
+            return sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 300;
+        }
+        var st = window.scrollY || document.documentElement.scrollTop || 0;
+        return window.innerHeight + st >= (document.documentElement.scrollHeight || document.body.offsetHeight) - 300;
+    }
+    function _maybeLoadMoreOnScroll() {
         if (_isLoadingMore) return;
-        // Faqat asosiy sahifada ishlaydi (oyna ochiq yoki qidiruvда emas)
         if (activeModal || searchActive) return;
-        let mm = document.getElementById('main-menu');
+        var mm = document.getElementById('main-menu');
         if (!mm || mm.classList.contains('hidden')) return;
-
-        // Skroll oxiriga 300px qolganda boshlaymiz
-        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) { 
-            if (limitCount < displayDB.length) { 
-                _isLoadingMore = true;
-                let oldLimit = limitCount;
-                limitCount += 12; 
-
-                // ⚙️ Pastki shesternyani ko'rsatamiz
-                let loader = document.getElementById('scroll-loader');
-                if (loader) loader.classList.remove('hidden');
-
-                // 0.5s+ kutamiz — shesternya aniq ko'rinsin (premium hissi),
-                // keyin 12 ta tovar chiziladi va shesternya yo'qoladi
-                setTimeout(() => {
-                    window.requestAnimationFrame(() => {
-                        loadMoreProducts(oldLimit); 
-                        if (loader) loader.classList.add('hidden');
-                        _isLoadingMore = false;
-                    });
-                }, 550); 
-            } 
-        } 
-    }, { passive: true }); // passive: true — skroll zarracha ham qotmasligini ta'minlaydi
+        if (!_isNearListBottom()) return;
+        if (limitCount >= displayDB.length) return;
+        _isLoadingMore = true;
+        var oldLimit = limitCount;
+        limitCount += 12;
+        var loader = document.getElementById('scroll-loader');
+        if (loader) loader.classList.remove('hidden');
+        setTimeout(function () {
+            window.requestAnimationFrame(function () {
+                loadMoreProducts(oldLimit);
+                if (loader) loader.classList.add('hidden');
+                _isLoadingMore = false;
+            });
+        }, 550);
+    }
+    (function attachInfiniteScroll() {
+        var sc = document.querySelector('.container');
+        if (sc) sc.addEventListener('scroll', _maybeLoadMoreOnScroll, { passive: true });
+        window.addEventListener('scroll', _maybeLoadMoreOnScroll, { passive: true });
+    })();
 
    
 // ➕ Faqatgina yangi kelgan tovarlarni pastga yopishtiruvchi motor
@@ -14886,11 +14894,14 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
       update();
     }
 
+    window.refreshHomeSliderDots = init;
     if(document.readyState === 'loading'){
       document.addEventListener('DOMContentLoaded', init);
     } else {
       init();
     }
+    // Rasm/maket joylashgach qayta sinxron (nuqtalar aniq chiqsin)
+    window.addEventListener('load', init);
   })();
 </script>
 
