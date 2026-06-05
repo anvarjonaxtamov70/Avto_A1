@@ -3980,11 +3980,15 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
+            box-sizing: border-box !important; /* 🔧 FIX: padding kenglik ICHIGA kirsin — aks holda
+                                                  width:100% + padding => bar o'ng chetdan toshib,
+                                                  tugmalar markazga nisbatan siljib qolardi */
             display: flex !important;
-            justify-content: space-between;
+            justify-content: space-around !important; /* 🔧 FIX: 5 tugma teng, simmetrik tarqaladi */
+            align-items: center !important;
             gap: 4px;
             z-index: var(--nav-z);
-            padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+            padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
             background: var(--nav-bg) !important;
             -webkit-backdrop-filter: blur(var(--nav-blur)) saturate(180%) !important;
             backdrop-filter: blur(var(--nav-blur)) saturate(180%) !important;
@@ -4006,7 +4010,8 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 
         /* Menyu tugmalari */
         .bottom-nav .nav-item {
-            flex: 1;
+            flex: 1 1 0; /* 🔧 FIX: har tugma teng ulush (markazlash kafolati) */
+            min-width: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -14640,6 +14645,25 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
   /* Skroll paytida karta::before gradientini vaqtincha o'chirib paintni kamaytiramiz */
   body.is-scrolling .luxury-card::before{ opacity:0 !important; }
 
+  /* 🔧 FIX (jank): skroll DAVOMIDA barcha cheksiz animatsiyalarni pauza qilamiz
+     (shimmer, gearSpin, storyRingSpin, float, gold-shimmer va h.k.) — skroll
+     tugashi bilan (140ms) darhol tiklanadi, shuning uchun ko'zga ko'rinmaydi,
+     lekin har kadrdagi qayta-bo'yash (repaint) keskin kamayadi -> 60fps. */
+  body.is-scrolling .skeleton,
+  body.is-scrolling [class*="shimmer"],
+  body.is-scrolling .story-ring,
+  body.is-scrolling .nav-badge,
+  body.is-scrolling .slider-partner-badge{
+    animation-play-state: paused !important;
+  }
+  /* Fiksirlangan shisha panellardagi og'ir blurni skroll paytida yengillashtirish
+     (backdrop-filter har kadrda qayta hisoblanadi — mobil GPU uchun eng qimmati). */
+  body.is-scrolling .bottom-nav,
+  body.is-scrolling .header{
+    backdrop-filter: blur(7px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(7px) saturate(140%) !important;
+  }
+
   @media (prefers-reduced-motion: reduce){
     #polish-grain{ display:none; }
   }
@@ -14650,11 +14674,19 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
     var t = null, on = false;
     function start(){ if(!on){ document.body.classList.add('is-scrolling'); on = true; } }
     function end(){ document.body.classList.remove('is-scrolling'); on = false; }
-    window.addEventListener('scroll', function(){
+    function onScroll(){
       start();
       if (t) clearTimeout(t);
       t = setTimeout(end, 140);
-    }, { passive: true });
+    }
+    // 🔧 FIX (jank/20fps): skroll WINDOW'da emas, ".container" ICHIDA bo'ladi
+    //   (html/body { overflow:hidden }). Avval listener faqat window'da edi —
+    //   shu sabab body.is-scrolling HECH QACHON qo'shilmasdi va skroll paytida
+    //   barcha cheksiz animatsiyalar ishlab turardi -> kadr "yeyilib" qotardi.
+    //   Endi haqiqiy skrollerga ulaymiz (window zaxira sifatida qoladi).
+    var _sc = document.querySelector('.container');
+    if (_sc) _sc.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
   })();
 </script>
 
