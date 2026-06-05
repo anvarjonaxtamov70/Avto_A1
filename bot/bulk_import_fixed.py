@@ -32,6 +32,19 @@ import aiohttp
 
 log = logging.getLogger(__name__)
 
+
+def _node_items(node):
+    """Firebase tugunini (dict YOKI list) (kalit, qiymat) juftliklariga aylantiradi.
+    RTDB ketma-ket raqamli kalitlarni list qilib qaytaradi; .items() to'g'ridan-to'g'ri
+    chaqirilsa AttributeError beradi. Bu yordamchi har ikki holatni qo'llab-quvvatlaydi."""
+    if not node:
+        return []
+    if isinstance(node, dict):
+        return list(node.items())
+    if isinstance(node, list):
+        return [(str(i), v) for i, v in enumerate(node)]
+    return []
+
 GROQ_TEXT_MODEL = os.getenv("GROQ_TEXT_MODEL", "llama-3.3-70b-versatile")
 
 # Bir so'rovda nechta qatorni qabul qilamiz (suiiste'mol/qotishni oldini olish)
@@ -119,12 +132,28 @@ async def _ai_parse_lines(groq_client, raw_text: str):
         return None
 
 
-async def _read_products(session, fb_url):
+async def _read_products_raw(session, fb_url):
+    """`products` tugunini RAW (dict/list/None) ko'rinishida o'qiydi."""
     async with session.get(fb_url("products")) as r:
         if r.status != 200:
             raise RuntimeError(f"products o'qib bo'lmadi (status={r.status})")
-        data = await r.json()
-    return [p for p in (data or []) if p is not None]
+        return await r.json()
+
+
+def _product_offsets(raw):
+    """RAW products dan (keyingi_id, keyingi_indeks) ni hisoblaydi.
+    Butun massivni qayta yozmaslik (append-only PATCH) uchun keyingi_indeks kerak."""
+    if isinstance(raw, list):
+        items = [p for p in raw if isinstance(p, dict)]
+        next_index = len(raw)
+    elif isinstance(raw, dict):
+        items = [v for v in raw.values() if isinstance(v, dict)]
+        nums = [int(k) for k in raw.keys() if str(k).isdigit()]
+        next_index = (max(nums) + 1) if nums else len(raw)
+    else:
+        items, next_index = [], 0
+    next_id = max([p.get("id", 0) for p in items], default=0) + 1
+    return next_id, next_index
 
 
 async def process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_image=None, products_lock=None):
@@ -154,7 +183,7 @@ async def process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_image=None
                     requests = await resp.json()
 
                 if requests:
-                    for uid, data in list(requests.items()):
+                    for uid, data in _node_items(requests):
                         if not isinstance(data, dict) or data.get("needs_processing") is not True:
                             continue
                         await _process_single(session, fb_url, groq_client, fetch_image, lock, bot, uid, data)
@@ -208,13 +237,13 @@ async def _process_single(session, fb_url, groq_client, fetch_image, lock, bot, 
     # 2) products'ni o'qib-yozishni LOCK ostida bajaramiz (ID poyga holatini oldini olish)
     async with lock:
         try:
-            current = await _read_products(session, fb_url)
+            raw = await _read_products_raw(session, fb_url)
         except Exception as e:
             log.error(f"AI bulk: products o'qishda xato ({uid}): {e}")
             await _finish(session, fb_url, uid, status="error", error=str(e), added=0)
             return
 
-        next_id = (max([p.get("id", 0) for p in current], default=0) + 1)
+        next_id, next_index = _product_offsets(raw)
 
         new_products = []
         for it in parsed:
@@ -244,9 +273,12 @@ async def _process_single(session, fb_url, groq_client, fetch_image, lock, bot, 
             })
             next_id += 1
 
-        current.extend(new_products)
+        # Butun massivni qayta yozmaymiz — faqat yangi indekslarni PATCH qilamiz.
+        # Shunda admin Mini App'da boshqa mahsulotlarga kiritgan o'zgarishlar
+        # (tahrir/o'chirish) ustidan yozib yuborilmaydi.
+        payload = {str(next_index + i): p for i, p in enumerate(new_products)}
         try:
-            async with session.put(fb_url("products"), json=current) as r:
+            async with session.patch(fb_url("products"), json=payload) as r:
                 if r.status != 200:
                     raise RuntimeError(f"products yozilmadi (status={r.status})")
         except Exception as e:
