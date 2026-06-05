@@ -17,6 +17,7 @@
 import asyncio
 import json
 import logging
+import html
 import math
 import os
 import re
@@ -79,6 +80,17 @@ if not API_TOKEN:
     raise SystemExit("BOT_TOKEN .env faylda topilmadi. .env.example dan .env yarating.")
 
 groq_client = AsyncGroq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
+
+def esc(v):
+    """Telegram parse_mode='HTML' xabarlari uchun foydalanuvchi matnini
+    xavfsizlashtiradi (& < > belgilarini almashtiradi).
+
+    Eski kodda mijoz ismi/manzili/mahsulot nomi to'g'ridan-to'g'ri HTML xabarga
+    qo'yilardi. Agar matnda '<' yoki '&' bo'lsa, Telegram xabarni RAD etardi
+    (400: can't parse entities) -> admin bildirishnomani UMUMAN olmasdi.
+    """
+    return html.escape(str(v if v is not None else ""))
 
 
 # =====================================================================
@@ -738,7 +750,7 @@ async def start_command(message: types.Message, state: FSMContext):
         users_db[user_id] = existing_user
         name = existing_user.get("name", message.from_user.first_name)
         await message.answer(
-            f"Assalomu alaykum yana bir bor, <b>{name}</b>!\n\n"
+            f"Assalomu alaykum yana bir bor, <b>{esc(name)}</b>!\n\n"
             "Pastdagi <b>Do'konga marhamat</b> tugmasini bosing.",
             reply_markup=asosiy_menyu, parse_mode="HTML",
         )
@@ -800,10 +812,10 @@ async def get_region(message: types.Message, state: FSMContext):
     username_txt = f"@{username}" if username else "Yo'q"
     admin_text = (
         "<b>YANGI MIJOZ RO'YXATDAN O'TDI</b>\n\n"
-        f"Ism: <b>{name}</b>\n"
-        f"Tel: <code>{phone}</code>\n"
-        f"Viloyat: {region}\n"
-        f"Username: {username_txt}\n"
+        f"Ism: <b>{esc(name)}</b>\n"
+        f"Tel: <code>{esc(phone)}</code>\n"
+        f"Viloyat: {esc(region)}\n"
+        f"Username: {esc(username_txt)}\n"
         f"ID: <code>{user_id}</code>"
     )
     try:
@@ -866,7 +878,7 @@ async def handle_webapp_data(message: types.Message):
                 "yetkazildi": "YETKAZIB BERILDI", "bekor_qilingan": "BEKOR QILINDI",
             }
             await message.answer(
-                f"<b>#{order_id}</b> holati: {status_text.get(new_status, new_status.upper())}",
+                f"<b>#{esc(order_id)}</b> holati: {esc(status_text.get(new_status, str(new_status).upper()))}",
                 parse_mode="HTML",
             )
             mijozga_xabar = {
@@ -1025,13 +1037,13 @@ async def process_new_orders(bot: Bot):
 
                                 text = (
                                     f"<b>YANGI BUYURTMA! ({platforma})</b>\n\n"
-                                    f"Ism: <b>{customer_name}</b>\n"
-                                    f"Tel: <code>{phone}</code>\n"
-                                    f"Manzil: {address}\n\n<b>Tovarlar:</b>\n"
+                                    f"Ism: <b>{esc(customer_name)}</b>\n"
+                                    f"Tel: <code>{esc(phone)}</code>\n"
+                                    f"Manzil: {esc(address)}\n\n<b>Tovarlar:</b>\n"
                                 )
                                 for item in items:
-                                    text += f"- {item.get('name')} x {item.get('quantity', 1)} dona\n"
-                                text += f"\n<b>Umumiy: {total:,.0f} so'm</b>\nID: #{order_id}"
+                                    text += f"- {esc(item.get('name'))} x {esc(item.get('quantity', 1))} dona\n"
+                                text += f"\n<b>Umumiy: {total:,.0f} so'm</b>\nID: #{esc(order_id)}"
 
                                 await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="HTML")
                                 await session.patch(fb_url(f"orders/{order_id}"), json={"notified_admin": True})
