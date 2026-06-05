@@ -225,11 +225,22 @@ def get_firebase_token():
     return None
 
 
-def fb_url(path):
-    """Token bilan to'liq RTDB URL yasaydi: .../path.json?access_token=..."""
+def fb_url(path, params=None):
+    """Token (va ixtiyoriy query-param'lar) bilan to'liq RTDB URL yasaydi.
+
+    params — RTDB so'rovi uchun (masalan orderBy/limitToLast). Bu butun tugunni
+    o'qish o'rniga faqat kerakli qismini olishga imkon beradi (#scalability).
+    """
     token = get_firebase_token()
-    base = f"{FIREBASE_URL}/{path}.json"
-    return f"{base}?access_token={token}" if token else base
+    url = f"{FIREBASE_URL}/{path}.json"
+    query = {}
+    if token:
+        query["access_token"] = token
+    if params:
+        query.update(params)
+    if query:
+        url += "?" + urllib.parse.urlencode(query)
+    return url
 
 
 def fb_items(node):
@@ -285,7 +296,11 @@ MAX_AI_PRODUCTS = 40
 def _select_relevant_products(products, query, limit=MAX_AI_PRODUCTS):
     """So'rovga mos mahsulotlarni tanlaydi (nom bo'yicha). Mos kelmasa eng
     boshidagi `limit` tasini qaytaradi. Qoralamalar (is_draft) tashlanadi."""
-    live = [p for p in (products or []) if p and not p.get("is_draft")]
+    # #4: products RTDB'dan dict YOKI list bo'lib kelishi mumkin. Avval uni
+    # mahsulot-dict'lar ro'yxatiga normallashtiramiz (aks holda dict ustida
+    # ishlaganda kalitlar (matn) bo'yicha yurib, .get() da xato berardi).
+    products = [v for _, v in fb_items(products) if isinstance(v, dict)]
+    live = [p for p in products if not p.get("is_draft")]
     tokens = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) >= 3]
     if tokens:
         scored = []
@@ -598,32 +613,34 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
                     await msg.edit_text(f"'Nomi' yoki 'Narxi' ustuni topilmadi!\n\nO'qilgan ustunlar:\n{result['columns']}")
                 else:
                     await msg.edit_text(f"Xatolik: {result['error']}")
-                await state.clear()
                 return
 
             new_products = result["new_products"]
             if new_products:
-                # Butun massivni qayta yozmaymiz — faqat yangi indekslarni PATCH
-                # qilamiz, shunda admin boshqa mahsulotlarga kiritgan o'zgarishlar
-                # (tahrir/o'chirish) ustidan yozib yuborilmaydi.
+                # Butun massivni qayta yozmaymiz — har bir yangi mahsulot bo'sh
+                # slotga ETag (if-match) bilan ATOMIK qo'shiladi, shunda admin
+                # boshqa mahsulotlarga kiritgan o'zgarishlar (tahrir/o'chirish/qo'shish)
+                # ustidan yozib yuborilmaydi (#3).
                 async with aiohttp.ClientSession() as session:
                     ok = await firebase_append_products(session, new_products, next_index)
                 if not ok:
                     await msg.edit_text("Mahsulotlar bazaga yozilmadi (Firebase xatosi). Qayta urinib ko'ring.")
-                    await state.clear()
                     return
-
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
         await msg.edit_text(
             f"<b>{len(new_products)} ta tovar</b> bazaga qo'shildi!\n\n"
             "'Qoralamalar' bo'limidan tasdiqlashingiz mumkin.",
             parse_mode="HTML",
         )
-        await state.clear()
     except Exception as e:
         await msg.edit_text(f"Xatolik: {e}")
+    finally:
+        # #7: vaqtinchalik fayl muvaffaqiyat/xato — har holatda ham o'chiriladi
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception as e:
+            logging.warning(f"Vaqtinchalik faylni o'chirishda xato: {e}")
         await state.clear()
 
 
@@ -675,21 +692,61 @@ def product_offsets(raw):
     return next_id, next_index
 
 
-async def firebase_append_products(session, new_products, next_index):
-    """Yangi mahsulotlarni FAQAT yangi indekslarga PATCH qiladi (append).
-    Mavjud mahsulotlar ustidan yozilmaydi. Muvaffaqiyatda True."""
+async def _slot_etag_and_value(session, idx):
+    """products/<idx> slotining ETag va joriy qiymatini qaytaradi."""
+    async with session.get(fb_url(f"products/{idx}"),
+                           headers={"X-Firebase-ETag": "true"}) as r:
+        etag = r.headers.get("ETag")
+        value = await r.json()
+    return etag, value
+
+
+async def firebase_append_products(session, new_products, start_index, max_probe=64):
+    """Yangi mahsulotlarni massivga XAVFSIZ (atomik) append qiladi.
+
+    Har bir mahsulot uchun bo'sh slot topiladi va u ETag (if-match) bilan
+    ATOMIK egallanadi. Agar admin/boshqa manba ayni paytda o'sha slotni egallasa
+    (slot bo'sh emas yoki 412 Precondition Failed), keyingi slotga o'tiladi.
+    Shu sababli mavjud mahsulotlar HECH QACHON ustidan yozilmaydi (#3).
+
+    Hammasi yozilsa True, qattiq xatoda False.
+    """
     if not new_products:
         return True
-    payload = {str(next_index + i): p for i, p in enumerate(new_products)}
-    try:
-        async with session.patch(fb_url("products"), json=payload, timeout=30) as r:
-            if r.status == 200:
-                return True
-            logging.error(f"products PATCH muvaffaqiyatsiz (status={r.status})")
-        return False
-    except Exception as e:
-        logging.error(f"products PATCH xatosi: {e}")
-        return False
+    idx = start_index
+    for p in new_products:
+        placed = False
+        probes = 0
+        while probes < max_probe:
+            probes += 1
+            try:
+                etag, value = await _slot_etag_and_value(session, idx)
+            except Exception as e:
+                logging.error(f"products[{idx}] ETag o'qish xatosi: {e}")
+                return False
+            if value is not None:
+                idx += 1  # slot band — ustidan YOZMAYMIZ, keyingisiga o'tamiz
+                continue
+            headers = {"if-match": etag} if etag else {}
+            try:
+                async with session.put(fb_url(f"products/{idx}"), json=p,
+                                       headers=headers, timeout=30) as pr:
+                    if pr.status == 200:
+                        placed = True
+                        idx += 1
+                        break
+                    if pr.status == 412:  # poyga: slotni boshqasi egalladi
+                        idx += 1
+                        continue
+                    logging.error(f"products[{idx}] yozilmadi (status={pr.status})")
+                    return False
+            except Exception as e:
+                logging.error(f"products[{idx}] PUT xatosi: {e}")
+                return False
+        if not placed:
+            logging.error("products append: bo'sh slot topilmadi (max_probe tugadi)")
+            return False
+    return True
 
 
 # =====================================================================
@@ -867,6 +924,11 @@ async def contact_handler(message: types.Message):
 
 @dp.message(F.web_app_data)
 async def handle_webapp_data(message: types.Message):
+    # #1: faqat adminlar holat o'zgartira oladi. Aks holda istalgan foydalanuvchi
+    # Mini App orqali 'edit_status' yuborib, bot nomidan boshqa odamlarga soxta
+    # xabar jo'natishi mumkin edi (spam/aldash vektori).
+    if message.from_user.id not in ADMIN_IDS:
+        return
     try:
         data = json.loads(message.web_app_data.data)
         if data.get("action") == "edit_status":
@@ -1019,7 +1081,11 @@ async def process_new_orders(bot: Bot):
     async with aiohttp.ClientSession() as session:
         while True:
             try:
-                async with session.get(fb_url("orders")) as resp:
+                # #2: butun 'orders' tugunini emas, faqat eng so'nggi buyurtmalarni
+                # o'qiymiz (createdAt indekslangan). Shunda buyurtmalar soni o'ssa ham
+                # har so'rovda yuklama CHEKLANGAN bo'ladi (cheksiz o'smaydi).
+                params = {"orderBy": '"createdAt"', "limitToLast": 100}
+                async with session.get(fb_url("orders", params)) as resp:
                     if resp.status == 200:
                         orders = await resp.json()
                         if orders:
@@ -1045,8 +1111,20 @@ async def process_new_orders(bot: Bot):
                                     text += f"- {esc(item.get('name'))} x {esc(item.get('quantity', 1))} dona\n"
                                 text += f"\n<b>Umumiy: {total:,.0f} so'm</b>\nID: #{esc(order_id)}"
 
-                                await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="HTML")
-                                await session.patch(fb_url(f"orders/{order_id}"), json={"notified_admin": True})
+                                # #5: AVVAL flagni o'rnatamiz, KEYIN xabar yuboramiz.
+                                # PATCH muvaffaqiyatsiz bo'lsa — xabar yuborilmaydi va
+                                # keyingi tsiklda qayta uriniladi (takror yuborish yo'q).
+                                async with session.patch(fb_url(f"orders/{order_id}"),
+                                                         json={"notified_admin": True}) as pr:
+                                    if pr.status != 200:
+                                        continue
+                                try:
+                                    await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="HTML")
+                                except Exception as e:
+                                    # Xabar uzilsa flagni qaytaramiz — keyingi tsiklda qayta urinadi
+                                    logging.error(f"Admin xabar xatosi, flag qaytarilmoqda: {e}")
+                                    await session.patch(fb_url(f"orders/{order_id}"),
+                                                        json={"notified_admin": False})
             except Exception as e:
                 logging.error(f"Buyurtma tekshirish xatosi: {e}")
             await asyncio.sleep(5)
@@ -1074,7 +1152,14 @@ async def main():
     asyncio.create_task(process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_yandex_image, products_lock))
     asyncio.create_task(process_ai_admin_tasks(bot))
     asyncio.create_task(process_new_orders(bot))
-    await dp.start_polling(bot)
+
+    # #6: avval webhookni va kutilayotgan yangilanishlarni tozalaymiz — bu
+    # "409 Conflict" (webhook + getUpdates yoki eski navbat) sababini yo'qotadi.
+    # Eslatma: botni AYNI vaqtda IKKI nusxada ishga tushirmang — Telegram baribir
+    # 409 beradi (har bir bot uchun faqat bitta getUpdates iste'molchisi bo'ladi).
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot, drop_pending_updates=True,
+                           allowed_updates=dp.resolve_used_update_types())
 
 
 if __name__ == "__main__":

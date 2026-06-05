@@ -142,7 +142,7 @@ async def _read_products_raw(session, fb_url):
 
 def _product_offsets(raw):
     """RAW products dan (keyingi_id, keyingi_indeks) ni hisoblaydi.
-    Butun massivni qayta yozmaslik (append-only PATCH) uchun keyingi_indeks kerak."""
+    Butun massivni qayta yozmaslik (append-only) uchun keyingi_indeks kerak."""
     if isinstance(raw, list):
         items = [p for p in raw if isinstance(p, dict)]
         next_index = len(raw)
@@ -154,6 +154,54 @@ def _product_offsets(raw):
         items, next_index = [], 0
     next_id = max([p.get("id", 0) for p in items], default=0) + 1
     return next_id, next_index
+
+
+async def _append_products_safe(session, fb_url, new_products, start_index, max_probe=64):
+    """Yangi mahsulotlarni massivga XAVFSIZ (atomik) append qiladi.
+
+    Har bir mahsulot uchun bo'sh slot topiladi va u ETag (if-match) bilan ATOMIK
+    egallanadi. Slot band bo'lsa yoki 412 (poyga) qaytsa — keyingi slotga o'tiladi,
+    shu sababli mavjud mahsulotlar ustidan HECH QACHON yozilmaydi (#3).
+    Hammasi yozilsa True, qattiq xatoda False.
+    """
+    if not new_products:
+        return True
+    idx = start_index
+    for p in new_products:
+        placed = False
+        probes = 0
+        while probes < max_probe:
+            probes += 1
+            try:
+                async with session.get(fb_url(f"products/{idx}"),
+                                       headers={"X-Firebase-ETag": "true"}) as gr:
+                    etag = gr.headers.get("ETag")
+                    value = await gr.json()
+            except Exception as e:
+                log.error(f"AI bulk: products[{idx}] ETag o'qish xatosi: {e}")
+                return False
+            if value is not None:
+                idx += 1  # slot band — ustidan yozmaymiz
+                continue
+            headers = {"if-match": etag} if etag else {}
+            try:
+                async with session.put(fb_url(f"products/{idx}"), json=p, headers=headers) as pr:
+                    if pr.status == 200:
+                        placed = True
+                        idx += 1
+                        break
+                    if pr.status == 412:  # poyga: slotni boshqasi egalladi
+                        idx += 1
+                        continue
+                    log.error(f"AI bulk: products[{idx}] yozilmadi (status={pr.status})")
+                    return False
+            except Exception as e:
+                log.error(f"AI bulk: products[{idx}] PUT xatosi: {e}")
+                return False
+        if not placed:
+            log.error("AI bulk: bo'sh slot topilmadi (max_probe tugadi)")
+            return False
+    return True
 
 
 async def process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_image=None, products_lock=None):
@@ -273,17 +321,13 @@ async def _process_single(session, fb_url, groq_client, fetch_image, lock, bot, 
             })
             next_id += 1
 
-        # Butun massivni qayta yozmaymiz — faqat yangi indekslarni PATCH qilamiz.
+        # Har bir mahsulotni bo'sh slotga ETag (if-match) bilan ATOMIK qo'shamiz.
         # Shunda admin Mini App'da boshqa mahsulotlarga kiritgan o'zgarishlar
-        # (tahrir/o'chirish) ustidan yozib yuborilmaydi.
-        payload = {str(next_index + i): p for i, p in enumerate(new_products)}
-        try:
-            async with session.patch(fb_url("products"), json=payload) as r:
-                if r.status != 200:
-                    raise RuntimeError(f"products yozilmadi (status={r.status})")
-        except Exception as e:
-            log.error(f"AI bulk: products yozishda xato ({uid}): {e}")
-            await _finish(session, fb_url, uid, status="error", error=str(e), added=0)
+        # (tahrir/o'chirish/qo'shish) ustidan HECH QACHON yozib yuborilmaydi.
+        ok = await _append_products_safe(session, fb_url, new_products, next_index)
+        if not ok:
+            await _finish(session, fb_url, uid, status="error",
+                          error="products yozilmadi (Firebase xatosi)", added=0)
             return
 
     added = len(new_products)
