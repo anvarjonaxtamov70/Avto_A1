@@ -34,6 +34,7 @@ from google.oauth2 import service_account
 
 from groq import AsyncGroq
 from aiogram import Bot, Dispatcher, types, F
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -54,6 +55,28 @@ API_TOKEN = os.getenv("BOT_TOKEN", "")
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://anvarjonaxtamov70.github.io/Avto_A1/")
 FIREBASE_URL = os.getenv("FIREBASE_DB_URL", "https://avtoa1shop-default-rtdb.firebaseio.com").rstrip("/")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+# =====================================================================
+# PROKSI (PythonAnywhere bepul tarifi uchun)
+#   - PythonAnywhere bepul akkaunti tashqi internetga TO'G'RIDAN-TO'G'RI
+#     ulanishga ruxsat bermaydi; barcha so'rovlar proksi orqali ketishi kerak
+#     (http://proxy.server:3128). Aks holda: "Cannot connect to host
+#     api.telegram.org:443" xatosi chiqadi.
+#   - .env da TELEGRAM_PROXY=http://proxy.server:3128 deb yozing.
+#   - Mahalliy kompyuter / Oracle Cloud'da bo'sh qoldiring -> to'g'ridan-to'g'ri.
+#
+#   Telegram (aiogram): AiohttpSession(proxy=...) orqali (pastda, bot=...).
+#   Firebase (aiohttp) va Groq (httpx): muhit o'zgaruvchisi + trust_env orqali
+#   AVTOMATIK proksiga yo'naltiriladi (har bir so'rovni qo'lda o'zgartirmaymiz).
+# =====================================================================
+TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "").strip()
+if TELEGRAM_PROXY:
+    # aiohttp(trust_env=True) va httpx shu env'lardan proksini o'qiydi
+    os.environ.setdefault("HTTP_PROXY", TELEGRAM_PROXY)
+    os.environ.setdefault("HTTPS_PROXY", TELEGRAM_PROXY)
+    os.environ.setdefault("http_proxy", TELEGRAM_PROXY)
+    os.environ.setdefault("https_proxy", TELEGRAM_PROXY)
+    logging.getLogger(__name__).info(f"Proksi yoqildi: {TELEGRAM_PROXY}")
 
 # Cloudflare Worker (storis media PROXY + sendMessage). Storis rasm/videolari
 # shu Worker orqali o'qiladi => link DOIMIY bo'ladi, token sirqib chiqmaydi.
@@ -291,7 +314,12 @@ users_db = BoundedTTLCache(max_size=5000, ttl_seconds=6 * 3600)
 # To'g'ri event loop'ga bog'lanishi uchun main() ichida ishga tushiriladi.
 products_lock = None
 
-bot = Bot(token=API_TOKEN)
+# Telegram'ga ulanish: proksi berilgan bo'lsa (PythonAnywhere) — proksi orqali,
+# aks holda (mahalliy / Oracle Cloud) to'g'ridan-to'g'ri.
+if TELEGRAM_PROXY:
+    bot = Bot(token=API_TOKEN, session=AiohttpSession(proxy=TELEGRAM_PROXY))
+else:
+    bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 logging.basicConfig(level=logging.INFO)
 
@@ -453,7 +481,7 @@ def _select_relevant_products(products, query, limit=MAX_AI_PRODUCTS):
 
 
 async def process_mini_app_ai():
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         while True:
             try:
                 async with session.get(fb_url("ai_requests")) as resp:
@@ -534,7 +562,7 @@ async def process_mini_app_ai():
 # AI KOPIRAYTER (rasmni ko'rib tavsif yozadi)
 # =====================================================================
 async def process_ai_admin_tasks(bot: Bot):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         while True:
             try:
                 async with session.get(fb_url("ai_admin_tasks")) as resp:
@@ -736,7 +764,7 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
         # Aks holda AI bulk import bilan ayni vaqtda ishlaganda bir xil ID
         # berilishi yoki yozuvlar bir-birini o'chirib yuborishi mumkin (#15).
         async with products_lock:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(trust_env=True) as session:
                 async with session.get(fb_url("products")) as resp:
                     raw_products = await resp.json()
                     next_id, next_index = product_offsets(raw_products)
@@ -758,7 +786,7 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
                 # slotga ETag (if-match) bilan ATOMIK qo'shiladi, shunda admin
                 # boshqa mahsulotlarga kiritgan o'zgarishlar (tahrir/o'chirish/qo'shish)
                 # ustidan yozib yuborilmaydi (#3).
-                async with aiohttp.ClientSession() as session:
+                async with aiohttp.ClientSession(trust_env=True) as session:
                     ok = await firebase_append_products(session, new_products, next_index)
                 if not ok:
                     await msg.edit_text("Mahsulotlar bazaga yozilmadi (Firebase xatosi). Qayta urinib ko'ring.")
@@ -785,7 +813,7 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
 # FIREBASE YORDAMCHILARI (token bilan)
 # =====================================================================
 async def firebase_patch(path, data):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         try:
             async with session.patch(fb_url(path), json=data, timeout=10) as r:
                 return r.status == 200
@@ -795,7 +823,7 @@ async def firebase_patch(path, data):
 
 
 async def firebase_get(path):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         try:
             async with session.get(fb_url(path), timeout=10) as r:
                 if r.status == 200:
@@ -1209,7 +1237,7 @@ async def handle_stories(message: types.Message, bot: Bot):
         }
 
         # Token bilan yozamiz (aks holda 401)
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             async with session.put(fb_url(f"stories/{category}/{story_id}"), json=story_data) as resp:
                 if resp.status == 200:
                     await msg.edit_text(
@@ -1281,7 +1309,7 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
 # YANGI BUYURTMALARNI POYLASH
 # =====================================================================
 async def process_new_orders(bot: Bot):
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         while True:
             try:
                 # #2: butun 'orders' tugunini emas, faqat eng so'nggi buyurtmalarni
