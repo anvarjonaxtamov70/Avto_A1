@@ -3986,7 +3986,9 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
                                                   width:100% + padding => bar o'ng chetdan toshib,
                                                   tugmalar markazga nisbatan siljib qolardi */
             display: flex !important;
-            justify-content: space-around !important; /* 🔧 FIX: 5 tugma teng, simmetrik tarqaladi */
+            flex-direction: row !important;  /* 🔧 gorizontal qator — ustunga aylanib ketmasin (override himoyasi) */
+            flex-wrap: nowrap !important;     /* 🔧 tugmalar pastki qatorga tushmasin */
+            justify-content: space-between !important; /* 🔧 teng tarqalish; flex:1 bilan baribir 100% to'ladi */
             align-items: center !important;
             gap: 4px;
             z-index: var(--nav-z);
@@ -4012,8 +4014,11 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 
         /* Menyu tugmalari */
         .bottom-nav .nav-item {
-            flex: 1 1 0; /* 🔧 FIX: har tugma teng ulush (markazlash kafolati) */
-            min-width: 0;
+            flex: 1 1 0% !important;  /* 🔧 BULLETPROOF: har tugma AYNAN teng ulush => doim simmetrik/markazda.
+                                          '0%' (birlikli) — eski iOS Safari/Telegram WKWebView 'flex:1 1 0'
+                                          (birliksiz) ni e'tiborsiz qoldirib tugmalarni bir chetga yig'ardi.
+                                          !important — hech qaysi eski qoida buni yenga olmaydi. */
+            min-width: 0 !important;  /* uzun yozuv (masalan "Saqlangan") ustunni kengaytirib yubormasin */
             display: flex;
             flex-direction: column;
             align-items: center;
