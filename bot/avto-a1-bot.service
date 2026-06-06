@@ -1,0 +1,39 @@
+# =====================================================================
+#  Avto_A1 Telegram bot — systemd xizmati
+#  Bu fayl botni 24/7 ishlatadi:
+#    - krash bo'lsa AVTOMATIK qayta ishga tushadi (Restart=always)
+#    - server qayta yuklansa, bot O'ZI yonadi (WantedBy=multi-user.target)
+#
+#  O'RNATISH (server ichida, root/sudo bilan):
+#    sudo cp /home/ubuntu/Avto_A1/bot/avto-a1-bot.service /etc/systemd/system/
+#    sudo systemctl daemon-reload
+#    sudo systemctl enable --now avto-a1-bot
+#
+#  HOLATNI KO'RISH:   systemctl status avto-a1-bot
+#  LOGLARNI KO'RISH:  journalctl -u avto-a1-bot -f
+#  QAYTA ISHGA TUSH:  sudo systemctl restart avto-a1-bot
+#
+#  ESLATMA: quyidagi yo'llar Oracle Cloud Ubuntu obrazidagi standart
+#  `ubuntu` foydalanuvchisi uchun. Boshqa foydalanuvchi/yo'l bo'lsa,
+#  User= va WorkingDirectory= / ExecStart= qatorlarini moslang.
+# =====================================================================
+[Unit]
+Description=Avto_A1 Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Avto_A1/bot
+# venv ichidagi python bilan ishga tushiramiz (kerakli kutubxonalar shu yerda)
+ExecStart=/home/ubuntu/Avto_A1/bot/venv/bin/python bot.py
+# Krash bo'lsa 5 soniyadan keyin qayta urinadi (cheksiz)
+Restart=always
+RestartSec=5
+# Loglar journald'ga yoziladi (journalctl orqali ko'riladi)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
