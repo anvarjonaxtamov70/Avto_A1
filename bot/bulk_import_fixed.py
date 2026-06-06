@@ -221,7 +221,7 @@ async def process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_image=None
 
     lock = products_lock or asyncio.Lock()
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         while True:
             try:
                 async with session.get(fb_url("ai_bulk_requests")) as resp:
