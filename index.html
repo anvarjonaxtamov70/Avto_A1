@@ -3985,10 +3985,13 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             box-sizing: border-box !important; /* 🔧 FIX: padding kenglik ICHIGA kirsin — aks holda
                                                   width:100% + padding => bar o'ng chetdan toshib,
                                                   tugmalar markazga nisbatan siljib qolardi */
-            display: flex !important;
-            flex-direction: row !important;  /* 🔧 gorizontal qator — ustunga aylanib ketmasin (override himoyasi) */
-            flex-wrap: nowrap !important;     /* 🔧 tugmalar pastki qatorga tushmasin */
-            justify-content: space-between !important; /* 🔧 teng tarqalish; flex:1 bilan baribir 100% to'ladi */
+            /* ✅ CSS GRID — har tugma AYNAN teng ustun (1fr). Bu flexdan ham ishonchli:
+               eski iOS/Telegram WebView'da ham 100% ishlaydi, hech qachon bir chetga yig'ilmaydi.
+               grid-auto-flow:column + grid-auto-columns:1fr => tugmalar SONI nechta bo'lsa
+               (5 oddiy, 6 admin), o'shancha TENG ustunga avtomatik bo'linadi => doim markazda. */
+            display: grid !important;
+            grid-auto-flow: column !important;
+            grid-auto-columns: 1fr !important;
             align-items: center !important;
             gap: 4px;
             z-index: var(--nav-z);
@@ -4014,14 +4017,13 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 
         /* Menyu tugmalari */
         .bottom-nav .nav-item {
-            flex: 1 1 0% !important;  /* 🔧 BULLETPROOF: har tugma AYNAN teng ulush => doim simmetrik/markazda.
-                                          '0%' (birlikli) — eski iOS Safari/Telegram WKWebView 'flex:1 1 0'
-                                          (birliksiz) ni e'tiborsiz qoldirib tugmalarni bir chetga yig'ardi.
-                                          !important — hech qaysi eski qoida buni yenga olmaydi. */
-            min-width: 0 !important;  /* uzun yozuv (masalan "Saqlangan") ustunni kengaytirib yubormasin */
+            /* Kenglikni endi grid (1fr) belgilaydi — har tugma teng. Bu yerda faqat
+               ichki joylashuv: ikonka + yozuv ustma-ust, markazda. */
+            min-width: 0 !important;  /* uzun yozuv (masalan "Saqlangan") ustunni buzmasin */
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 4px;
             padding: 10px 0;
             border-radius: 20px;
