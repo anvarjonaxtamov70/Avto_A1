@@ -61,10 +61,33 @@ WORKER_URL = os.getenv("WORKER_URL", "https://avtoa1bot.anvaraxtamov70.workers.d
 
 # Storis kategoriyalari — Mini App (index.html) dagi halqalar bilan bir xil bo'lishi SHART.
 # Admin shu hashteglardan birini caption qilib yuboradi (masalan: #aksiyalar).
-VALID_STORY_CATEGORIES = {
-    "aksiyalar", "bugun", "mijozlar", "dostavka",
-    "kafolat", "lokatsiya", "tolov", "aloqa",
-}
+# Har bir kategoriya uchun qisqa izoh — /storis buyrug'ida ko'rsatiladi, shunda
+# admin hashteglarni yoddan bilishi shart emas (xatoga moyillik kamayadi).
+STORY_CATEGORY_INFO = OrderedDict([
+    ("aksiyalar", "Aksiya va chegirmalar"),
+    ("bugun", "Bugungi yangiliklar"),
+    ("mijozlar", "Mijozlar fikri / sharhlar"),
+    ("dostavka", "Yetkazib berish haqida"),
+    ("kafolat", "Kafolat shartlari"),
+    ("lokatsiya", "Manzil / lokatsiya"),
+    ("tolov", "To'lov usullari"),
+    ("aloqa", "Aloqa ma'lumotlari"),
+])
+# Tekshirish uchun to'plam — yuqoridagi ro'yxatdan AVTOMATIK hosil bo'ladi,
+# shunda ro'yxat bilan har doim sinxron bo'ladi (ikki joyda qo'lda yozilmaydi).
+VALID_STORY_CATEGORIES = set(STORY_CATEGORY_INFO.keys())
+
+
+def story_categories_text():
+    """/storis buyrug'i va xato xabari uchun kategoriyalar ro'yxatini tayyorlaydi."""
+    lines = [
+        "<b>Storis kategoriyalari</b>\n",
+        "Rasm yoki videoni quyidagi hashteglardan biri bilan <b>caption</b> qilib yuboring:\n",
+    ]
+    for cat, desc in STORY_CATEGORY_INFO.items():
+        lines.append(f"<code>#{cat}</code> — {desc}")
+    lines.append("\n<i>Masalan: rasmni tanlab, izohiga </i><code>#aksiyalar</code><i> deb yozing.</i>")
+    return "\n".join(lines)
 
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "5105291033,483425630").replace(" ", "").split(",") if x]
 ADMIN_ID = ADMIN_IDS[0] if ADMIN_IDS else 0
@@ -91,6 +114,119 @@ def esc(v):
     (400: can't parse entities) -> admin bildirishnomani UMUMAN olmasdi.
     """
     return html.escape(str(v if v is not None else ""))
+
+
+# =====================================================================
+# KO'P TILLILIK (o'zbek / rus)
+#   - Mijozga ko'rinadigan barcha matnlar shu yerda turadi.
+#   - Foydalanuvchi tili profilga (users/<id>/profile/lang) saqlanadi.
+#   - t(lang, key, **kwargs) — tanlangan tildagi matnni qaytaradi.
+#   - Eslatma: adminga boradigan bildirishnomalar o'zbekcha qoladi.
+# =====================================================================
+DEFAULT_LANG = "uz"
+SUPPORTED_LANGS = ("uz", "ru")
+
+# Menyu tugmalari (handlerlarda set bilan solishtiriladi — eski o'zbekcha
+# matnlar ham ishlashda davom etadi, ya'ni mavjud klaviaturalar buzilmaydi).
+BTN = {
+    "uz": {"shop": "Do'konga marhamat", "contact": "Biz bilan bog'lanish", "lang": "🌐 Til / Язык"},
+    "ru": {"shop": "В магазин", "contact": "Связаться с нами", "lang": "🌐 Til / Язык"},
+}
+SHOP_BUTTONS = {BTN["uz"]["shop"], BTN["ru"]["shop"]}
+CONTACT_BUTTONS = {BTN["uz"]["contact"], BTN["ru"]["contact"]}
+LANG_BUTTONS = {BTN["uz"]["lang"], BTN["ru"]["lang"]}
+
+TEXTS = {
+    "uz": {
+        "welcome_new": "Assalomu alaykum, Avto_A1 do'koniga xush kelibsiz!",
+        "choose_lang": "Tilni tanlang / Выберите язык:",
+        "lang_set": "Til o'zgartirildi: O'zbekcha",
+        "menu": "Asosiy menyu",
+        "ask_name": "<b>Ismingizni kiriting:</b>",
+        "ask_phone": "<b>Telefon raqamingizni yuboring:</b>",
+        "phone_invalid": ("Raqam noto'g'ri ko'rinishda kiritildi.\n\n"
+                          "Pastdagi <b>Raqamni yuborish</b> tugmasini bosing yoki "
+                          "raqamni <code>+998 90 123 45 67</code> ko'rinishida yozing."),
+        "ask_region": "<b>Viloyatingizni tanlang:</b>",
+        "register_success": ("<b>Ro'yxatdan muvaffaqiyatli o'tdingiz!</b>\n\n"
+                             "Pastdagi <b>{shop}</b> tugmasini bosing."),
+        "welcome_back": ("Assalomu alaykum yana bir bor, <b>{name}</b>!\n\n"
+                         "Pastdagi <b>{shop}</b> tugmasini bosing."),
+        "shop_prompt": "Buyurtma berish uchun do'konni oching:",
+        "shop_btn_inline": "Barcha zapchastlar",
+        "contact_info": ("<b>Avto_A1 bilan bog'lanish:</b>\n\n"
+                         "Admin: Anvar\n"
+                         "Telefon: +998 88 289 30 30\n"
+                         "Telegram: @anvaraxtamov2004"),
+        "photo_thanks": "Rasm uchun rahmat!\n\nZapchastlarni ko'rish uchun do'konni oching.",
+        "ai_busy": "Kechirasiz, hozir bandman. Birozdan keyin yozing.",
+        "phone_send": "Raqamni yuborish",
+        "order_qabul": "Buyurtmangiz qabul qilindi!",
+        "order_yolda": "Buyurtmangiz yo'lga chiqdi!",
+        "order_yetkazildi": "Buyurtmangiz yetkazildi. Rahmat!",
+        "order_bekor_qilingan": "Buyurtmangiz bekor qilindi.",
+    },
+    "ru": {
+        "welcome_new": "Здравствуйте! Добро пожаловать в магазин Avto_A1!",
+        "choose_lang": "Tilni tanlang / Выберите язык:",
+        "lang_set": "Язык изменён: Русский",
+        "menu": "Главное меню",
+        "ask_name": "<b>Введите ваше имя:</b>",
+        "ask_phone": "<b>Отправьте ваш номер телефона:</b>",
+        "phone_invalid": ("Номер введён неверно.\n\n"
+                          "Нажмите кнопку <b>Отправить номер</b> ниже или "
+                          "введите номер в формате <code>+998 90 123 45 67</code>."),
+        "ask_region": "<b>Выберите ваш регион:</b>",
+        "register_success": ("<b>Вы успешно зарегистрировались!</b>\n\n"
+                             "Нажмите кнопку <b>{shop}</b> ниже."),
+        "welcome_back": ("С возвращением, <b>{name}</b>!\n\n"
+                         "Нажмите кнопку <b>{shop}</b> ниже."),
+        "shop_prompt": "Откройте магазин, чтобы оформить заказ:",
+        "shop_btn_inline": "Все запчасти",
+        "contact_info": ("<b>Связаться с Avto_A1:</b>\n\n"
+                         "Админ: Анвар\n"
+                         "Телефон: +998 88 289 30 30\n"
+                         "Telegram: @anvaraxtamov2004"),
+        "photo_thanks": "Спасибо за фото!\n\nОткройте магазин, чтобы посмотреть запчасти.",
+        "ai_busy": "Извините, сейчас я занят. Напишите чуть позже.",
+        "phone_send": "Отправить номер",
+        "order_qabul": "Ваш заказ принят!",
+        "order_yolda": "Ваш заказ в пути!",
+        "order_yetkazildi": "Ваш заказ доставлен. Спасибо!",
+        "order_bekor_qilingan": "Ваш заказ отменён.",
+    },
+}
+
+
+def t(lang, key, **kwargs):
+    """Tanlangan tildagi matnni qaytaradi (kalit topilmasa o'zbekchaga qaytadi)."""
+    lang = lang if lang in TEXTS else DEFAULT_LANG
+    template = TEXTS[lang].get(key) or TEXTS[DEFAULT_LANG].get(key, key)
+    if kwargs:
+        try:
+            return template.format(**kwargs)
+        except Exception:
+            return template
+    return template
+
+
+def shop_label(lang):
+    """Til bo'yicha 'do'kon' tugmasi yozuvi (matn ichida havola qilish uchun)."""
+    return BTN.get(lang, BTN[DEFAULT_LANG])["shop"]
+
+
+async def get_user_lang(user_id):
+    """Foydalanuvchi tilini keshdan, bo'lmasa Firebase profilidan oladi.
+    Topilmasa DEFAULT_LANG ('uz'). Hot-path'da ortiqcha so'rov bo'lmasligi uchun
+    avval xotira keshiga (users_db) qaraydi."""
+    cached = users_db.get(user_id)
+    if cached and cached.get("lang"):
+        return cached["lang"]
+    prof = await firebase_get(f"users/{user_id}/profile")
+    if prof:
+        users_db[user_id] = prof
+        return prof.get("lang", DEFAULT_LANG)
+    return DEFAULT_LANG
 
 
 # =====================================================================
@@ -467,6 +603,7 @@ class ImportState(StatesGroup):
 
 
 class Register(StatesGroup):
+    lang = State()
     name = State()
     phone = State()
     region = State()
@@ -771,16 +908,32 @@ def normalize_phone(text):
 # =====================================================================
 # MENYULAR
 # =====================================================================
-asosiy_menyu = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Do'konga marhamat")],
-              [KeyboardButton(text="Biz bilan bog'lanish")]],
-    resize_keyboard=True,
-)
+def main_menu(lang=DEFAULT_LANG):
+    """Til bo'yicha asosiy menyu (do'kon / aloqa / til almashtirish)."""
+    b = BTN.get(lang, BTN[DEFAULT_LANG])
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=b["shop"])],
+                  [KeyboardButton(text=b["contact"])],
+                  [KeyboardButton(text=b["lang"])]],
+        resize_keyboard=True,
+    )
 
-phone_btn = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Raqamni yuborish", request_contact=True)]],
-    resize_keyboard=True, one_time_keyboard=True,
-)
+
+def phone_kb(lang=DEFAULT_LANG):
+    """Til bo'yicha 'raqamni yuborish' tugmasi."""
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=t(lang, "phone_send"), request_contact=True)]],
+        resize_keyboard=True, one_time_keyboard=True,
+    )
+
+
+def lang_inline_kb():
+    """Til tanlash inline klaviaturasi (har holatda ishlaydi — callback orqali)."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🇺🇿 O'zbekcha", callback_data="setlang:uz"),
+        InlineKeyboardButton(text="🇷🇺 Русский", callback_data="setlang:ru"),
+    ]])
+
 
 viloyatlar_menyu = ReplyKeyboardMarkup(
     keyboard=[
@@ -805,29 +958,65 @@ async def start_command(message: types.Message, state: FSMContext):
     existing_user = await firebase_get(f"users/{user_id}/profile")
     if existing_user and existing_user.get("phone"):
         users_db[user_id] = existing_user
+        lang = existing_user.get("lang", DEFAULT_LANG)
         name = existing_user.get("name", message.from_user.first_name)
         await message.answer(
-            f"Assalomu alaykum yana bir bor, <b>{esc(name)}</b>!\n\n"
-            "Pastdagi <b>Do'konga marhamat</b> tugmasini bosing.",
-            reply_markup=asosiy_menyu, parse_mode="HTML",
+            t(lang, "welcome_back", name=esc(name), shop=shop_label(lang)),
+            reply_markup=main_menu(lang), parse_mode="HTML",
         )
     else:
-        await message.answer(
-            "Assalomu alaykum, Avto_A1 do'koniga xush kelibsiz!\n\n<b>Ismingizni kiriting:</b>",
-            reply_markup=ReplyKeyboardRemove(), parse_mode="HTML",
-        )
+        # Yangi foydalanuvchi: avval tilni so'raymiz, keyin ro'yxatdan o'tkazamiz.
+        await message.answer(t(DEFAULT_LANG, "welcome_new"), reply_markup=ReplyKeyboardRemove())
+        await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb())
+        await state.set_state(Register.lang)
+
+
+@dp.message(Command("til", "language"))
+async def change_language_command(message: types.Message):
+    await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb())
+
+
+@dp.callback_query(F.data.startswith("setlang:"))
+async def set_language(call: types.CallbackQuery, state: FSMContext):
+    lang = call.data.split(":", 1)[1]
+    if lang not in SUPPORTED_LANGS:
+        lang = DEFAULT_LANG
+
+    # 1-holat: yangi foydalanuvchi ro'yxatdan o'tish boshida til tanladi
+    if await state.get_state() == Register.lang.state:
+        await state.update_data(lang=lang)
         await state.set_state(Register.name)
+        await call.message.edit_text(t(lang, "ask_name"), parse_mode="HTML")
+        await call.answer()
+        return
+
+    # 2-holat: mavjud foydalanuvchi tilni almashtirdi -> profilga saqlaymiz
+    user_id = call.from_user.id
+    prof = users_db.get(user_id) or (await firebase_get(f"users/{user_id}/profile")) or {}
+    prof["lang"] = lang
+    users_db[user_id] = prof
+    await firebase_patch(f"users/{user_id}/profile", {"lang": lang})
+    try:
+        await call.message.edit_text(t(lang, "lang_set"))
+    except Exception:
+        pass
+    await call.message.answer(t(lang, "menu"), reply_markup=main_menu(lang))
+    await call.answer()
 
 
 @dp.message(Register.name)
 async def get_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer("<b>Telefon raqamingizni yuboring:</b>", reply_markup=phone_btn, parse_mode="HTML")
+    data = await state.get_data()
+    lang = data.get("lang", DEFAULT_LANG)
+    await message.answer(t(lang, "ask_phone"), reply_markup=phone_kb(lang), parse_mode="HTML")
     await state.set_state(Register.phone)
 
 
 @dp.message(Register.phone)
 async def get_phone(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", DEFAULT_LANG)
     if message.contact:
         phone = message.contact.phone_number
         if not phone.startswith("+"):
@@ -836,14 +1025,12 @@ async def get_phone(message: types.Message, state: FSMContext):
         phone = normalize_phone(message.text)
         if not phone:
             await message.answer(
-                "Raqam noto'g'ri ko'rinishda kiritildi.\n\n"
-                "Pastdagi <b>Raqamni yuborish</b> tugmasini bosing yoki "
-                "raqamni <code>+998 90 123 45 67</code> ko'rinishida yozing.",
-                reply_markup=phone_btn, parse_mode="HTML",
+                t(lang, "phone_invalid"),
+                reply_markup=phone_kb(lang), parse_mode="HTML",
             )
             return  # holatda qolamiz — qayta so'raymiz
     await state.update_data(phone=phone)
-    await message.answer("<b>Viloyatingizni tanlang:</b>", reply_markup=viloyatlar_menyu, parse_mode="HTML")
+    await message.answer(t(lang, "ask_region"), reply_markup=viloyatlar_menyu, parse_mode="HTML")
     await state.set_state(Register.region)
 
 
@@ -853,14 +1040,15 @@ async def get_region(message: types.Message, state: FSMContext):
     data = await state.get_data()
     name = data.get("name")
     phone = data.get("phone")
+    lang = data.get("lang", DEFAULT_LANG)
     user_id = message.from_user.id
     username = message.from_user.username
     first_name = message.from_user.first_name
     last_name = message.from_user.last_name or ""
 
-    users_db[user_id] = {"name": name, "phone": phone, "address": region}
+    users_db[user_id] = {"name": name, "phone": phone, "address": region, "lang": lang}
     profile_data = {
-        "uid": user_id, "name": name, "phone": phone, "address": region,
+        "uid": user_id, "name": name, "phone": phone, "address": region, "lang": lang,
         "username": f"@{username}" if username else "Yo'q",
         "firstName": first_name, "lastName": last_name,
     }
@@ -872,6 +1060,7 @@ async def get_region(message: types.Message, state: FSMContext):
         f"Ism: <b>{esc(name)}</b>\n"
         f"Tel: <code>{esc(phone)}</code>\n"
         f"Viloyat: {esc(region)}\n"
+        f"Til: {esc(lang)}\n"
         f"Username: {esc(username_txt)}\n"
         f"ID: <code>{user_id}</code>"
     )
@@ -881,14 +1070,18 @@ async def get_region(message: types.Message, state: FSMContext):
         logging.error(f"Adminga xabar xatosi: {e}")
 
     await message.answer(
-        "<b>Ro'yxatdan muvaffaqiyatli o'tdingiz!</b>\n\n"
-        "Pastdagi <b>Do'konga marhamat</b> tugmasini bosing.",
-        reply_markup=asosiy_menyu, parse_mode="HTML",
+        t(lang, "register_success", shop=shop_label(lang)),
+        reply_markup=main_menu(lang), parse_mode="HTML",
     )
     await state.clear()
 
 
-@dp.message(F.text == "Do'konga marhamat")
+@dp.message(F.text.in_(LANG_BUTTONS))
+async def lang_button_handler(message: types.Message):
+    await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb())
+
+
+@dp.message(F.text.in_(SHOP_BUTTONS))
 async def interaktiv_menyu_handler(message: types.Message):
     user_id = message.from_user.id
     if user_id not in users_db:
@@ -896,6 +1089,7 @@ async def interaktiv_menyu_handler(message: types.Message):
         if existing and existing.get("phone"):
             users_db[user_id] = existing
 
+    lang = users_db.get(user_id, {}).get("lang", DEFAULT_LANG) if users_db.get(user_id) else DEFAULT_LANG
     if user_id in users_db and users_db[user_id].get("phone"):
         u = users_db[user_id]
         safe_name = urllib.parse.quote(str(u.get("name", message.from_user.first_name)))
@@ -907,19 +1101,22 @@ async def interaktiv_menyu_handler(message: types.Message):
         dynamic_url = f"{MINI_APP_URL}?name={safe_name}"
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text="Barcha zapchastlar", web_app=WebAppInfo(url=dynamic_url))]])
-    await message.answer("Buyurtma berish uchun do'konni oching:", reply_markup=kb)
+        text=t(lang, "shop_btn_inline"), web_app=WebAppInfo(url=dynamic_url))]])
+    await message.answer(t(lang, "shop_prompt"), reply_markup=kb)
 
 
-@dp.message(F.text == "Biz bilan bog'lanish")
+@dp.message(F.text.in_(CONTACT_BUTTONS))
 async def contact_handler(message: types.Message):
-    await message.answer(
-        "<b>Avto_A1 bilan bog'lanish:</b>\n\n"
-        "Admin: Anvar\n"
-        "Telefon: +998 88 289 30 30\n"
-        "Telegram: @anvaraxtamov2004",
-        parse_mode="HTML",
-    )
+    lang = await get_user_lang(message.from_user.id)
+    await message.answer(t(lang, "contact_info"), parse_mode="HTML")
+
+
+@dp.message(Command("storis", "kategoriyalar"))
+async def story_categories_command(message: types.Message):
+    # Admin storis hashteglarini yoddan bilishi shart emas — shu buyruq ro'yxatni ko'rsatadi.
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    await message.answer(story_categories_text(), parse_mode="HTML")
 
 
 @dp.message(F.web_app_data)
@@ -944,14 +1141,15 @@ async def handle_webapp_data(message: types.Message):
                 parse_mode="HTML",
             )
             mijozga_xabar = {
-                "qabul": "Buyurtmangiz qabul qilindi!",
-                "yolda": "Buyurtmangiz yo'lga chiqdi!",
-                "yetkazildi": "Buyurtmangiz yetkazildi. Rahmat!",
-                "bekor_qilingan": "Buyurtmangiz bekor qilindi.",
-            }.get(new_status, "")
+                "qabul": "order_qabul",
+                "yolda": "order_yolda",
+                "yetkazildi": "order_yetkazildi",
+                "bekor_qilingan": "order_bekor_qilingan",
+            }.get(new_status)
             if mijozga_xabar and uid and str(uid) != "Noma'lum":
                 try:
-                    await bot.send_message(chat_id=int(uid), text=mijozga_xabar)
+                    cust_lang = await get_user_lang(int(uid))
+                    await bot.send_message(chat_id=int(uid), text=t(cust_lang, mijozga_xabar))
                 except Exception as e:
                     logging.error(f"Mijozga xabar xatosi: {e}")
     except Exception as e:
@@ -973,9 +1171,8 @@ async def handle_stories(message: types.Message, bot: Bot):
     if category not in VALID_STORY_CATEGORIES:
         await message.reply(
             f"Noto'g'ri kategoriya: <b>#{category or '(bo`sh)'}</b>\n\n"
-            "Storis quyidagi hashteglardan biri bilan yuborilishi kerak:\n"
-            "<code>#aksiyalar  #bugun  #mijozlar  #dostavka</code>\n"
-            "<code>#kafolat  #lokatsiya  #tolov  #aloqa</code>",
+            + story_categories_text()
+            + "\n\nTo'liq ro'yxat uchun: /storis",
             parse_mode="HTML",
         )
         return
@@ -1034,9 +1231,10 @@ async def handle_stories(message: types.Message, bot: Bot):
 
 @dp.message(F.photo)
 async def handle_photo_redirect(message: types.Message):
+    lang = await get_user_lang(message.from_user.id)
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text="Do'konga marhamat", web_app=WebAppInfo(url=MINI_APP_URL))]])
-    await message.reply("Rasm uchun rahmat!\n\nZapchastlarni ko'rish uchun do'konni oching.", reply_markup=kb)
+        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    await message.reply(t(lang, "photo_thanks"), reply_markup=kb)
 
 
 @dp.message(F.text)
@@ -1046,10 +1244,15 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
     try:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         user_id = message.from_user.id
+        lang = await get_user_lang(user_id)
         if user_id not in ai_sessions:
+            lang_rule = ("Foydalanuvchi rus tilida yozyapti — javobni RUS tilida ber. "
+                         if lang == "ru" else
+                         "Foydalanuvchi o'zbek tilida yozyapti — javobni O'ZBEK tilida ber. ")
             ai_sessions[user_id] = [{
                 "role": "system",
                 "content": ("Sen 'Avto_A1' do'konining xushmuomala administratorisan. "
+                            + lang_rule +
                             "Zapchast yoki narx so'ralsa: 'Pastdagi tugmani bosib onlayn do'konimizga kiring' de. "
                             "Hech qachon ochiq link yozma. "
                             "Manzil: Samarqand yangi zapchast bozor, 19-sektor, 2-do'kon. "
@@ -1059,7 +1262,7 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
 
         bot_reply = await groq_chat(ai_sessions[user_id], temperature=0.5)
         if bot_reply is None:
-            await message.reply("Kechirasiz, hozir bandman. Birozdan keyin yozing.")
+            await message.reply(t(lang, "ai_busy"))
             return
 
         ai_sessions[user_id].append({"role": "assistant", "content": bot_reply})
@@ -1067,11 +1270,11 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
             ai_sessions[user_id] = [ai_sessions[user_id][0]] + ai_sessions[user_id][-9:]
 
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-            text="Do'konga marhamat", web_app=WebAppInfo(url=MINI_APP_URL))]])
+            text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
         await message.reply(bot_reply, reply_markup=kb)
     except Exception as e:
         logging.error(f"AI chat xatosi: {e}")
-        await message.reply("Kechirasiz, hozir bandman. Keyinroq yozing.")
+        await message.reply(t(DEFAULT_LANG, "ai_busy"))
 
 
 # =====================================================================
