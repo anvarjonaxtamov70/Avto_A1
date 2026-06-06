@@ -3978,13 +3978,14 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             bottom: 0 !important;            /* ekran tagiga to'liq yopishadi */
             top: auto !important;
             width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            box-sizing: border-box !important; /* 🔧 FIX: padding kenglik ICHIGA kirsin — aks holda
-                                                  width:100% + padding => bar o'ng chetdan toshib,
-                                                  tugmalar markazga nisbatan siljib qolardi */
+            max-width: 500px !important;     /* 🔧 kontent (.container, 500px) bilan bir xil ustun */
+            margin: 0 auto !important;       /* 🔧 left:0 + right:0 + margin:auto => bar HAR DOIM aniq markazda
+                                                (keng ekranda chetga, telefonda <500px to'liq kenglik) */
+            box-sizing: border-box !important; /* 🔧 padding kenglik ICHIGA kirsin — toshib ketmasin */
             display: flex !important;
-            justify-content: space-around !important; /* 🔧 FIX: 5 tugma teng, simmetrik tarqaladi */
+            flex-direction: row !important;  /* 🔧 ustun emas — gorizontal qator (override himoyasi) */
+            flex-wrap: nowrap !important;    /* 🔧 tugmalar pastga tushmasin */
+            justify-content: space-between !important; /* 🔧 teng tarqalish; flex:1 bilan baribir 100% to'ladi */
             align-items: center !important;
             gap: 4px;
             z-index: var(--nav-z);
@@ -4010,8 +4011,11 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 
         /* Menyu tugmalari */
         .bottom-nav .nav-item {
-            flex: 1 1 0; /* 🔧 FIX: har tugma teng ulush (markazlash kafolati) */
-            min-width: 0;
+            flex: 1 1 0% !important;  /* 🔧 BULLETPROOF: har tugma AYNAN teng ulush => doim simmetrik/markazda.
+                                          '0%' (birlikli) — eski iOS Safari/Telegram WKWebView 'flex:1 1 0'
+                                          (birliksiz) ni e'tiborsiz qoldirib tugmalarni bir chetga yig'ardi.
+                                          !important — hech qaysi eski qoida buni yenga olmaydi. */
+            min-width: 0 !important;  /* uzun yozuv (masalan "Saqlangan") ustunni kengaytirib yubormasin */
             display: flex;
             flex-direction: column;
             align-items: center;
