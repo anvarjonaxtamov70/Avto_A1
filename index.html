@@ -4053,6 +4053,36 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             filter: drop-shadow(0 4px 6px rgba(212, 175, 55, 0.4));
         }
 
+        /* ════════════════════════════════════════════════════════════
+           🧲 MAGNIT KAPSULA (nav-indicator) — JS bilan qo'shiladi.
+           ──────────────────────────────────────────────────────────
+           ❗️ ASOSIY TUZATISH: bu element 'position: absolute' bo'lishi
+           SHART. Aks holda u .bottom-nav ning grid (1fr) ustunlaridan
+           BITTASINI egallaydi => 5 ta ikonka o'rniga 6 ta ustun paydo
+           bo'lib, tugmalar chapga qisilib, o'ng tomonda bo'sh ustun
+           qoladi (Light ham, Dark ham buziladi). Absolute qilinsa,
+           kapsula grid oqimidan butunlay chiqadi => 5 ta tugma AYNAN
+           teng (1fr) ustunlarga bo'linib, simmetrik joylashadi.
+           ════════════════════════════════════════════════════════════ */
+        .bottom-nav .nav-indicator {
+            position: absolute !important;
+            top: 50% !important;
+            left: 0 !important;
+            width: 0;                 /* JS haqiqiy tugma kengligini beradi */
+            height: 46px;
+            margin-top: -27px;        /* ikonka+yozuv markaziga to'g'rilash (safe-area paddingni hisobga olib) */
+            border-radius: 16px;
+            background: linear-gradient(180deg, rgba(212, 175, 55, 0.18), rgba(212, 175, 55, 0.07));
+            box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.22);
+            pointer-events: none;     /* bosishga xalaqit bermaydi */
+            z-index: 1;               /* nav-item (z-index:2) ortida */
+            transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        html[data-theme="light"] .bottom-nav .nav-indicator {
+            background: linear-gradient(180deg, rgba(154, 122, 30, 0.16), rgba(154, 122, 30, 0.06));
+            box-shadow: inset 0 0 0 1px rgba(154, 122, 30, 0.26);
+        }
+
         /* ============================================================ */
         /* 💎 PASTKI GRADIENT FADE — menyu ostidagi bo'sh joyni yo'qotadi */
         /* Ekran pasti shaffofdan to'q qoraga ohista o'tadi. Menyu shu    */
@@ -7671,7 +7701,7 @@ window.clearAppCache = () => {
 };
     function clearSearch() { document.getElementById('searchInput').value = ''; searchProducts(); document.getElementById('searchInput').focus(); }
     function applyQuickSearch(t) { document.getElementById('searchInput').value = t; searchProducts(); }
-    function exitSearch() { searchActive = false; document.getElementById('searchInput').value = ''; if (typeof window._sfsSyncToolbar === 'function') window._sfsSyncToolbar(false, 0, 0); document.getElementById('search-results').classList.add('hidden'); document.getElementById('quick-chips').classList.add('hidden'); document.getElementById('clearSearchBtn').classList.remove('show'); document.getElementById('content-area').classList.remove('hidden'); let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; let bn = document.querySelector('.bottom-nav');if(bn) { bn.style.display = 'flex'; } updateBtns(); }
+    function exitSearch() { searchActive = false; document.getElementById('searchInput').value = ''; if (typeof window._sfsSyncToolbar === 'function') window._sfsSyncToolbar(false, 0, 0); document.getElementById('search-results').classList.add('hidden'); document.getElementById('quick-chips').classList.add('hidden'); document.getElementById('clearSearchBtn').classList.remove('show'); document.getElementById('content-area').classList.remove('hidden'); let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; let bn = document.querySelector('.bottom-nav');if(bn) { bn.style.display = ''; } updateBtns(); }
 
     function updateCartBadge() { let tot = Object.values(cart).reduce((a,b)=>a+b,0); let b = document.getElementById('nav-badge'); b.innerText = tot; if(tot > 0) { b.classList.add('show'); b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse'); } else { b.classList.remove('show'); } }
     function addToCart(id) { cart[id] = (cart[id] || 0) + 1; saveLocalCart(); updateCartBadge(); tg.HapticFeedback.impactOccurred('medium'); showToast('Savatda!'); }
@@ -7695,20 +7725,16 @@ window.clearAppCache = () => {
             let it = document.getElementById(id); 
             if(it) {
                 it.classList.add('active'); 
-                
-                // Magnit kapsulani hisoblab, o'sha ikonkaning orqasiga yugurtiramiz
+                try { Haptics.selection(); } catch(e) {}
+                // Magnit kapsulani faol ikonka ustiga yugurtiramiz (absolute => layoutni buzmaydi)
                 let indicator = document.getElementById('nav-indicator');
-                if(indicator) {
-                    let navRect = document.querySelector('.bottom-nav').getBoundingClientRect();
+                let nav = document.querySelector('.bottom-nav');
+                if(indicator && nav) {
+                    let navRect = nav.getBoundingClientRect();
                     let itemRect = it.getBoundingClientRect();
-                    // Chapdan qancha masofada ekanini hisoblaymiz
                     let offsetLeft = itemRect.left - navRect.left;
-                        if(it) {
-                            it.classList.add('active');
-                               Haptics.selection(); // ✅ Barmoq sezadigan nozik tebranish
                     indicator.style.transform = `translateX(${offsetLeft}px)`;
                     indicator.style.width = `${itemRect.width}px`;
-                   }
                 }
             }
         } 
