@@ -15631,6 +15631,134 @@ window._skel = function (n, h) {
     } catch (e) {}
 })();
 </script>
+<!-- ============================================================
+     🔍 QIDIRUV QATORI — YAKUNIY PREMIUM TUZATISH (single source of truth)
+     ────────────────────────────────────────────────────────────
+     MUAMMO (oldin):
+       • .search-input-container 'position: sticky; top:15px; z-index:1400'
+         edi — scrollda qidiruv qatori pastdagi TOVAR va BRENDLAR ustiga
+         tushib, "tiqilib"/ustma-ust ko'rinardi.
+       • Sticky 'top' offseti + bir nechta zid !important qoidalar
+         (1825, 2573, 2955-qatorlar) tepada keraksiz bo'sh joy qoldirardi.
+       • body.scrolled morph (top:5px, translateY, height:45px) bar shaklini
+         skrollda "sakratardi".
+     YECHIM:
+       • Qidiruv ODDIY OQIMGA (position: relative) o'tkazildi — endi u hech
+         qachon kontent ustiga chiqmaydi va skrollda xalaqit bermaydi.
+       • Tepadagi bo'sh joy slider↔qidiruv marginlari zichlanib olib tashlandi.
+       • Premium ko'rinish: nozik tilla hoshiya, shisha gradient fon, silliq
+         fokus halqasi (joy siljimaydi).
+       • search-focused spotlight effekti SAQLANADI.
+     Bu blok ENG OXIRDA turadi => manba tartibida barcha eski qoidalardan
+     ustun (equal-specificity + !important => keyingisi g'olib).
+     ============================================================ -->
+<style id="search-premium-final">
+  /* Slider bilan qidiruv orasidagi ortiqcha bo'shliqni zichlaymiz */
+  .slider-container { margin-bottom: 14px !important; }
+
+  /* ——— Konteyner: STICKY EMAS, oddiy oqimda (ustma-ust tushmaydi) ——— */
+  .search-input-container {
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: calc(100% - 40px) !important;
+    margin: 0 auto 16px !important;   /* tepada bo'sh joy yo'q, yon chetlar slider bilan tekis */
+    box-sizing: border-box !important;
+    display: block !important;
+  }
+
+  /* ——— Premium qidiruv qutisi (FAQAT asosiy qidiruvga; boshqa inputlarga tegmaydi) ——— */
+  .search-input-container .search-box {
+    width: 100% !important;
+    height: 54px !important;
+    padding: 0 88px 0 48px !important;   /* chap: lupa ikonkasi, o'ng: tozalash/skaner tugmalari */
+    border-radius: 16px !important;
+    border: 1px solid rgba(212, 175, 55, 0.22) !important;
+    background: linear-gradient(180deg, rgba(40, 40, 44, 0.92), rgba(24, 24, 27, 0.94)) !important;
+    color: #ffffff !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.2px !important;
+    box-shadow:
+      0 6px 22px -10px rgba(0, 0, 0, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(140%) !important;
+    backdrop-filter: blur(12px) saturate(140%) !important;
+    transition:
+      border-color 0.28s ease,
+      box-shadow 0.28s ease,
+      background 0.28s ease !important;
+  }
+  .search-input-container .search-box::placeholder {
+    color: rgba(255, 255, 255, 0.42) !important;
+    font-weight: 500 !important;
+  }
+  /* Fokus — tilla halqa, JOY SILJIMAYDI (eski translateY(-2px) olib tashlandi) */
+  .search-input-container .search-box:focus {
+    border-color: var(--luxury-gold, #C9A84C) !important;
+    background: linear-gradient(180deg, rgba(46, 42, 28, 0.95), rgba(28, 26, 20, 0.95)) !important;
+    box-shadow:
+      0 12px 32px -10px rgba(0, 0, 0, 0.7),
+      0 0 0 3px rgba(212, 175, 55, 0.16) !important;
+    transform: none !important;
+  }
+
+  /* Chap lupa va tugmalar — yangi balandlikka (54px) markazlanadi */
+  .search-input-container .search-icon-left {
+    left: 18px !important;
+    color: rgba(255, 255, 255, 0.55) !important;
+  }
+  .search-input-container .clear-search-btn { right: 16px !important; }
+  .search-input-container .scan-search-btn { right: 50px !important; }
+
+  /* ——— body.scrolled morph'ini neytrallaymiz (sticky yo'q => sakrash yo'q) ——— */
+  body.scrolled .search-input-container {
+    top: auto !important;
+    width: calc(100% - 40px) !important;
+    transform: none !important;
+  }
+  body.scrolled .search-input-container .search-box {
+    background: linear-gradient(180deg, rgba(40, 40, 44, 0.92), rgba(24, 24, 27, 0.94)) !important;
+    border-radius: 16px !important;
+    height: 54px !important;
+  }
+
+  /* ——— search-focused spotlight (premium fokus zoom) SAQLANADI ——— */
+  body.search-focused .search-input-container {
+    transform: scale(1.015) !important;
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  }
+
+  /* ——— Yorug' rejim varianti ——— */
+  html[data-theme="light"] .search-input-container .search-box {
+    background: linear-gradient(180deg, #FFFDF8, #F5EEDF) !important;
+    border: 1px solid rgba(154, 122, 30, 0.28) !important;
+    color: #211C12 !important;
+    box-shadow:
+      0 6px 18px -10px rgba(120, 90, 30, 0.40),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+  }
+  html[data-theme="light"] .search-input-container .search-box::placeholder {
+    color: #A99A7C !important;
+  }
+  html[data-theme="light"] .search-input-container .search-box:focus {
+    border-color: var(--luxury-gold-dark, #7A5E12) !important;
+    background: linear-gradient(180deg, #FFFDF6, #F3EBD8) !important;
+    box-shadow:
+      0 10px 26px -10px rgba(120, 90, 30, 0.45),
+      0 0 0 3px rgba(154, 122, 30, 0.18) !important;
+  }
+  html[data-theme="light"] .search-input-container .search-icon-left {
+    color: #94804F !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .search-input-container .search-box,
+    body.search-focused .search-input-container { transition: none !important; }
+  }
+</style>
 </body>    
 </html> 
 
