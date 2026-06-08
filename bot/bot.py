@@ -429,27 +429,101 @@ async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
 MAX_AI_PRODUCTS = 40
 
 
+# Mashina modeli / kategoriya uchun "umumiy" (ma'noga ega bo'lmagan) qiymatlar.
+# Kross-sell faqat ANIQ modeldagi qismlarni taklif qilsin — generic qiymatlar
+# bo'yicha tasodifiy tovarlar qo'shilib ketmasin.
+_GENERIC_VALUES = {"", "umumiy", "ko'rsatilmagan", "korsatilmagan", "nan", "noma'lum", "namalum"}
+
+
+def _norm(s):
+    return str(s if s is not None else "").lower().strip()
+
+
+def _product_haystack(p):
+    """Mahsulotning qidiriladigan barcha matnli maydonlarini birlashtiradi."""
+    cats = " ".join(_norm(c) for c in (p.get("categories") or []))
+    return {
+        "name": _norm(p.get("name")),
+        "desc": _norm(p.get("desc")),
+        "brand": _norm(p.get("brand")),
+        "model": _norm(p.get("model")),
+        "cats": cats + " " + _norm(p.get("category")),
+    }
+
+
+def _in_stock(p):
+    try:
+        return float(p.get("stock", 0)) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _select_relevant_products(products, query, limit=MAX_AI_PRODUCTS):
-    """So'rovga mos mahsulotlarni tanlaydi (nom bo'yicha). Mos kelmasa eng
-    boshidagi `limit` tasini qaytaradi. Qoralamalar (is_draft) tashlanadi."""
-    # #4: products RTDB'dan dict YOKI list bo'lib kelishi mumkin. Avval uni
-    # mahsulot-dict'lar ro'yxatiga normallashtiramiz (aks holda dict ustida
-    # ishlaganda kalitlar (matn) bo'yicha yurib, .get() da xato berardi).
+    """So'rovga mos mahsulotlarni AQLLI tanlaydi (sotuvchi-maslahatchi kabi).
+
+    - Faqat nom emas, balki desc/brand/model/kategoriya bo'yicha ham qidiradi.
+    - Ballash: nom > model > (desc/brand/kategoriya); butun so'rov ichida bo'lsa
+      qo'shimcha ball; omborda bori biroz oldinroq turadi.
+    - Topilgan top mosликlar bilan AYNI mashina modelidagi qismlarni ham qo'shadi
+      (proaktiv kross-sell — AI to'ldiruvchi tovar taklif qila olsin).
+    - Hech narsa mos kelmasa, boshidagi `limit` tasini qaytaradi.
+    Qoralamalar (is_draft) doimo tashlanadi.
+    """
+    # #4: products RTDB'dan dict YOKI list bo'lib kelishi mumkin — normallashtiramiz.
     products = [v for _, v in fb_items(products) if isinstance(v, dict)]
     live = [p for p in products if not p.get("is_draft")]
-    tokens = [t for t in re.split(r"\W+", (query or "").lower()) if len(t) >= 3]
-    if tokens:
-        scored = []
-        for p in live:
-            name = str(p.get("name", "")).lower()
-            score = sum(1 for t in tokens if t in name)
-            if score:
-                scored.append((score, p))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        chosen = [p for _, p in scored[:limit]]
-        if chosen:
-            return chosen
-    return live[:limit]
+
+    q = _norm(query)
+    tokens = [t for t in re.split(r"\W+", q) if len(t) >= 2]
+    if not tokens:
+        return live[:limit]
+
+    def score(p):
+        h = _product_haystack(p)
+        s = 0.0
+        for t in tokens:
+            if t in h["name"]:
+                s += 3
+            if t in h["model"]:
+                s += 2
+            if t in h["desc"]:
+                s += 1
+            if t in h["brand"]:
+                s += 1
+            if t in h["cats"]:
+                s += 1
+        if q and q in h["name"]:   # butun so'rov nomda — kuchli signal
+            s += 4
+        if s > 0 and _in_stock(p):
+            s += 0.5
+        return s
+
+    scored = [(score(p), p) for p in live]
+    scored = [(s, p) for s, p in scored if s > 0]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    chosen = [p for _, p in scored[:limit]]
+    if not chosen:
+        return live[:limit]
+
+    # ——— Proaktiv kross-sell: top mosликlar bilan ayni ANIQ mashina modelidagi
+    #     boshqa qismlarni ham qo'shamiz (faqat generic bo'lmagan model bo'yicha).
+    if len(chosen) < limit:
+        seen = {p.get("id") for p in chosen}
+        target_models = {
+            _norm(p.get("model")) for p in chosen[:3]
+            if _norm(p.get("model")) not in _GENERIC_VALUES
+        }
+        if target_models:
+            for p in live:
+                if len(chosen) >= limit:
+                    break
+                if p.get("id") in seen:
+                    continue
+                if _norm(p.get("model")) in target_models:
+                    chosen.append(p)
+                    seen.add(p.get("id"))
+
+    return chosen
 
 
 async def process_mini_app_ai():
@@ -483,29 +557,59 @@ async def process_mini_app_ai():
                                 last_user_msg = str(m.get("text", ""))
                                 break
                         relevant = _select_relevant_products(products, last_user_msg)
-                        prod_info = [
-                            f"ID: {p.get('id')} | Nomi: {p.get('name')} | Narxi: {p.get('price')} so'm"
-                            for p in relevant
-                        ]
-                        prod_context = "\n".join(prod_info)
+
+                        def _prod_line(p):
+                            # AI ga foydali, ammo ixcham kontekst: nom, narx, mavjudlik
+                            # va (bo'lsa) mashina/izoh — shunda u to'g'ri maslahat beradi.
+                            price = 0
+                            try:
+                                price = int(float(p.get("price", 0)))
+                            except (TypeError, ValueError):
+                                price = 0
+                            parts = [f"ID:{p.get('id')}",
+                                     str(p.get("name", "")).strip(),
+                                     f"{price:,} so'm".replace(",", " ")]
+                            model = str(p.get("model", "")).strip()
+                            if _norm(model) not in _GENERIC_VALUES:
+                                parts.append(f"mashina: {model}")
+                            desc = str(p.get("desc", "")).strip()
+                            if desc and _norm(desc) not in _GENERIC_VALUES and not desc.lower().startswith("mashina:"):
+                                parts.append(desc[:60])
+                            parts.append("omborda bor" if _in_stock(p) else "borligini aniqlash kerak")
+                            return " | ".join(parts)
+
+                        prod_context = "\n".join(_prod_line(p) for p in relevant) or "(hozircha mos tovar yo'q)"
+                        relevant_ids = {p.get("id") for p in relevant}
 
                         groq_msgs = [{
                             "role": "system",
                             "content": (
-                                "Sen 'Avto_A1' zapchast do'konining aqlli yordamchisisan.\n"
-                                "QOIDALAR:\n"
-                                "1. Oddiy salomlashishga qisqa, xushmuomala javob ber.\n"
-                                "2. Zapchast so'ralsa, faqat quyidagi BAZAdan qidir.\n"
-                                "3. Mos tovar topsang oxiriga shu formatda yoz: [IDS: 1, 4]\n"
-                                "4. Bazada bo'lmasa: 'Kechirasiz, hozircha bu qolmagan' deb yoz.\n\n"
-                                f"DO'KON BAZASI:\n{prod_context}"
+                                "Sen 'Avto_A1' avto-ehtiyot qismlar do'konining TAJRIBALI "
+                                "sotuvchi-maslahatchisisan. Mijozga tirik, aqlli mutaxassis "
+                                "kabi yordam ber — quruq javob beruvchi bot emas.\n\n"
+                                "USLUB:\n"
+                                "- Mijoz qaysi tilda yozsa (o'zbekcha/ruscha), AYNAN o'sha tilda javob ber.\n"
+                                "- JUDA QISQA va lo'nda: 1-3 ta qisqa gap yoki kichik ro'yxat. Suv yo'q.\n"
+                                "- Samimiy, ishonchli, foydali maslahat ohangi (robotdek emas).\n\n"
+                                "VAZIFALAR:\n"
+                                "1. Mijoz ehtiyot qism so'rasa — quyidagi BAZAdan O'ZING qidirib top va tavsiya et.\n"
+                                "2. Mos tovar(lar) topsang, javob OXIRIGA aniq shu formatda yoz: [IDS: 1, 4]\n"
+                                "   (faqat haqiqiy mos ID'lar; kartochka avtomatik chiqadi — narx/nomni qayta yozma).\n"
+                                "3. So'rov noaniq bo'lsa (qaysi mashina, yili, dvigatel, old/orqa va h.k.) — "
+                                "tavsiya berishdan oldin 1 ta ANIQ savol ber.\n"
+                                "4. Imkon bo'lsa to'ldiruvchi qismni ham taklif qil (mas. kolodka so'rasa — disk/datchik).\n"
+                                "5. Bazada bo'lmasa: qisqa uzr + qaysi mashinaga kerakligini so'ra yoki "
+                                "+998(88)289-30-30 raqamiga yo'naltir.\n\n"
+                                "CHEKLOV: faqat BAZAdagi tovarlarni tavsiya qil, narxni o'zing to'qima, "
+                                "ochiq havola yozma.\n\n"
+                                f"DO'KON BAZASI (mavjud tovarlar):\n{prod_context}"
                             )
                         }]
                         for m in messages:
                             role = "user" if m.get("sender") == "user" else "assistant"
                             groq_msgs.append({"role": role, "content": str(m.get("text", ""))})
 
-                        bot_reply = await groq_chat(groq_msgs, temperature=0.3)
+                        bot_reply = await groq_chat(groq_msgs, temperature=0.4)
                         if bot_reply is None:
                             bot_reply = "Kechirasiz, hozir javob bera olmayapman. Birozdan keyin urinib ko'ring."
 
@@ -514,6 +618,9 @@ async def process_mini_app_ai():
                         if match:
                             found_ids = [int(i.strip()) for i in match.group(1).split(",") if i.strip().isdigit()]
                             bot_reply = re.sub(r"\[IDS:\s*[\d,\s]+\]", "", bot_reply).strip()
+                            # AI faqat ko'rsatilgan bazadagi tovarlarni ko'rsatsin
+                            # (xato/yo'q ID yoki qoralama kartochka chiqib qolmasin).
+                            found_ids = [i for i in found_ids if i in relevant_ids]
 
                         messages.append({
                             "sender": "bot",
@@ -1251,9 +1358,12 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
                          "Foydalanuvchi o'zbek tilida yozyapti — javobni O'ZBEK tilida ber. ")
             ai_sessions[user_id] = [{
                 "role": "system",
-                "content": ("Sen 'Avto_A1' do'konining xushmuomala administratorisan. "
-                            + lang_rule +
-                            "Zapchast yoki narx so'ralsa: 'Pastdagi tugmani bosib onlayn do'konimizga kiring' de. "
+                "content": ("Sen 'Avto_A1' avto-ehtiyot qismlar do'konining tajribali "
+                            "sotuvchi-maslahatchisisan. " + lang_rule +
+                            "JUDA QISQA va lo'nda javob ber (1-2 gap), tirik mutaxassis kabi, foydali maslahat bilan. "
+                            "So'rov noaniq bo'lsa — qaysi mashina/yili kabi 1 ta aniq savol ber. "
+                            "Aniq zapchast yoki narx so'ralsa, do'konda bor-yo'qligini ko'rish uchun: "
+                            "'Pastdagi tugmani bosib onlayn do'konimizdan qidiring' de. "
                             "Hech qachon ochiq link yozma. "
                             "Manzil: Samarqand yangi zapchast bozor, 19-sektor, 2-do'kon. "
                             "Tel: +998(88)289-30-30")
