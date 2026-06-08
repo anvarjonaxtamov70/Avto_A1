@@ -6379,11 +6379,53 @@ document.addEventListener('touchmove', function(e) {
     } catch(e) { _dwarn('[TG] setBackgroundColor qo\'llab-quvvatlanmaydi:', e.message); }
     
     // 4. Ekranni to'liq egallash (faqat Telegram 8.0+ uchun)
+    var _tgFullscreen = false;
     try {
         if (tg.isVersionAtLeast && tg.isVersionAtLeast('8.0') && tg.requestFullscreen) {
             tg.requestFullscreen();
+            _tgFullscreen = true;
         }
     } catch(e) { _dwarn('[TG] requestFullscreen qo\'llab-quvvatlanmaydi:', e.message); }
+
+    // ====================================================================
+    // 🔝 TELEGRAM XAVFSIZ ZONA — header Telegram tugmalari OSTIDA boshlansin
+    // --------------------------------------------------------------------
+    // To'liq ekran (fullscreen) rejimida Telegram'ning o'z tugmalari (✕ yopish,
+    // ⋮ menyu) kontent USTIDA suzadi. Bizning header tugmalarimiz (mavzu/qo'ng'iroq)
+    // ular ostida qolib ketmasligi uchun --safe-top o'zgaruvchisini Telegram bergan
+    // HAQIQIY insetlar bilan yangilaymiz:
+    //     --safe-top = safeAreaInset.top (notch) + contentSafeAreaInset.top (TG UI)
+    // CSS dagi barcha 'calc(... + var(--safe-top))' joylari (header padding,
+    // .p2-hdr-btn tugmalari, modal paddinglari) avtomatik to'g'ri pastga suriladi.
+    // Insetlar fullscreen O'TISHIDAN KEYIN (event orqali) keladi — shuning uchun
+    // event listenerlar + bir nechta kechiktirilgan urinish qo'shamiz.
+    // ====================================================================
+    function applyTgSafeTop() {
+        try {
+            var sa  = tg.safeAreaInset || null;          // qurilma (notch/status bar)
+            var csa = tg.contentSafeAreaInset || null;   // Telegram UI (tugmalar paneli)
+            var saTop  = (sa  && typeof sa.top  === 'number') ? sa.top  : 0;
+            var csaTop = (csa && typeof csa.top === 'number') ? csa.top : 0;
+            var total = saTop + csaTop;
+            // Fullscreen yoqilgan, ammo inset hali kelmagan (eski SDK yoki o'tish
+            // lahzasi) — tugmalar ustma-ust tushmasligi uchun zaxira qiymat.
+            var isFs = (typeof tg.isFullscreen === 'boolean') ? tg.isFullscreen : _tgFullscreen;
+            if (total < 1 && isFs) total = 56;
+            if (total > 0) {
+                document.documentElement.style.setProperty('--safe-top', total + 'px');
+            }
+        } catch(e) { _dwarn('[TG] safe-top hisoblash xato:', e.message); }
+    }
+    try {
+        if (tg.onEvent) {
+            tg.onEvent('safeAreaChanged', applyTgSafeTop);
+            tg.onEvent('contentSafeAreaChanged', applyTgSafeTop);
+            tg.onEvent('fullscreenChanged', applyTgSafeTop);
+        }
+    } catch(e) {}
+    applyTgSafeTop();                 // darhol
+    setTimeout(applyTgSafeTop, 120);  // fullscreen o'tishidan keyin
+    setTimeout(applyTgSafeTop, 500);  // sekinroq qurilmalar uchun zaxira
 
     // 🛑 1. Tepadan pastga tortganda yopilib ketishini TO'LIQ BLOKLASH
     try {
