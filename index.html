@@ -4037,10 +4037,19 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             cursor: pointer;
             position: relative;
             z-index: 2;
-            transition: transform 0.15s ease, color 0.2s ease;
+            /* Silliq o'tish: yengil overshoot (premium "spring" hissi).
+               Ikonka rangi va ko'tarilish bir maromda animatsiyalanadi. */
+            transition:
+                transform 0.34s cubic-bezier(0.34, 1.45, 0.5, 1),
+                color 0.25s ease;
+            -webkit-tap-highlight-color: transparent;
         }
-        .bottom-nav .nav-item svg { width: 24px; height: 24px; fill: currentColor; }
-        .bottom-nav .nav-item:active { transform: scale(0.92); }
+        .bottom-nav .nav-item svg {
+            width: 24px; height: 24px; fill: currentColor;
+            transition: filter 0.3s ease, transform 0.34s cubic-bezier(0.34, 1.45, 0.5, 1);
+        }
+        /* Bosilish — snappy (tez) javob, keyin silliq qaytadi */
+        .bottom-nav .nav-item:active { transform: scale(0.9); transition: transform 0.12s ease; }
 
         /* Faol tugma — tilla, yengil tepaga qalqiydi, ikonkadan tilla nur */
         .bottom-nav .nav-item.active {
@@ -4051,6 +4060,10 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         .bottom-nav .nav-item.active svg {
             fill: var(--luxury-gold);
             filter: drop-shadow(0 4px 6px rgba(212, 175, 55, 0.4));
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .bottom-nav .nav-item,
+            .bottom-nav .nav-item svg { transition: color 0.2s ease !important; }
         }
 
         /* ════════════════════════════════════════════════════════════
@@ -4066,21 +4079,41 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
            ════════════════════════════════════════════════════════════ */
         .bottom-nav .nav-indicator {
             position: absolute !important;
-            top: 50% !important;
+            top: 0 !important;
             left: 0 !important;
-            width: 0;                 /* JS haqiqiy tugma kengligini beradi */
-            height: 46px;
-            margin-top: -27px;        /* ikonka+yozuv markaziga to'g'rilash (safe-area paddingni hisobga olib) */
-            border-radius: 16px;
-            background: linear-gradient(180deg, rgba(212, 175, 55, 0.18), rgba(212, 175, 55, 0.07));
-            box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.22);
+            /* O'lcham VA joylashuv (x,y) BUTUNLAY JS dan keladi (positionNavIndicator).
+               'offset*' layout qiymatlari ishlatiladi — ular transform (scale/translate)
+               ta'sirida o'zgarmaydi, shuning uchun kapsula har doim tugma markaziga
+               aniq tushadi (iOS safe-area paddingi ham buzmaydi). */
+            width: 0;
+            height: 48px;
+            border-radius: 18px;
+            /* 🟡 Sariq SHISHA (frosted glass): yengil tilla gradient + ichki halqa +
+               nozik tashqi nur + backdrop blur. Tugma hududini to'liq, tekis qoplaydi. */
+            background: linear-gradient(180deg, rgba(212, 175, 55, 0.24), rgba(212, 175, 55, 0.07));
+            box-shadow:
+                inset 0 0 0 1px rgba(212, 175, 55, 0.30),
+                inset 0 1px 1px rgba(255, 255, 255, 0.14),
+                0 6px 18px -6px rgba(212, 175, 55, 0.40);
+            -webkit-backdrop-filter: blur(5px) saturate(140%);
+            backdrop-filter: blur(5px) saturate(140%);
             pointer-events: none;     /* bosishga xalaqit bermaydi */
             z-index: 1;               /* nav-item (z-index:2) ortida */
-            transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+            will-change: transform, width;
+            transition:
+                transform 0.42s cubic-bezier(0.34, 1.45, 0.5, 1),
+                width 0.42s cubic-bezier(0.34, 1.45, 0.5, 1);
         }
         html[data-theme="light"] .bottom-nav .nav-indicator {
-            background: linear-gradient(180deg, rgba(154, 122, 30, 0.16), rgba(154, 122, 30, 0.06));
-            box-shadow: inset 0 0 0 1px rgba(154, 122, 30, 0.26);
+            background: linear-gradient(180deg, rgba(154, 122, 30, 0.18), rgba(154, 122, 30, 0.06));
+            box-shadow:
+                inset 0 0 0 1px rgba(154, 122, 30, 0.30),
+                inset 0 1px 1px rgba(255, 255, 255, 0.40),
+                0 6px 18px -8px rgba(154, 122, 30, 0.34);
+        }
+        /* Harakatni kamaytirish rejimida (a11y) — sakrash/silliq surilish o'chadi */
+        @media (prefers-reduced-motion: reduce) {
+            .bottom-nav .nav-indicator { transition: none !important; }
         }
 
         /* ============================================================ */
@@ -6707,6 +6740,8 @@ const Haptics = {
             if(adminBtn) adminBtn.classList.remove('hidden'); 
             let scanBtn = document.getElementById('scanSearchBtn');
             if(scanBtn) scanBtn.classList.remove('hidden');
+            // Admin tugmasi qo'shildi => menyu ustunlari 5->6 o'zgardi: kapsulani to'g'rilaymiz
+            try { if (window._recalcNavIndicator) window._recalcNavIndicator(60); } catch(e) {}
         }
 
         // 🔐 DB'ga murojaatdan OLDIN auth tugashini kutamiz.
@@ -6722,6 +6757,8 @@ const Haptics = {
             var _amAdmin = window.isAdmin();
             if (_adminBtn2) _adminBtn2.classList.toggle('hidden', !_amAdmin);
             if (_scanBtn2) _scanBtn2.classList.toggle('hidden', !_amAdmin);
+            // Tugmalar soni o'zgargan bo'lishi mumkin => kapsulani qayta to'g'rilaymiz
+            try { if (window._recalcNavIndicator) window._recalcNavIndicator(60); } catch(e) {}
         } catch (e) {}
 
         // 2. Telegramdagi ma'lumotlarni bazaga yozish
@@ -7714,31 +7751,66 @@ window.clearAppCache = () => {
             indicator.className = 'nav-indicator';
             nav.appendChild(indicator);
             // Ilova ochilganda birinchi ikonka ustiga borib turishi uchun:
-            setTimeout(() => updateNav('nav-home'), 100); 
+            setTimeout(() => updateNav('nav-home'), 100);
         }
     });
 
+    // ──────────────────────────────────────────────────────────────
+    // 🧲 Sariq SHISHA kapsulani faol tugma ustiga ANIQ joylashtirish.
+    //   'offset*' (layout) qiymatlaridan foydalanamiz — ular CSS transform
+    //   (scale/translate) ta'sirida o'zgarmaydi. Shu sababli:
+    //     • kapsula tugma markaziga AYNAN tushadi (scale(1.1) buzmaydi),
+    //     • aktiv tugmaning -6px ko'tarilishi hisobga olinadi (LIFT),
+    //     • iPhone safe-area paddingidan MUSTAQIL (vertikal bo'shliq yo'q).
+    //   Natija: kapsula tugma hududini to'liq va TEKIS qoplaydi (iOS+Android).
+    // ──────────────────────────────────────────────────────────────
+    window._activeNavId = window._activeNavId || 'nav-home';
+    function positionNavIndicator(it) {
+        const indicator = document.getElementById('nav-indicator');
+        const nav = document.querySelector('.bottom-nav');
+        if (!indicator || !nav || !it) return;
+        const LIFT = 6;       // .nav-item.active translateY(-6px) bilan bir xil
+        const INSET_X = 7;    // pill yon chetlardan ozgina ichkarida — snug, ammo to'liq qoplaydi
+        const CAP_H = 48;     // CSS dagi height bilan bir xil
+        const w = Math.max(0, it.offsetWidth - INSET_X * 2);
+        const left = it.offsetLeft + INSET_X;
+        const top = it.offsetTop + it.offsetHeight / 2 - CAP_H / 2 - LIFT;
+        indicator.style.width = w + 'px';
+        indicator.style.height = CAP_H + 'px';
+        indicator.style.transform = `translate(${left}px, ${top}px)`;
+    }
+
     // Eskining o'rniga yangi Suyuq Navigatsiya funksiyasi
-    window.updateNav = function(id) { 
-        document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active')); 
-        if(id) { 
-            let it = document.getElementById(id); 
+    window.updateNav = function(id) {
+        document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+        if(id) {
+            let it = document.getElementById(id);
             if(it) {
-                it.classList.add('active'); 
+                it.classList.add('active');
+                window._activeNavId = id;
                 try { Haptics.selection(); } catch(e) {}
-                // Magnit kapsulani faol ikonka ustiga yugurtiramiz (absolute => layoutni buzmaydi)
-                let indicator = document.getElementById('nav-indicator');
-                let nav = document.querySelector('.bottom-nav');
-                if(indicator && nav) {
-                    let navRect = nav.getBoundingClientRect();
-                    let itemRect = it.getBoundingClientRect();
-                    let offsetLeft = itemRect.left - navRect.left;
-                    indicator.style.transform = `translateX(${offsetLeft}px)`;
-                    indicator.style.width = `${itemRect.width}px`;
-                }
+                positionNavIndicator(it);
             }
-        } 
+        }
     };
+
+    // Ekran o'lchami / orientatsiya o'zgarsa kapsulani qayta hisoblaymiz
+    // (klaviatura ochilishi, qurilma burilishi, oyna o'lchami — iOS+Android).
+    let _navRecalcT;
+    function _recalcNavIndicator(delay) {
+        clearTimeout(_navRecalcT);
+        _navRecalcT = setTimeout(() => {
+            const it = document.getElementById(window._activeNavId);
+            if (it && it.classList.contains('active')) positionNavIndicator(it);
+        }, delay || 120);
+    }
+    window._recalcNavIndicator = _recalcNavIndicator;
+    window.addEventListener('resize', () => _recalcNavIndicator(120));
+    window.addEventListener('orientationchange', () => _recalcNavIndicator(280));
+    // Shriftlar kech yuklansa kenglik biroz o'zgaradi — yuklangach to'g'rilaymiz
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => _recalcNavIndicator(60));
+    }
     function showSection(id) { document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); d.classList.remove('animate-slide-up'); }); let t = document.getElementById(id); if(t) { t.classList.remove('hidden'); t.classList.add('animate-slide-up'); } if (historyStack[historyStack.length - 1] !== id) { historyStack.push(id); window.history.pushState({ section: id }, ""); } let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (id === 'main-menu') ? 'block' : 'none'; if(searchActive) exitSearch(); updateBtns(); }
     function showCatalog() { if(activeModal) closeModal(); updateNav('nav-catalog'); showSection('katalog-menu'); }
        function showProfile() { 
