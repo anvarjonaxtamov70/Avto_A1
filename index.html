@@ -10,6 +10,83 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Avto A1 Shop</title>
+    <!-- ============================================================
+         ⚡ ADAPTIV TEZLIK REJIMI (PERFORMANCE TIER) — eng birinchi ishlaydi
+         ────────────────────────────────────────────────────────────
+         Zaif telefonlarda og'ir GPU effektlari (backdrop-filter blur,
+         doimiy animatsiyalar, soyalar) telefonni qotiradi va qizdiradi.
+         Bu skript qurilma quvvatini aniqlab, zaif bo'lsa <html>'ga
+         "lite" klassini qo'yadi — pastdagi CSS uni yengillashtiradi.
+         Kuchli telefonlarda esa to'liq "premium" ko'rinish saqlanadi.
+         Qo'shimcha: ishlаб turganda FPS pasaysa, avtomatik lite'ga o'tadi.
+         ============================================================ -->
+    <script>
+    (function adaptivePerf(){
+      var root = document.documentElement;
+      try {
+        var lite = false;
+        var reasons = [];
+
+        // 1) RAM: 4 GB yoki kamroq => zaif
+        if (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 4) {
+          lite = true; reasons.push('ram<=4');
+        }
+        // 2) Protsessor yadrolari: 4 yoki kamroq => zaif
+        if (typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4) {
+          lite = true; reasons.push('cpu<=4');
+        }
+        // 3) Foydalanuvchi "harakatni kamaytirish"ni yoqgan
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          lite = true; reasons.push('reduced-motion');
+        }
+        // 4) Trafik tejash / sekin tarmoq
+        var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (conn) {
+          if (conn.saveData) { lite = true; reasons.push('save-data'); }
+          if (typeof conn.effectiveType === 'string' && /(^|\b)(slow-2g|2g|3g)\b/.test(conn.effectiveType)) {
+            lite = true; reasons.push('slow-net:' + conn.effectiveType);
+          }
+        }
+
+        if (lite) {
+          root.classList.add('lite');
+        }
+        window.__perfLite = lite;
+        window.__perfReasons = reasons;
+      } catch (e) { /* aniqlash imkonsiz bo'lsa, hech narsa qilmaymiz */ }
+
+      // 5) ADAPTIV FPS QOROVULI — ishlab turganda kadr tezligi pasayib ketsa,
+      //    (zaifligi oldindan bilinmagan telefonlar uchun) avtomatik lite'ga o'tamiz.
+      try {
+        if (!window.__perfLite) {
+          var frames = 0, t0 = 0, slowStreak = 0, started = false, rafId = 0, checks = 0;
+          function probe(ts){
+            if (!started) { started = true; t0 = ts; frames = 0; rafId = requestAnimationFrame(probe); return; }
+            frames++;
+            var dt = ts - t0;
+            if (dt >= 1000) {
+              var fps = frames * 1000 / dt;
+              checks++;
+              if (fps < 40) { slowStreak++; } else { slowStreak = 0; }
+              // Ketma-ket 2 soniya 40 FPS dan past => zaif deb hisoblaymiz
+              if (slowStreak >= 2) {
+                document.documentElement.classList.add('lite');
+                window.__perfLite = true;
+                (window.__perfReasons = window.__perfReasons || []).push('low-fps');
+                return; // qorovulni to'xtatamiz
+              }
+              // 8 soniyadan keyin telefon yetarli tez ekan — qorovulni to'xtatamiz
+              if (checks >= 8) return;
+              t0 = ts; frames = 0;
+            }
+            rafId = requestAnimationFrame(probe);
+          }
+          // Sahifa biroz yuklangach o'lchashni boshlaymiz (boshlang'ich sekinlikni hisobga olmaymiz)
+          window.addEventListener('load', function(){ setTimeout(function(){ requestAnimationFrame(probe); }, 1500); });
+        }
+      } catch (e) {}
+    })();
+    </script>
     <!-- #24: yuklanish skeleton (shimmer) + #23 a11y fokus uslublari -->
     <style>
         .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.12) 37%, rgba(255,255,255,0.05) 63%); background-size: 400% 100%; animation: skelShimmer 1.4s ease infinite; border-radius: 14px; }
@@ -15800,6 +15877,140 @@ window._skel = function (n, h) {
     .search-input-container .search-box,
     body.search-focused .search-input-container { transition: none !important; }
   }
+</style>
+
+<!-- ================================================================
+     ⚡⚡ LITE REJIM — ZAIF TELEFONLAR UCHUN TEZLIK QATLAMI
+     ────────────────────────────────────────────────────────────────
+     <html class="lite"> bo'lganda (yuqoridagi aniqlash skripti qo'yadi)
+     og'ir GPU/CPU effektlari yengillashtiriladi. Bu eng OXIRGI <style>,
+     shuning uchun eng yuqori kaskad ustunligiga ega. Yuqori specificity
+     uchun "html.lite body" prefiksi ishlatiladi (mavjud !important
+     qoidalarni ham ustun yengadi).
+     MAQSAD: 60fps silliq skroll, telefon qizimasligi — ko'rinish esa
+     premiumligicha qoladi (faqat ko'zga ko'rinmas effektlar olinadi).
+     ================================================================ -->
+<style id="perf-tier-lite">
+
+  /* ——— 1) BARCHA backdrop-filter (shisha blur) OLINADI ———
+     Bu mobil GPU uchun ENG qimmat effekt: har kadrda butun orqa fonni
+     qayta blur qiladi. Olib tashlash hech qachon kontentni yashirmaydi. */
+  html.lite body .header,
+  html.lite body .bottom-nav,
+  html.lite body .modal-header,
+  html.lite body .pm-sticky-bar,
+  html.lite body .sticky-bar,
+  html.lite body .sticky-admin-footer,
+  html.lite body .toast,
+  html.lite body .search-suggestions,
+  html.lite body .ai-input-container,
+  html.lite body .floating-btn,
+  html.lite body .badge,
+  html.lite body .btn-wishlist,
+  html.lite body .btn-compare-card,
+  html.lite body .pm-close-btn,
+  html.lite body .pm-edit-icon,
+  html.lite body .scan-action-btn,
+  html.lite body .login-overlay,
+  html.lite body .order-loading-overlay,
+  html.lite body #cartModal,
+  html.lite body #paymentModal,
+  html.lite body .modal-standard,
+  html.lite body .ai-luxury-modal,
+  html.lite body .ai-chat-modal,
+  html.lite body .search-input-container .search-box,
+  html.lite body [style*="backdrop-filter"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Blur olingach, "shisha" panellar ortidagi kontent ko'rinib qolmasligi
+     uchun ularga to'qroq, mat fon beramiz (ko'rinishi deyarli o'zgarmaydi). */
+  html.lite body .header,
+  html.lite body .bottom-nav,
+  html.lite body .modal-header,
+  html.lite body .pm-sticky-bar,
+  html.lite body .sticky-bar,
+  html.lite body .sticky-admin-footer,
+  html.lite body .toast,
+  html.lite body .search-suggestions,
+  html.lite body .ai-input-container {
+    background: rgba(16, 16, 18, 0.97) !important;
+  }
+  html.lite body .login-overlay,
+  html.lite body .order-loading-overlay {
+    background: rgba(5, 5, 6, 0.94) !important;
+  }
+  /* Yorug' (light) mavzu uchun mos mat fon */
+  html.lite[data-theme="light"] body .header,
+  html.lite[data-theme="light"] body .bottom-nav,
+  html.lite[data-theme="light"] body .modal-header,
+  html.lite[data-theme="light"] body .pm-sticky-bar,
+  html.lite[data-theme="light"] body .sticky-bar,
+  html.lite[data-theme="light"] body .toast,
+  html.lite[data-theme="light"] body .search-suggestions,
+  html.lite[data-theme="light"] body .ai-input-container {
+    background: rgba(250, 248, 243, 0.98) !important;
+  }
+
+  /* ——— 2) DOIMIY (infinite) BEZAK ANIMATSIYALARINI TO'XTATISH ———
+     Loyiha o'zida prefers-reduced-motion uchun aynan shu isbotlangan
+     usulni qo'llaydi: animatsiya bir marta, deyarli oniy ravishda tugab
+     OXIRGI (ko'rinadigan) holatda to'xtaydi -> kontent yashirilmaydi,
+     lekin har kadrdagi qayta-bo'yash (repaint) yo'qoladi -> qizish/qotish
+     to'xtaydi. Shimmer, glow, ken-burns, float kabilar endi CPU yemaydi. */
+  html.lite body *,
+  html.lite body *::before,
+  html.lite body *::after {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+  }
+  /* Inline style bilan berilgan doimiy animatsiyalarni ham to'xtatamiz */
+  html.lite body [style*="floatCart"],
+  html.lite body [style*="floatIcon"],
+  html.lite body [style*="dotPulse"],
+  html.lite body [style*="badgePulse"],
+  html.lite body [style*="Shimmer"],
+  html.lite body [style*="Glow"] {
+    animation: none !important;
+  }
+
+  /* ——— 3) OG'IR SOYALARNI (box-shadow) YENGILLASHTIRISH ———
+     Takrorlanuvchi kartalardagi katta, ko'p qatlamli soyalar skrollda
+     repaintni og'irlashtiradi. Bitta yengil soyaga almashtiramiz —
+     "ko'tarilgan" his saqlanadi, lekin 3-4 barobar tez. */
+  html.lite body .luxury-card,
+  html.lite body .neon-brand-card,
+  html.lite body .similar-card,
+  html.lite body .story-item {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28) !important;
+  }
+
+  /* ——— 4) BEZAK FILTRLARINI (drop-shadow/blur) OLISH ———
+     Emoji/ikonkalardagi drop-shadow va blur har biri alohida GPU qatlami
+     yaratadi. Lite'da ularni olamiz (ko'zga deyarli bilinmaydi). */
+  html.lite body [style*="drop-shadow"],
+  html.lite body [style*="blur("] {
+    filter: none !important;
+  }
+
+  /* ——— 5) DOIMIY REPAINT QILUVCHI "GRAIN/NOISE" QATLAMI O'CHIRILADI ——— */
+  html.lite body #polish-grain { display: none !important; }
+
+  /* ——— 6) SLIDER RASMLARIDAGI "KEN BURNS" ZOOMNI TO'XTATISH ———
+     12s davom etuvchi doimiy transform-zoom orqa fonda hech to'xtamasdan
+     GPU ishlatadi. Lite'da rasm tinch turadi. */
+  html.lite body .slider .slide img {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  /* ——— 7) GPU qatlamlarini kamaytirish: katta, doim ko'rinadigan
+     elementlarda will-change'ni tiyamiz (haddan ortiq qatlam = sekinlik). */
+  html.lite body .luxury-card,
+  html.lite body .similar-card { will-change: auto !important; }
+
 </style>
 </body>    
 </html> 
