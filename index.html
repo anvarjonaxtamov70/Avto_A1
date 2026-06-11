@@ -5207,7 +5207,11 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     </div>
 <div class="toast-container" id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="order-loading-overlay" id="order-loading-overlay"><div class="hourglass"></div><div class="order-loading-text">Kuting...</div></div>
-<div id="welcome-screen"><h1>Assalomu alaykum, <br><span id="user-name-display"></span>!</h1><p style="letter-spacing:3px;font-weight:600;opacity:0.85;">AVTO A1 — Premium Ehtiyot Qismlar</p></div>
+<!-- Kirish ekrani: matn DARHOL yakuniy (animatsiyali) ko'rinishda turadi.
+     Ilgari bu yerda eski "<h1>Assalomu alaykum, ISM!</h1>" turardi va JS uni
+     keyinroq .welcome-text bilan almashtirardi -> sekin qurilmada eski yozuv
+     bir lahza "yonib o'chib" ko'rinardi (FOUC/flash). Endi flash yo'q. -->
+<div id="welcome-screen"><div class="welcome-text">Assalomu alaykum</div></div>
 <div class="floating-btn" id="back-btn" onclick="goBack()"><svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
 <div class="container">
     <div class="header">
@@ -7007,7 +7011,7 @@ const Haptics = {
     };
     window._invalidateUsersCache = function () { window._usersSnapCache = null; };
     function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">' + icon('check') + ' Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">' + icon('truck') + ' Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">' + icon('flag') + ' Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">' + icon('cancel') + ' Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">' + icon('clock') + ' Kutilmoqda</span>'; }
-    function updateProfileUI() { let dN = myProfile.name || "Mijoz"; document.getElementById('user-name-display').innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; _updateVipStatus(); }
+    function updateProfileUI() { let dN = myProfile.name || "Mijoz"; var _und = document.getElementById('user-name-display'); if (_und) _und.innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; _updateVipStatus(); }
 
     // ⭐ QADAM 2: VIP MEMBER yorlig'i faqat haqiqiy mijozlar uchun
     // Mantiq:
@@ -7355,10 +7359,13 @@ document.addEventListener('visibilitychange', function() {
 });
     function startCinematicWelcome() {
         const screen = document.getElementById('welcome-screen');
-        
-        // Hozirgi "Assalomu alaykum" yozuvini yangi stilga o'tkazamiz
-        screen.innerHTML = `<div class="welcome-text">Assalomu alaykum</div>`;
-        
+        if (!screen) return;
+
+        // Matn (.welcome-text) endi HTML'da DARHOL turibdi va o'zi animatsiya
+        // bilan kattalashadi. Bu yerda innerHTML'ni QAYTA o'rnatmaymiz — aks holda
+        // animatsiya nol nuqtadan qayta boshlanib "sakrab" ketardi va eski flash
+        // qaytib kelardi. Faqat animatsiya tugagach ekranni yopamiz.
+
         // Animatsiya tugagach (2.5 sekunddan keyin), ilovani ochamiz
         setTimeout(() => {
             screen.classList.add('welcome-fade-out');
