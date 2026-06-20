@@ -1344,19 +1344,30 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         .cart-price {
             flex: 1 1 auto;
             min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            line-height: 1.12;
+            overflow: hidden;
+        }
+        .cart-price .cp-now {
+            font-size: clamp(11px, 3.2vw, 14px);
+            font-weight: 800;
             white-space: nowrap;
+            max-width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: clamp(10.5px, 3.2vw, 14px);
-            line-height: 1.2;
         }
         .btn-add-cart svg { flex: 0 0 auto !important; }
         .card-oldprice {
-            font-size: 0.8em;
+            font-size: 10px;
             font-weight: 600;
-            color: rgba(0, 0, 0, 0.5);
+            color: rgba(0, 0, 0, 0.45);
             text-decoration: line-through;
-            margin-left: 4px;
+            white-space: nowrap;
+            margin: 1px 0 0 0;
+            line-height: 1.1;
         }
         
         /* 🛒 PREMIUM TILLA TUGMA */
@@ -7588,11 +7599,20 @@ function cardHTML(p) {
     let oosStyle = st <= 0 ? 'filter: grayscale(1); opacity:0.7;' : '';
 
     // 💎 Karta boyitish — faqat mavjud maydonlar bo'lsa ko'rsatiladi (regressiyasiz)
-    let discChip = '', oldPriceHTML = '';
+    let _now = Date.now();
+    let flashOn = !!(p.flashUntil && p.flashUntil > _now && p.oldPrice && Number(p.oldPrice) > Number(p.price));
+    let discChip = '', oldPriceHTML = '', flashTag = '';
     if (p.oldPrice && Number(p.oldPrice) > Number(p.price)) {
-        oldPriceHTML = `<small class="card-oldprice">${Number(p.oldPrice).toLocaleString()}</small>`;
+        oldPriceHTML = `<span class="card-oldprice">${Number(p.oldPrice).toLocaleString()} so'm</span>`;
         let _pct = Math.round((1 - Number(p.price) / Number(p.oldPrice)) * 100);
-        if (_pct > 0) discChip = `<span class="card-disc">-${_pct}%</span>`;
+        if (_pct > 0) {
+            if (flashOn) {
+                // 🔥 Flash: -% (tepada) + countdown (tagida) — rasm pastki-chap burchagida
+                flashTag = `<div class="flash-tag"><div class="ft-pct">-${_pct}%</div><div class="ft-time"><span class="flash-cd" data-until="${p.flashUntil}"></span></div></div>`;
+            } else {
+                discChip = `<span class="card-disc">-${_pct}%</span>`;
+            }
+        }
     }
     let _ratingHTML = '';
     let _rInfo = (window.productRatings && window.productRatings[p.id]) ? window.productRatings[p.id] : null;
@@ -7618,7 +7638,7 @@ function cardHTML(p) {
     if(st > 0) {
         cartBtn = `
         <button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})">
-            <span class="cart-price">${p.price.toLocaleString()} so'm ${oldPriceHTML}</span>
+            <span class="cart-price"><span class="cp-now">${p.price.toLocaleString()} so'm</span>${oldPriceHTML}</span>
             <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>`;
     } else {
@@ -7628,15 +7648,8 @@ function cardHTML(p) {
     // 🛡️ 7/9: kartada nafis ISHONCH belgisi (kafolat) — faqat sotuvda bor tovarda
     let trustHTML = (st > 0) ? `<div class="card-trust">${icon('shield')} 14 kun kafolat</div>` : '';
 
-    // 🔥 FLASH SALE badge (countdown) — faqat aktiv flash bo'lsa. oldPrice strikethrough
-    //    yuqorida (discChip/oldPriceHTML) avtomatik chiqadi (oldPrice > price bo'lgani uchun).
-    let flashBadge = '';
-    if (p.flashUntil && p.flashUntil > Date.now() && p.oldPrice && Number(p.oldPrice) > Number(p.price)) {
-        flashBadge = `<div class="flash-badge">🔥 <span class="flash-cd" data-until="${p.flashUntil}"></span></div>`;
-    }
-
     return `<div class="luxury-card" data-pid="${p.id}" onclick="openProduct(${p.id})">
-        ${bH}${flashBadge}${heartBtn}
+        ${bH}${heartBtn}
         <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">${icon('scale')}</div>
         <div class="img-wrap" style="${oosStyle}">
         <img src="${_thumb(p.img, 240)}" 
@@ -7645,6 +7658,7 @@ function cardHTML(p) {
      class="card-img-lazy"
      data-full="${(p.img||'').replace(/"/g,'&quot;')}"
      onerror="window._imgFallback(this)">
+        ${flashTag}
         </div>
         <div class="info">
             <h4>${mainName}${carHint}</h4>
@@ -7712,7 +7726,8 @@ function openProduct(id) {
             var box = document.createElement('div');
             box.id = 'pm-flash-cd';
             box.className = 'pm-flash-cd';
-            box.innerHTML = '🔥 Flash chegirma tugashiga: <span class="flash-cd" data-until="' + p.flashUntil + '"></span>';
+            box.innerHTML = '<span class="pm-flash-old">' + Number(p.oldPrice).toLocaleString() + ' so\'m</span>'
+                          + '<span class="pm-flash-timer">🔥 <span class="flash-cd" data-until="' + p.flashUntil + '"></span></span>';
             if (host.parentNode) host.parentNode.insertBefore(box, host.nextSibling);
         }
     })();
@@ -16449,34 +16464,43 @@ html.lite .nav-badge.idle::after { animation: none !important; }
      cart/buyurtma kodi O'ZGARMAYDI (narx avtomatik to'g'ri).
    - Muddat tugagach applyFlashState() asl narxni tiklaydi.
    ================================================================ */
-.flash-badge {
-    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-    z-index: 5; display: inline-flex; align-items: center; gap: 4px;
+/* 🔥 FLASH TAG — rasm PASTKI-CHAP burchagida: -% (tepada) + countdown (tagida).
+   Yuqori burchaklar band (badge/compare/heart) -> pastki-chap toza, nafis ribbon. */
+.flash-tag {
+    position: absolute; bottom: 8px; left: 8px; z-index: 4;
+    display: flex; flex-direction: column; align-items: stretch;
+    min-width: 46px; border-radius: 10px; overflow: hidden;
+    box-shadow: 0 5px 14px rgba(255,45,85,0.42);
+    pointer-events: none; font-family: 'Inter', sans-serif;
+}
+.flash-tag .ft-pct {
     background: linear-gradient(135deg, #ff453a, #ff2d55);
-    color: #fff; font-size: 10px; font-weight: 800;
-    padding: 4px 9px; border-radius: 999px; white-space: nowrap;
-    box-shadow: 0 3px 10px rgba(255,69,58,0.45); letter-spacing: 0.3px;
-    pointer-events: none;
+    color: #fff; font-size: 13px; font-weight: 900; line-height: 1;
+    text-align: center; padding: 4px 8px;
 }
-.flash-badge .flash-cd { font-variant-numeric: tabular-nums; }
+.flash-tag .ft-time {
+    background: rgba(18,18,20,0.92); color: #ffd2d2;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.4px;
+    text-align: center; padding: 3px 6px; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
 @media (prefers-reduced-motion: no-preference) {
-    .flash-badge { animation: flashPulse 1.8s ease-in-out infinite; }
+    .flash-tag .ft-pct { animation: ftPulse 1.9s ease-in-out infinite; }
 }
-@keyframes flashPulse {
-    0%,100% { box-shadow: 0 3px 10px rgba(255,69,58,0.45); }
-    50%     { box-shadow: 0 3px 17px rgba(255,69,58,0.75); }
-}
-html.lite .flash-badge { animation: none !important; }
+@keyframes ftPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.13); } }
+html.lite .flash-tag .ft-pct { animation: none !important; }
 
-/* Detal oynasidagi countdown */
+/* Detal oynasi: narx OSTIDA — eski narx (chizilgan) + countdown */
 .pm-flash-cd {
-    display: flex; align-items: center; gap: 6px; justify-content: center;
-    margin: 10px 0 0; padding: 9px 12px; border-radius: 12px;
-    background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.32);
-    color: #ff453a; font-weight: 800; font-size: 13px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin: 10px 0 0; padding: 10px 14px; border-radius: 12px;
+    background: rgba(255,69,58,0.10); border: 1px solid rgba(255,69,58,0.30);
 }
-.pm-flash-cd .flash-cd { font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
-html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border-color: rgba(216,57,43,0.30); color: #c0392b; }
+.pm-flash-old { color: #9aa0aa; text-decoration: line-through; font-weight: 700; font-size: 13px; white-space: nowrap; }
+html[data-theme="light"] .pm-flash-old { color: #9b8e74; }
+.pm-flash-timer { color: #ff453a; font-weight: 800; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pm-flash-timer .flash-cd { font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
+html[data-theme="light"] .pm-flash-timer { color: #c0392b; }
 
 /* Admin flash-sale guruhi (qizil chap chiziq) */
 .flash-admin-group { border-left-color: #ff453a !important; }
