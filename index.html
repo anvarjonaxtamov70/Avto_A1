@@ -7906,7 +7906,7 @@ window.clearAppCache = () => {
     function applyQuickSearch(t) { document.getElementById('searchInput').value = t; searchProducts(); }
     function exitSearch() { searchActive = false; document.getElementById('searchInput').value = ''; if (typeof window._sfsSyncToolbar === 'function') window._sfsSyncToolbar(false, 0, 0); document.getElementById('search-results').classList.add('hidden'); document.getElementById('quick-chips').classList.add('hidden'); document.getElementById('clearSearchBtn').classList.remove('show'); document.getElementById('content-area').classList.remove('hidden'); let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (historyStack[historyStack.length - 1] === 'main-menu') ? 'block' : 'none'; let bn = document.querySelector('.bottom-nav');if(bn) { bn.style.display = ''; } updateBtns(); }
 
-    function updateCartBadge() { let tot = Object.values(cart).reduce((a,b)=>a+b,0); let b = document.getElementById('nav-badge'); b.innerText = tot; if(tot > 0) { b.classList.add('show'); b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse'); } else { b.classList.remove('show'); } }
+    function updateCartBadge() { let tot = Object.values(cart).reduce((a,b)=>a+b,0); let b = document.getElementById('nav-badge'); b.innerText = tot; if(tot > 0) { b.classList.add('show'); b.classList.add('idle'); b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse'); } else { b.classList.remove('show'); b.classList.remove('idle'); } }
     function addToCart(id) { cart[id] = (cart[id] || 0) + 1; saveLocalCart(); updateCartBadge(); tg.HapticFeedback.impactOccurred('medium'); showToast('Savatda!'); }
     // HTML ni buzmaslik uchun Magnit Kapsulani JS orqali o'zimiz menyuga joylaymiz
     document.addEventListener('DOMContentLoaded', () => {
@@ -8021,6 +8021,7 @@ window.clearAppCache = () => {
         } 
         let tSum = document.getElementById('cart-total-sum');
         if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+        window._cartTotal = t;   // 🔢 count-up animatsiyasi uchun (cart ochilganda)
         // 🌟 PROGRESS BAR HISOB-KITOBI
     let pWrap = document.getElementById('cart-progress-wrap');
     let pBar = document.getElementById('cart-progress-bar');
@@ -8587,7 +8588,18 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     }
     function openModal(id) {
         if (activeModal === id) return;
-        if(id === 'cartModal') renderCartItems();
+        if(id === 'cartModal') {
+            renderCartItems();
+            // 🔢 NUMBER COUNT-UP: cart ochilganda jami summa "yuqoriga sanab" chiqadi
+            //    (faqat ochilganda — har +/- da emas). reduced-motion/lite da darhol.
+            try {
+                var _rmCnt = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+                          || document.documentElement.classList.contains('lite') || window.__perfLite;
+                if (!_rmCnt && window.animateValue && window._cartTotal > 0) {
+                    setTimeout(function(){ window.animateValue('cart-total-sum', window._cartTotal); }, 60);
+                }
+            } catch(e){}
+        }
         let m = document.getElementById(id);
         // 🛒 Agar boshqa modal ochiq bo'lsa - uni xotirada saqlab, yashiramiz.
         // Yangi modal yopilganда (popstate) - eski modal qaytib ochiladi.
@@ -11389,12 +11401,24 @@ window.animatePrice = (id, end) => {
     window.requestAnimationFrame(step);
 };
 const revealObserver = new IntersectionObserver((entries, observer) => {
+    // 🎬 STAGGERED ENTRY: ayni vaqtda ko'ringan kartalar KETMA-KET (45ms oraliq)
+    //    paydo bo'ladi. Animatsiyani CSS transition (reveal-item) beradi; biz faqat
+    //    '.active' ni staggered VAQTDA qo'shamiz -> transition-delay ishlatilmaydi,
+    //    shu sababli micro-interaction (press) kechikmaydi. lite/reduced-motion da
+    //    darhol (oraliqsiz). Skrollda 1-2 ta kelganda oraliq ~0 -> sezilmaydi.
+    var reduce = false, lite = false;
+    try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e){}
+    try { lite = document.documentElement.classList.contains('lite') || window.__perfLite; } catch(e){}
+    var i = 0;
     entries.forEach(entry => {
         if (entry.isIntersecting) {
-            entry.target.classList.add('active');
-            // Eng muhim qator — bir marta ko'ringach, kuzatuvdan chiqamiz
-            // Endi tepaga qaytganda bu element hech qachon qayta animatsiyalanmaydi
+            var el = entry.target;
             observer.unobserve(entry.target);
+            if (reduce || lite) { el.classList.add('active'); return; }
+            var delay = Math.min(i, 8) * 45;   // eng ko'pi 8 ta karta staggerlanadi
+            i++;
+            if (delay > 0) setTimeout(function(){ el.classList.add('active'); }, delay);
+            else el.classList.add('active');
         }
     });
 }, { 
@@ -13175,6 +13199,88 @@ window._doBroadcast = async (text) => {
     }, {passive: true});
 })();
 
+/* ====================================================================
+   🃏 KARTA SWIPE — mahsulot kartasini surib amal bajarish:
+       chapga (←) = savatga qo'shish,  o'ngga (→) = sevimli (wishlist).
+   - passive touch -> skroll BUZILMAYDI; faqat aniq GORIZONTAL harakatda ishlaydi.
+   - tap (ochish) buzilmaydi: faqat threshold'dan oshsa amal + keyingi click bekor.
+   - addToCartQuick() ishlatiladi -> razmer/ombor/option'lar to'g'ri boshqariladi.
+   - parallax/reveal/micro-interaction bilan TO'QNASHMAYDI (alohida transform).
+   ==================================================================== */
+(function cardSwipeInit(){
+    var startX=0, startY=0, dx=0, card=null, horiz=null, acted=false;
+    var THRESH = 70, MAXPULL = 110;
+    function reset(){
+        if (card){
+            card.classList.remove('swiping');
+            card.classList.add('swipe-snap');
+            card.style.transform = '';
+            var c = card;
+            setTimeout(function(){ try { c.classList.remove('swipe-snap'); } catch(e){} }, 300);
+        }
+        card=null; dx=0; horiz=null;
+    }
+    document.addEventListener('touchstart', function(e){
+        var t = e.target.closest && e.target.closest('.luxury-card');
+        // tugmalar ustida bo'lsa — aralashmaymiz (ularning o'z bosishi bor)
+        if (!t || (e.target.closest && e.target.closest('.btn-add-cart, .btn-wishlist, .btn-compare-card'))) { card=null; return; }
+        card = t; startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+        dx=0; horiz=null;
+    }, {passive:true});
+    document.addEventListener('touchmove', function(e){
+        if (!card) return;
+        var mx = e.touches[0].clientX - startX;
+        var my = e.touches[0].clientY - startY;
+        if (horiz === null && (Math.abs(mx) > 10 || Math.abs(my) > 10)){
+            horiz = Math.abs(mx) > Math.abs(my) * 1.3;   // ANIQ gorizontal bo'lsagina
+            if (horiz) card.classList.add('swiping');
+        }
+        if (horiz){
+            dx = Math.max(-MAXPULL, Math.min(MAXPULL, mx));
+            card.style.transform = 'translateX(' + dx + 'px)';
+        }
+    }, {passive:true});
+    document.addEventListener('touchend', function(e){
+        if (!card) return;
+        var pid = parseInt(card.dataset && card.dataset.pid, 10);
+        if (horiz && Math.abs(dx) >= THRESH && !isNaN(pid)){
+            acted = true;
+            var tx = startX + dx, ty = startY;
+            try { if (e.changedTouches && e.changedTouches[0]){ tx = e.changedTouches[0].clientX; ty = e.changedTouches[0].clientY; } } catch(_){}
+            var synth = { stopPropagation:function(){}, preventDefault:function(){}, clientX: tx, clientY: ty, target: card };
+            if (dx < 0){
+                // ← chap: savatga (addToCartQuick razmer/ombor/option'ni o'zi hal qiladi)
+                try {
+                    if (typeof window.addToCartQuick === 'function') window.addToCartQuick(synth, pid);
+                    else if (typeof window.addToCart === 'function') window.addToCart(pid);
+                } catch(_){}
+            } else {
+                // → o'ng: sevimli (faqat qo'shish; allaqachon bo'lsa xabar)
+                try {
+                    var inW = (window.wishlist||[]).includes(pid);
+                    if (!inW && typeof window.toggleWishlist === 'function'){
+                        var heart = card.querySelector('.btn-wishlist');
+                        window.toggleWishlist({ target: heart || card }, pid);
+                    } else if (inW && typeof showToast === 'function'){
+                        showToast('Allaqachon saqlangan');
+                    }
+                } catch(_){}
+            }
+            try { if (typeof window._hap === 'function') window._hap(dx < 0 ? 'medium' : 'light'); } catch(_){}
+        }
+        reset();
+        if (acted) setTimeout(function(){ acted = false; }, 450);
+    }, {passive:true});
+    // Swipe bo'lganda kartaning ochilish (click) hodisasini bekor qilamiz
+    document.addEventListener('click', function(e){
+        if (acted && e.target.closest && e.target.closest('.luxury-card')){
+            e.stopPropagation();
+            try { e.preventDefault(); } catch(_){}
+            acted = false;
+        }
+    }, true);
+})();
+
 // 1.3 BOTTOM NAV PULSE — har bir nav-item bosilganda
 document.addEventListener('click', (e) => {
     const tab = e.target.closest('.nav-item');
@@ -13219,11 +13325,22 @@ if (typeof window.addToCartWithOptions === 'function' && !window._origAddToCartW
 }
 
 // 1.5 Konfetti — confirmOrder muvaffaqiyatda
+// CSS SUCCESS CHECK (Lottie O'RNIGA) — buyurtma muvaffaqiyatda chiziladigan belgi.
+window._showSuccessCheck = function(){
+    try {
+        var rm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        var ov = document.createElement('div');
+        ov.className = 'css-check-overlay';
+        ov.innerHTML = '<div class="css-check-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div>';
+        document.body.appendChild(ov);
+        setTimeout(function(){ try { ov.remove(); } catch(e){} }, rm ? 700 : 1100);
+    } catch(e){}
+};
 if (typeof window.confirmOrder === 'function' && !window._origConfirmOrder_v2) {
     window._origConfirmOrder_v2 = window.confirmOrder;
     window.confirmOrder = async function() {
         const r = await window._origConfirmOrder_v2.apply(this, arguments);
-        try { _fireConfetti(40); _hap('success'); } catch (e) {}
+        try { _showSuccessCheck(); _fireConfetti(40); _hap('success'); } catch (e) {}
         return r;
     };
 }
@@ -15934,6 +16051,80 @@ window._skel = function (n, h) {
     .search-input-container .search-box,
     body.search-focused .search-input-container { transition: none !important; }
   }
+</style>
+
+<style id="anim-enhance-2026">
+/* ================================================================
+   ANIMATSIYA QATLAMI (2026) — 6 ta, ADDITIVE va XAVFSIZ.
+     1) Page transition (lite/reduced refinement)  2) Staggered card entry (JS)
+     3) Cart FAB idle pulse   4) CSS success check (Lottie o'rniga)
+     5) Number count-up (JS)  6) Swipe gestures (JS)
+   GPU-friendly (transform/opacity/box-shadow). lite + reduced-motion
+   da yengillashadi yoki o'chadi -> telefonni QIZDIRMAYDI.
+   ================================================================ */
+
+/* ——— 1) PAGE TRANSITION: mavjud cinematicEnter'ni GPU uchun optimallash ——— */
+/*    cinematicEnter blur() ishlatadi (zaif GPU uchun qimmat). Kuchli telefonda
+      premium blur qoladi; zaifda (lite) blur'siz yengil fade-up'ga o'tamiz. */
+#content-area > div { will-change: transform, opacity; }
+html.lite #content-area > div {
+    animation: anim2026FadeUp 0.30s ease forwards !important;
+    filter: none !important;
+}
+@keyframes anim2026FadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* ——— 3) CART FAB IDLE PULSE: savatda tovar bo'lsa nafis "nafas olish" halqasi ——— */
+/*    box-shadow halqasi pseudo-element'da -> badge'ning o'z scale-pulse'iga TEGMAYDI. */
+.nav-badge.idle::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: fabRing 2.4s ease-out infinite;
+}
+@keyframes fabRing {
+    0%   { box-shadow: 0 0 0 0 rgba(255,69,58,0.45); }
+    70%  { box-shadow: 0 0 0 9px rgba(255,69,58,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,69,58,0); }
+}
+
+/* ——— 4) CSS SUCCESS CHECK (Lottie O'RNIGA — CSS/SVG, kutubxonasiz) ——— */
+.css-check-overlay {
+    position: fixed; inset: 0; z-index: 99997;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none; background: transparent;
+}
+.css-check-circle {
+    width: 96px; height: 96px; border-radius: 50%;
+    background: rgba(48,209,88,0.16);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 12px 34px rgba(48,209,88,0.30);
+    animation: cssCheckPop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+.css-check-circle svg { width: 52px; height: 52px; }
+.css-check-circle svg path {
+    fill: none; stroke: #30d158; stroke-width: 3.5;
+    stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 30; stroke-dashoffset: 30;
+    animation: cssCheckDraw 0.4s 0.18s ease forwards;
+}
+@keyframes cssCheckPop { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes cssCheckDraw { to { stroke-dashoffset: 0; } }
+
+/* ——— 6) SWIPE: kartani surganda silliq qaytishi uchun ——— */
+.luxury-card.swiping { transition: none !important; z-index: 5; }
+.luxury-card.swipe-snap { transition: transform 0.28s cubic-bezier(0.2,0.8,0.2,1) !important; }
+
+/* ——— REDUCED-MOTION: pulslar/animatsiyalar o'chadi ——— */
+@media (prefers-reduced-motion: reduce) {
+    .nav-badge.idle::after { animation: none; }
+    .css-check-circle, .css-check-circle svg path { animation: none; }
+    .css-check-circle svg path { stroke-dashoffset: 0; }
+    #content-area > div { animation: none !important; }
+}
+/* ——— LITE: doimiy FAB pulse o'chadi (zaif telefonni charchatmasin) ——— */
+html.lite .nav-badge.idle::after { animation: none !important; }
 </style>
 
 <!-- ================================================================
