@@ -6370,7 +6370,16 @@ window.currentUser = null;
             initDataUnsafe: {},
             expand: function(){}, ready: function(){},
             isVersionAtLeast: function(){ return false; },
-            HapticFeedback: { notificationOccurred: function(){}, impactOccurred: function(){}, selectionChanged: function(){} },
+            // 📳 Brauzer/APK (Telegram tashqarisida) — navigator.vibrate ZAXIRASI.
+            // Shunda mavjud BARCHA tg.HapticFeedback.* chaqiruvlari (savat, buyurtma,
+            // like va h.k.) Telegram tashqarisida ham tebranish beradi — call-site'larni
+            // o'zgartirmasdan. Telegram ICHIDA bu stub umuman ishlatilmaydi (native haptic).
+            // ⚡ Telefonni qizdirmaydi: bir martalik, juda qisqa (5–20ms) impuls.
+            HapticFeedback: {
+                notificationOccurred: function(type){ try { if (typeof navigator!=='undefined' && navigator.vibrate) navigator.vibrate(type === 'success' ? [10,30,10] : [18,40,18]); } catch(e){} },
+                impactOccurred: function(style){ try { if (typeof navigator!=='undefined' && navigator.vibrate) navigator.vibrate(style === 'heavy' ? 20 : style === 'medium' ? 15 : style === 'soft' ? 8 : 10); } catch(e){} },
+                selectionChanged: function(){ try { if (typeof navigator!=='undefined' && navigator.vibrate) navigator.vibrate(5); } catch(e){} }
+            },
             BackButton: { show: function(){}, hide: function(){}, onClick: function(){} },
             MainButton: { show: function(){}, hide: function(){}, onClick: function(){}, setText: function(){} },
             close: function(){}, sendData: function(){},
@@ -6381,6 +6390,26 @@ window.currentUser = null;
     }
     try { tg.expand && tg.expand(); } catch(e) { _dwarn('[TG] expand xato:', e.message); }
     try { tg.ready && tg.ready(); } catch(e) {}
+
+    // 📳 HAPTIC ZAXIRASI (navigator.vibrate) — XAVFSIZ va MARKAZIY.
+    //    Muammo: telegram-web-app.js BRAUZERDA ham window.Telegram.WebApp yaratadi,
+    //    lekin uning HapticFeedback'i Telegram TASHQARISIDA NO-OP (tebranmaydi).
+    //    Yechim: agar HAQIQATAN Telegram ichida bo'lmasak (initData bo'sh va platform
+    //    'unknown'/'browser'), tg.HapticFeedback'ni navigator.vibrate bilan almashtiramiz.
+    //    Natija: savat / buyurtma / like / menyu — BARCHA mavjud haptic chaqiruvlari
+    //    brauzer va APK'da ham tebranadi. Telegram ICHIDA esa native haptic SAQLANADI.
+    //    ⚡ Telefonni qizdirmaydi: bir martalik, juda qisqa (5–20ms) impuls.
+    try {
+        var _realTelegram = !!(tg && (tg.initData ||
+            (tg.platform && tg.platform !== 'unknown' && tg.platform !== 'browser')));
+        if (!_realTelegram && typeof navigator !== 'undefined' && navigator.vibrate) {
+            tg.HapticFeedback = {
+                notificationOccurred: function(type){ try { navigator.vibrate(type === 'success' ? [10,30,10] : [18,40,18]); } catch(e){} },
+                impactOccurred: function(style){ try { navigator.vibrate(style === 'heavy' ? 20 : style === 'medium' ? 15 : style === 'soft' ? 8 : 10); } catch(e){} },
+                selectionChanged: function(){ try { navigator.vibrate(5); } catch(e){} }
+            };
+        }
+    } catch(e){}
     // iOS dagi 300ms kechikishni o'chiramiz
 // Endi tugmalar darhol javob beradi
 document.addEventListener('touchstart', function() {}, {passive: true});
@@ -6774,12 +6803,14 @@ document.addEventListener('touchmove', function(e) {
     };
 
     // ⚡️ TELEGRAM PREMIUM HAPTIC (VIBRATSIYA) TIZIMI
+    // Endi window._hap orqali yo'naltiriladi: Telegram ichida native haptic,
+    // brauzer/APK'da esa navigator.vibrate ZAXIRASI ishlaydi (xato bermaydi).
 const Haptics = {
-    light: () => tg.HapticFeedback.impactOccurred('light'),     // Mayin (tugma uchun)
-    medium: () => tg.HapticFeedback.impactOccurred('medium'),   // O'rtacha (savat uchun)
-    success: () => tg.HapticFeedback.notificationOccurred('success'), // Zo'r (xarid uchun)
-    warning: () => tg.HapticFeedback.notificationOccurred('warning'), // Ogohlantirish
-    selection: () => tg.HapticFeedback.selectionChanged()       // Menyu almashganda
+    light:     () => { try { window._hap && window._hap('light'); } catch (e) {} }, // Mayin (tugma uchun)
+    medium:    () => { try { window._hap && window._hap('medium'); } catch (e) {} }, // O'rtacha (savat uchun)
+    success:   () => { try { window._hap && window._hap('success'); } catch (e) {} }, // Zo'r (xarid uchun)
+    warning:   () => { try { window._hap && window._hap('warning'); } catch (e) {} }, // Ogohlantirish
+    selection: () => { try { window._hap && window._hap('selection'); } catch (e) {} } // Menyu almashganda
 };
 
     
@@ -7123,6 +7154,22 @@ function showToast(m, t = 'success') {
     //    O'CHIB ketardi. Endi hammasi yuklanadi -> .set() xavfsiz.
     //    Ekran tez ochilishi uchun ma'lumot kelgach FAQAT 12 ta chiziladi
     //    (renderProducts), qolgani skrollда 12 talab qo'shiladi.
+    // ⚡ CONTENT-AWARE SKELETON ko'rsatish: ma'lumot kelguncha markaziy "gear"
+    //    o'rniga MAHSULOT KARTASI SHAKLIDAGI skeletonlarni (allaqachon #home-products
+    //    ichida statik turibdi) ko'rsatamiz -> "tezroq" va zamonaviy his beradi.
+    //    Ma'lumot kelgach renderProducts() ularni haqiqiy kartalar bilan almashtiradi.
+    //    XAVFSIZ: faqat ko'rinishni ochadi, yangi DOM/logika qo'shmaydi.
+    (function _showInitialSkeletons(){
+        try {
+            var hc = document.getElementById('home-products');
+            // Skeleton kartalar mavjud bo'lsagina (hali render bo'lmagan) ko'rsatamiz
+            if (!hc || !hc.querySelector('.sk-card')) return;
+            var lt = document.getElementById('loading-text');
+            if (lt) lt.style.display = 'none';
+            var ca = document.getElementById('content-area');
+            if (ca) ca.classList.remove('hidden');
+        } catch (e) {}
+    })();
     db.ref('products').once('value', (snap) => {
         document.getElementById('loading-text').style.display = 'none';
         document.getElementById('content-area').classList.remove('hidden');
@@ -11412,7 +11459,91 @@ function initReveal() {
         el.classList.add('reveal-item');
         revealObserver.observe(el);
     });
+    // 🌊 Yangi render bo'lgan kartalar rasmlarini parallax kuzatuviga ulaymiz
+    try { if (typeof window._scanParallax === 'function') window._scanParallax(); } catch(e){}
 }
+
+/* ====================================================================
+   🌊 KARTA PARALLAX — mahsulot rasmlari skrollda yengil "suzadi".
+   - FAQAT transform (GPU-friendly), rAF-throttle bilan; IntersectionObserver
+     orqali FAQAT ekrandagi rasmlarga ishlaydi -> telefonni QIZDIRMAYDI.
+   - lite rejim / reduced-motion / __perfLite bo'lsa BUTUNLAY o'chadi.
+   - Reveal tizimiga TEGMAYDI: reveal kartaga (.luxury-card), parallax esa
+     uning ichidagi RASMGA (.img-wrap img) ta'sir qiladi -> to'qnashmaydi.
+   - img-wrap'da overflow:hidden + radial-mask bor -> qirralar ko'rinmaydi.
+   ==================================================================== */
+(function(){
+    var reduce = false;
+    try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e){}
+    function disabled(){
+        try { return reduce || document.documentElement.classList.contains('lite') || window.__perfLite; }
+        catch(e){ return true; }
+    }
+
+    var visible = new Set();
+    var ticking = false;
+    var AMP = 7;          // px — siljish amplitudasi (juda nozik, premium his)
+    var io = null;
+
+    function ensureObserver(){
+        if (io) return io;
+        io = new IntersectionObserver(function(entries){
+            entries.forEach(function(en){
+                var img = en.target;
+                if (en.isIntersecting){
+                    visible.add(img);
+                    img.style.willChange = 'transform';
+                } else {
+                    visible.delete(img);
+                    img.style.willChange = '';
+                    img.style.transform = 'scale(1.08)';   // ko'rinishdan chiqdi -> baseline
+                }
+            });
+            schedule();
+        }, { threshold: 0 });
+        return io;
+    }
+
+    function apply(){
+        ticking = false;
+        if (disabled()) return;
+        var vh = window.innerHeight || document.documentElement.clientHeight || 1;
+        var mid = vh / 2;
+        visible.forEach(function(img){
+            var r = img.getBoundingClientRect();
+            var c = r.top + r.height / 2;
+            var rel = (c - mid) / vh;                       // -1 (tepa) .. +1 (past)
+            if (rel > 1) rel = 1; else if (rel < -1) rel = -1;
+            var y = (rel * AMP).toFixed(2);
+            img.style.transform = 'scale(1.08) translate3d(0,' + y + 'px,0)';
+        });
+    }
+    function schedule(){
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(apply);
+    }
+
+    function attach(){
+        var c = document.querySelector('.container');     // asosiy skroll konteyneri
+        if (c) c.addEventListener('scroll', schedule, { passive: true });
+        window.addEventListener('scroll', schedule, { passive: true });
+        window.addEventListener('resize', schedule, { passive: true });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
+    else attach();
+
+    // Render/loadMore'dan keyin initReveal ichidan chaqiriladi.
+    window._scanParallax = function(){
+        if (disabled()) return;
+        var obs = ensureObserver();
+        document.querySelectorAll('.luxury-card .img-wrap img:not(.ux-parallax)').forEach(function(img){
+            img.classList.add('ux-parallax');
+            obs.observe(img);
+        });
+        schedule();
+    };
+})();
 // ===================================================
         // 📺 2. PREMIUM STORIS MOTOR (4K Video, Tap, Pause, Admin)
         // ===================================================
@@ -12787,13 +12918,25 @@ if (typeof window.showToast === 'function' && !window._origShowToast) {
 
 // 3.8 UNIVERSAL HAPTIC
 window._hap = (kind) => {
-    if (typeof tg === 'undefined' || !tg.HapticFeedback) return;
+    // tg.HapticFeedback yuqorida MARKAZIY sozlangan: Telegram ICHIDA native haptic,
+    // brauzer/APK'da esa navigator.vibrate. Shuning uchun shu yerda faqat yo'naltiramiz.
     try {
-        if (kind === 'success') tg.HapticFeedback.notificationOccurred('success');
-        else if (kind === 'warning') tg.HapticFeedback.notificationOccurred('warning');
-        else if (kind === 'error') tg.HapticFeedback.notificationOccurred('error');
-        else if (kind === 'selection') tg.HapticFeedback.selectionChanged();
-        else tg.HapticFeedback.impactOccurred(kind || 'light');
+        if (typeof tg !== 'undefined' && tg.HapticFeedback) {
+            if (kind === 'success') tg.HapticFeedback.notificationOccurred('success');
+            else if (kind === 'warning') tg.HapticFeedback.notificationOccurred('warning');
+            else if (kind === 'error') tg.HapticFeedback.notificationOccurred('error');
+            else if (kind === 'selection') tg.HapticFeedback.selectionChanged();
+            else tg.HapticFeedback.impactOccurred(kind || 'light');
+            return;
+        }
+    } catch (e) {}
+    // Zaxira (tg.HapticFeedback umuman bo'lmagan kamdan-kam holat uchun)
+    try {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(kind === 'success' ? [10, 30, 10]
+                : (kind === 'warning' || kind === 'error') ? [18, 40, 18]
+                : kind === 'selection' ? 5 : 10);
+        }
     } catch (e) {}
 };
 
@@ -15934,6 +16077,86 @@ window._skel = function (n, h) {
     .search-input-container .search-box,
     body.search-focused .search-input-container { transition: none !important; }
   }
+</style>
+
+<style id="ux-enhance-2026">
+/* ================================================================
+   UX YAXSHILASH (2026) — 4 ta dizayn qatlami, ADDITIVE va XAVFSIZ
+     1) Micro-interactions (tap press)   2) Content-aware skeleton
+     3) Bottom-sheet modal nafisligi     4) Karta parallax (rasm)
+   Hammasi GPU-friendly (faqat transform/opacity). lite + reduced-motion
+   da o'chadi -> telefonni QIZDIRMAYDI. Mavjud qoidalarga tegmaydi
+   (yangi selektorlar / property'lar; eski :active'lar !important bilan ustun).
+   ================================================================ */
+
+/* ——— 1) MICRO-INTERACTIONS: bosilganda nafis "press" (scale 0.95, 120ms) ——— */
+/*    Faqat ALLAQACHON :active transform'i BO'LMAGAN elementlarga qo'shiladi
+      (luxury-card / btn-add-cart / pm-sticky-btn / p2-tile / p2-hdr-btn —
+       o'z press'iga ega, ularga TEGILMAYDI). */
+.ux-tap,
+.close-btn, .pm-close-btn, .pm-edit-icon,
+.inv-btn, .btn-checkout,
+.chip, .cat-chip, .model-chip, .origin-chip, .inv-fchip, .quick-chip,
+.addr-type-btn, .pay-method-card, .dlv-method-card,
+.story-item, .luxury-model-item, .nav-item,
+.field-mic-btn, .field-scan-btn, .scan-action-btn,
+.profile-menu-item, .similar-card, .search-item {
+    transition: transform 120ms var(--ease-bounce, cubic-bezier(0.34,1.56,0.64,1));
+}
+.ux-tap:active,
+.close-btn:active, .pm-close-btn:active, .pm-edit-icon:active,
+.inv-btn:active, .btn-checkout:active,
+.chip:active, .cat-chip:active, .model-chip:active, .origin-chip:active, .inv-fchip:active, .quick-chip:active,
+.addr-type-btn:active, .pay-method-card:active, .dlv-method-card:active,
+.story-item:active, .luxury-model-item:active, .nav-item:active,
+.field-mic-btn:active, .field-scan-btn:active, .scan-action-btn:active,
+.profile-menu-item:active, .similar-card:active, .search-item:active {
+    transform: scale(0.95);
+}
+
+/* ——— 2) CONTENT-AWARE SKELETON ——— */
+/*    Karta SHAKLIDAGI skeleton ALLAQACHON mavjud (.sk-card / .sk-bone, shimmer
+      bilan, lite + light-theme moslangan). Yangi tizim yaratilmaydi (ikki xil
+      skeleton bo'lmasin). Yagona muammo: u dastlabki yuklanishda markaziy "gear"
+      ostida yashirin qolardi. Buni JS hal qiladi (pastga qarang: _showInitialSkeletons)
+      -> mavjud karta-skeletonlar yuklanish paytida KO'RINADI. CSS o'zgarmaydi. */
+
+/* ——— 3) BOTTOM-SHEET nafisligi (mavjud slideUpModal ANIMATSIYASI ustiga) ——— */
+/*    Modallar pastdan chiqadi (allaqachon bor). Endi tepa burchaklar yumaloq +
+      "tortish" tayoqchasi (handle) nafisroq -> zamonaviy sheet ko'rinishi.
+      Tuzilma/balandlik o'zgarmaydi (skroll/navigatsiya buzilmaydi). */
+.modal-standard {
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+}
+.modal-standard::before {
+    width: 44px !important;
+    height: 5px !important;
+    background: rgba(255,255,255,0.22) !important;
+}
+html[data-theme="light"] .modal-standard::before { background: rgba(120,90,30,0.22) !important; }
+
+/* ——— 4) KARTA PARALLAX: rasm skrollda yengil "suzadi" (faqat transform) ——— */
+/*    Boshlang'ich kichik zoom (1.08) parallax siljishiga joy beradi; img-wrap
+      ustidagi radial mask qirralarni yashiradi -> bo'sh joy ko'rinmaydi.
+      Haqiqiy siljishni JS inline transform bilan beradi (rAF, GPU). */
+.luxury-card .img-wrap img.ux-parallax { transform: scale(1.08); }
+
+/* ——— REDUCED-MOTION: "harakatni kamaytirish" yoqilsa — press/parallax/shimmer o'chadi ——— */
+@media (prefers-reduced-motion: reduce) {
+    .ux-tap:active,
+    .close-btn:active, .pm-close-btn:active, .pm-edit-icon:active,
+    .inv-btn:active, .btn-checkout:active,
+    .chip:active, .cat-chip:active, .model-chip:active, .origin-chip:active, .inv-fchip:active, .quick-chip:active,
+    .addr-type-btn:active, .pay-method-card:active, .dlv-method-card:active,
+    .story-item:active, .luxury-model-item:active, .nav-item:active,
+    .field-mic-btn:active, .field-scan-btn:active, .scan-action-btn:active,
+    .profile-menu-item:active, .similar-card:active, .search-item:active { transform: none; }
+    .luxury-card .img-wrap img.ux-parallax { transform: none; }
+}
+
+/* ——— LITE REJIM: zaif telefonlarda parallax butunlay o'chadi ——— */
+html.lite .luxury-card .img-wrap img.ux-parallax { transform: none !important; }
 </style>
 
 <!-- ================================================================
