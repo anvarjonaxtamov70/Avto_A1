@@ -5810,6 +5810,21 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
                 <button type="button" class="field-scan-btn" onclick="scanBarcode('edit')" title="Shtrix-kod skaner">📷</button>
             </div>
 
+            <!-- 🔥 FLASH SALE (IXTIYORIY — shtrix-kod kabi, to'ldirilmasa ham tovar saqlanadi) -->
+            <div style="background:rgba(255,69,58,0.06); border:1px dashed rgba(255,69,58,0.35); border-radius:14px; padding:12px; margin-bottom:15px;">
+                <div style="font-size:11px; font-weight:800; color:#ff453a; letter-spacing:0.5px; margin-bottom:10px;">🔥 FLASH CHEGIRMA (ixtiyoriy)</div>
+                <div class="admin-input-wrap">
+                    <i>💸</i>
+                    <input type="text" inputmode="numeric" id="edit-flash-price" class="admin-input" placeholder="Flash narxi (so'mda, asl narxdan kam)" oninput="formatPriceInput(this)">
+                </div>
+                <div class="admin-input-wrap" style="margin-bottom:0;">
+                    <i>⏱️</i>
+                    <input type="number" inputmode="decimal" id="edit-flash-hours" class="admin-input" placeholder="Necha soat davom etadi (mas: 24)" step="0.5" min="0">
+                </div>
+                <div style="font-size:10px; color:var(--text-muted); margin-top:8px;">Bo'sh qoldirilsa — flash chegirma yo'q. To'ldirsangiz, mijozga countdown bilan ko'rinadi.</div>
+            </div>
+
+
             <div style="display: flex; gap: 12px; margin-bottom: 15px;">
                 <div class="admin-input-wrap" style="flex: 1; margin-bottom: 0;">
                     <i>📦</i>
@@ -6041,6 +6056,21 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
                 <input type="text" id="add-code" class="admin-input" placeholder="Artikul / OEM kod (ixtiyoriy)" oninput="updateLivePreview('add')" style="padding-right:50px;">
                 <button type="button" class="field-scan-btn" onclick="scanBarcode('add')" title="Shtrix-kod skaner">📷</button>
             </div>
+
+            <!-- 🔥 FLASH SALE (IXTIYORIY — shtrix-kod kabi, to'ldirilmasa ham tovar qo'shiladi) -->
+            <div style="background:rgba(255,69,58,0.06); border:1px dashed rgba(255,69,58,0.35); border-radius:14px; padding:12px; margin-bottom:15px;">
+                <div style="font-size:11px; font-weight:800; color:#ff453a; letter-spacing:0.5px; margin-bottom:10px;">🔥 FLASH CHEGIRMA (ixtiyoriy)</div>
+                <div class="admin-input-wrap">
+                    <i>💸</i>
+                    <input type="text" inputmode="numeric" id="add-flash-price" class="admin-input" placeholder="Flash narxi (so'mda, asl narxdan kam)" oninput="formatPriceInput(this)">
+                </div>
+                <div class="admin-input-wrap" style="margin-bottom:0;">
+                    <i>⏱️</i>
+                    <input type="number" inputmode="decimal" id="add-flash-hours" class="admin-input" placeholder="Necha soat davom etadi (mas: 24)" step="0.5" min="0">
+                </div>
+                <div style="font-size:10px; color:var(--text-muted); margin-top:8px;">Bo'sh qoldirilsa — flash chegirma yo'q. To'ldirsangiz, mijozga countdown bilan ko'rinadi.</div>
+            </div>
+
 
             <div style="display: flex; gap: 12px; margin-bottom: 15px;">
                 <div class="admin-input-wrap" style="flex: 1; margin-bottom: 0;">
@@ -7496,6 +7526,8 @@ document.addEventListener('visibilitychange', function() {
 
 // Oynani birinchi marta ochgandagi yoki tovar yangilangandagi chizish
     function renderProducts() {
+        // 🔥 Muddati tugagan flash chegirmalarni asl narxga qaytaramiz (har renderда)
+        try { if (window.applyFlashState) window.applyFlashState(); } catch(e){}
         let hc = document.getElementById('home-products'); 
         if(hc) { 
             let hi = displayDB.slice(0, limitCount); 
@@ -7599,8 +7631,15 @@ function cardHTML(p) {
     // 🛡️ 7/9: kartada nafis ISHONCH belgisi (kafolat) — faqat sotuvda bor tovarda
     let trustHTML = (st > 0) ? `<div class="card-trust">${icon('shield')} 14 kun kafolat</div>` : '';
 
+    // 🔥 FLASH SALE badge (countdown) — faqat aktiv flash bo'lsa. oldPrice strikethrough
+    //    yuqorida (discChip/oldPriceHTML) avtomatik chiqadi (oldPrice > price bo'lgani uchun).
+    let flashBadge = '';
+    if (p.flashUntil && p.flashUntil > Date.now() && p.oldPrice && Number(p.oldPrice) > Number(p.price)) {
+        flashBadge = `<div class="flash-badge">🔥 <span class="flash-cd" data-until="${p.flashUntil}"></span></div>`;
+    }
+
     return `<div class="luxury-card" data-pid="${p.id}" onclick="openProduct(${p.id})">
-        ${bH}${heartBtn}
+        ${bH}${flashBadge}${heartBtn}
         <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">${icon('scale')}</div>
         <div class="img-wrap" style="${oosStyle}">
         <img src="${_thumb(p.img, 240)}" 
@@ -7667,6 +7706,19 @@ function openProduct(id) {
     
     document.getElementById('pm-desc').innerText = p.desc && p.desc !== "Tavsif kiritilmagan" ? p.desc : "Bu tovar haqida batafsil ma'lumot uchun biz bilan bog'laning — sizga yordam beramiz."; 
     document.getElementById('pm-price').innerText = `${p.price.toLocaleString()} so'm`;
+
+    // 🔥 Flash countdown (detal oynasi) — aktiv flash bo'lsa narx ostida ko'rsatamiz
+    (function(){
+        var ex = document.getElementById('pm-flash-cd'); if (ex) ex.remove();
+        var host = document.getElementById('pm-price');
+        if (host && window._flashActive && window._flashActive(p)) {
+            var box = document.createElement('div');
+            box.id = 'pm-flash-cd';
+            box.className = 'pm-flash-cd';
+            box.innerHTML = '🔥 Flash chegirma tugashiga: <span class="flash-cd" data-until="' + p.flashUntil + '"></span>';
+            if (host.parentNode) host.parentNode.insertBefore(box, host.nextSibling);
+        }
+    })();
     
     let buyB = document.getElementById('pm-buy-btn');
     let sInf = document.getElementById('pm-stock');
@@ -10138,6 +10190,23 @@ window.openEditModal = function(e, directId = null) {
     document.getElementById('edit-price').value = formatNumber(p.price);
     let editCodeEl = document.getElementById('edit-code');
     if (editCodeEl) editCodeEl.value = p.code || "";
+
+    // 🔥 Flash sale maydonlarini to'ldirish: aktiv flash bo'lsa, narx maydonida ASL
+    //    narx (oldPrice), flash maydonida chegirma narx va qolgan soat ko'rsatiladi.
+    (function(){
+        var efp = document.getElementById('edit-flash-price');
+        var efh = document.getElementById('edit-flash-hours');
+        if (!efp || !efh) return;
+        var now = Date.now();
+        if (p.flashUntil && p.flashUntil > now && p.oldPrice && Number(p.oldPrice) > Number(p.price)) {
+            document.getElementById('edit-price').value = formatNumber(p.oldPrice); // asl narx
+            efp.value = formatNumber(p.price);                                       // flash narx
+            efh.value = Math.max(0, Math.round(((p.flashUntil - now) / 3600000) * 10) / 10);
+        } else {
+            efp.value = '';
+            efh.value = '';
+        }
+    })();
     document.getElementById('edit-desc').value = p.desc || "";
 
     let pType = p.product_type || 'oddiy';
@@ -10294,6 +10363,25 @@ window.saveEditProduct = function(keepDraft = false) {
             productsDB[idx].stock = sizes.reduce((s, x) => s + x.stock, 0);
         }
 
+        // 🔥 FLASH SALE (ixtiyoriy): flash narx asl narxdan kichik va soat > 0 bo'lsa —
+        //    narxni vaqtincha tushiramiz (price=flash, oldPrice=asl, flashUntil=tugash vaqti).
+        //    Aks holda flashni o'chiramiz (asl narxni tiklab). 'p' = asl narx (price maydoni).
+        (function(){
+            var fpEl = document.getElementById('edit-flash-price');
+            var fhEl = document.getElementById('edit-flash-hours');
+            var fp = fpEl ? parsePrice(fpEl.value) : 0;
+            var fh = fhEl ? (parseFloat(String(fhEl.value).replace(',', '.')) || 0) : 0;
+            if (fp > 0 && fp < p && fh > 0) {
+                productsDB[idx].oldPrice = p;
+                productsDB[idx].price = fp;
+                productsDB[idx].flashUntil = Date.now() + Math.round(fh * 3600000);
+            } else {
+                productsDB[idx].price = p;
+                delete productsDB[idx].oldPrice;
+                delete productsDB[idx].flashUntil;
+            }
+        })();
+
         if (!keepDraft) {
             delete productsDB[idx].is_draft; 
         } else {
@@ -10363,6 +10451,20 @@ window.saveNewProduct = function() {
         newProduct.stock = sizes.reduce((s, x) => s + x.stock, 0);
         newProduct.category = sCats[0]; newProduct.categories = sCats;
     }
+
+    // 🔥 FLASH SALE (ixtiyoriy): flash narx asl narxdan kichik + soat > 0 bo'lsa qo'llaymiz.
+    //    'p' = asl narx. To'ldirilmasa — oddiy tovar (flashsiz) qo'shiladi.
+    (function(){
+        var fpEl = document.getElementById('add-flash-price');
+        var fhEl = document.getElementById('add-flash-hours');
+        var fp = fpEl ? parsePrice(fpEl.value) : 0;
+        var fh = fhEl ? (parseFloat(String(fhEl.value).replace(',', '.')) || 0) : 0;
+        if (fp > 0 && fp < p && fh > 0) {
+            newProduct.oldPrice = p;
+            newProduct.price = fp;
+            newProduct.flashUntil = Date.now() + Math.round(fh * 3600000);
+        }
+    })();
 
     productsDB.push(newProduct);
     let newIdx = productsDB.length - 1;
@@ -12320,6 +12422,64 @@ window.saveProductAt = (idx) => {
     if (idx < 0 || idx >= productsDB.length) return Promise.reject(new Error("Noto'g'ri indeks"));
     return db.ref('products/' + idx).set(productsDB[idx]);
 };
+// =====================================================================
+// 🔥 FLASH SALE — yordamchilar, normalizer (muddat tugashi) va countdown ticker
+//   - _flashActive(p): flash hozir aktivmi.
+//   - _fmtFlash(ms): qolgan vaqtni "Dk HH:MM:SS" ko'rinishida.
+//   - applyFlashState(): muddati o'tgan flash'larni ASL narxga qaytaradi
+//     (xotirada; admin bo'lsa DB'ni ham tozalaydi). price flash davomida
+//     discounted; tugagach oldPrice (asl) tiklanadi -> cart/buyurtma to'g'ri.
+// =====================================================================
+window._flashActive = function(p){
+    return !!(p && p.flashUntil && p.flashUntil > Date.now()
+              && p.oldPrice && Number(p.oldPrice) > Number(p.price));
+};
+window._fmtFlash = function(ms){
+    if (ms <= 0) return '00:00:00';
+    var s = Math.floor(ms/1000), d = Math.floor(s/86400); s -= d*86400;
+    var h = Math.floor(s/3600); s -= h*3600;
+    var m = Math.floor(s/60); s -= m*60;
+    var z = function(n){ return (n<10?'0':'') + n; };
+    return (d>0 ? d + ' kun ' : '') + z(h)+':'+z(m)+':'+z(s);
+};
+window.applyFlashState = function(){
+    var now = Date.now(), changed = false;
+    var list = (typeof productsDB !== 'undefined' && productsDB) ? productsDB : (window.productsDB || []);
+    for (var i = 0; i < list.length; i++){
+        var p = list[i];
+        if (p && p.flashUntil && p.flashUntil <= now){
+            if (p.oldPrice && Number(p.oldPrice) > 0) p.price = Number(p.oldPrice);
+            delete p.oldPrice; delete p.flashUntil;
+            changed = true;
+            try { if (window.isAdmin && window.isAdmin() && window.saveProductAt) window.saveProductAt(i); } catch(e){}
+        }
+    }
+    return changed;
+};
+// 1 soniyalik ticker — FAQAT ekranda .flash-cd bo'lsa ish bajaradi (telefonni qizdirmaydi).
+(function flashTicker(){
+    function tick(){
+        var nodes = document.querySelectorAll('.flash-cd');
+        if (!nodes.length) return;
+        var now = Date.now(), expired = false;
+        nodes.forEach(function(el){
+            var until = parseInt(el.getAttribute('data-until'), 10) || 0;
+            var left = until - now;
+            if (left <= 0){ el.textContent = '00:00:00'; expired = true; }
+            else el.textContent = window._fmtFlash(left);
+        });
+        if (expired && window.applyFlashState && window.applyFlashState()){
+            try {
+                if (typeof _sortDisplayDB === 'function')
+                    displayDB = _sortDisplayDB(productsDB.filter(function(p){ return !p.is_draft; }).slice().reverse());
+                if (typeof renderProducts === 'function') renderProducts();
+            } catch(e){}
+        }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setInterval(tick, 1000); });
+    else setInterval(tick, 1000);
+})();
+
 window.generateProductId = () => {
     // #14: bot bilan BIR XIL sxema — ketma-ket (max + 1). Bot ham max(id)+1
     // ishlatadi; ilgari bu yerda Date.now() edi (nomuvofiq). Collision guard saqlanadi.
@@ -12349,7 +12509,7 @@ window._rewriteProductsSafely = function (mutator) {
 
 // ---------- 7) ADD FORMANI TOZALASH / OCHISH / KLON ----------
 window.resetAddForm = () => {
-    ['add-name','add-price','add-code','add-desc','add-img-url','add-img-url2','add-img-url3'].forEach(id => { let el = document.getElementById(id); if (el) el.value = ''; });
+    ['add-name','add-price','add-code','add-desc','add-img-url','add-img-url2','add-img-url3','add-flash-price','add-flash-hours'].forEach(id => { let el = document.getElementById(id); if (el) el.value = ''; });
     let st = document.getElementById('add-stock'); if (st) st.value = 10;
     let pt = document.getElementById('admin-prod-type'); if (pt) pt.value = 'oddiy';
     if (typeof toggleProductTypeFields === 'function') toggleProductTypeFields();
@@ -16157,6 +16317,46 @@ html[data-theme="light"] .modal-standard::before { background: rgba(120,90,30,0.
 
 /* ——— LITE REJIM: zaif telefonlarda parallax butunlay o'chadi ——— */
 html.lite .luxury-card .img-wrap img.ux-parallax { transform: none !important; }
+</style>
+
+<style id="flash-sale-2026">
+/* ================================================================
+   🔥 FLASH SALE — cheklangan vaqtli chegirma (countdown bilan)
+   - Narx p.price'ga "singdiriladi", asl narx p.oldPrice'da -> mavjud
+     cart/buyurtma kodi O'ZGARMAYDI (narx avtomatik to'g'ri).
+   - Muddat tugagach applyFlashState() asl narxni tiklaydi.
+   ================================================================ */
+.flash-badge {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    z-index: 5; display: inline-flex; align-items: center; gap: 4px;
+    background: linear-gradient(135deg, #ff453a, #ff2d55);
+    color: #fff; font-size: 10px; font-weight: 800;
+    padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(255,69,58,0.45); letter-spacing: 0.3px;
+    pointer-events: none;
+}
+.flash-badge .flash-cd { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: no-preference) {
+    .flash-badge { animation: flashPulse 1.8s ease-in-out infinite; }
+}
+@keyframes flashPulse {
+    0%,100% { box-shadow: 0 3px 10px rgba(255,69,58,0.45); }
+    50%     { box-shadow: 0 3px 17px rgba(255,69,58,0.75); }
+}
+html.lite .flash-badge { animation: none !important; }
+
+/* Detal oynasidagi countdown */
+.pm-flash-cd {
+    display: flex; align-items: center; gap: 6px; justify-content: center;
+    margin: 10px 0 0; padding: 9px 12px; border-radius: 12px;
+    background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.32);
+    color: #ff453a; font-weight: 800; font-size: 13px;
+}
+.pm-flash-cd .flash-cd { font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
+html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border-color: rgba(216,57,43,0.30); color: #c0392b; }
+
+/* Admin flash-sale guruhi (qizil chap chiziq) */
+.flash-admin-group { border-left-color: #ff453a !important; }
 </style>
 
 <!-- ================================================================
