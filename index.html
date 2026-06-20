@@ -4624,9 +4624,6 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         .review-star.lit { animation: starGlow 0.4s ease forwards; }
         @keyframes confettiFall { 0%{transform:translateY(-20vh) rotate(0);opacity:1;} 100%{transform:translateY(120vh) rotate(720deg);opacity:0;} }
         .confetti-piece { position:fixed; top:0; width:10px; height:14px; pointer-events:none; z-index:99998; border-radius:2px; animation: confettiFall 2.5s linear forwards; }
-        #ptr-indicator { position:fixed; top:-60px; left:50%; transform:translateX(-50%); z-index:99997; width:50px; height:50px; border-radius:50%; background:rgba(28,28,30,0.95); backdrop-filter:blur(10px); border:1px solid rgba(212,175,55,0.3); display:flex; align-items:center; justify-content:center; transition: top 0.3s ease; color: var(--luxury-gold); }
-        #ptr-indicator.visible { top: 20px; }
-        #ptr-indicator.refreshing svg { animation: gearSpin 0.85s linear infinite; }
         .items-grid > .luxury-card { animation: cardFadeIn 0.35s ease backwards; }
         @keyframes cardFadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
         @keyframes cartShake { 0%,100%{transform:translateX(0);} 20%{transform:translateX(-4px) rotate(-3deg);} 40%{transform:translateX(4px) rotate(3deg);} 60%{transform:translateX(-3px) rotate(-2deg);} 80%{transform:translateX(3px) rotate(2deg);} }
@@ -13201,73 +13198,8 @@ window._doBroadcast = async (text) => {
     }
 };
 
-// 1.6 PULL-TO-REFRESH
-(function ptrInit(){
-    let startY = 0, dy = 0, pulling = false, refreshing = false;
-    const threshold = 65, maxPull = 100;
-    function getIndicator() {
-        let el = document.getElementById('ptr-indicator');
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'ptr-indicator';
-            el.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg>';
-            document.body.appendChild(el);
-        }
-        return el;
-    }
-    function shouldEnable() {
-        if (window.activeModal || window.searchActive || refreshing) return false;
-        if ((document.scrollingElement && document.scrollingElement.scrollTop) > 0) return false;
-        const mm = document.getElementById('main-menu');
-        return mm && !mm.classList.contains('hidden');
-    }
-    document.addEventListener('touchstart', (e) => {
-        if (!shouldEnable()) return;
-        startY = e.touches[0].clientY; pulling = true; dy = 0;
-    }, {passive: true});
-    document.addEventListener('touchmove', (e) => {
-        if (!pulling || refreshing) return;
-        dy = e.touches[0].clientY - startY;
-        if (dy > 0) {
-            const ind = getIndicator();
-            const pull = Math.min(dy * 0.5, maxPull);
-            if (pull > threshold) ind.classList.add('visible');
-            else ind.classList.remove('visible');
-        }
-    }, {passive: true});
-    document.addEventListener('touchend', () => {
-        if (!pulling) return;
-        pulling = false;
-        const ind = getIndicator();
-        if (dy * 0.5 > threshold && !refreshing) {
-            refreshing = true;
-            ind.classList.add('visible', 'refreshing');
-            _hap('medium');
-            try {
-                db.ref('products').once('value', (snap) => {
-                    if (snap.exists()) {
-                        window.productsDB = snap.val() || [];
-                        if (typeof _sortDisplayDB === 'function') {
-                            window.displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
-                        }
-                        if (typeof renderProducts === 'function') renderProducts();
-                    }
-                    setTimeout(() => {
-                        ind.classList.remove('visible', 'refreshing');
-                        refreshing = false;
-                        showToast('✅ Yangilandi', 'success');
-                    }, 500);
-                });
-            } catch (err) {
-                ind.classList.remove('visible', 'refreshing');
-                refreshing = false;
-            }
-        } else {
-            ind.classList.remove('visible');
-        }
-        dy = 0;
-    }, {passive: true});
-})();
+// 1.6 PULL-TO-REFRESH — OLIB TASHLANDI (foydalanuvchi so'roviga ko'ra: pastga
+//      tortib yangilash kerak emas. Ma'lumot baribir real-time yangilanadi.)
 
 // 2.8 SWIPE-TO-DELETE (cart row)
 (function swipeInit(){
