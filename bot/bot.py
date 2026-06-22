@@ -575,10 +575,13 @@ async def process_mini_app_ai():
                             desc = str(p.get("desc", "")).strip()
                             if desc and _norm(desc) not in _GENERIC_VALUES and not desc.lower().startswith("mashina:"):
                                 parts.append(desc[:60])
-                            parts.append("omborda bor" if _in_stock(p) else "borligini aniqlash kerak")
+                            parts.append("omborda mavjud" if _in_stock(p) else "buyurtma asosida (so'rovga ko'ra keltiriladi)")
                             return " | ".join(parts)
 
-                        prod_context = "\n".join(_prod_line(p) for p in relevant) or "(hozircha mos tovar yo'q)"
+                        # Omborda mavjud tovarlar kontekstda BIRINCHI tursin — AI ularni
+                        # birinchi tavsiya qilsin (ishonchli, "bor" deb ayta oladigan).
+                        relevant_for_ctx = sorted(relevant, key=lambda p: 0 if _in_stock(p) else 1)
+                        prod_context = "\n".join(_prod_line(p) for p in relevant_for_ctx) or "(hozircha mos tovar yo'q)"
                         relevant_ids = {p.get("id") for p in relevant}
 
                         groq_msgs = [{
@@ -598,7 +601,10 @@ async def process_mini_app_ai():
                                 "3. So'rov noaniq bo'lsa (qaysi mashina, yili, dvigatel, old/orqa va h.k.) — "
                                 "tavsiya berishdan oldin 1 ta ANIQ savol ber.\n"
                                 "4. Imkon bo'lsa to'ldiruvchi qismni ham taklif qil (mas. kolodka so'rasa — disk/datchik).\n"
-                                "5. Bazada bo'lmasa: qisqa uzr + qaysi mashinaga kerakligini so'ra yoki "
+                                "5. OMBOR: 'omborda mavjud' tovarlarni BIRINCHI tavsiya qil. Tovar "
+                                "'buyurtma asosida' bo'lsa — ISHONCH bilan ayt: bor, so'rovga ko'ra keltiramiz. "
+                                "'Bor-yo'qligini bilmayman' yoki 'aniqlashim kerak' kabi IKKILANISH iboralarini ISHLATMA.\n"
+                                "6. Bazada umuman bo'lmasa: qisqa uzr + qaysi mashinaga kerakligini so'ra yoki "
                                 "+998(88)289-30-30 raqamiga yo'naltir.\n\n"
                                 "CHEKLOV: faqat BAZAdagi tovarlarni tavsiya qil, narxni o'zing to'qima, "
                                 "ochiq havola yozma.\n\n"
