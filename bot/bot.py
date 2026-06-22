@@ -105,6 +105,45 @@ if not API_TOKEN:
 groq_client = AsyncGroq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 
+# =====================================================================
+# DO'KON MA'LUMOTLARI — BITTA MANBA (single source of truth)
+#   - Aloqa xabari (contact_info), AI promptlari va lokatsiya shu qiymatlardan
+#     oziqlanadi. Shunda mijoz har joyda BIR XIL, izchil ma'lumot ko'radi
+#     (ilgari manzil AI promptida bor, aloqada yo'q edi — ziddiyat).
+#   - Hammasi .env orqali o'zgartiriladi (kodga tegmasdan).
+# =====================================================================
+SHOP_NAME = os.getenv("SHOP_NAME", "Avto_A1")
+SHOP_ADMIN = os.getenv("SHOP_ADMIN", "Anvar")
+SHOP_PHONE = os.getenv("SHOP_PHONE", "+998 88 289 30 30")
+SHOP_TELEGRAM = os.getenv("SHOP_TELEGRAM", "@anvaraxtamov2004")
+SHOP_ADDRESS = os.getenv("SHOP_ADDRESS", "Samarqand, yangi zapchast bozori, 19-sektor, 2-do'kon")
+SHOP_ADDRESS_RU = os.getenv("SHOP_ADDRESS_RU", "Самарканд, новый рынок автозапчастей, сектор 19, магазин 2")
+SHOP_HOURS = os.getenv("SHOP_HOURS", "Har kuni 09:00–19:00")
+SHOP_HOURS_RU = os.getenv("SHOP_HOURS_RU", "Ежедневно 09:00–19:00")
+# Lokatsiya pin (ixtiyoriy): koordinatalar berilsa, aloqa bo'limida xarita
+# nuqtasi (jonli location) ham yuboriladi.
+SHOP_LAT = os.getenv("SHOP_LAT", "")
+SHOP_LNG = os.getenv("SHOP_LNG", "")
+# Xaritadagi aniq joy havolasi (ixtiyoriy). Bo'lmasa — manzil bo'yicha
+# Google Maps qidiruv havolasi avtomatik yasaladi.
+SHOP_MAP_URL = os.getenv("SHOP_MAP_URL", "")
+
+
+def shop_address(lang="uz"):
+    return SHOP_ADDRESS_RU if lang == "ru" else SHOP_ADDRESS
+
+
+def shop_hours(lang="uz"):
+    return SHOP_HOURS_RU if lang == "ru" else SHOP_HOURS
+
+
+def shop_map_url():
+    """Do'kon manzili uchun xarita havolasi (sozlangan bo'lsa — aniq joy)."""
+    if SHOP_MAP_URL:
+        return SHOP_MAP_URL
+    return "https://maps.google.com/?q=" + urllib.parse.quote(SHOP_ADDRESS)
+
+
 def esc(v):
     """Telegram parse_mode='HTML' xabarlari uchun foydalanuvchi matnini
     xavfsizlashtiradi (& < > belgilarini almashtiradi).
@@ -129,12 +168,15 @@ SUPPORTED_LANGS = ("uz", "ru")
 # Menyu tugmalari (handlerlarda set bilan solishtiriladi — eski o'zbekcha
 # matnlar ham ishlashda davom etadi, ya'ni mavjud klaviaturalar buzilmaydi).
 BTN = {
-    "uz": {"shop": "Do'konga marhamat", "contact": "Biz bilan bog'lanish", "lang": "🌐 Til / Язык"},
-    "ru": {"shop": "В магазин", "contact": "Связаться с нами", "lang": "🌐 Til / Язык"},
+    "uz": {"shop": "Do'konga marhamat", "contact": "Biz bilan bog'lanish", "lang": "🌐 Til / Язык",
+           "register": "📱 Tez buyurtma uchun ro'yxatdan o'tish"},
+    "ru": {"shop": "В магазин", "contact": "Связаться с нами", "lang": "🌐 Til / Язык",
+           "register": "📱 Регистрация для быстрого заказа"},
 }
 SHOP_BUTTONS = {BTN["uz"]["shop"], BTN["ru"]["shop"]}
 CONTACT_BUTTONS = {BTN["uz"]["contact"], BTN["ru"]["contact"]}
 LANG_BUTTONS = {BTN["uz"]["lang"], BTN["ru"]["lang"]}
+REGISTER_BUTTONS = {BTN["uz"]["register"], BTN["ru"]["register"]}
 
 TEXTS = {
     "uz": {
@@ -142,6 +184,12 @@ TEXTS = {
         "choose_lang": "Tilni tanlang / Выберите язык:",
         "lang_set": "Til o'zgartirildi: O'zbekcha",
         "menu": "Asosiy menyu",
+        "welcome_browse": ("Marhamat, <b>{shop}</b> tugmasini bosib do'konni bemalol ko'ring. 🛍\n\n"
+                           "Ro'yxatdan o'tishingiz <b>shart emas</b> — buyurtma berishda telefon "
+                           "raqamingizni bir marta so'raymiz, xolos.\n\n"
+                           "<i>Istasangiz, pastdagi tugma orqali oldindan ro'yxatdan o'tib, keyingi "
+                           "buyurtmalarni tezroq berishingiz mumkin.</i>"),
+        "register_intro": "<b>Ismingizni kiriting:</b>",
         "ask_name": "<b>Ismingizni kiriting:</b>",
         "ask_phone": "<b>Telefon raqamingizni yuboring:</b>",
         "phone_invalid": ("Raqam noto'g'ri ko'rinishda kiritildi.\n\n"
@@ -154,23 +202,36 @@ TEXTS = {
                          "Pastdagi <b>{shop}</b> tugmasini bosing."),
         "shop_prompt": "Buyurtma berish uchun do'konni oching:",
         "shop_btn_inline": "Barcha zapchastlar",
-        "contact_info": ("<b>Avto_A1 bilan bog'lanish:</b>\n\n"
-                         "Admin: Anvar\n"
-                         "Telefon: +998 88 289 30 30\n"
-                         "Telegram: @anvaraxtamov2004"),
+        "contact_info": ("<b>{shop} bilan bog'lanish</b>\n\n"
+                         "👤 Admin: {admin}\n"
+                         "📞 Telefon: {phone}\n"
+                         "💬 Telegram: {tg}\n"
+                         "📍 Manzil: {address}\n"
+                         "🕒 Ish vaqti: {hours}"),
+        "contact_map_btn": "📍 Xaritada ko'rish",
         "photo_thanks": "Rasm uchun rahmat!\n\nZapchastlarni ko'rish uchun do'konni oching.",
+        "photo_analyzing": "Rasmni ko'rib chiqyapman... 🔎",
+        "photo_found_intro": "Bizda shunga mos keladigan(lar):",
+        "photo_vision_failed": ("Rasmni oldim! Bu qaysi mashinaning qaysi qismi ekanini ayting — "
+                                "darrov topib beraman. 🔧"),
         "ai_busy": "Uzr, hozir biroz bandman 🙏 Bir-ikki daqiqadan so'ng qayta yozsangiz, albatta yordam beraman.",
         "phone_send": "Raqamni yuborish",
-        "order_qabul": "Buyurtmangiz qabul qilindi!",
-        "order_yolda": "Buyurtmangiz yo'lga chiqdi!",
-        "order_yetkazildi": "Buyurtmangiz yetkazildi. Rahmat!",
-        "order_bekor_qilingan": "Buyurtmangiz bekor qilindi.",
+        "order_qabul": "✅ #{code} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!{detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.",
+        "order_yolda": "🚚 #{code} raqamli buyurtmangiz yo'lga chiqdi!{detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.",
+        "order_yetkazildi": "🏁 #{code} raqamli buyurtmangiz yetkazib berildi.{detail}\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.",
+        "order_bekor_qilingan": "❌ #{code} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30",
     },
     "ru": {
         "welcome_new": "Здравствуйте! Добро пожаловать в магазин Avto_A1!",
         "choose_lang": "Tilni tanlang / Выберите язык:",
         "lang_set": "Язык изменён: Русский",
         "menu": "Главное меню",
+        "welcome_browse": ("Нажмите кнопку <b>{shop}</b> и спокойно смотрите магазин. 🛍\n\n"
+                           "Регистрация <b>не обязательна</b> — мы лишь один раз спросим ваш номер "
+                           "телефона при оформлении заказа.\n\n"
+                           "<i>При желании можно зарегистрироваться заранее по кнопке ниже, чтобы "
+                           "следующие заказы оформлялись быстрее.</i>"),
+        "register_intro": "<b>Введите ваше имя:</b>",
         "ask_name": "<b>Введите ваше имя:</b>",
         "ask_phone": "<b>Отправьте ваш номер телефона:</b>",
         "phone_invalid": ("Номер введён неверно.\n\n"
@@ -183,17 +244,24 @@ TEXTS = {
                          "Нажмите кнопку <b>{shop}</b> ниже."),
         "shop_prompt": "Откройте магазин, чтобы оформить заказ:",
         "shop_btn_inline": "Все запчасти",
-        "contact_info": ("<b>Связаться с Avto_A1:</b>\n\n"
-                         "Админ: Анвар\n"
-                         "Телефон: +998 88 289 30 30\n"
-                         "Telegram: @anvaraxtamov2004"),
+        "contact_info": ("<b>Связь с {shop}</b>\n\n"
+                         "👤 Админ: {admin}\n"
+                         "📞 Телефон: {phone}\n"
+                         "💬 Telegram: {tg}\n"
+                         "📍 Адрес: {address}\n"
+                         "🕒 Время работы: {hours}"),
+        "contact_map_btn": "📍 Открыть на карте",
         "photo_thanks": "Спасибо за фото!\n\nОткройте магазин, чтобы посмотреть запчасти.",
+        "photo_analyzing": "Смотрю фото... 🔎",
+        "photo_found_intro": "У нас есть подходящее:",
+        "photo_vision_failed": ("Получил фото! Подскажите, от какой машины эта деталь — "
+                                "сразу найду для вас. 🔧"),
         "ai_busy": "Извините, сейчас немного занят 🙏 Напишите через пару минут — обязательно помогу.",
         "phone_send": "Отправить номер",
-        "order_qabul": "Ваш заказ принят!",
-        "order_yolda": "Ваш заказ в пути!",
-        "order_yetkazildi": "Ваш заказ доставлен. Спасибо!",
-        "order_bekor_qilingan": "Ваш заказ отменён.",
+        "order_qabul": "✅ Ваш заказ #{code} принят и готовится!{detail}\n\n🙏 Скоро сообщим о следующем этапе.",
+        "order_yolda": "🚚 Ваш заказ #{code} в пути!{detail}\n\n📦 Скоро доставим по адресу, держите телефон под рукой.",
+        "order_yetkazildi": "🏁 Ваш заказ #{code} доставлен.{detail}\n\n🙏 Спасибо за покупку! Ждём вас снова.",
+        "order_bekor_qilingan": "❌ Ваш заказ #{code} отменён.\n\nПо вопросам свяжитесь с нами: +998 88 289 30 30",
     },
 }
 
@@ -599,7 +667,7 @@ async def process_mini_app_ai():
                                 "tavsiya berishdan oldin 1 ta ANIQ savol ber.\n"
                                 "4. Imkon bo'lsa to'ldiruvchi qismni ham taklif qil (mas. kolodka so'rasa — disk/datchik).\n"
                                 "5. Bazada bo'lmasa: qisqa uzr + qaysi mashinaga kerakligini so'ra yoki "
-                                "+998(88)289-30-30 raqamiga yo'naltir.\n\n"
+                                f"{SHOP_PHONE} raqamiga yo'naltir.\n\n"
                                 "CHEKLOV: faqat BAZAdagi tovarlarni tavsiya qil, narxni o'zing to'qima, "
                                 "ochiq havola yozma.\n\n"
                                 f"DO'KON BAZASI (mavjud tovarlar):\n{prod_context}"
@@ -1016,15 +1084,20 @@ def normalize_phone(text):
 # =====================================================================
 # MENYULAR
 # =====================================================================
-def main_menu(lang=DEFAULT_LANG):
-    """Til bo'yicha asosiy menyu (do'kon / aloqa / til almashtirish)."""
+def main_menu(lang=DEFAULT_LANG, registered=True):
+    """Til bo'yicha asosiy menyu (do'kon / aloqa / til almashtirish).
+
+    registered=False bo'lsa (telefon hali yo'q) — ixtiyoriy 'ro'yxatdan o'tish'
+    tugmasi ham qo'shiladi. Ro'yxatdan o'tish MAJBURIY emas: mijoz do'konni
+    bemalol ko'radi, telefon faqat buyurtma berishda so'raladi.
+    """
     b = BTN.get(lang, BTN[DEFAULT_LANG])
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=b["shop"])],
-                  [KeyboardButton(text=b["contact"])],
-                  [KeyboardButton(text=b["lang"])]],
-        resize_keyboard=True,
-    )
+    rows = [[KeyboardButton(text=b["shop"])]]
+    if not registered:
+        rows.append([KeyboardButton(text=b["register"])])
+    rows.append([KeyboardButton(text=b["contact"])])
+    rows.append([KeyboardButton(text=b["lang"])])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
 def phone_kb(lang=DEFAULT_LANG):
@@ -1062,18 +1135,28 @@ viloyatlar_menyu = ReplyKeyboardMarkup(
 # =====================================================================
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
+    await state.clear()
     user_id = message.from_user.id
     existing_user = await firebase_get(f"users/{user_id}/profile")
-    if existing_user and existing_user.get("phone"):
+    if existing_user and existing_user.get("lang"):
         users_db[user_id] = existing_user
         lang = existing_user.get("lang", DEFAULT_LANG)
-        name = existing_user.get("name", message.from_user.first_name)
-        await message.answer(
-            t(lang, "welcome_back", name=esc(name), shop=shop_label(lang)),
-            reply_markup=main_menu(lang), parse_mode="HTML",
-        )
+        has_phone = bool(existing_user.get("phone"))
+        if has_phone:
+            name = existing_user.get("name", message.from_user.first_name)
+            await message.answer(
+                t(lang, "welcome_back", name=esc(name), shop=shop_label(lang)),
+                reply_markup=main_menu(lang, registered=True), parse_mode="HTML",
+            )
+        else:
+            # Tili ma'lum, lekin telefon yo'q — qayta til so'ramaymiz, bemalol ko'rsin.
+            await message.answer(
+                t(lang, "welcome_browse", shop=shop_label(lang)),
+                reply_markup=main_menu(lang, registered=False), parse_mode="HTML",
+            )
     else:
-        # Yangi foydalanuvchi: avval tilni so'raymiz, keyin ro'yxatdan o'tkazamiz.
+        # Yangi foydalanuvchi: faqat tilni so'raymiz, keyin do'konni BEMALOL ko'rsin
+        # (majburiy ro'yxatdan o'tish yo'q — telefon buyurtmada so'raladi).
         await message.answer(t(DEFAULT_LANG, "welcome_new"), reply_markup=ReplyKeyboardRemove())
         await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb())
         await state.set_state(Register.lang)
@@ -1090,11 +1173,25 @@ async def set_language(call: types.CallbackQuery, state: FSMContext):
     if lang not in SUPPORTED_LANGS:
         lang = DEFAULT_LANG
 
-    # 1-holat: yangi foydalanuvchi ro'yxatdan o'tish boshida til tanladi
+    # 1-holat: yangi foydalanuvchi ro'yxatdan o'tish boshida til tanladi.
+    # Endi MAJBURIY ism/telefon so'ramaymiz — tilni saqlaymiz va do'konni bemalol
+    # ko'rishi uchun asosiy menyuni ochamiz (browse-first). Telefon buyurtmada so'raladi.
     if await state.get_state() == Register.lang.state:
-        await state.update_data(lang=lang)
-        await state.set_state(Register.name)
-        await call.message.edit_text(t(lang, "ask_name"), parse_mode="HTML")
+        await state.clear()
+        user_id = call.from_user.id
+        prof = users_db.get(user_id) or {}
+        prof["lang"] = lang
+        users_db[user_id] = prof
+        # Tilni darhol profilga yozamiz — keyingi /start da qayta so'ralmaydi.
+        await firebase_patch(f"users/{user_id}/profile", {"lang": lang})
+        try:
+            await call.message.edit_text(t(lang, "lang_set"))
+        except Exception:
+            pass
+        await call.message.answer(
+            t(lang, "welcome_browse", shop=shop_label(lang)),
+            reply_markup=main_menu(lang, registered=False), parse_mode="HTML",
+        )
         await call.answer()
         return
 
@@ -1108,7 +1205,10 @@ async def set_language(call: types.CallbackQuery, state: FSMContext):
         await call.message.edit_text(t(lang, "lang_set"))
     except Exception:
         pass
-    await call.message.answer(t(lang, "menu"), reply_markup=main_menu(lang))
+    await call.message.answer(
+        t(lang, "menu"),
+        reply_markup=main_menu(lang, registered=bool(prof.get("phone"))),
+    )
     await call.answer()
 
 
@@ -1179,9 +1279,22 @@ async def get_region(message: types.Message, state: FSMContext):
 
     await message.answer(
         t(lang, "register_success", shop=shop_label(lang)),
-        reply_markup=main_menu(lang), parse_mode="HTML",
+        reply_markup=main_menu(lang, registered=True), parse_mode="HTML",
     )
     await state.clear()
+
+
+@dp.message(F.text.in_(REGISTER_BUTTONS))
+async def register_button_handler(message: types.Message, state: FSMContext):
+    """Ixtiyoriy ro'yxatdan o'tishni boshlaydi (mijoz o'zi xohlasa).
+
+    Browse-first oqimida ro'yxatdan o'tish MAJBURIY emas; bu tugma faqat
+    keyingi buyurtmalarni tezlashtirishni istagan mijozlar uchun.
+    """
+    lang = await get_user_lang(message.from_user.id)
+    await state.update_data(lang=lang)
+    await message.answer(t(lang, "register_intro"), reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
+    await state.set_state(Register.name)
 
 
 @dp.message(F.text.in_(LANG_BUTTONS))
@@ -1216,7 +1329,19 @@ async def interaktiv_menyu_handler(message: types.Message):
 @dp.message(F.text.in_(CONTACT_BUTTONS))
 async def contact_handler(message: types.Message):
     lang = await get_user_lang(message.from_user.id)
-    await message.answer(t(lang, "contact_info"), parse_mode="HTML")
+    text = t(lang, "contact_info",
+             shop=esc(SHOP_NAME), admin=esc(SHOP_ADMIN), phone=esc(SHOP_PHONE),
+             tg=esc(SHOP_TELEGRAM), address=esc(shop_address(lang)), hours=esc(shop_hours(lang)))
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=t(lang, "contact_map_btn"), url=shop_map_url())]])
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+    # Koordinatalar sozlangan bo'lsa — xaritada jonli lokatsiya nuqtasini ham yuboramiz.
+    if SHOP_LAT and SHOP_LNG:
+        try:
+            await message.answer_location(latitude=float(SHOP_LAT), longitude=float(SHOP_LNG))
+        except Exception as e:
+            logging.error(f"Lokatsiya yuborish xatosi: {e}")
 
 
 @dp.message(Command("storis", "kategoriyalar"))
@@ -1256,8 +1381,20 @@ async def handle_webapp_data(message: types.Message):
             }.get(new_status)
             if mijozga_xabar and uid and str(uid) != "Noma'lum":
                 try:
+                    # Markaziy buyurtmadan jami summani olib, xabarni boyitamiz.
+                    detail = ""
+                    try:
+                        central = await firebase_get(f"orders/{uid}_{order_id}")
+                        if isinstance(central, dict) and central.get("total"):
+                            total_txt = f"{int(float(central['total'])):,}".replace(",", " ")
+                            detail = f"\n\n💰 Jami: {total_txt} so'm"
+                    except Exception:
+                        pass
                     cust_lang = await get_user_lang(int(uid))
-                    await bot.send_message(chat_id=int(uid), text=t(cust_lang, mijozga_xabar))
+                    await bot.send_message(
+                        chat_id=int(uid),
+                        text=t(cust_lang, mijozga_xabar, code=order_id, detail=detail),
+                    )
                 except Exception as e:
                     logging.error(f"Mijozga xabar xatosi: {e}")
     except Exception as e:
@@ -1339,10 +1476,98 @@ async def handle_stories(message: types.Message, bot: Bot):
 
 @dp.message(F.photo)
 async def handle_photo_redirect(message: types.Message):
-    lang = await get_user_lang(message.from_user.id)
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+    """Mijoz yuborgan zapchast rasmini AI vision bilan FAOL tahlil qiladi.
+
+    Passiv 'rasm uchun rahmat' o'rniga: rasmga qarab qismni aniqlaydi, kerak
+    bo'lsa aniqlovchi savol beradi va do'kon bazasidan mos tovarlarni topib
+    taklif qiladi. Token sirqib chiqmasligi uchun rasm Worker /media proxy
+    orqali Groq vision modeliga uzatiladi.
+    """
+    user_id = message.from_user.id
+    lang = await get_user_lang(user_id)
+    shop_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
-    await message.reply(t(lang, "photo_thanks"), reply_markup=kb)
+
+    # AI o'chirilgan bo'lsa — xushmuomala fallback (eski quruq 'rahmat' emas)
+    if groq_client is None:
+        await message.reply(t(lang, "photo_vision_failed"), reply_markup=shop_kb)
+        return
+
+    try:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        notice = await message.reply(t(lang, "photo_analyzing"))
+
+        file_id = message.photo[-1].file_id
+        image_url = f"{WORKER_URL}/media?id={urllib.parse.quote(file_id)}"
+
+        lang_name = "rus" if lang == "ru" else "o'zbek"
+        vision_prompt = (
+            "Sen 'Avto_A1' avto-ehtiyot qismlar do'konining tajribali ustasisan. "
+            "Mijoz avto-zapchast rasmini yubordi.\n\n"
+            "VAZIFA:\n"
+            f"1. Rasmga qarab bu qanday zapchast ekanini ANIQLA va {lang_name} tilida QISQA (1-2 gap) ayt.\n"
+            "2. Aniq tavsiya uchun zarur bo'lsa, qaysi mashina/yil ekanini 1 ta savol bilan SO'RA.\n"
+            "3. Samimiy, ishonchli usta ohangi (robotdek emas), ortiqcha gapsiz.\n"
+            "4. Rasmda zapchast bo'lmasa yoki tanib bo'lmasa — buni xushmuomala ayt va aniqlik so'ra.\n"
+            "5. Javob OXIRIGA, bazadan qidirish uchun zapchast nomini SHU formatda yoz: [QIDIRUV: <nom>]"
+        )
+        vision_msgs = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": vision_prompt},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ],
+        }]
+        reply = await groq_chat(vision_msgs, model=GROQ_VISION_MODEL, temperature=0.4)
+
+        try:
+            await notice.delete()
+        except Exception:
+            pass
+
+        if not reply:
+            await message.reply(t(lang, "photo_vision_failed"), reply_markup=shop_kb)
+            return
+
+        # [QIDIRUV: ...] kalit so'zni ajratamiz va mijozga ko'rinadigan matndan olib tashlaymiz
+        search_term = ""
+        m = re.search(r"\[QIDIRUV:\s*(.+?)\]", reply, re.IGNORECASE)
+        if m:
+            search_term = m.group(1).strip()
+            reply = re.sub(r"\[QIDIRUV:\s*.+?\]", "", reply, flags=re.IGNORECASE).strip()
+
+        # Bazadan HAQIQATAN mos tovarlarni topamiz (omborda borlarini oldinga).
+        matches_text = ""
+        q_tokens = [tok for tok in re.split(r"\W+", _norm(search_term)) if len(tok) >= 3]
+        if q_tokens:
+            try:
+                products = await firebase_get("products")
+                relevant = _select_relevant_products(products, search_term, limit=8)
+
+                def _really_matches(p):
+                    blob = " ".join(_product_haystack(p).values())
+                    return any(tok in blob for tok in q_tokens)
+
+                relevant = [p for p in relevant if _really_matches(p)]
+                relevant.sort(key=lambda p: 0 if _in_stock(p) else 1)
+
+                lines = []
+                for p in relevant[:3]:
+                    try:
+                        price = int(float(p.get("price", 0)))
+                    except (TypeError, ValueError):
+                        price = 0
+                    price_txt = f"{price:,}".replace(",", " ")
+                    lines.append(f"• {esc(p.get('name', ''))} — {price_txt} so'm")
+                if lines:
+                    matches_text = "\n\n<b>" + esc(t(lang, "photo_found_intro")) + "</b>\n" + "\n".join(lines)
+            except Exception as e:
+                logging.error(f"Rasm bo'yicha tovar qidirish xatosi: {e}")
+
+        await message.reply(esc(reply) + matches_text, reply_markup=shop_kb, parse_mode="HTML")
+    except Exception as e:
+        logging.error(f"Rasm tahlili xatosi: {e}")
+        await message.reply(t(lang, "photo_vision_failed"), reply_markup=shop_kb)
 
 
 @dp.message(F.text)
@@ -1367,8 +1592,8 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
                             "Aniq zapchast yoki narx so'ralsa, do'konda bor-yo'qligini ko'rish uchun: "
                             "'Pastdagi tugmani bosib onlayn do'konimizdan qidiring' de. "
                             "Hech qachon ochiq link yozma. "
-                            "Manzil: Samarqand yangi zapchast bozor, 19-sektor, 2-do'kon. "
-                            "Tel: +998(88)289-30-30")
+                            f"Manzil: {SHOP_ADDRESS}. "
+                            f"Tel: {SHOP_PHONE}")
             }]
         ai_sessions[user_id].append({"role": "user", "content": message.text})
 
