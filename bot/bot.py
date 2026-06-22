@@ -129,12 +129,15 @@ SUPPORTED_LANGS = ("uz", "ru")
 # Menyu tugmalari (handlerlarda set bilan solishtiriladi — eski o'zbekcha
 # matnlar ham ishlashda davom etadi, ya'ni mavjud klaviaturalar buzilmaydi).
 BTN = {
-    "uz": {"shop": "Do'konga marhamat", "contact": "Biz bilan bog'lanish", "lang": "🌐 Til / Язык"},
-    "ru": {"shop": "В магазин", "contact": "Связаться с нами", "lang": "🌐 Til / Язык"},
+    "uz": {"shop": "Do'konga marhamat", "contact": "Biz bilan bog'lanish", "lang": "🌐 Til / Язык",
+           "register": "📱 Tez buyurtma uchun ro'yxatdan o'tish"},
+    "ru": {"shop": "В магазин", "contact": "Связаться с нами", "lang": "🌐 Til / Язык",
+           "register": "📱 Регистрация для быстрого заказа"},
 }
 SHOP_BUTTONS = {BTN["uz"]["shop"], BTN["ru"]["shop"]}
 CONTACT_BUTTONS = {BTN["uz"]["contact"], BTN["ru"]["contact"]}
 LANG_BUTTONS = {BTN["uz"]["lang"], BTN["ru"]["lang"]}
+REGISTER_BUTTONS = {BTN["uz"]["register"], BTN["ru"]["register"]}
 
 TEXTS = {
     "uz": {
@@ -142,6 +145,12 @@ TEXTS = {
         "choose_lang": "Tilni tanlang / Выберите язык:",
         "lang_set": "Til o'zgartirildi: O'zbekcha",
         "menu": "Asosiy menyu",
+        "welcome_browse": ("Marhamat, <b>{shop}</b> tugmasini bosib do'konni bemalol ko'ring. 🛍\n\n"
+                           "Ro'yxatdan o'tishingiz <b>shart emas</b> — buyurtma berishda telefon "
+                           "raqamingizni bir marta so'raymiz, xolos.\n\n"
+                           "<i>Istasangiz, pastdagi tugma orqali oldindan ro'yxatdan o'tib, keyingi "
+                           "buyurtmalarni tezroq berishingiz mumkin.</i>"),
+        "register_intro": "<b>Ismingizni kiriting:</b>",
         "ask_name": "<b>Ismingizni kiriting:</b>",
         "ask_phone": "<b>Telefon raqamingizni yuboring:</b>",
         "phone_invalid": ("Raqam noto'g'ri ko'rinishda kiritildi.\n\n"
@@ -171,6 +180,12 @@ TEXTS = {
         "choose_lang": "Tilni tanlang / Выберите язык:",
         "lang_set": "Язык изменён: Русский",
         "menu": "Главное меню",
+        "welcome_browse": ("Нажмите кнопку <b>{shop}</b> и спокойно смотрите магазин. 🛍\n\n"
+                           "Регистрация <b>не обязательна</b> — мы лишь один раз спросим ваш номер "
+                           "телефона при оформлении заказа.\n\n"
+                           "<i>При желании можно зарегистрироваться заранее по кнопке ниже, чтобы "
+                           "следующие заказы оформлялись быстрее.</i>"),
+        "register_intro": "<b>Введите ваше имя:</b>",
         "ask_name": "<b>Введите ваше имя:</b>",
         "ask_phone": "<b>Отправьте ваш номер телефона:</b>",
         "phone_invalid": ("Номер введён неверно.\n\n"
@@ -1015,15 +1030,20 @@ def normalize_phone(text):
 # =====================================================================
 # MENYULAR
 # =====================================================================
-def main_menu(lang=DEFAULT_LANG):
-    """Til bo'yicha asosiy menyu (do'kon / aloqa / til almashtirish)."""
+def main_menu(lang=DEFAULT_LANG, registered=True):
+    """Til bo'yicha asosiy menyu (do'kon / aloqa / til almashtirish).
+
+    registered=False bo'lsa (telefon hali yo'q) — ixtiyoriy 'ro'yxatdan o'tish'
+    tugmasi ham qo'shiladi. Ro'yxatdan o'tish MAJBURIY emas: mijoz do'konni
+    bemalol ko'radi, telefon faqat buyurtma berishda so'raladi.
+    """
     b = BTN.get(lang, BTN[DEFAULT_LANG])
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=b["shop"])],
-                  [KeyboardButton(text=b["contact"])],
-                  [KeyboardButton(text=b["lang"])]],
-        resize_keyboard=True,
-    )
+    rows = [[KeyboardButton(text=b["shop"])]]
+    if not registered:
+        rows.append([KeyboardButton(text=b["register"])])
+    rows.append([KeyboardButton(text=b["contact"])])
+    rows.append([KeyboardButton(text=b["lang"])])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
 def phone_kb(lang=DEFAULT_LANG):
@@ -1061,18 +1081,28 @@ viloyatlar_menyu = ReplyKeyboardMarkup(
 # =====================================================================
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
+    await state.clear()
     user_id = message.from_user.id
     existing_user = await firebase_get(f"users/{user_id}/profile")
-    if existing_user and existing_user.get("phone"):
+    if existing_user and existing_user.get("lang"):
         users_db[user_id] = existing_user
         lang = existing_user.get("lang", DEFAULT_LANG)
-        name = existing_user.get("name", message.from_user.first_name)
-        await message.answer(
-            t(lang, "welcome_back", name=esc(name), shop=shop_label(lang)),
-            reply_markup=main_menu(lang), parse_mode="HTML",
-        )
+        has_phone = bool(existing_user.get("phone"))
+        if has_phone:
+            name = existing_user.get("name", message.from_user.first_name)
+            await message.answer(
+                t(lang, "welcome_back", name=esc(name), shop=shop_label(lang)),
+                reply_markup=main_menu(lang, registered=True), parse_mode="HTML",
+            )
+        else:
+            # Tili ma'lum, lekin telefon yo'q — qayta til so'ramaymiz, bemalol ko'rsin.
+            await message.answer(
+                t(lang, "welcome_browse", shop=shop_label(lang)),
+                reply_markup=main_menu(lang, registered=False), parse_mode="HTML",
+            )
     else:
-        # Yangi foydalanuvchi: avval tilni so'raymiz, keyin ro'yxatdan o'tkazamiz.
+        # Yangi foydalanuvchi: faqat tilni so'raymiz, keyin do'konni BEMALOL ko'rsin
+        # (majburiy ro'yxatdan o'tish yo'q — telefon buyurtmada so'raladi).
         await message.answer(t(DEFAULT_LANG, "welcome_new"), reply_markup=ReplyKeyboardRemove())
         await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb())
         await state.set_state(Register.lang)
@@ -1089,11 +1119,25 @@ async def set_language(call: types.CallbackQuery, state: FSMContext):
     if lang not in SUPPORTED_LANGS:
         lang = DEFAULT_LANG
 
-    # 1-holat: yangi foydalanuvchi ro'yxatdan o'tish boshida til tanladi
+    # 1-holat: yangi foydalanuvchi ro'yxatdan o'tish boshida til tanladi.
+    # Endi MAJBURIY ism/telefon so'ramaymiz — tilni saqlaymiz va do'konni bemalol
+    # ko'rishi uchun asosiy menyuni ochamiz (browse-first). Telefon buyurtmada so'raladi.
     if await state.get_state() == Register.lang.state:
-        await state.update_data(lang=lang)
-        await state.set_state(Register.name)
-        await call.message.edit_text(t(lang, "ask_name"), parse_mode="HTML")
+        await state.clear()
+        user_id = call.from_user.id
+        prof = users_db.get(user_id) or {}
+        prof["lang"] = lang
+        users_db[user_id] = prof
+        # Tilni darhol profilga yozamiz — keyingi /start da qayta so'ralmaydi.
+        await firebase_patch(f"users/{user_id}/profile", {"lang": lang})
+        try:
+            await call.message.edit_text(t(lang, "lang_set"))
+        except Exception:
+            pass
+        await call.message.answer(
+            t(lang, "welcome_browse", shop=shop_label(lang)),
+            reply_markup=main_menu(lang, registered=False), parse_mode="HTML",
+        )
         await call.answer()
         return
 
@@ -1107,7 +1151,10 @@ async def set_language(call: types.CallbackQuery, state: FSMContext):
         await call.message.edit_text(t(lang, "lang_set"))
     except Exception:
         pass
-    await call.message.answer(t(lang, "menu"), reply_markup=main_menu(lang))
+    await call.message.answer(
+        t(lang, "menu"),
+        reply_markup=main_menu(lang, registered=bool(prof.get("phone"))),
+    )
     await call.answer()
 
 
@@ -1178,9 +1225,22 @@ async def get_region(message: types.Message, state: FSMContext):
 
     await message.answer(
         t(lang, "register_success", shop=shop_label(lang)),
-        reply_markup=main_menu(lang), parse_mode="HTML",
+        reply_markup=main_menu(lang, registered=True), parse_mode="HTML",
     )
     await state.clear()
+
+
+@dp.message(F.text.in_(REGISTER_BUTTONS))
+async def register_button_handler(message: types.Message, state: FSMContext):
+    """Ixtiyoriy ro'yxatdan o'tishni boshlaydi (mijoz o'zi xohlasa).
+
+    Browse-first oqimida ro'yxatdan o'tish MAJBURIY emas; bu tugma faqat
+    keyingi buyurtmalarni tezlashtirishni istagan mijozlar uchun.
+    """
+    lang = await get_user_lang(message.from_user.id)
+    await state.update_data(lang=lang)
+    await message.answer(t(lang, "register_intro"), reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
+    await state.set_state(Register.name)
 
 
 @dp.message(F.text.in_(LANG_BUTTONS))
