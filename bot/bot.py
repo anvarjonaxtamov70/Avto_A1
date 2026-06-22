@@ -159,6 +159,10 @@ TEXTS = {
                          "Telefon: +998 88 289 30 30\n"
                          "Telegram: @anvaraxtamov2004"),
         "photo_thanks": "Rasm uchun rahmat!\n\nZapchastlarni ko'rish uchun do'konni oching.",
+        "photo_analyzing": "Rasmni ko'rib chiqyapman... 🔎",
+        "photo_found_intro": "Bizda shunga mos keladigan(lar):",
+        "photo_vision_failed": ("Rasmni oldim! Bu qaysi mashinaning qaysi qismi ekanini ayting — "
+                                "darrov topib beraman. 🔧"),
         "ai_busy": "Kechirasiz, hozir bandman. Birozdan keyin yozing.",
         "phone_send": "Raqamni yuborish",
         "order_qabul": "Buyurtmangiz qabul qilindi!",
@@ -188,6 +192,10 @@ TEXTS = {
                          "Телефон: +998 88 289 30 30\n"
                          "Telegram: @anvaraxtamov2004"),
         "photo_thanks": "Спасибо за фото!\n\nОткройте магазин, чтобы посмотреть запчасти.",
+        "photo_analyzing": "Смотрю фото... 🔎",
+        "photo_found_intro": "У нас есть подходящее:",
+        "photo_vision_failed": ("Получил фото! Подскажите, от какой машины эта деталь — "
+                                "сразу найду для вас. 🔧"),
         "ai_busy": "Извините, сейчас я занят. Напишите чуть позже.",
         "phone_send": "Отправить номер",
         "order_qabul": "Ваш заказ принят!",
@@ -1338,10 +1346,98 @@ async def handle_stories(message: types.Message, bot: Bot):
 
 @dp.message(F.photo)
 async def handle_photo_redirect(message: types.Message):
-    lang = await get_user_lang(message.from_user.id)
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+    """Mijoz yuborgan zapchast rasmini AI vision bilan FAOL tahlil qiladi.
+
+    Passiv 'rasm uchun rahmat' o'rniga: rasmga qarab qismni aniqlaydi, kerak
+    bo'lsa aniqlovchi savol beradi va do'kon bazasidan mos tovarlarni topib
+    taklif qiladi. Token sirqib chiqmasligi uchun rasm Worker /media proxy
+    orqali Groq vision modeliga uzatiladi.
+    """
+    user_id = message.from_user.id
+    lang = await get_user_lang(user_id)
+    shop_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
-    await message.reply(t(lang, "photo_thanks"), reply_markup=kb)
+
+    # AI o'chirilgan bo'lsa — xushmuomala fallback (eski quruq 'rahmat' emas)
+    if groq_client is None:
+        await message.reply(t(lang, "photo_vision_failed"), reply_markup=shop_kb)
+        return
+
+    try:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        notice = await message.reply(t(lang, "photo_analyzing"))
+
+        file_id = message.photo[-1].file_id
+        image_url = f"{WORKER_URL}/media?id={urllib.parse.quote(file_id)}"
+
+        lang_name = "rus" if lang == "ru" else "o'zbek"
+        vision_prompt = (
+            "Sen 'Avto_A1' avto-ehtiyot qismlar do'konining tajribali ustasisan. "
+            "Mijoz avto-zapchast rasmini yubordi.\n\n"
+            "VAZIFA:\n"
+            f"1. Rasmga qarab bu qanday zapchast ekanini ANIQLA va {lang_name} tilida QISQA (1-2 gap) ayt.\n"
+            "2. Aniq tavsiya uchun zarur bo'lsa, qaysi mashina/yil ekanini 1 ta savol bilan SO'RA.\n"
+            "3. Samimiy, ishonchli usta ohangi (robotdek emas), ortiqcha gapsiz.\n"
+            "4. Rasmda zapchast bo'lmasa yoki tanib bo'lmasa — buni xushmuomala ayt va aniqlik so'ra.\n"
+            "5. Javob OXIRIGA, bazadan qidirish uchun zapchast nomini SHU formatda yoz: [QIDIRUV: <nom>]"
+        )
+        vision_msgs = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": vision_prompt},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ],
+        }]
+        reply = await groq_chat(vision_msgs, model=GROQ_VISION_MODEL, temperature=0.4)
+
+        try:
+            await notice.delete()
+        except Exception:
+            pass
+
+        if not reply:
+            await message.reply(t(lang, "photo_vision_failed"), reply_markup=shop_kb)
+            return
+
+        # [QIDIRUV: ...] kalit so'zni ajratamiz va mijozga ko'rinadigan matndan olib tashlaymiz
+        search_term = ""
+        m = re.search(r"\[QIDIRUV:\s*(.+?)\]", reply, re.IGNORECASE)
+        if m:
+            search_term = m.group(1).strip()
+            reply = re.sub(r"\[QIDIRUV:\s*.+?\]", "", reply, flags=re.IGNORECASE).strip()
+
+        # Bazadan HAQIQATAN mos tovarlarni topamiz (omborda borlarini oldinga).
+        matches_text = ""
+        q_tokens = [tok for tok in re.split(r"\W+", _norm(search_term)) if len(tok) >= 3]
+        if q_tokens:
+            try:
+                products = await firebase_get("products")
+                relevant = _select_relevant_products(products, search_term, limit=8)
+
+                def _really_matches(p):
+                    blob = " ".join(_product_haystack(p).values())
+                    return any(tok in blob for tok in q_tokens)
+
+                relevant = [p for p in relevant if _really_matches(p)]
+                relevant.sort(key=lambda p: 0 if _in_stock(p) else 1)
+
+                lines = []
+                for p in relevant[:3]:
+                    try:
+                        price = int(float(p.get("price", 0)))
+                    except (TypeError, ValueError):
+                        price = 0
+                    price_txt = f"{price:,}".replace(",", " ")
+                    lines.append(f"• {esc(p.get('name', ''))} — {price_txt} so'm")
+                if lines:
+                    matches_text = "\n\n<b>" + esc(t(lang, "photo_found_intro")) + "</b>\n" + "\n".join(lines)
+            except Exception as e:
+                logging.error(f"Rasm bo'yicha tovar qidirish xatosi: {e}")
+
+        await message.reply(esc(reply) + matches_text, reply_markup=shop_kb, parse_mode="HTML")
+    except Exception as e:
+        logging.error(f"Rasm tahlili xatosi: {e}")
+        await message.reply(t(lang, "photo_vision_failed"), reply_markup=shop_kb)
 
 
 @dp.message(F.text)
