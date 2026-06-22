@@ -7125,6 +7125,32 @@ const Haptics = {
         } catch (e) {}
     };
 
+    // 🧾 Buyurtma tarkibini chiroyli matn qilib beradi (mijozga ketadigan xabarlar uchun).
+    // itemsMap: { "baseId||carOpt": qty }. Nom/narx productsDB dan olinadi; tovar
+    // o'chirilgan bo'lsa ham buyurtma yiqilmaydi (qatorsiz o'tib ketadi).
+    window._orderItemsSummary = function (itemsMap) {
+        var lines = "";
+        var total = 0;
+        try {
+            var pdb = window.productsDB || [];
+            for (var fullId in (itemsMap || {})) {
+                var parts = String(fullId).split('||');
+                var baseId = parts[0];
+                var carOpt = parts[1];
+                var qty = itemsMap[fullId] || 0;
+                var p = pdb.find(function (x) { return x.id == baseId; });
+                var price = p ? (p.price || 0) : 0;
+                var sum = price * qty;
+                total += sum;
+                if (!p) continue; // nomi noma'lum tovarni qatorga qo'shmaymiz
+                var nm = p.name;
+                if (carOpt && carOpt !== "Universal" && carOpt !== "undefined") nm += ' (' + carOpt + ')';
+                lines += "\n\u25AA\uFE0F " + nm + " \u2014 " + qty + " x " + price.toLocaleString() + " = " + sum.toLocaleString() + " so'm";
+            }
+        } catch (e) {}
+        return { lines: lines, total: total };
+    };
+
     // #6: admin panelda stats/orders/customers ketma-ket ochilganda butun users
     // daraxtini qayta-qayta yuklamaslik uchun qisqa muddatli umumiy kesh.
     // Yozuvlardan keyin (holat o'zgartirish) _invalidateUsersCache() chaqiriladi.
@@ -8341,7 +8367,11 @@ window.clearAppCache = () => {
                     tgProxySend({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" });
                 }
                 if(currentUser) { 
-                    tgProxySend({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!\n💳 To'lov turi: ${paymentMethod}` }); 
+                    var _cSum = window._orderItemsSummary(savedItems);
+                    var _cDetail = _cSum.lines
+                        ? ("\n\n🛒 Buyurtma tarkibi:" + _cSum.lines + "\n\n💰 Jami: " + total.toLocaleString() + " so'm")
+                        : ("\n\n💰 Jami: " + total.toLocaleString() + " so'm");
+                    tgProxySend({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!${_cDetail}\n💳 To'lov turi: ${paymentMethod}\n\n🙏 Rahmat! Holat o'zgarganda sizga shu yerda xabar beramiz.` }); 
                 }
                 myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
                 saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge();
@@ -8752,18 +8782,25 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                             let statusText = "";
                             let mijozMsg = "";
 
+                            // 🧾 Buyurtma tarkibi + jami summa (mijoz xabarini boyitadi)
+                            let _sum = window._orderItemsSummary(userOrders[idx].items || {});
+                            let _ordTotal = userOrders[idx].total || _sum.total;
+                            let _detail = _sum.lines
+                                ? ("\n\n🛒 Buyurtma tarkibi:" + _sum.lines + "\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm")
+                                : (_ordTotal ? ("\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm") : "");
+
                             if (newStatus === "qabul") {
                                 statusText = "✅ QABUL QILINDI";
-                                mijozMsg = `✅ #${displayCode} raqamli buyurtmangiz qabul qilindi va yig'ilmoqda!`;
+                                mijozMsg = `✅ #${displayCode} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!${_detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.`;
                             } else if (newStatus === "yolda") {
                                 statusText = "🚚 YO'LGA CHIQDI";
-                                mijozMsg = `🚚 #${displayCode} raqamli buyurtmangiz yo'lga chiqdi! Kuting.`;
+                                mijozMsg = `🚚 #${displayCode} raqamli buyurtmangiz yo'lga chiqdi!${_detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.`;
                             } else if (newStatus === "yetkazildi") {
                                 statusText = "🏁 YETKAZIB BERILDI";
-                                mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz muvaffaqiyatli yetkazib berildi. Xaridingiz uchun rahmat!`;
+                                mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz yetkazib berildi.${_detail}\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.`;
                             } else if (newStatus === "bekor_qilingan") {
                                 statusText = "❌ BEKOR QILINDI";
-                                mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi. Batafsil ma'lumot olish uchun admin bilan bog'laning.`;
+                                mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30`;
                             }
 
                             // ADMINGA SMS DA HAM QISQA KOD ISHLATILADI
