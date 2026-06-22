@@ -105,6 +105,45 @@ if not API_TOKEN:
 groq_client = AsyncGroq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 
+# =====================================================================
+# DO'KON MA'LUMOTLARI — BITTA MANBA (single source of truth)
+#   - Aloqa xabari (contact_info), AI promptlari va lokatsiya shu qiymatlardan
+#     oziqlanadi. Shunda mijoz har joyda BIR XIL, izchil ma'lumot ko'radi
+#     (ilgari manzil AI promptida bor, aloqada yo'q edi — ziddiyat).
+#   - Hammasi .env orqali o'zgartiriladi (kodga tegmasdan).
+# =====================================================================
+SHOP_NAME = os.getenv("SHOP_NAME", "Avto_A1")
+SHOP_ADMIN = os.getenv("SHOP_ADMIN", "Anvar")
+SHOP_PHONE = os.getenv("SHOP_PHONE", "+998 88 289 30 30")
+SHOP_TELEGRAM = os.getenv("SHOP_TELEGRAM", "@anvaraxtamov2004")
+SHOP_ADDRESS = os.getenv("SHOP_ADDRESS", "Samarqand, yangi zapchast bozori, 19-sektor, 2-do'kon")
+SHOP_ADDRESS_RU = os.getenv("SHOP_ADDRESS_RU", "Самарканд, новый рынок автозапчастей, сектор 19, магазин 2")
+SHOP_HOURS = os.getenv("SHOP_HOURS", "Har kuni 09:00–19:00")
+SHOP_HOURS_RU = os.getenv("SHOP_HOURS_RU", "Ежедневно 09:00–19:00")
+# Lokatsiya pin (ixtiyoriy): koordinatalar berilsa, aloqa bo'limida xarita
+# nuqtasi (jonli location) ham yuboriladi.
+SHOP_LAT = os.getenv("SHOP_LAT", "")
+SHOP_LNG = os.getenv("SHOP_LNG", "")
+# Xaritadagi aniq joy havolasi (ixtiyoriy). Bo'lmasa — manzil bo'yicha
+# Google Maps qidiruv havolasi avtomatik yasaladi.
+SHOP_MAP_URL = os.getenv("SHOP_MAP_URL", "")
+
+
+def shop_address(lang="uz"):
+    return SHOP_ADDRESS_RU if lang == "ru" else SHOP_ADDRESS
+
+
+def shop_hours(lang="uz"):
+    return SHOP_HOURS_RU if lang == "ru" else SHOP_HOURS
+
+
+def shop_map_url():
+    """Do'kon manzili uchun xarita havolasi (sozlangan bo'lsa — aniq joy)."""
+    if SHOP_MAP_URL:
+        return SHOP_MAP_URL
+    return "https://maps.google.com/?q=" + urllib.parse.quote(SHOP_ADDRESS)
+
+
 def esc(v):
     """Telegram parse_mode='HTML' xabarlari uchun foydalanuvchi matnini
     xavfsizlashtiradi (& < > belgilarini almashtiradi).
@@ -154,10 +193,13 @@ TEXTS = {
                          "Pastdagi <b>{shop}</b> tugmasini bosing."),
         "shop_prompt": "Buyurtma berish uchun do'konni oching:",
         "shop_btn_inline": "Barcha zapchastlar",
-        "contact_info": ("<b>Avto_A1 bilan bog'lanish:</b>\n\n"
-                         "Admin: Anvar\n"
-                         "Telefon: +998 88 289 30 30\n"
-                         "Telegram: @anvaraxtamov2004"),
+        "contact_info": ("<b>{shop} bilan bog'lanish</b>\n\n"
+                         "👤 Admin: {admin}\n"
+                         "📞 Telefon: {phone}\n"
+                         "💬 Telegram: {tg}\n"
+                         "📍 Manzil: {address}\n"
+                         "🕒 Ish vaqti: {hours}"),
+        "contact_map_btn": "📍 Xaritada ko'rish",
         "photo_thanks": "Rasm uchun rahmat!\n\nZapchastlarni ko'rish uchun do'konni oching.",
         "ai_busy": "Kechirasiz, hozir bandman. Birozdan keyin yozing.",
         "phone_send": "Raqamni yuborish",
@@ -183,10 +225,13 @@ TEXTS = {
                          "Нажмите кнопку <b>{shop}</b> ниже."),
         "shop_prompt": "Откройте магазин, чтобы оформить заказ:",
         "shop_btn_inline": "Все запчасти",
-        "contact_info": ("<b>Связаться с Avto_A1:</b>\n\n"
-                         "Админ: Анвар\n"
-                         "Телефон: +998 88 289 30 30\n"
-                         "Telegram: @anvaraxtamov2004"),
+        "contact_info": ("<b>Связь с {shop}</b>\n\n"
+                         "👤 Админ: {admin}\n"
+                         "📞 Телефон: {phone}\n"
+                         "💬 Telegram: {tg}\n"
+                         "📍 Адрес: {address}\n"
+                         "🕒 Время работы: {hours}"),
+        "contact_map_btn": "📍 Открыть на карте",
         "photo_thanks": "Спасибо за фото!\n\nОткройте магазин, чтобы посмотреть запчасти.",
         "ai_busy": "Извините, сейчас я занят. Напишите чуть позже.",
         "phone_send": "Отправить номер",
@@ -599,7 +644,7 @@ async def process_mini_app_ai():
                                 "tavsiya berishdan oldin 1 ta ANIQ savol ber.\n"
                                 "4. Imkon bo'lsa to'ldiruvchi qismni ham taklif qil (mas. kolodka so'rasa — disk/datchik).\n"
                                 "5. Bazada bo'lmasa: qisqa uzr + qaysi mashinaga kerakligini so'ra yoki "
-                                "+998(88)289-30-30 raqamiga yo'naltir.\n\n"
+                                f"{SHOP_PHONE} raqamiga yo'naltir.\n\n"
                                 "CHEKLOV: faqat BAZAdagi tovarlarni tavsiya qil, narxni o'zing to'qima, "
                                 "ochiq havola yozma.\n\n"
                                 f"DO'KON BAZASI (mavjud tovarlar):\n{prod_context}"
@@ -1215,7 +1260,19 @@ async def interaktiv_menyu_handler(message: types.Message):
 @dp.message(F.text.in_(CONTACT_BUTTONS))
 async def contact_handler(message: types.Message):
     lang = await get_user_lang(message.from_user.id)
-    await message.answer(t(lang, "contact_info"), parse_mode="HTML")
+    text = t(lang, "contact_info",
+             shop=esc(SHOP_NAME), admin=esc(SHOP_ADMIN), phone=esc(SHOP_PHONE),
+             tg=esc(SHOP_TELEGRAM), address=esc(shop_address(lang)), hours=esc(shop_hours(lang)))
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=t(lang, "contact_map_btn"), url=shop_map_url())]])
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+    # Koordinatalar sozlangan bo'lsa — xaritada jonli lokatsiya nuqtasini ham yuboramiz.
+    if SHOP_LAT and SHOP_LNG:
+        try:
+            await message.answer_location(latitude=float(SHOP_LAT), longitude=float(SHOP_LNG))
+        except Exception as e:
+            logging.error(f"Lokatsiya yuborish xatosi: {e}")
 
 
 @dp.message(Command("storis", "kategoriyalar"))
@@ -1365,8 +1422,8 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
                             "Aniq zapchast yoki narx so'ralsa, do'konda bor-yo'qligini ko'rish uchun: "
                             "'Pastdagi tugmani bosib onlayn do'konimizdan qidiring' de. "
                             "Hech qachon ochiq link yozma. "
-                            "Manzil: Samarqand yangi zapchast bozor, 19-sektor, 2-do'kon. "
-                            "Tel: +998(88)289-30-30")
+                            f"Manzil: {SHOP_ADDRESS}. "
+                            f"Tel: {SHOP_PHONE}")
             }]
         ai_sessions[user_id].append({"role": "user", "content": message.text})
 
