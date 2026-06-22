@@ -2430,6 +2430,72 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         }
         .chat-user .chat-time { color: rgba(0,0,0,0.6); }
 
+        /* ================================================= */
+        /* 🧾 BUYURTMA TAFSILOTI — TOVARLAR RO'YXATI (RASMLI) */
+        /* ================================================= */
+        .od-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+        .od-item:last-child { border-bottom: none; }
+        .od-item-img {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .od-item-info {
+            flex: 1;
+            min-width: 0; /* matn truncate ishlashi uchun */
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .od-item-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main, #fff);
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .od-item-name .od-car-opt {
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-muted, #999);
+            margin-left: 4px;
+        }
+        .od-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        .od-item-qty {
+            color: var(--text-muted, #999);
+            font-weight: 500;
+        }
+        .od-item-price {
+            color: var(--luxury-gold, #d4af37);
+            font-weight: 700;
+        }
+        /* Yorug' rejim uchun */
+        html[data-theme="light"] .od-item {
+            border-bottom-color: rgba(120,95,40,0.10);
+        }
+        html[data-theme="light"] .od-item-img {
+            background: rgba(120,95,40,0.05);
+            border-color: rgba(120,95,40,0.12);
+        }
+
         /* Yozish maydoni */
         .chat-input-wrapper {
             display: flex;
@@ -8331,8 +8397,21 @@ window.clearAppCache = () => {
                     let [baseId, carOpt] = fullId.split('||');
                     let p = productsDB.find(x => x.id == baseId); 
                     if(p) {
-                        let dName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="font-size:10px; color:gray;">[${carOpt}]</span>` : p.name;
-                        iH += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${dName} (x${o.items[fullId]})</span><span style="color:var(--luxury-gold);">${(p.price * o.items[fullId]).toLocaleString()} so'm</span></div>`; 
+                        let carOptHTML = carOpt && carOpt !== "Universal" ? `<span class="od-car-opt">[${escHtml(carOpt)}]</span>` : '';
+                        let imgSrc = p.img || p.image || '';
+                        let imgTag = imgSrc 
+                            ? `<img class="od-item-img" src="${imgSrc}" alt="${escHtml(p.name)}" onerror="this.style.display='none'">` 
+                            : `<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-muted);">📦</div>`;
+                        iH += `<div class="od-item">
+                            ${imgTag}
+                            <div class="od-item-info">
+                                <div class="od-item-name">${escHtml(p.name)} ${carOptHTML}</div>
+                                <div class="od-item-meta">
+                                    <span class="od-item-qty">×${o.items[fullId]}</span>
+                                    <span class="od-item-price">${(p.price * o.items[fullId]).toLocaleString()} so'm</span>
+                                </div>
+                            </div>
+                        </div>`; 
                     }
                 }
         document.getElementById('od-items').innerHTML = iH; 
