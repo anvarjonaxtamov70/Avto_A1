@@ -214,7 +214,7 @@ TEXTS = {
         "photo_found_intro": "Bizda shunga mos keladigan(lar):",
         "photo_vision_failed": ("Rasmni oldim! Bu qaysi mashinaning qaysi qismi ekanini ayting — "
                                 "darrov topib beraman. 🔧"),
-        "ai_busy": "Kechirasiz, hozir bandman. Birozdan keyin yozing.",
+        "ai_busy": "Uzr, hozir biroz bandman 🙏 Bir-ikki daqiqadan so'ng qayta yozsangiz, albatta yordam beraman.",
         "phone_send": "Raqamni yuborish",
         "order_qabul": "✅ #{code} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!{detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.",
         "order_yolda": "🚚 #{code} raqamli buyurtmangiz yo'lga chiqdi!{detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.",
@@ -256,7 +256,7 @@ TEXTS = {
         "photo_found_intro": "У нас есть подходящее:",
         "photo_vision_failed": ("Получил фото! Подскажите, от какой машины эта деталь — "
                                 "сразу найду для вас. 🔧"),
-        "ai_busy": "Извините, сейчас я занят. Напишите чуть позже.",
+        "ai_busy": "Извините, сейчас немного занят 🙏 Напишите через пару минут — обязательно помогу.",
         "phone_send": "Отправить номер",
         "order_qabul": "✅ Ваш заказ #{code} принят и готовится!{detail}\n\n🙏 Скоро сообщим о следующем этапе.",
         "order_yolda": "🚚 Ваш заказ #{code} в пути!{detail}\n\n📦 Скоро доставим по адресу, держите телефон под рукой.",
@@ -685,7 +685,8 @@ async def process_mini_app_ai():
 
                         bot_reply = await groq_chat(groq_msgs, temperature=0.4)
                         if bot_reply is None:
-                            bot_reply = "Kechirasiz, hozir javob bera olmayapman. Birozdan keyin urinib ko'ring."
+                            bot_reply = ("Uzr, hozir javob bera olmayapman 🙏 Bir oz vaqtdan so'ng qayta urinib ko'ring.\n"
+                                         "Извините, сейчас не могу ответить — попробуйте чуть позже.")
 
                         found_ids = []
                         match = re.search(r"\[IDS:\s*([\d,\s]+)\]", bot_reply)
@@ -1579,6 +1580,7 @@ async def handle_photo_redirect(message: types.Message):
 async def handle_ai_chat(message: types.Message, state: FSMContext):
     if await state.get_state() is not None:
         return
+    lang = DEFAULT_LANG
     try:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         user_id = message.from_user.id
@@ -1615,7 +1617,7 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         await message.reply(bot_reply, reply_markup=kb)
     except Exception as e:
         logging.error(f"AI chat xatosi: {e}")
-        await message.reply(t(DEFAULT_LANG, "ai_busy"))
+        await message.reply(t(lang, "ai_busy"))
 
 
 # =====================================================================
