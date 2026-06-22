@@ -161,10 +161,10 @@ TEXTS = {
         "photo_thanks": "Rasm uchun rahmat!\n\nZapchastlarni ko'rish uchun do'konni oching.",
         "ai_busy": "Kechirasiz, hozir bandman. Birozdan keyin yozing.",
         "phone_send": "Raqamni yuborish",
-        "order_qabul": "Buyurtmangiz qabul qilindi!",
-        "order_yolda": "Buyurtmangiz yo'lga chiqdi!",
-        "order_yetkazildi": "Buyurtmangiz yetkazildi. Rahmat!",
-        "order_bekor_qilingan": "Buyurtmangiz bekor qilindi.",
+        "order_qabul": "✅ #{code} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!{detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.",
+        "order_yolda": "🚚 #{code} raqamli buyurtmangiz yo'lga chiqdi!{detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.",
+        "order_yetkazildi": "🏁 #{code} raqamli buyurtmangiz yetkazib berildi.{detail}\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.",
+        "order_bekor_qilingan": "❌ #{code} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30",
     },
     "ru": {
         "welcome_new": "Здравствуйте! Добро пожаловать в магазин Avto_A1!",
@@ -190,10 +190,10 @@ TEXTS = {
         "photo_thanks": "Спасибо за фото!\n\nОткройте магазин, чтобы посмотреть запчасти.",
         "ai_busy": "Извините, сейчас я занят. Напишите чуть позже.",
         "phone_send": "Отправить номер",
-        "order_qabul": "Ваш заказ принят!",
-        "order_yolda": "Ваш заказ в пути!",
-        "order_yetkazildi": "Ваш заказ доставлен. Спасибо!",
-        "order_bekor_qilingan": "Ваш заказ отменён.",
+        "order_qabul": "✅ Ваш заказ #{code} принят и готовится!{detail}\n\n🙏 Скоро сообщим о следующем этапе.",
+        "order_yolda": "🚚 Ваш заказ #{code} в пути!{detail}\n\n📦 Скоро доставим по адресу, держите телефон под рукой.",
+        "order_yetkazildi": "🏁 Ваш заказ #{code} доставлен.{detail}\n\n🙏 Спасибо за покупку! Ждём вас снова.",
+        "order_bekor_qilingan": "❌ Ваш заказ #{code} отменён.\n\nПо вопросам свяжитесь с нами: +998 88 289 30 30",
     },
 }
 
@@ -1255,8 +1255,20 @@ async def handle_webapp_data(message: types.Message):
             }.get(new_status)
             if mijozga_xabar and uid and str(uid) != "Noma'lum":
                 try:
+                    # Markaziy buyurtmadan jami summani olib, xabarni boyitamiz.
+                    detail = ""
+                    try:
+                        central = await firebase_get(f"orders/{uid}_{order_id}")
+                        if isinstance(central, dict) and central.get("total"):
+                            total_txt = f"{int(float(central['total'])):,}".replace(",", " ")
+                            detail = f"\n\n💰 Jami: {total_txt} so'm"
+                    except Exception:
+                        pass
                     cust_lang = await get_user_lang(int(uid))
-                    await bot.send_message(chat_id=int(uid), text=t(cust_lang, mijozga_xabar))
+                    await bot.send_message(
+                        chat_id=int(uid),
+                        text=t(cust_lang, mijozga_xabar, code=order_id, detail=detail),
+                    )
                 except Exception as e:
                     logging.error(f"Mijozga xabar xatosi: {e}")
     except Exception as e:
