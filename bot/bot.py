@@ -159,7 +159,7 @@ TEXTS = {
                          "Telefon: +998 88 289 30 30\n"
                          "Telegram: @anvaraxtamov2004"),
         "photo_thanks": "Rasm uchun rahmat!\n\nZapchastlarni ko'rish uchun do'konni oching.",
-        "ai_busy": "Kechirasiz, hozir bandman. Birozdan keyin yozing.",
+        "ai_busy": "Uzr, hozir biroz bandman 🙏 Bir-ikki daqiqadan so'ng qayta yozsangiz, albatta yordam beraman.",
         "phone_send": "Raqamni yuborish",
         "order_qabul": "Buyurtmangiz qabul qilindi!",
         "order_yolda": "Buyurtmangiz yo'lga chiqdi!",
@@ -188,7 +188,7 @@ TEXTS = {
                          "Телефон: +998 88 289 30 30\n"
                          "Telegram: @anvaraxtamov2004"),
         "photo_thanks": "Спасибо за фото!\n\nОткройте магазин, чтобы посмотреть запчасти.",
-        "ai_busy": "Извините, сейчас я занят. Напишите чуть позже.",
+        "ai_busy": "Извините, сейчас немного занят 🙏 Напишите через пару минут — обязательно помогу.",
         "phone_send": "Отправить номер",
         "order_qabul": "Ваш заказ принят!",
         "order_yolda": "Ваш заказ в пути!",
@@ -611,7 +611,8 @@ async def process_mini_app_ai():
 
                         bot_reply = await groq_chat(groq_msgs, temperature=0.4)
                         if bot_reply is None:
-                            bot_reply = "Kechirasiz, hozir javob bera olmayapman. Birozdan keyin urinib ko'ring."
+                            bot_reply = ("Uzr, hozir javob bera olmayapman 🙏 Bir oz vaqtdan so'ng qayta urinib ko'ring.\n"
+                                         "Извините, сейчас не могу ответить — попробуйте чуть позже.")
 
                         found_ids = []
                         match = re.search(r"\[IDS:\s*([\d,\s]+)\]", bot_reply)
@@ -1348,6 +1349,7 @@ async def handle_photo_redirect(message: types.Message):
 async def handle_ai_chat(message: types.Message, state: FSMContext):
     if await state.get_state() is not None:
         return
+    lang = DEFAULT_LANG
     try:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         user_id = message.from_user.id
@@ -1384,7 +1386,7 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         await message.reply(bot_reply, reply_markup=kb)
     except Exception as e:
         logging.error(f"AI chat xatosi: {e}")
-        await message.reply(t(DEFAULT_LANG, "ai_busy"))
+        await message.reply(t(lang, "ai_busy"))
 
 
 # =====================================================================
