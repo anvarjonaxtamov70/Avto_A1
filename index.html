@@ -9021,8 +9021,26 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         let itemsHtml = ''; 
         if (o.items) {
             for(let pid in o.items) { 
-                let p = productsDB.find(x => x.id == pid); 
-                if(p) itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${p.name} (x${o.items[pid]})</span> <span style="color:var(--luxury-gold);">${(p.price * o.items[pid]).toLocaleString()} s</span></div>`; 
+                let [baseId, carOptRaw] = String(pid).split('||');
+                let p = productsDB.find(x => x.id == baseId); 
+                if(p) {
+                    let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+                    let carOptHTML = carOpt && carOpt !== "Universal" ? `<span class="od-car-opt">[${escHtml(carOpt)}]</span>` : '';
+                    let imgSrc = p.img || p.image || '';
+                    let imgTag = imgSrc 
+                        ? `<img class="od-item-img" src="${imgSrc}" alt="${escHtml(p.name)}" onerror="this.style.display='none'">` 
+                        : `<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-muted);">📦</div>`;
+                    itemsHtml += `<div class="od-item">
+                        ${imgTag}
+                        <div class="od-item-info">
+                            <div class="od-item-name">${escHtml(p.name)} ${carOptHTML}</div>
+                            <div class="od-item-meta">
+                                <span class="od-item-qty">×${o.items[pid]}</span>
+                                <span class="od-item-price">${(p.price * o.items[pid]).toLocaleString()} so'm</span>
+                            </div>
+                        </div>
+                    </div>`; 
+                }
             }
         }
         document.getElementById('od-items').innerHTML = itemsHtml; 
@@ -9782,8 +9800,21 @@ window.openOrderDetails = (id) => {
         let p = productsDB.find(x => x.id == baseId); 
         if(p) {
             let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-            let dName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="font-size:10px; color:gray;">[${carOpt}]</span>` : p.name;
-            iH += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${dName} (x${o.items[fullId]})</span><span style="color:var(--luxury-gold); font-weight:600;">${(p.price * o.items[fullId]).toLocaleString()} so'm</span></div>`; 
+            let carOptHTML = carOpt && carOpt !== "Universal" ? `<span class="od-car-opt">[${escHtml(carOpt)}]</span>` : '';
+            let imgSrc = p.img || p.image || '';
+            let imgTag = imgSrc 
+                ? `<img class="od-item-img" src="${imgSrc}" alt="${escHtml(p.name)}" onerror="this.style.display='none'">` 
+                : `<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-muted);">📦</div>`;
+            iH += `<div class="od-item">
+                ${imgTag}
+                <div class="od-item-info">
+                    <div class="od-item-name">${escHtml(p.name)} ${carOptHTML}</div>
+                    <div class="od-item-meta">
+                        <span class="od-item-qty">×${o.items[fullId]}</span>
+                        <span class="od-item-price">${(p.price * o.items[fullId]).toLocaleString()} so'm</span>
+                    </div>
+                </div>
+            </div>`; 
         }
     }
     document.getElementById('od-items').innerHTML = iH; 
@@ -9811,8 +9842,21 @@ window.showTrackedOrder = (o) => {
             let p = productsDB.find(x => x.id == baseId); 
             if(p) {
                 let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-                let dName = carOpt && carOpt !== "Universal" ? `${p.name} <span style="font-size:10px; color:gray;">[${carOpt}]</span>` : p.name;
-                itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:5px;"><span>${dName} (x${o.items[pid]})</span> <span style="color:var(--luxury-gold); font-weight:600;">${(p.price * o.items[pid]).toLocaleString()} so'm</span></div>`; 
+                let carOptHTML = carOpt && carOpt !== "Universal" ? `<span class="od-car-opt">[${escHtml(carOpt)}]</span>` : '';
+                let imgSrc = p.img || p.image || '';
+                let imgTag = imgSrc 
+                    ? `<img class="od-item-img" src="${imgSrc}" alt="${escHtml(p.name)}" onerror="this.style.display='none'">` 
+                    : `<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-muted);">📦</div>`;
+                itemsHtml += `<div class="od-item">
+                    ${imgTag}
+                    <div class="od-item-info">
+                        <div class="od-item-name">${escHtml(p.name)} ${carOptHTML}</div>
+                        <div class="od-item-meta">
+                            <span class="od-item-qty">×${o.items[pid]}</span>
+                            <span class="od-item-price">${(p.price * o.items[pid]).toLocaleString()} so'm</span>
+                        </div>
+                    </div>
+                </div>`; 
             }
         }
     }
