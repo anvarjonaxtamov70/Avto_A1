@@ -7587,12 +7587,21 @@ function cardHTML(p) {
     else if(p.badge === 'new') bH = '<div class="badge new">' + icon('sparkle') + ' Yangi</div>'; 
     let oosStyle = st <= 0 ? 'filter: grayscale(1); opacity:0.7;' : '';
 
-    // 💎 Karta boyitish — faqat mavjud maydonlar bo'lsa ko'rsatiladi (regressiyasiz)
-    let discChip = '', oldPriceHTML = '';
-    if (p.oldPrice && Number(p.oldPrice) > Number(p.price)) {
-        oldPriceHTML = `<small class="card-oldprice">${Number(p.oldPrice).toLocaleString()}</small>`;
-        let _pct = Math.round((1 - Number(p.price) / Number(p.oldPrice)) * 100);
-        if (_pct > 0) discChip = `<span class="card-disc">-${_pct}%</span>`;
+    // 💎 Karta boyitish — chegirma / flash
+    let _now = Date.now();
+    let flashOn = !!(p.flashUntil && p.flashUntil > _now && p.oldPrice && Number(p.oldPrice) > Number(p.price));
+    let _pct = (p.oldPrice && Number(p.oldPrice) > Number(p.price))
+               ? Math.round((1 - Number(p.price) / Number(p.oldPrice)) * 100) : 0;
+    // Flash bo'lmaganda -% meta qatorida; flash bo'lsa -% flash guruhida ko'rsatiladi.
+    let discChip = (_pct > 0 && !flashOn) ? `<span class="card-disc">-${_pct}%</span>` : '';
+    // 🔥 Flash guruhi (sariq tugma TEPASIDA): taymer -> -% -> eski narx (chizilgan, kulrang)
+    let flashGroup = '';
+    if (flashOn) {
+        flashGroup = `<div class="card-flash">`
+            + `<span class="cf-timer">🔥 <span class="flash-cd" data-until="${p.flashUntil}"></span></span>`
+            + (_pct > 0 ? `<span class="cf-disc">-${_pct}%</span>` : '')
+            + `<span class="cf-old">${Number(p.oldPrice).toLocaleString()} so'm</span>`
+            + `</div>`;
     }
     let _ratingHTML = '';
     let _rInfo = (window.productRatings && window.productRatings[p.id]) ? window.productRatings[p.id] : null;
@@ -7618,7 +7627,7 @@ function cardHTML(p) {
     if(st > 0) {
         cartBtn = `
         <button class="btn-add-cart" onclick="addToCartQuick(event, ${p.id})">
-            <span class="cart-price">${p.price.toLocaleString()} so'm ${oldPriceHTML}</span>
+            <span class="cart-price">${p.price.toLocaleString()} so'm</span>
             <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>`;
     } else {
@@ -7628,15 +7637,8 @@ function cardHTML(p) {
     // 🛡️ 7/9: kartada nafis ISHONCH belgisi (kafolat) — faqat sotuvda bor tovarda
     let trustHTML = (st > 0) ? `<div class="card-trust">${icon('shield')} 14 kun kafolat</div>` : '';
 
-    // 🔥 FLASH SALE badge (countdown) — faqat aktiv flash bo'lsa. oldPrice strikethrough
-    //    yuqorida (discChip/oldPriceHTML) avtomatik chiqadi (oldPrice > price bo'lgani uchun).
-    let flashBadge = '';
-    if (p.flashUntil && p.flashUntil > Date.now() && p.oldPrice && Number(p.oldPrice) > Number(p.price)) {
-        flashBadge = `<div class="flash-badge">🔥 <span class="flash-cd" data-until="${p.flashUntil}"></span></div>`;
-    }
-
     return `<div class="luxury-card" data-pid="${p.id}" onclick="openProduct(${p.id})">
-        ${bH}${flashBadge}${heartBtn}
+        ${bH}${heartBtn}
         <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">${icon('scale')}</div>
         <div class="img-wrap" style="${oosStyle}">
         <img src="${_thumb(p.img, 240)}" 
@@ -7649,6 +7651,7 @@ function cardHTML(p) {
         <div class="info">
             <h4>${mainName}${carHint}</h4>
             ${metaHTML}
+            ${flashGroup}
             ${cartBtn}
             ${trustHTML}
         </div>
@@ -16449,24 +16452,39 @@ html.lite .nav-badge.idle::after { animation: none !important; }
      cart/buyurtma kodi O'ZGARMAYDI (narx avtomatik to'g'ri).
    - Muddat tugagach applyFlashState() asl narxni tiklaydi.
    ================================================================ */
-.flash-badge {
-    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-    z-index: 5; display: inline-flex; align-items: center; gap: 4px;
-    background: linear-gradient(135deg, #ff453a, #ff2d55);
-    color: #fff; font-size: 10px; font-weight: 800;
-    padding: 4px 9px; border-radius: 999px; white-space: nowrap;
-    box-shadow: 0 3px 10px rgba(255,69,58,0.45); letter-spacing: 0.3px;
-    pointer-events: none;
+/* 🔥 FLASH GURUHI — sariq tugma TEPASIDA, toza vertikal stack:
+   1-qator: taymer (countdown) | 2-qator: -% chegirma | 3-qator: eski narx (chizilgan).
+   Rasm USTIDA hech narsa yo'q (taymer rasmdan olindi). Masofalar nozik (gap/margin). */
+.card-flash {
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: 5px; margin: 2px 0 9px;
 }
-.flash-badge .flash-cd { font-variant-numeric: tabular-nums; }
+.card-flash .cf-timer {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: linear-gradient(135deg, #ff453a, #ff2d55); color: #fff;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.3px; line-height: 1.1;
+    padding: 3px 9px; border-radius: 999px;
+    box-shadow: 0 2px 9px rgba(255,69,58,0.34);
+}
+.card-flash .cf-timer .flash-cd { font-variant-numeric: tabular-nums; }
+.card-flash .cf-disc {
+    font-size: 11px; font-weight: 800; color: #0a0a0c; line-height: 1.25;
+    background: linear-gradient(135deg, #f2d98a, #C9A84C);
+    padding: 2px 8px; border-radius: 999px; letter-spacing: 0.3px;
+}
+.card-flash .cf-old {
+    font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.42);
+    text-decoration: line-through; letter-spacing: 0.2px; line-height: 1;
+}
+html[data-theme="light"] .card-flash .cf-old { color: #9b8e74; }
 @media (prefers-reduced-motion: no-preference) {
-    .flash-badge { animation: flashPulse 1.8s ease-in-out infinite; }
+    .card-flash .cf-timer { animation: cfPulse 1.9s ease-in-out infinite; }
 }
-@keyframes flashPulse {
-    0%,100% { box-shadow: 0 3px 10px rgba(255,69,58,0.45); }
-    50%     { box-shadow: 0 3px 17px rgba(255,69,58,0.75); }
+@keyframes cfPulse {
+    0%,100% { box-shadow: 0 2px 9px rgba(255,69,58,0.34); }
+    50%     { box-shadow: 0 2px 15px rgba(255,69,58,0.60); }
 }
-html.lite .flash-badge { animation: none !important; }
+html.lite .card-flash .cf-timer { animation: none !important; }
 
 /* Detal oynasidagi countdown */
 .pm-flash-cd {
