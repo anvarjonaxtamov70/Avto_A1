@@ -353,8 +353,8 @@ class BoundedTTLCache:
             return default
 
 
-# AI suhbat tarixi: 1 soat faolsiz bo'lsa yoki 2000 tadan oshsa tozalanadi
-ai_sessions = BoundedTTLCache(max_size=2000, ttl_seconds=3600)
+# AI suhbat tarixi: 2 soat faolsiz bo'lsa yoki 2000 tadan oshsa tozalanadi
+ai_sessions = BoundedTTLCache(max_size=2000, ttl_seconds=2 * 3600)
 # Profil keshi: kerak bo'lsa Firebase'dan qayta o'qiladi, shuning uchun evict xavfsiz
 users_db = BoundedTTLCache(max_size=5000, ttl_seconds=6 * 3600)
 # products tugunini o'qib-yozishni serializatsiya qiladi (ID poyga holatini oldini oladi).
@@ -1607,6 +1607,36 @@ async def handle_photo_redirect(message: types.Message):
         await message.reply(t(lang, "photo_vision_failed"), reply_markup=shop_kb)
 
 
+def _ai_system_prompt(lang):
+    """Telegram matnli AI suhbati uchun tizim ko'rsatmasi (professional sotuvchi).
+
+    MUHIM: bu ko'rsatma HAR XABARDA qayta o'rnatiladi. Ilgari til faqat birinchi
+    xabarda belgilanardi — mijoz keyin tilni almashtirsa ham AI eski tilda javob
+    berardi. Endi profil tili + 'mijoz qaysi tilda yozsa o'sha tilda javob ber'
+    qoidasi har safar yangilanadi.
+    """
+    profil_til = "rus" if lang == "ru" else "o'zbek"
+    return (
+        "Sen 'Avto_A1' avto-ehtiyot qismlar do'konining tajribali, samimiy "
+        "SOTUVCHI-MASLAHATCHISISAN — quruq bot emas, tirik professional usta kabi suhbatlash.\n\n"
+        "TIL (juda muhim):\n"
+        f"- Mijozning profil tili: {profil_til}.\n"
+        "- Mijoz qaysi tilda yozsa — AYNAN o'sha tilda javob ber: ruscha yozsa RUSCHA, "
+        "o'zbekcha yozsa O'ZBEKCHA. Tilni o'zboshimcha almashtirma.\n\n"
+        "USLUB:\n"
+        "- Muloyim, hurmatli va ILIQ ohang — mijozni qadrlayotgandek gaplash.\n"
+        "- LO'NDA va aniq: 1-3 ta qisqa gap. Ortiqcha gap, 'suv' yo'q.\n"
+        "- Faqat kerakli, foydali so'zlar; har javobda aniq yechim yoki keyingi qadam taklif qil.\n"
+        "- SUHBATNI ESLAB QOL: mijoz avval aytgan mashina/model/ehtiyojni hisobga ol, "
+        "bir narsani qayta-qayta so'rama.\n\n"
+        "VAZIFA:\n"
+        "- So'rov noaniq bo'lsa (qaysi mashina, yili, old/orqa va h.k.) — avval 1 ta aniq savol ber.\n"
+        "- Aniq zapchast yoki narx so'ralsa: 'Pastdagi tugma orqali onlayn do'konimizdan qidiring' deb yo'naltir.\n"
+        "- Hech qachon ochiq havola (link) yozma.\n\n"
+        f"Do'kon manzili: {SHOP_ADDRESS}. Aloqa: {SHOP_PHONE}."
+    )
+
+
 @dp.message(F.text)
 async def handle_ai_chat(message: types.Message, state: FSMContext):
     if await state.get_state() is not None:
@@ -1616,22 +1646,17 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         user_id = message.from_user.id
         lang = await get_user_lang(user_id)
+
+        # System promptni HAR safar yangilaymiz — shunda til doim to'g'ri bo'ladi
+        # (mijoz tilni almashtirsa ham), suhbat tarixi esa saqlanib qoladi.
         if user_id not in ai_sessions:
-            lang_rule = ("Foydalanuvchi rus tilida yozyapti — javobni RUS tilida ber. "
-                         if lang == "ru" else
-                         "Foydalanuvchi o'zbek tilida yozyapti — javobni O'ZBEK tilida ber. ")
-            ai_sessions[user_id] = [{
-                "role": "system",
-                "content": ("Sen 'Avto_A1' avto-ehtiyot qismlar do'konining tajribali "
-                            "sotuvchi-maslahatchisisan. " + lang_rule +
-                            "JUDA QISQA va lo'nda javob ber (1-2 gap), tirik mutaxassis kabi, foydali maslahat bilan. "
-                            "So'rov noaniq bo'lsa — qaysi mashina/yili kabi 1 ta aniq savol ber. "
-                            "Aniq zapchast yoki narx so'ralsa, do'konda bor-yo'qligini ko'rish uchun: "
-                            "'Pastdagi tugmani bosib onlayn do'konimizdan qidiring' de. "
-                            "Hech qachon ochiq link yozma. "
-                            f"Manzil: {SHOP_ADDRESS}. "
-                            f"Tel: {SHOP_PHONE}")
-            }]
+            ai_sessions[user_id] = [{"role": "system", "content": _ai_system_prompt(lang)}]
+        else:
+            sess = ai_sessions[user_id]
+            if sess and sess[0].get("role") == "system":
+                sess[0]["content"] = _ai_system_prompt(lang)
+            else:
+                sess.insert(0, {"role": "system", "content": _ai_system_prompt(lang)})
         ai_sessions[user_id].append({"role": "user", "content": message.text})
 
         bot_reply = await groq_chat(ai_sessions[user_id], temperature=0.5)
@@ -1640,8 +1665,9 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
             return
 
         ai_sessions[user_id].append({"role": "assistant", "content": bot_reply})
-        if len(ai_sessions[user_id]) > 10:
-            ai_sessions[user_id] = [ai_sessions[user_id][0]] + ai_sessions[user_id][-9:]
+        # Suhbatni ko'proq eslab qolsin: system + oxirgi 16 xabar (8 ta almashinuv).
+        if len(ai_sessions[user_id]) > 17:
+            ai_sessions[user_id] = [ai_sessions[user_id][0]] + ai_sessions[user_id][-16:]
 
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
             text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
