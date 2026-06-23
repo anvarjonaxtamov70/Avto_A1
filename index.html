@@ -5762,6 +5762,15 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     <div id="card-details" class="hidden">
         <p style="text-align: center; color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Quyidagi kartaga pul o'tkazing:</p>
         
+        <!-- SUMMA KO'RSATISH -->
+        <div style="background: linear-gradient(135deg, rgba(212,175,55,0.10), rgba(212,175,55,0.03)); border:1px solid rgba(212,175,55,0.25); border-radius:14px; padding:14px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px;">
+            <div style="font-size:20px;">💰</div>
+            <div style="flex:1;">
+                <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">O'tkazish kerak:</div>
+                <div id="card-pay-amount" style="font-size:20px; font-weight:800; color:var(--luxury-gold);">0 so'm</div>
+            </div>
+        </div>
+
         <div class="premium-bank-card">
             <div class="card-chip"></div>
             <div class="card-number" id="copy-target">5614 6818 7479 6349</div>
@@ -7946,6 +7955,13 @@ function openProduct(id) {
 }
     
     function backToCart() {
+        // Agar card-details ochiq bo'lsa — avval payment-options ga qaytamiz
+        var cardDet = document.getElementById('card-details');
+        if (cardDet && !cardDet.classList.contains('hidden')) {
+            cardDet.classList.add('hidden');
+            document.getElementById('payment-options').classList.remove('hidden');
+            return;
+        }
         // To'lov oynasini yashiramiz
         document.getElementById('paymentModal').style.display = 'none';
         
@@ -7955,6 +7971,7 @@ function openProduct(id) {
         
         // Holatni Savatga qaytaramiz
         activeModal = 'cartModal';
+        window._modalStack = [];
         window.history.replaceState({ modal: 'cartModal' }, "");
         renderCartItems(); // Savat ichini yangilab qo'yamiz
     }
@@ -8302,13 +8319,27 @@ window.clearAppCache = () => {
         let m = document.getElementById('paymentModal'); 
         m.style.display = 'flex'; 
         document.body.style.overflow = 'hidden';
-        activeModal = 'paymentModal'; 
-        window.history.replaceState({ modal: 'paymentModal' }, ""); 
+        activeModal = 'paymentModal';
+        window._modalStack = window._modalStack || [];
+        window._modalStack.push('cartModal');
+        window.history.pushState({ modal: 'paymentModal' }, ""); 
         tg.BackButton.show(); 
         updateBtns(); 
     }
     
-    function selectPayment(t) { if(t === 'cash') confirmOrder('Naqd pul'); else if(t === 'card') { document.getElementById('payment-options').classList.add('hidden'); document.getElementById('card-details').classList.remove('hidden'); } }
+    function selectPayment(t) {
+        var _sum = window._cartTotal || 0;
+        if(t === 'cash') {
+            tg.showConfirm("Buyurtmani tasdiqlaysizmi?\n\nJami: " + _sum.toLocaleString() + " so'm\nTo'lov: Naqd pul (yetkazilganda)", function(ok) {
+                if(ok) confirmOrder('Naqd pul');
+            });
+        } else if(t === 'card') {
+            document.getElementById('payment-options').classList.add('hidden');
+            document.getElementById('card-details').classList.remove('hidden');
+            var el = document.getElementById('card-pay-amount');
+            if(el) el.textContent = _sum.toLocaleString() + " so'm";
+        }
+    }
     function copyCard() { navigator.clipboard.writeText("5614681874796349"); showToast("Nusxalandi!"); }
 
     async function confirmOrder(paymentMethod) {
@@ -8901,7 +8932,30 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     if (window._aiChatRef) { try { window._aiChatRef.off('value'); window._aiChatRef = null; } catch(e){} }
                 }
     
-                // 2. Tahrirlash oynasidan -> Tovar yoki Qoralamalarga qaytish
+                // 2. To'lov oynasidan -> Savatga qaytish (Nazad tugmasi)
+                if (current === 'paymentModal') {
+                    var _cdEl = document.getElementById('card-details');
+                    if (_cdEl && !_cdEl.classList.contains('hidden')) {
+                        _cdEl.classList.add('hidden');
+                        document.getElementById('payment-options').classList.remove('hidden');
+                        document.getElementById('paymentModal').style.display = 'flex';
+                        activeModal = 'paymentModal';
+                        document.body.style.overflow = 'hidden';
+                        window.history.pushState({ modal: 'paymentModal' }, "");
+                        updateBtns();
+                        return;
+                    }
+                    activeModal = 'cartModal';
+                    document.getElementById('cartModal').style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = [];
+                    window.history.pushState({ modal: 'cartModal' }, "");
+                    renderCartItems();
+                    updateBtns();
+                    return;
+                }
+
+                // 2b. Tahrirlash oynasidan -> Tovar yoki Qoralamalarga qaytish
                 if (current === 'editModal') {
                     if (window.currentDraftFolder) {
                         activeModal = 'adminDraftsModal';
@@ -14034,7 +14088,9 @@ window.openDeliveryModal = () => {
     m.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     activeModal = 'deliveryModal';
-    window.history.replaceState({ modal: 'deliveryModal' }, "");
+    window._modalStack = window._modalStack || [];
+    window._modalStack.push('cartModal');
+    window.history.pushState({ modal: 'deliveryModal' }, "");
     if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show();
     updateBtns();
     // Avvalgi tanlovni tiklash
