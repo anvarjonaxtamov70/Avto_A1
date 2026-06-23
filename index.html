@@ -13982,12 +13982,12 @@ window.openDeliveryModal = () => {
         <div style="padding:0 4px;">
             <div class="dlv-method-card" id="dlv-courier" onclick="selectDeliveryMethod('courier')">
                 <div style="font-size:30px;">🚖</div>
-                <div style="flex:1;"><h4 style="margin:0 0 3px;font-size:15px;color:#fff;">Kuryer — manzilga</h4><p style="margin:0;font-size:12px;color:var(--text-muted);">Shahar ichida 1–2 kun · taksi orqali</p></div>
+                <div style="flex:1;"><h4 style="margin:0 0 3px;font-size:15px;color:#fff;">Kuryer — manzilga</h4><p style="margin:0;font-size:12px;color:var(--text-muted);">Faqat Samarqand shahar ichida · 1–2 kun</p></div>
                 <div class="dlv-check">✓</div>
             </div>
             <div class="dlv-method-card" id="dlv-bts" onclick="selectDeliveryMethod('bts')">
                 <div style="font-size:30px;">📦</div>
-                <div style="flex:1;"><h4 style="margin:0 0 3px;font-size:15px;color:#fff;">BTS Pochta filialiga</h4><p style="margin:0;font-size:12px;color:var(--text-muted);">Viloyatlarga 2–4 kun · filialdan olasiz</p></div>
+                <div style="flex:1;"><h4 style="margin:0 0 3px;font-size:15px;color:#fff;">BTS Pochta filialiga</h4><p style="margin:0;font-size:12px;color:var(--text-muted);">Viloyat va tumanlarga · 2–4 kun · filialdan olasiz</p></div>
                 <div class="dlv-check">✓</div>
             </div>
 
@@ -13995,6 +13995,10 @@ window.openDeliveryModal = () => {
                 <div style="font-size:11px;font-weight:800;color:var(--luxury-gold);letter-spacing:1px;margin-bottom:10px;">📍 MANZILNI TANLANG</div>
                 <div id="dlv-addresses"></div>
                 <button onclick="openMapPicker()" style="width:100%;padding:14px;border-radius:14px;background:rgba(0,122,255,0.1);border:1px solid rgba(0,122,255,0.35);color:#0a84ff;font-weight:800;cursor:pointer;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;">🗺 Xaritadan belgilash</button>
+                <div style="margin-top:14px;padding:11px 13px;border-radius:12px;background:rgba(255,159,10,0.1);border:1px solid rgba(255,159,10,0.3);font-size:12px;color:#ffb340;line-height:1.5;">ℹ️ Kuryer <b>faqat Samarqand shahar ichida</b> ishlaydi. Shahar tashqarisida bo'lsangiz, yuqoridan 📦 <b>BTS Pochta</b>ni tanlang.</div>
+                <label style="display:flex;align-items:center;gap:11px;margin-top:12px;cursor:pointer;font-size:13px;color:#fff;font-weight:600;">
+                    <input type="checkbox" id="dlv-smq-confirm" style="width:19px;height:19px;flex-shrink:0;accent-color:var(--luxury-gold);"> Manzilim Samarqand shahar ichida
+                </label>
             </div>
 
             <div id="dlv-bts-box" style="display:none; margin-top:16px;">
@@ -14102,10 +14106,12 @@ window.updateBtsBranches = () => {
 window.confirmDelivery = () => {
     if (!window._dlvMethod) { showToast("Yetkazish usulini tanlang!", "warning"); return; }
     if (window._dlvMethod === 'courier') {
+        let chk = document.getElementById('dlv-smq-confirm');
+        if (!chk || !chk.checked) { showToast("Kuryer faqat Samarqand shahar ichida. Tasdiqlang yoki 📦 BTS Pochtani tanlang.", "warning"); return; }
         let addrs = (typeof getAddresses === 'function') ? getAddresses() : [];
         if (window._dlvSelectedAddr === null || !addrs[window._dlvSelectedAddr]) { showToast("Manzilni tanlang yoki xaritadan belgilang!", "warning"); return; }
         let a = addrs[window._dlvSelectedAddr];
-        window.selectedDelivery = { method: 'courier', address: a.address, mapLink: a.mapLink || '' };
+        window.selectedDelivery = { method: 'courier', address: a.address, mapLink: a.mapLink || '', city: 'Samarqand' };
     } else if (window._dlvMethod === 'bts') {
         let reg = document.getElementById('dlv-bts-region').value;
         if (!reg) { showToast("Viloyatni tanlang!", "warning"); return; }
