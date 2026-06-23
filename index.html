@@ -4726,7 +4726,10 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         .slider .slide img { animation: kenBurns 12s ease-in-out infinite; }
         #productModal .modal-header { border-bottom: 1px solid rgba(212,175,55,0.15) !important; }
         #cartModal .modal-header { border-bottom: 1px solid rgba(48,209,88,0.15) !important; }
-        #paymentModal .modal-header { border-bottom: 1px solid rgba(0,122,255,0.15) !important; }
+        #paymentModal .modal-header { border-bottom: 1px solid rgba(212,175,55,0.20) !important; }
+        #paymentModal .pay-method-card { transition: all 0.2s cubic-bezier(0.25,0.8,0.25,1) !important; }
+        #paymentModal .pay-method-card:active { transform: scale(0.97) !important; border-color: var(--luxury-gold) !important; box-shadow: 0 4px 18px rgba(212,175,55,0.15) !important; }
+        #paymentModal [onclick*="openPayApp"]:active { transform: scale(0.94) !important; opacity: 0.85 !important; }
         #editModal .modal-header { border-bottom: 1px solid rgba(48,209,88,0.15) !important; }
         #addProductModal .modal-header { border-bottom: 1px solid rgba(212,175,55,0.15) !important; }
         .cart-row { position:relative; overflow: hidden; }
@@ -5733,47 +5736,215 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 <div class="modal-standard" id="paymentModal">
     <div class="modal-header" style="align-items: flex-start;">
         <div>
-            <h2 style="font-size: 24px; font-weight: 800; margin: 0;">To'lov usuli</h2>
-            <p style="color: var(--text-muted); font-size: 12px; margin: 5px 0 0 0;">Qanday to'lov qilishni xohlaysiz?</p>
+            <h2 style="font-size: 22px; font-weight: 800; margin: 0; display:flex; align-items:center; gap:8px;"><svg class="uic" style="stroke:var(--luxury-gold);"><use href="#i-shield"></use></svg> Xavfsiz to'lov</h2>
+            <p style="color: var(--text-muted); font-size: 12px; margin: 5px 0 0 0;">Qulay usulni tanlang</p>
         </div>
-        <button class="close-btn" aria-label="Yopish" style="font-size: 24px; background: rgba(255,255,255,0.05);" onclick="backToCart()">←</button>
+        <button class="close-btn" aria-label="Yopish" style="font-size: 24px; background: rgba(255,255,255,0.05);" onclick="backToCart()">&#8592;</button>
+    </div>
+
+    <!-- JAMI SUMMA BLOKI -->
+    <div id="pay-total-display" style="background: linear-gradient(135deg, rgba(212,175,55,0.10), rgba(212,175,55,0.03)); border:1px solid rgba(212,175,55,0.25); border-radius:16px; padding:16px 18px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:700;">To'lov summasi</div>
+            <div id="pay-amount-display" style="font-size:26px; font-weight:900; color:var(--luxury-gold); margin-top:2px;">0 so'm</div>
+        </div>
+        <div style="width:44px; height:44px; border-radius:50%; background:rgba(212,175,55,0.12); display:flex; align-items:center; justify-content:center; font-size:22px;">🛒</div>
     </div>
     
     <div id="payment-options">
-        <div class="pay-method-card" onclick="selectPayment('card')">
-            <div class="pay-icon" style="background: rgba(0, 122, 255, 0.15); color: #007aff;">💳</div>
-            <div class="pay-info">
-                <h4>Karta orqali to'lov</h4>
-                <p>Uzcard, Humo yoki Visa</p>
+        <!-- 1. KARTA ORQALI -->
+        <div class="pay-method-card" onclick="selectPayment('card')" style="position:relative; overflow:hidden;">
+            <div class="pay-icon" style="background: linear-gradient(135deg, rgba(0,122,255,0.15), rgba(0,80,200,0.08)); color: #007aff; border-radius:14px; width:50px; height:50px; display:flex; align-items:center; justify-content:center; font-size:22px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
             </div>
-            <div class="pay-arrow">›</div>
+            <div class="pay-info" style="flex:1;">
+                <h4 style="margin:0 0 3px; font-size:15px; font-weight:700;">Karta orqali o'tkazma</h4>
+                <p style="margin:0; font-size:12px; color:var(--text-muted);">Uzcard / Humo kartangizdan</p>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                    <span style="background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.20); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; color:#007aff;">UZCARD</span>
+                    <span style="background:rgba(76,175,80,0.08); border:1px solid rgba(76,175,80,0.20); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; color:#4caf50;">HUMO</span>
+                </div>
+            </div>
+            <div class="pay-arrow" style="font-size:20px; color:rgba(255,255,255,0.3);">&#8250;</div>
+        </div>
+
+        <!-- 2. PAYME / CLICK ILOVA ORQALI -->
+        <div class="pay-method-card" onclick="selectPayment('app')" style="position:relative; overflow:hidden;">
+            <div class="pay-icon" style="background: linear-gradient(135deg, rgba(0,205,228,0.12), rgba(108,99,255,0.08)); border-radius:14px; width:50px; height:50px; display:flex; align-items:center; justify-content:center;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00cde4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            </div>
+            <div class="pay-info" style="flex:1;">
+                <h4 style="margin:0 0 3px; font-size:15px; font-weight:700;">Ilova orqali to'lash</h4>
+                <p style="margin:0; font-size:12px; color:var(--text-muted);">Payme, Click yoki boshqa ilovadan</p>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                    <span style="background:rgba(0,205,228,0.08); border:1px solid rgba(0,205,228,0.22); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; color:#00cde4;">PAYME</span>
+                    <span style="background:rgba(108,99,255,0.08); border:1px solid rgba(108,99,255,0.22); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; color:#6c63ff;">CLICK</span>
+                </div>
+            </div>
+            <div class="pay-arrow" style="font-size:20px; color:rgba(255,255,255,0.3);">&#8250;</div>
         </div>
         
-        <div class="pay-method-card" onclick="selectPayment('cash')">
-            <div class="pay-icon" style="background: rgba(48, 209, 88, 0.15); color: #30d158;">💵</div>
-            <div class="pay-info">
-                <h4>Naqd pul (Kuryerga)</h4>
-                <p>Tovarni olganda to'lash</p>
+        <!-- 3. NAQD PUL -->
+        <div class="pay-method-card" onclick="selectPayment('cash')" style="position:relative; overflow:hidden;">
+            <div class="pay-icon" style="background: linear-gradient(135deg, rgba(48,209,88,0.12), rgba(40,180,70,0.06)); color: #30d158; border-radius:14px; width:50px; height:50px; display:flex; align-items:center; justify-content:center; font-size:22px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#30d158" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
-            <div class="pay-arrow">›</div>
+            <div class="pay-info" style="flex:1;">
+                <h4 style="margin:0 0 3px; font-size:15px; font-weight:700;">Naqd pul</h4>
+                <p style="margin:0; font-size:12px; color:var(--text-muted);">Tovar kelganda to'laysiz</p>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                    <span style="background:rgba(48,209,88,0.08); border:1px solid rgba(48,209,88,0.20); border-radius:6px; padding:3px 8px; font-size:10px; font-weight:700; color:#30d158;">TEKSHIRIB, KEYIN</span>
+                </div>
+            </div>
+            <div class="pay-arrow" style="font-size:20px; color:rgba(255,255,255,0.3);">&#8250;</div>
+        </div>
+
+        <!-- ISHONCH ELEMENTLARI -->
+        <div style="margin-top:20px; padding:16px; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:16px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                <div style="width:32px; height:32px; border-radius:50%; background:rgba(48,209,88,0.10); display:flex; align-items:center; justify-content:center;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#30d158" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                </div>
+                <div>
+                    <div style="font-size:13px; font-weight:700; color:var(--text-main);">100% xavfsiz to'lov</div>
+                    <div style="font-size:11px; color:var(--text-muted);">Ma'lumotlaringiz himoyalangan</div>
+                </div>
+            </div>
+            <div style="display:flex; gap:14px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.04);">
+                <div style="display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-muted);"><span style="color:var(--luxury-gold);">&#10003;</span> 14 kun kafolat</div>
+                <div style="display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-muted);"><span style="color:var(--luxury-gold);">&#10003;</span> Original tovar</div>
+                <div style="display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-muted);"><span style="color:var(--luxury-gold);">&#10003;</span> Tez yetkazish</div>
+            </div>
         </div>
     </div>
     
+    <!-- KARTA ORQALI O'TKAZMA TAFSILOTLARI -->
     <div id="card-details" class="hidden">
-        <p style="text-align: center; color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Quyidagi kartaga pul o'tkazing:</p>
-        
-        <div class="premium-bank-card">
+        <div style="text-align:center; margin-bottom:18px;">
+            <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.20); border-radius:12px; padding:8px 16px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#007aff" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <span style="font-size:13px; font-weight:700; color:#007aff;">Karta orqali o'tkazma</span>
+            </div>
+        </div>
+
+        <!-- PREMIUM BANK KARTA -->
+        <div class="premium-bank-card" style="margin-bottom:16px;">
             <div class="card-chip"></div>
-            <div class="card-number" id="copy-target">5614 6818 7479 6349</div>
+            <div class="card-number" id="copy-target" style="cursor:pointer;" onclick="copyCard()">5614 6818 7479 6349</div>
             <div class="card-bottom">
-                <div class="card-name">Axtamov Anvarjon</div>
+                <div class="card-name">AXTAMOV ANVARJON</div>
                 <div class="card-logo">UZCARD</div>
             </div>
         </div>
+
+        <!-- SUMMA ESLATMASI -->
+        <div style="background:rgba(212,175,55,0.06); border:1px solid rgba(212,175,55,0.20); border-radius:14px; padding:14px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px;">
+            <div style="font-size:20px;">💰</div>
+            <div style="flex:1;">
+                <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">O'tkazish kerak:</div>
+                <div id="card-pay-amount" style="font-size:18px; font-weight:800; color:var(--luxury-gold);">0 so'm</div>
+            </div>
+        </div>
+
+        <!-- QADAMLAR -->
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:14px; padding:16px; margin-bottom:18px;">
+            <div style="font-size:12px; font-weight:700; color:var(--text-main); margin-bottom:12px;">Qanday to'lash:</div>
+            <div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:10px;">
+                <div style="min-width:22px; height:22px; border-radius:50%; background:var(--luxury-gold); color:#000; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;">1</div>
+                <div style="font-size:12px; color:var(--text-muted); line-height:1.5;">Yuqoridagi karta raqamini <b style="color:var(--text-main);">nusxalang</b> (raqamga bosing)</div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:10px;">
+                <div style="min-width:22px; height:22px; border-radius:50%; background:var(--luxury-gold); color:#000; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;">2</div>
+                <div style="font-size:12px; color:var(--text-muted); line-height:1.5;">Bank ilovangizda (Apelsin, Kapital24 va h.k.) <b style="color:var(--text-main);">pul o'tkazing</b></div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:flex-start;">
+                <div style="min-width:22px; height:22px; border-radius:50%; background:var(--luxury-gold); color:#000; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;">3</div>
+                <div style="font-size:12px; color:var(--text-muted); line-height:1.5;">Pastdagi <b style="color:var(--text-main);">"To'ladim"</b> tugmasini bosing</div>
+            </div>
+        </div>
+
+        <!-- TUGMALAR -->
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-checkout" style="flex: 1; background: rgba(255,255,255,0.06) !important; color: white !important; font-size: 14px !important; border:1px solid var(--glass-border) !important; box-shadow:none !important;" onclick="copyCard()"><svg class="uic" aria-hidden="true"><use href="#i-copy"></use></svg> Nusxalash</button>
+            <button class="btn-checkout" style="flex: 2; font-size: 14px !important;" onclick="confirmOrder('Karta orqali o\'tkazma')"><svg class="uic" aria-hidden="true"><use href="#i-check"></use></svg> To'ladim</button>
+        </div>
         
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button class="btn-checkout" style="flex: 1; background: rgba(255,255,255,0.08) !important; color: white !important; font-size: 14px !important;" onclick="copyCard()"><svg class="uic" aria-hidden="true"><use href="#i-copy"></use></svg> Nusxa</button>
-            <button class="btn-checkout" style="flex: 2; font-size: 14px !important;" onclick="confirmOrder('Karta')"><svg class="uic" aria-hidden="true"><use href="#i-check"></use></svg> To'ladim</button>
+        <div style="text-align:center; margin-top:14px; font-size:11px; color:var(--text-muted); line-height:1.5;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Admin to'lovni tekshirgach buyurtma tasdiqlanadi
+        </div>
+    </div>
+
+    <!-- PAYME / CLICK ILOVA ORQALI -->
+    <div id="app-pay-details" class="hidden">
+        <div style="text-align:center; margin-bottom:18px;">
+            <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,205,228,0.08); border:1px solid rgba(0,205,228,0.20); border-radius:12px; padding:8px 16px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00cde4" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                <span style="font-size:13px; font-weight:700; color:#00cde4;">Ilova orqali to'lov</span>
+            </div>
+        </div>
+
+        <!-- QABUL QILUVCHI MA'LUMOTLARI -->
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); border-radius:16px; padding:18px; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.04);">
+                <div style="width:44px; height:44px; border-radius:50%; background:var(--luxury-gold); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; color:#000;">A</div>
+                <div>
+                    <div style="font-size:14px; font-weight:700; color:var(--text-main);">Axtamov Anvarjon</div>
+                    <div style="font-size:12px; color:var(--text-muted);">Avto A1 do'koni</div>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="font-size:12px; color:var(--text-muted);">Karta raqami:</span>
+                <span id="app-card-display" style="font-size:14px; font-weight:700; color:var(--text-main); font-family:monospace; letter-spacing:1px; cursor:pointer;" onclick="copyCard()">5614 6818 7479 6349 <span style="font-size:10px; color:var(--luxury-gold);">&#128203;</span></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="font-size:12px; color:var(--text-muted);">Telefon (P2P):</span>
+                <span style="font-size:14px; font-weight:700; color:var(--text-main);">+998 88 289 30 30</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:12px; color:var(--text-muted);">Summa:</span>
+                <span id="app-pay-amount" style="font-size:16px; font-weight:800; color:var(--luxury-gold);">0 so'm</span>
+            </div>
+        </div>
+
+        <!-- ILOVA TUGMALARI -->
+        <div style="display:flex; gap:10px; margin-bottom:16px;">
+            <button onclick="openPayApp('payme')" style="flex:1; background:linear-gradient(135deg, #00cde4, #009db5); color:#fff; border:none; padding:14px 10px; border-radius:14px; font-size:13px; font-weight:800; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:0 4px 15px rgba(0,205,228,0.25); transition:transform 0.2s;">
+                <span style="font-size:22px;">📱</span>
+                Payme ochish
+            </button>
+            <button onclick="openPayApp('click')" style="flex:1; background:linear-gradient(135deg, #6c63ff, #4a42d4); color:#fff; border:none; padding:14px 10px; border-radius:14px; font-size:13px; font-weight:800; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:0 4px 15px rgba(108,99,255,0.25); transition:transform 0.2s;">
+                <span style="font-size:22px;">📱</span>
+                Click ochish
+            </button>
+        </div>
+
+        <!-- QADAMLAR -->
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:14px; padding:14px 16px; margin-bottom:18px;">
+            <div style="font-size:12px; font-weight:700; color:var(--text-main); margin-bottom:10px;">Qanday to'lash:</div>
+            <div style="display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;">
+                <div style="min-width:20px; height:20px; border-radius:50%; background:rgba(0,205,228,0.15); color:#00cde4; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">1</div>
+                <div style="font-size:12px; color:var(--text-muted); line-height:1.4;"><b style="color:var(--text-main);">Payme</b> yoki <b style="color:var(--text-main);">Click</b> tugmasini bosing</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;">
+                <div style="min-width:20px; height:20px; border-radius:50%; background:rgba(0,205,228,0.15); color:#00cde4; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">2</div>
+                <div style="font-size:12px; color:var(--text-muted); line-height:1.4;">Ilovada <b style="color:var(--text-main);">karta yoki telefonga o'tkazma</b> qiling</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:flex-start;">
+                <div style="min-width:20px; height:20px; border-radius:50%; background:rgba(0,205,228,0.15); color:#00cde4; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">3</div>
+                <div style="font-size:12px; color:var(--text-muted); line-height:1.4;">Qaytib kelib <b style="color:var(--text-main);">"To'ladim"</b> tugmasini bosing</div>
+            </div>
+        </div>
+
+        <!-- TUGMALAR -->
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-checkout" style="flex: 1; background: rgba(255,255,255,0.06) !important; color: white !important; font-size: 14px !important; border:1px solid var(--glass-border) !important; box-shadow:none !important;" onclick="copyCard()"><svg class="uic" aria-hidden="true"><use href="#i-copy"></use></svg> Nusxa</button>
+            <button class="btn-checkout" style="flex: 2; font-size: 14px !important;" onclick="confirmOrder('Payme/Click ilova')"><svg class="uic" aria-hidden="true"><use href="#i-check"></use></svg> To'ladim</button>
+        </div>
+
+        <div style="text-align:center; margin-top:14px; font-size:11px; color:var(--text-muted); line-height:1.5;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Chekni screenshot qilib saqlang — muammo bo'lsa dalil bo'ladi
         </div>
     </div>
 </div>
@@ -8297,7 +8468,14 @@ window.clearAppCache = () => {
         
         document.getElementById('cartModal').style.display = 'none'; 
         document.getElementById('payment-options').classList.remove('hidden'); 
-        document.getElementById('card-details').classList.add('hidden'); 
+        document.getElementById('card-details').classList.add('hidden');
+        var _appDet = document.getElementById('app-pay-details');
+        if(_appDet) _appDet.classList.add('hidden');
+
+        // Jami summani ko'rsatish
+        var _sum = window._cartTotal || 0;
+        var _payDisp = document.getElementById('pay-amount-display');
+        if(_payDisp) _payDisp.textContent = _sum.toLocaleString() + " so'm";
         
         let m = document.getElementById('paymentModal'); 
         m.style.display = 'flex'; 
@@ -8308,8 +8486,54 @@ window.clearAppCache = () => {
         updateBtns(); 
     }
     
-    function selectPayment(t) { if(t === 'cash') confirmOrder('Naqd pul'); else if(t === 'card') { document.getElementById('payment-options').classList.add('hidden'); document.getElementById('card-details').classList.remove('hidden'); } }
-    function copyCard() { navigator.clipboard.writeText("5614681874796349"); showToast("Nusxalandi!"); }
+    function selectPayment(t) { 
+        if(t === 'cash') { 
+            confirmOrder('Naqd pul (yetkazilganda)'); 
+        } else if(t === 'card') { 
+            document.getElementById('payment-options').classList.add('hidden'); 
+            document.getElementById('card-details').classList.remove('hidden');
+            document.getElementById('app-pay-details').classList.add('hidden');
+            // Summani ko'rsatish
+            var _sum = window._cartTotal || 0;
+            var el = document.getElementById('card-pay-amount');
+            if(el) el.textContent = _sum.toLocaleString() + " so'm";
+        } else if(t === 'app') {
+            document.getElementById('payment-options').classList.add('hidden');
+            document.getElementById('card-details').classList.add('hidden');
+            document.getElementById('app-pay-details').classList.remove('hidden');
+            // Summani ko'rsatish
+            var _sum = window._cartTotal || 0;
+            var el = document.getElementById('app-pay-amount');
+            if(el) el.textContent = _sum.toLocaleString() + " so'm";
+        }
+    }
+    function copyCard() { 
+        navigator.clipboard.writeText("5614681874796349").then(function(){
+            showToast("Karta raqami nusxalandi!", "success");
+        }).catch(function(){ 
+            // Fallback: manual select
+            var t = document.createElement('textarea');
+            t.value = "5614681874796349";
+            document.body.appendChild(t);
+            t.select();
+            document.execCommand('copy');
+            document.body.removeChild(t);
+            showToast("Nusxalandi!", "success"); 
+        });
+    }
+    // Payme/Click ilovasini ochish (deeplink)
+    function openPayApp(provider) {
+        tg.HapticFeedback.impactOccurred('medium');
+        if(provider === 'payme') {
+            // Payme ilovasini ochish — P2P o'tkazma sahifasi
+            try { tg.openLink('https://payme.uz/home/main'); } catch(e) { window.open('https://payme.uz', '_blank'); }
+            showToast("Payme ochildi. Kartaga o'tkazing!", "success");
+        } else if(provider === 'click') {
+            // Click ilovasini ochish
+            try { tg.openLink('https://my.click.uz/app/transfer'); } catch(e) { window.open('https://my.click.uz', '_blank'); }
+            showToast("Click ochildi. Kartaga o'tkazing!", "success");
+        }
+    }
 
     async function confirmOrder(paymentMethod) {
         const loadingOverlay = document.getElementById('order-loading-overlay'); 
