@@ -181,8 +181,9 @@ REGISTER_BUTTONS = {BTN["uz"]["register"], BTN["ru"]["register"]}
 TEXTS = {
     "uz": {
         "welcome_new": "Assalomu alaykum, Avto_A1 do'koniga xush kelibsiz!",
-        "choose_lang": "Tilni tanlang / Выберите язык:",
+        "choose_lang": "🌐 <b>Til / Язык</b>\n\nMuloqot tilini tanlang / Выберите язык:",
         "lang_set": "Til o'zgartirildi: O'zbekcha",
+        "lang_already": "Bu til allaqachon tanlangan ✓",
         "menu": "Asosiy menyu",
         "welcome_browse": ("Marhamat, <b>{shop}</b> tugmasini bosib do'konni bemalol ko'ring. 🛍\n\n"
                            "Ro'yxatdan o'tishingiz <b>shart emas</b> — buyurtma berishda telefon "
@@ -223,8 +224,9 @@ TEXTS = {
     },
     "ru": {
         "welcome_new": "Здравствуйте! Добро пожаловать в магазин Avto_A1!",
-        "choose_lang": "Tilni tanlang / Выберите язык:",
+        "choose_lang": "🌐 <b>Til / Язык</b>\n\nMuloqot tilini tanlang / Выберите язык:",
         "lang_set": "Язык изменён: Русский",
+        "lang_already": "Этот язык уже выбран ✓",
         "menu": "Главное меню",
         "welcome_browse": ("Нажмите кнопку <b>{shop}</b> и спокойно смотрите магазин. 🛍\n\n"
                            "Регистрация <b>не обязательна</b> — мы лишь один раз спросим ваш номер "
@@ -1114,12 +1116,20 @@ def phone_kb(lang=DEFAULT_LANG):
     )
 
 
-def lang_inline_kb():
-    """Til tanlash inline klaviaturasi (har holatda ishlaydi — callback orqali)."""
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🇺🇿 O'zbekcha", callback_data="setlang:uz"),
-        InlineKeyboardButton(text="🇷🇺 Русский", callback_data="setlang:ru"),
-    ]])
+def lang_inline_kb(current=None):
+    """Til tanlash inline klaviaturasi (har holatda ishlaydi — callback orqali).
+
+    current berilsa, FAOL til yonida ✓ belgisi ko'rsatiladi — mijoz qaysi til
+    yoqilganini darrov ko'radi (professional, nozik ko'rinish). Har til alohida
+    qatorda — ixcham emas, keng va o'qish oson.
+    """
+    def _btn(code, flag, name):
+        mark = "   ✓" if current == code else ""
+        return InlineKeyboardButton(text=f"{flag}  {name}{mark}", callback_data=f"setlang:{code}")
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [_btn("uz", "🇺🇿", "O'zbekcha")],
+        [_btn("ru", "🇷🇺", "Русский")],
+    ])
 
 
 viloyatlar_menyu = ReplyKeyboardMarkup(
@@ -1164,13 +1174,14 @@ async def start_command(message: types.Message, state: FSMContext):
         # Yangi foydalanuvchi: faqat tilni so'raymiz, keyin do'konni BEMALOL ko'rsin
         # (majburiy ro'yxatdan o'tish yo'q — telefon buyurtmada so'raladi).
         await message.answer(t(DEFAULT_LANG, "welcome_new"), reply_markup=ReplyKeyboardRemove())
-        await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb())
+        await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb(), parse_mode="HTML")
         await state.set_state(Register.lang)
 
 
 @dp.message(Command("til", "language"))
 async def change_language_command(message: types.Message):
-    await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb())
+    lang = await get_user_lang(message.from_user.id)
+    await message.answer(t(lang, "choose_lang"), reply_markup=lang_inline_kb(current=lang), parse_mode="HTML")
 
 
 @dp.callback_query(F.data.startswith("setlang:"))
@@ -1204,18 +1215,37 @@ async def set_language(call: types.CallbackQuery, state: FSMContext):
     # 2-holat: mavjud foydalanuvchi tilni almashtirdi -> profilga saqlaymiz
     user_id = call.from_user.id
     prof = users_db.get(user_id) or (await firebase_get(f"users/{user_id}/profile")) or {}
+    prev_lang = prof.get("lang", DEFAULT_LANG)
+
+    # Allaqachon shu til tanlangan bo'lsa — ortiqcha xabar yubormaymiz, faqat nozik
+    # toast ko'rsatamiz va ✓ belgisini joyida yangilab qo'yamiz.
+    if prev_lang == lang:
+        await call.answer(t(lang, "lang_already"))
+        try:
+            await call.message.edit_reply_markup(reply_markup=lang_inline_kb(current=lang))
+        except Exception:
+            pass
+        return
+
     prof["lang"] = lang
     users_db[user_id] = prof
     await firebase_patch(f"users/{user_id}/profile", {"lang": lang})
+
+    # Tanlangan xabarni JOYIDA yangilaymiz: tasdiq matni + ✓ belgili klaviatura.
     try:
-        await call.message.edit_text(t(lang, "lang_set"))
+        await call.message.edit_text(
+            f"✅ {esc(t(lang, 'lang_set'))}",
+            reply_markup=lang_inline_kb(current=lang), parse_mode="HTML",
+        )
     except Exception:
         pass
+    await call.answer("✓")
+    # Menyuni yangi tilda yangilaymiz (reply keyboard — buni faqat yangi xabar bilan
+    # almashtirish mumkin, shuning uchun bitta ixcham xabar yuboramiz).
     await call.message.answer(
         t(lang, "menu"),
         reply_markup=main_menu(lang, registered=bool(prof.get("phone"))),
     )
-    await call.answer()
 
 
 @dp.message(Register.name)
@@ -1305,7 +1335,8 @@ async def register_button_handler(message: types.Message, state: FSMContext):
 
 @dp.message(F.text.in_(LANG_BUTTONS))
 async def lang_button_handler(message: types.Message):
-    await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb())
+    lang = await get_user_lang(message.from_user.id)
+    await message.answer(t(lang, "choose_lang"), reply_markup=lang_inline_kb(current=lang), parse_mode="HTML")
 
 
 @dp.message(F.text.in_(SHOP_BUTTONS))
