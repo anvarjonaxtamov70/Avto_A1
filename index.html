@@ -13995,9 +13995,16 @@ window.openDeliveryModal = () => {
                 <div style="font-size:11px;font-weight:800;color:var(--luxury-gold);letter-spacing:1px;margin-bottom:10px;">📍 MANZILNI TANLANG</div>
                 <div id="dlv-addresses"></div>
                 <button onclick="openMapPicker()" style="width:100%;padding:14px;border-radius:14px;background:rgba(0,122,255,0.1);border:1px solid rgba(0,122,255,0.35);color:#0a84ff;font-weight:800;cursor:pointer;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;">🗺 Xaritadan belgilash</button>
-                <div style="margin-top:14px;padding:11px 13px;border-radius:12px;background:rgba(255,159,10,0.1);border:1px solid rgba(255,159,10,0.3);font-size:12px;color:#ffb340;line-height:1.5;">ℹ️ Kuryer <b>faqat Samarqand shahar ichida</b> ishlaydi. Shahar tashqarisida bo'lsangiz, yuqoridan 📦 <b>BTS Pochta</b>ni tanlang.</div>
-                <label style="display:flex;align-items:center;gap:11px;margin-top:12px;cursor:pointer;font-size:13px;color:#fff;font-weight:600;">
-                    <input type="checkbox" id="dlv-smq-confirm" style="width:19px;height:19px;flex-shrink:0;accent-color:var(--luxury-gold);"> Manzilim Samarqand shahar ichida
+                <div style="margin-top:14px;padding:11px 13px;border-radius:12px;background:rgba(255,159,10,0.08);border:1px solid rgba(255,159,10,0.25);font-size:12px;color:#ffb340;line-height:1.5;">ℹ️ Kuryer <b>faqat Samarqand shahar ichida</b> ishlaydi. Shahar tashqarisida bo'lsangiz, yuqoridan 📦 <b>BTS Pochta</b>ni tanlang.</div>
+                <label id="dlv-smq-card" onclick="toggleSmqConfirm()" style="display:flex;align-items:center;gap:14px;margin-top:14px;cursor:pointer;padding:16px;border-radius:16px;background:rgba(255,255,255,0.03);border:1.5px solid var(--glass-border);transition:all .25s ease;">
+                    <input type="checkbox" id="dlv-smq-confirm" style="display:none;">
+                    <div id="dlv-smq-toggle" style="width:44px;height:26px;border-radius:13px;background:rgba(255,255,255,0.12);position:relative;flex-shrink:0;transition:background .25s ease;">
+                        <div id="dlv-smq-knob" style="width:22px;height:22px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .25s ease;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>
+                    </div>
+                    <div style="flex:1;">
+                        <div id="dlv-smq-text" style="font-size:14px;font-weight:700;color:#fff;transition:color .25s;">📍 Manzilim Samarqand shahar ichida</div>
+                        <div id="dlv-smq-hint" style="font-size:11px;color:var(--text-muted);margin-top:3px;transition:color .25s;">Tasdiqlash uchun bosing</div>
+                    </div>
                 </label>
             </div>
 
@@ -14054,6 +14061,36 @@ window.backToCartFromDelivery = () => {
     window.history.replaceState({ modal: 'cartModal' }, "");
     if (typeof renderCartItems === 'function') renderCartItems();
     updateBtns();
+};
+
+window.toggleSmqConfirm = () => {
+    let chk = document.getElementById('dlv-smq-confirm');
+    let card = document.getElementById('dlv-smq-card');
+    let toggle = document.getElementById('dlv-smq-toggle');
+    let knob = document.getElementById('dlv-smq-knob');
+    let text = document.getElementById('dlv-smq-text');
+    let hint = document.getElementById('dlv-smq-hint');
+    chk.checked = !chk.checked;
+    if (chk.checked) {
+        card.style.background = 'rgba(48,209,88,0.1)';
+        card.style.borderColor = '#30d158';
+        toggle.style.background = '#30d158';
+        knob.style.transform = 'translateX(18px)';
+        text.style.color = '#30d158';
+        text.textContent = '✅ Tasdiqlandim — Samarqand shahar ichida';
+        hint.textContent = 'Kuryer yetkazib beradi';
+        hint.style.color = '#30d158';
+    } else {
+        card.style.background = 'rgba(255,255,255,0.03)';
+        card.style.borderColor = 'var(--glass-border)';
+        toggle.style.background = 'rgba(255,255,255,0.12)';
+        knob.style.transform = 'translateX(0)';
+        text.style.color = '#fff';
+        text.textContent = '📍 Manzilim Samarqand shahar ichida';
+        hint.textContent = 'Tasdiqlash uchun bosing';
+        hint.style.color = 'var(--text-muted)';
+    }
+    _hap('selection');
 };
 
 window.selectDeliveryMethod = (method) => {
