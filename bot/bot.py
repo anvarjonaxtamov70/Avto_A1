@@ -1546,7 +1546,9 @@ async def handle_photo_redirect(message: types.Message):
             "2. Aniq tavsiya uchun zarur bo'lsa, qaysi mashina/yil ekanini 1 ta savol bilan SO'RA.\n"
             "3. Samimiy, ishonchli usta ohangi (robotdek emas), ortiqcha gapsiz.\n"
             "4. Rasmda zapchast bo'lmasa yoki tanib bo'lmasa — buni xushmuomala ayt va aniqlik so'ra.\n"
-            "5. Javob OXIRIGA, bazadan qidirish uchun zapchast nomini SHU formatda yoz: [QIDIRUV: <nom>]"
+            "5. MUHIM: o'zingdan razmer, raqam yoki o'lcham (masalan 93-razmer, 12 volt) "
+            "TO'QIB CHIQARMA — faqat rasmda aniq ko'ringaniga tayan.\n"
+            "6. Javob OXIRIGA, bazadan qidirish uchun zapchast nomini SHU formatda yoz: [QIDIRUV: <nom>]"
         )
         vision_msgs = [{
             "role": "user",
@@ -1601,6 +1603,18 @@ async def handle_photo_redirect(message: types.Message):
             except Exception as e:
                 logging.error(f"Rasm bo'yicha tovar qidirish xatosi: {e}")
 
+        # Rasm natijasini AI suhbat XOTIRASIGA yozamiz. Shu tuzatish tufayli mijoz keyin
+        # "Gazel 2004" desa, AI JORIY mavzuni (rasmda topilgan detal) eslab qoladi va
+        # eski mavzuga (mas. porshen) qaytib, razmer to'qib chiqarmaydi.
+        try:
+            sess = _ensure_ai_session(user_id, lang)
+            sess.append({"role": "user", "content": "[Men zapchast rasmini yubordim — buni aniqlab ber]"})
+            sess.append({"role": "assistant", "content": reply})
+            if len(sess) > 17:
+                ai_sessions[user_id] = [sess[0]] + sess[-16:]
+        except Exception as e:
+            logging.error(f"Rasm kontekstini xotiraga yozish xatosi: {e}")
+
         await message.reply(esc(reply) + matches_text, reply_markup=shop_kb, parse_mode="HTML")
     except Exception as e:
         logging.error(f"Rasm tahlili xatosi: {e}")
@@ -1617,24 +1631,48 @@ def _ai_system_prompt(lang):
     """
     profil_til = "rus" if lang == "ru" else "o'zbek"
     return (
-        "Sen 'Avto_A1' avto-ehtiyot qismlar do'konining tajribali, samimiy "
-        "SOTUVCHI-MASLAHATCHISISAN — quruq bot emas, tirik professional usta kabi suhbatlash.\n\n"
+        "Siz 'Avto_A1' do'konining avtomobil ehtiyot qismlari (zapchast) bo'yicha "
+        "professional, tajribali va xushmuomala sotuvchi-maslahatchisiz. "
+        "Do'koningiz Samarqand shahrida joylashgan.\n\n"
         "TIL (juda muhim):\n"
         f"- Mijozning profil tili: {profil_til}.\n"
-        "- Mijoz qaysi tilda yozsa — AYNAN o'sha tilda javob ber: ruscha yozsa RUSCHA, "
-        "o'zbekcha yozsa O'ZBEKCHA. Tilni o'zboshimcha almashtirma.\n\n"
-        "USLUB:\n"
-        "- Muloyim, hurmatli va ILIQ ohang — mijozni qadrlayotgandek gaplash.\n"
-        "- LO'NDA va aniq: 1-3 ta qisqa gap. Ortiqcha gap, 'suv' yo'q.\n"
-        "- Faqat kerakli, foydali so'zlar; har javobda aniq yechim yoki keyingi qadam taklif qil.\n"
-        "- SUHBATNI ESLAB QOL: mijoz avval aytgan mashina/model/ehtiyojni hisobga ol, "
-        "bir narsani qayta-qayta so'rama.\n\n"
-        "VAZIFA:\n"
-        "- So'rov noaniq bo'lsa (qaysi mashina, yili, old/orqa va h.k.) — avval 1 ta aniq savol ber.\n"
-        "- Aniq zapchast yoki narx so'ralsa: 'Pastdagi tugma orqali onlayn do'konimizdan qidiring' deb yo'naltir.\n"
-        "- Hech qachon ochiq havola (link) yozma.\n\n"
-        f"Do'kon manzili: {SHOP_ADDRESS}. Aloqa: {SHOP_PHONE}."
+        "- Mijoz qaysi tilda yozsa — AYNAN o'sha tilda javob bering: ruscha yozsa RUSCHA, "
+        "o'zbekcha yozsa O'ZBEKCHA. Tilni o'zboshimcha almashtirmang.\n\n"
+        "QAT'IY QOIDALAR:\n"
+        "1. Har doim muloqot markazida turgan JORIY DETALGA (oxirgi rasm yoki oxirgi "
+        "so'ralgan zapchastga) e'tibor qarating. Agar mijoz rasm tashlab, keyin mashina "
+        "modelini aytsa, eski muloqotdagi mutlaqo boshqa zapchastlarni (masalan, porshenni) "
+        "joriy mavzuga ARALASHTIRMANG.\n"
+        "2. O'zingizdan raqam, razmer (masalan: 93-razmer, 12 volt va h.k.) yoki texnik "
+        "xarakteristikani TO'QIB CHIQARMANG (hallucination taqiqlanadi). Faqat rasmda aniq "
+        "ko'ringan yoki mijoz aytgan ma'lumotga tayaning. Aniq bilmasangiz — to'qimang, "
+        "aniqlashtirishni taklif qiling.\n"
+        "3. Mijoz mashina rusumi va yilini aytganda, unga JORIY zapchast (masalan: podushka) "
+        "ushbu mashinaga tushish-tushmasligini professional tarzda tushuntiring; agar aniq "
+        f"bilmasangiz, do'kon telefoniga ({SHOP_PHONE}) murojaat qilishni yoki "
+        f"{SHOP_ADDRESS} ga taklif qiling.\n"
+        "4. Javoblaringiz qisqa, aniq, sotuvchilarona va samimiy bo'lsin (1-3 gap).\n"
+        "- Aniq zapchast yoki narx so'ralsa: 'Pastdagi tugma orqali onlayn do'konimizdan "
+        "qidiring' deb yo'naltiring. Hech qachon ochiq havola (link) yozmang."
     )
+
+
+def _ensure_ai_session(user_id, lang):
+    """ai_sessions[user_id] mavjudligini va system promptning YANGI ekanini ta'minlaydi.
+
+    Mavjud suhbat tarixi saqlanadi — faqat birinchi (system) xabar yangilanadi.
+    Shu yordamchi handle_ai_chat va handle_photo_redirect da BIRGA ishlatiladi:
+    shunda rasm tahlili ham, matnli suhbat ham AYNI suhbat xotirasini boyitadi.
+    """
+    if user_id not in ai_sessions:
+        ai_sessions[user_id] = [{"role": "system", "content": _ai_system_prompt(lang)}]
+    else:
+        sess = ai_sessions[user_id]
+        if sess and sess[0].get("role") == "system":
+            sess[0]["content"] = _ai_system_prompt(lang)
+        else:
+            sess.insert(0, {"role": "system", "content": _ai_system_prompt(lang)})
+    return ai_sessions[user_id]
 
 
 @dp.message(F.text)
@@ -1649,14 +1687,7 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
 
         # System promptni HAR safar yangilaymiz — shunda til doim to'g'ri bo'ladi
         # (mijoz tilni almashtirsa ham), suhbat tarixi esa saqlanib qoladi.
-        if user_id not in ai_sessions:
-            ai_sessions[user_id] = [{"role": "system", "content": _ai_system_prompt(lang)}]
-        else:
-            sess = ai_sessions[user_id]
-            if sess and sess[0].get("role") == "system":
-                sess[0]["content"] = _ai_system_prompt(lang)
-            else:
-                sess.insert(0, {"role": "system", "content": _ai_system_prompt(lang)})
+        _ensure_ai_session(user_id, lang)
         ai_sessions[user_id].append({"role": "user", "content": message.text})
 
         bot_reply = await groq_chat(ai_sessions[user_id], temperature=0.5)
