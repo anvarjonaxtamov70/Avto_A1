@@ -5820,6 +5820,14 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     
     <!-- KARTA ORQALI O'TKAZMA TAFSILOTLARI -->
     <div id="card-details" class="hidden">
+        <!-- ORTGA TUGMA -->
+        <div style="margin-bottom:16px;">
+            <button onclick="backToPaymentOptions()" style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); color:var(--text-muted); padding:10px 16px; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:all 0.2s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                Boshqa usul tanlash
+            </button>
+        </div>
+
         <div style="text-align:center; margin-bottom:18px;">
             <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.20); border-radius:12px; padding:8px 16px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#007aff" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
@@ -5877,6 +5885,14 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 
     <!-- PAYME / CLICK ILOVA ORQALI -->
     <div id="app-pay-details" class="hidden">
+        <!-- ORTGA TUGMA -->
+        <div style="margin-bottom:16px;">
+            <button onclick="backToPaymentOptions()" style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); color:var(--text-muted); padding:10px 16px; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:all 0.2s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                Boshqa usul tanlash
+            </button>
+        </div>
+
         <div style="text-align:center; margin-bottom:18px;">
             <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,205,228,0.08); border:1px solid rgba(0,205,228,0.20); border-radius:12px; padding:8px 16px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00cde4" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
@@ -5896,10 +5912,6 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <span style="font-size:12px; color:var(--text-muted);">Karta raqami:</span>
                 <span id="app-card-display" style="font-size:14px; font-weight:700; color:var(--text-main); font-family:monospace; letter-spacing:1px; cursor:pointer;" onclick="copyCard()">5614 6818 7479 6349 <span style="font-size:10px; color:var(--luxury-gold);">&#128203;</span></span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <span style="font-size:12px; color:var(--text-muted);">Telefon (P2P):</span>
-                <span style="font-size:14px; font-weight:700; color:var(--text-main);">+998 88 289 30 30</span>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:12px; color:var(--text-muted);">Summa:</span>
@@ -8117,6 +8129,14 @@ function openProduct(id) {
 }
     
     function backToCart() {
+        // Agar card-details yoki app-pay-details ochiq bo'lsa — avval payment-options ga qaytamiz
+        var cardDet = document.getElementById('card-details');
+        var appDet = document.getElementById('app-pay-details');
+        if ((cardDet && !cardDet.classList.contains('hidden')) || (appDet && !appDet.classList.contains('hidden'))) {
+            backToPaymentOptions();
+            return;
+        }
+        
         // To'lov oynasini yashiramiz
         document.getElementById('paymentModal').style.display = 'none';
         
@@ -8488,7 +8508,13 @@ window.clearAppCache = () => {
     
     function selectPayment(t) { 
         if(t === 'cash') { 
-            confirmOrder('Naqd pul (yetkazilganda)'); 
+            // Naqd pul — tasdiqlash so'rash
+            var _sum = window._cartTotal || 0;
+            tg.showConfirm("Buyurtmani tasdiqlaysizmi?\n\nJami: " + _sum.toLocaleString() + " so'm\nTo'lov: Naqd pul (yetkazilganda)", function(ok) {
+                if(ok) {
+                    confirmOrder('Naqd pul (yetkazilganda)');
+                }
+            });
         } else if(t === 'card') { 
             document.getElementById('payment-options').classList.add('hidden'); 
             document.getElementById('card-details').classList.remove('hidden');
@@ -8506,6 +8532,12 @@ window.clearAppCache = () => {
             var el = document.getElementById('app-pay-amount');
             if(el) el.textContent = _sum.toLocaleString() + " so'm";
         }
+    }
+    // Karta/Ilova oynalaridan ORTGA — to'lov usullari ro'yxatiga qaytish
+    function backToPaymentOptions() {
+        document.getElementById('card-details').classList.add('hidden');
+        document.getElementById('app-pay-details').classList.add('hidden');
+        document.getElementById('payment-options').classList.remove('hidden');
     }
     function copyCard() { 
         navigator.clipboard.writeText("5614681874796349").then(function(){
