@@ -14277,8 +14277,15 @@ window.openDeliveryModal = () => {
             .dlv-addr-radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--glass-border);flex-shrink:0;}
             .dlv-addr-item.selected .dlv-addr-radio{border-color:#30d158;background:radial-gradient(circle,#30d158 40%,transparent 45%);}
             #map-picker-overlay{position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;}
-            #map-picker-map{flex:1;width:100%;}
+            #map-picker-map{flex:1;width:100%;position:relative;}
             #map-picker-bar{padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:rgba(15,15,17,0.97);display:flex;gap:10px;align-items:center;}
+            /* 🎯 "Mening joylashuvim" (GPS) tugmasi — xarita ustida suzuvchi */
+            #map-locate-btn{position:absolute;right:16px;bottom:20px;z-index:1000;width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;background:rgba(20,20,22,0.92);box-shadow:0 6px 20px rgba(0,0,0,0.45),0 0 0 1px rgba(212,175,55,0.25);display:flex;align-items:center;justify-content:center;color:var(--luxury-gold,#d4af37);-webkit-tap-highlight-color:transparent;transition:transform .18s ease,background .2s;}
+            #map-locate-btn:active{transform:scale(0.88);background:rgba(212,175,55,0.18);}
+            #map-locate-btn svg{width:26px;height:26px;display:block;}
+            #map-locate-btn.locating svg{animation:mapLocateSpin 0.9s linear infinite;}
+            @keyframes mapLocateSpin{to{transform:rotate(360deg);}}
+            #map-locate-hint{position:absolute;left:50%;top:16px;transform:translateX(-50%);z-index:1000;background:rgba(20,20,22,0.92);color:#fff;font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:20px;box-shadow:0 4px 16px rgba(0,0,0,0.4);pointer-events:none;white-space:nowrap;}
         `;
         document.head.appendChild(st);
     }
@@ -14489,7 +14496,7 @@ window.openMapPicker = async () => {
     if (!ov) {
         ov = document.createElement('div');
         ov.id = 'map-picker-overlay';
-        ov.innerHTML = `<div id="map-picker-map"></div><div id="map-picker-bar"><button onclick="closeMapPicker()" style="padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.1);color:#fff;border:none;font-weight:700;cursor:pointer;">Bekor</button><button onclick="confirmMapLocation()" style="flex:1;padding:14px;border-radius:12px;background:var(--gold-gradient);color:#000;border:none;font-weight:800;cursor:pointer;">📍 Shu manzilni tanlash</button></div>`;
+        ov.innerHTML = `<div id="map-picker-map"><div id="map-locate-hint">Joyni belgilang yoki 🎯 tugmasini bosing</div><button id="map-locate-btn" onclick="locateMe()" title="Mening joylashuvim" aria-label="Mening joylashuvim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="1" x2="12" y2="4"></line><line x1="12" y1="20" x2="12" y2="23"></line><line x1="1" y1="12" x2="4" y2="12"></line><line x1="20" y1="12" x2="23" y2="12"></line><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"></circle></svg></button></div><div id="map-picker-bar"><button onclick="closeMapPicker()" style="padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.1);color:#fff;border:none;font-weight:700;cursor:pointer;">Bekor</button><button onclick="confirmMapLocation()" style="flex:1;padding:14px;border-radius:12px;background:var(--gold-gradient);color:#000;border:none;font-weight:800;cursor:pointer;">📍 Shu manzilni tanlash</button></div>`;
         document.body.appendChild(ov);
     }
     ov.style.display = 'flex';
@@ -14508,12 +14515,10 @@ window.openMapPicker = async () => {
             if (window._mapPickerObj && window._mapPickerObj.destroy) { try { window._mapPickerObj.destroy(); } catch(e){} window._mapPickerObj = null; }
             mapEl.innerHTML = '';
             window._mapPickerObj = new ymaps.Map(mapEl, { center: [41.3111, 69.2797], zoom: 12, controls: ['zoomControl','geolocationControl'] });
-            let placemark = null;
+            window._yPlacemark = null;
             window._mapPickerObj.events.add('click', (e) => {
                 let coords = e.get('coords');
-                window._pickedCoords = { lat: coords[0], lng: coords[1] };
-                if (placemark) placemark.geometry.setCoordinates(coords);
-                else { placemark = new ymaps.Placemark(coords, {}, { preset: 'islands#redDotIcon', draggable: true }); window._mapPickerObj.geoObjects.add(placemark); placemark.events.add('dragend', () => { let c = placemark.geometry.getCoordinates(); window._pickedCoords = { lat: c[0], lng: c[1] }; }); }
+                window._placeMarker(coords[0], coords[1]);
             });
             // Joriy lokatsiya
             if (navigator.geolocation) navigator.geolocation.getCurrentPosition((pos) => {
@@ -14533,9 +14538,7 @@ window.openMapPicker = async () => {
         window._mapPickerObj = L.map(mapEl).setView([41.3111, 69.2797], 12);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20, attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd' }).addTo(window._mapPickerObj);
         window._mapPickerObj.on('click', (e) => {
-            window._pickedCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
-            if (window._mapMarker) window._mapMarker.setLatLng(e.latlng);
-            else window._mapMarker = L.marker(e.latlng).addTo(window._mapPickerObj);
+            window._placeMarker(e.latlng.lat, e.latlng.lng);
         });
         if (navigator.geolocation) navigator.geolocation.getCurrentPosition((pos) => {
             let ll = [pos.coords.latitude, pos.coords.longitude];
@@ -14545,6 +14548,62 @@ window.openMapPicker = async () => {
     }, 200);
 };
 window.closeMapPicker = () => { let ov = document.getElementById('map-picker-overlay'); if (ov) ov.style.display = 'none'; };
+
+// 🎯 Markerni qo'yish/ko'chirish — har ikkala xarita dvigateli uchun (Yandex + Leaflet)
+window._placeMarker = function(lat, lng) {
+    window._pickedCoords = { lat: lat, lng: lng };
+    try {
+        if (window._mapEngine === 'yandex' && window._mapPickerObj) {
+            var coords = [lat, lng];
+            if (window._yPlacemark) { window._yPlacemark.geometry.setCoordinates(coords); }
+            else {
+                window._yPlacemark = new ymaps.Placemark(coords, {}, { preset: 'islands#redDotIcon', draggable: true });
+                window._mapPickerObj.geoObjects.add(window._yPlacemark);
+                window._yPlacemark.events.add('dragend', function(){ var c = window._yPlacemark.geometry.getCoordinates(); window._pickedCoords = { lat: c[0], lng: c[1] }; });
+            }
+        } else if (window._mapEngine === 'leaflet' && window._mapPickerObj && window.L) {
+            var ll = [lat, lng];
+            if (window._mapMarker) window._mapMarker.setLatLng(ll);
+            else window._mapMarker = L.marker(ll).addTo(window._mapPickerObj);
+        }
+    } catch(e) {}
+};
+
+// 🎯 "Mening joylashuvim" — GPS koordinatani olib, xaritani markazlaydi + marker qo'yadi
+window.locateMe = function() {
+    var btn = document.getElementById('map-locate-btn');
+    var hint = document.getElementById('map-locate-hint');
+    if (!navigator.geolocation) { showToast("Qurilmangiz joylashuvni qo'llamaydi", "warning"); return; }
+    if (btn) btn.classList.add('locating');
+    if (hint) hint.textContent = "Joylashuv aniqlanmoqda...";
+    try { if (typeof _hap === 'function') _hap('selection'); } catch(e){}
+
+    navigator.geolocation.getCurrentPosition(function(pos){
+        var lat = pos.coords.latitude, lng = pos.coords.longitude;
+        // Xarita markazini joriy joyga ko'chiramiz
+        try {
+            if (window._mapEngine === 'yandex' && window._mapPickerObj) {
+                window._mapPickerObj.setCenter([lat, lng], 16, { duration: 400 });
+            } else if (window._mapEngine === 'leaflet' && window._mapPickerObj) {
+                window._mapPickerObj.setView([lat, lng], 16);
+            }
+        } catch(e){}
+        // Marker qo'yamiz va tanlangan deb belgilaymiz
+        window._placeMarker(lat, lng);
+        if (btn) btn.classList.remove('locating');
+        if (hint) hint.textContent = "📍 Joylashuvingiz topildi!";
+        showToast("📍 Joylashuvingiz aniqlandi", "success");
+        try { if (typeof _hap === 'function') _hap('success'); } catch(e){}
+    }, function(err){
+        if (btn) btn.classList.remove('locating');
+        if (hint) hint.textContent = "Joyni belgilang yoki 🎯 tugmasini bosing";
+        var msg = "Joylashuvni aniqlab bo'lmadi";
+        if (err && err.code === 1) msg = "Joylashuvga ruxsat berilmadi. Sozlamalardan yoqing.";
+        else if (err && err.code === 3) msg = "Vaqt tugadi. Qayta urinib ko'ring.";
+        showToast(msg, "warning");
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+};
+
 window.confirmMapLocation = () => {
     if (!window._pickedCoords) { showToast("Xaritada nuqtani belgilang", "warning"); return; }
     let lat = window._pickedCoords.lat, lng = window._pickedCoords.lng;
