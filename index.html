@@ -7600,7 +7600,7 @@ function showToast(m, t = 'success') {
     function deleteProduct() { let id = parseInt(document.getElementById('edit-id').value); tg.showConfirm("O'chirasizmi?", function(ok) { if(!ok) return; window._rewriteProductsSafely(function(fresh){ return fresh.filter(x => x.id !== id); }).then(() => { showToast("O'chirildi!"); closeModal(); }).catch(() => showToast("Saqlashda xato!", "warning")); }); }
 
     function openAdminInventory() {
-        document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.replaceState({ modal: 'adminInventoryModal' }, "");
+        document.getElementById('adminModal').style.display = 'none'; let aI = document.getElementById('adminInventoryModal'); aI.style.display = 'flex'; activeModal = 'adminInventoryModal'; window.history.pushState({ modal: 'adminInventoryModal' }, "");
         let invS = document.getElementById('inv-search'); if (invS) invS.value = '';
         window.invFilter = 'all';
         window._invSelected = {};
@@ -8884,7 +8884,7 @@ window.openAdminChat = (uid, orderId) => {
         let sM = document.getElementById('adminStatsModal');
         sM.style.display = 'flex';
         activeModal = 'adminStatsModal';
-        window.history.replaceState({ modal: 'adminStatsModal' }, "");
+        window.history.pushState({ modal: 'adminStatsModal' }, "");
         
         let c = document.getElementById('admin-stats-content');
         c.innerHTML = '<p style="text-align:center; margin-top:30px;"><span class="hourglass" style="transform:scale(0.5); display:inline-block;"></span></p>';
@@ -8965,7 +8965,7 @@ window.openAdminChat = (uid, orderId) => {
     let aM = document.getElementById('adminOrdersModal'); 
     aM.style.display = 'flex'; 
     activeModal = 'adminOrdersModal'; 
-    window.history.replaceState({ modal: 'adminOrdersModal' }, ""); 
+    window.history.pushState({ modal: 'adminOrdersModal' }, ""); 
     let c = document.getElementById('admin-orders-list'); 
     
     aM.querySelector('.modal-header h2').innerHTML = '📦 Buyurtmalar';
@@ -9172,7 +9172,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
                     updateBtns();
-                    window.history.pushState({ modal: 'adminOrdersModal' }, "");
+                    // ⚠️ pushState YO'Q — history allaqachon adminOrders'da (iOS swipe mos)
                     return;
                 }
 
@@ -9218,14 +9218,15 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     return;
                 }
     
-                // 3. Maxsus Admin oynalaridan -> Admin Panelga qaytish (Tarixni tiklash kerak)
+                // 3. Maxsus Admin oynalaridan -> Admin Panelga qaytish
                 if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal' || current === 'adminDraftsModal') {
                     activeModal = 'adminModal';
                     document.getElementById('adminModal').style.display = 'flex';
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza
                     updateBtns();
-                    window.history.pushState({ modal: 'adminModal' }, ""); // Tarixni tiklaymiz    
+                    // ⚠️ pushState YO'Q — endi ichki modallar pushState bilan ochiladi,
+                    //    history allaqachon adminModal'da. Qo'lda pushState iOS swipe'ni buzardi.
                     return;
                 }
     
@@ -9402,7 +9403,7 @@ window.openAdminCustomers = () => {
     let cM = document.getElementById('adminCustomersModal');
     cM.style.display = 'flex';
     activeModal = 'adminCustomersModal';
-    window.history.replaceState({ modal: 'adminCustomersModal' }, "");
+    window.history.pushState({ modal: 'adminCustomersModal' }, "");
     
     let listBox = document.getElementById('admin-customers-list');
     listBox.innerHTML = window._skel(6);
@@ -10401,7 +10402,7 @@ window.openAdminStats = () => {
     let sM = document.getElementById('adminStatsModal');
     sM.style.display = 'flex'; 
     activeModal = 'adminStatsModal'; 
-    window.history.replaceState({ modal: 'adminStatsModal' }, "");
+    window.history.pushState({ modal: 'adminStatsModal' }, "");
     
     let c = document.getElementById('admin-stats-content');
     
@@ -10989,7 +10990,7 @@ window.openAdminDrafts = () => {
     let m = document.getElementById('adminDraftsModal');
     m.style.display = 'flex';
     activeModal = 'adminDraftsModal';
-    window.history.replaceState({ modal: 'adminDraftsModal' }, "");
+    window.history.pushState({ modal: 'adminDraftsModal' }, "");
     
     document.getElementById('draft-search-input').value = '';
     filterAdminDrafts('all');
@@ -11361,7 +11362,7 @@ window.openAdminDrafts = () => {
     let m = document.getElementById('adminDraftsModal');
     m.style.display = 'flex';
     activeModal = 'adminDraftsModal';
-    window.history.replaceState({ modal: 'adminDraftsModal' }, "");
+    window.history.pushState({ modal: 'adminDraftsModal' }, "");
     showDraftFolders();
 };
 
