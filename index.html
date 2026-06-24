@@ -9136,6 +9136,30 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     return;
                 }
 
+                // 🆕 0b. XARITA tanlash oynasi — Nazad bosilsa xavfsiz yopiladi (qotmaydi)
+                if (current === '__mappicker__') {
+                    // Agar nom berish qatlami ochiq bo'lsa — faqat uni yopamiz, xarita qoladi
+                    let nm = document.getElementById('addr-name-overlay');
+                    if (nm && nm.classList.contains('show')) {
+                        nm.classList.remove('show');
+                        setTimeout(function(){ nm.style.display = 'none'; }, 220);
+                        window.history.pushState({ modal: '__mappicker__' }, ""); // map hali ochiq
+                        updateBtns();
+                        return;
+                    }
+                    // Xaritani yopamiz
+                    let ovm = document.getElementById('map-picker-overlay');
+                    if (ovm) ovm.style.display = 'none';
+                    activeModal = window._mapPrevActive || null;
+                    window._mapPrevActive = null;
+                    if (!activeModal) {
+                        document.body.style.overflow = '';
+                        let cont = document.querySelector('.container'); if(cont) cont.classList.remove('blur-bg');
+                    }
+                    updateBtns();
+                    return;
+                }
+
 
                 document.getElementById(current).style.display = 'none';
     
@@ -14520,6 +14544,12 @@ window.openMapPicker = async () => {
     }
     ov.style.display = 'flex';
     window._pickedCoords = null;
+    // 🧭 Nazad tugmasi xaritani yopa olishi uchun navigatsiya tizimiga ulaymiz
+    //    (scanner overlay bilan bir xil ishonchli pattern)
+    window._mapPrevActive = (activeModal && activeModal !== '__mappicker__') ? activeModal : (window._mapPrevActive || null);
+    activeModal = '__mappicker__';
+    window.history.pushState({ modal: '__mappicker__' }, "");
+    if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show();
 
     // 1) Yandex'ni urinib ko'ramiz (kalit bo'lsa)
     let useYandex = false;
@@ -14566,7 +14596,11 @@ window.openMapPicker = async () => {
         window._mapPickerObj.invalidateSize();
     }, 200);
 };
-window.closeMapPicker = () => { let ov = document.getElementById('map-picker-overlay'); if (ov) ov.style.display = 'none'; };
+window.closeMapPicker = () => {
+    // Nazad bilan bir xil yo'l: history.back() -> popstate '__mappicker__' case yopadi
+    if (activeModal === '__mappicker__') { window.history.back(); }
+    else { let ov = document.getElementById('map-picker-overlay'); if (ov) ov.style.display = 'none'; }
+};
 
 // 🎯 Markerni qo'yish/ko'chirish — har ikkala xarita dvigateli uchun (Yandex + Leaflet)
 window._placeMarker = function(lat, lng) {
@@ -14625,19 +14659,105 @@ window.locateMe = function() {
 
 window.confirmMapLocation = () => {
     if (!window._pickedCoords) { showToast("Xaritada nuqtani belgilang", "warning"); return; }
+    openAddrNameModal();
+};
+
+// 🏷️ MANZILGA NOM BERISH oynasi (chiroyli bottom-sheet input modal)
+window.openAddrNameModal = () => {
+    let ov = document.getElementById('addr-name-overlay');
+    if (!ov) {
+        if (!document.getElementById('addr-name-style')) {
+            let st = document.createElement('style');
+            st.id = 'addr-name-style';
+            st.textContent = `
+                #addr-name-overlay{position:fixed;inset:0;z-index:100000;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0);transition:background .25s ease;}
+                #addr-name-overlay.show{background:rgba(0,0,0,0.6);}
+                #addr-name-sheet{width:100%;max-width:500px;background:linear-gradient(180deg,#1c1c20,#141416);border:1px solid rgba(212,175,55,0.2);border-radius:24px 24px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom,0px));box-shadow:0 -12px 40px rgba(0,0,0,0.5);transform:translateY(110%);transition:transform .32s cubic-bezier(0.22,1,0.36,1);}
+                #addr-name-overlay.show #addr-name-sheet{transform:translateY(0);}
+                #addr-name-grip{width:42px;height:5px;border-radius:3px;background:rgba(255,255,255,0.18);margin:0 auto 16px;}
+                #addr-name-sheet h3{margin:0 0 4px;font-size:19px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px;}
+                #addr-name-sheet .ans-sub{margin:0 0 16px;font-size:13px;color:var(--text-muted,#8e8e93);line-height:1.4;}
+                #addr-name-input{width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;color:#fff;font-size:16px;outline:none;transition:.2s;margin-bottom:14px;}
+                #addr-name-input:focus{border-color:var(--luxury-gold,#d4af37);background:rgba(212,175,55,0.06);}
+                #addr-name-input::placeholder{color:rgba(255,255,255,0.35);}
+                .ans-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+                .ans-chip{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:9px 14px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;transition:.18s;-webkit-tap-highlight-color:transparent;}
+                .ans-chip:active{transform:scale(0.93);}
+                .ans-chip.sel{background:rgba(212,175,55,0.15);border-color:var(--luxury-gold,#d4af37);color:var(--luxury-gold,#d4af37);}
+                .ans-coords{font-size:11px;color:var(--text-muted,#8e8e93);text-align:center;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:5px;}
+                #addr-name-save{width:100%;padding:16px;border-radius:16px;background:var(--gold-gradient,linear-gradient(135deg,#F0D060,#C9A84C 45%,#96720A));color:#000;border:none;font-weight:800;font-size:16px;cursor:pointer;transition:.2s;}
+                #addr-name-save:active{transform:scale(0.97);}
+            `;
+            document.head.appendChild(st);
+        }
+        ov = document.createElement('div');
+        ov.id = 'addr-name-overlay';
+        ov.onclick = function(e){ if (e.target === ov) closeAddrNameModal(); };
+        ov.innerHTML = `
+            <div id="addr-name-sheet">
+                <div id="addr-name-grip"></div>
+                <h3>🏷️ Manzilga nom bering</h3>
+                <p class="ans-sub">Keyingi safar oson topishingiz uchun bu manzilga qulay nom qo'ying.</p>
+                <input type="text" id="addr-name-input" maxlength="40" placeholder="Masalan: Uy, Ish, Onamникi..." autocomplete="off">
+                <div class="ans-chips" id="addr-name-chips">
+                    <div class="ans-chip" onclick="ansPickChip(this,'Uy')">🏠 Uy</div>
+                    <div class="ans-chip" onclick="ansPickChip(this,'Ish')">💼 Ish</div>
+                    <div class="ans-chip" onclick="ansPickChip(this,'Do\\'kon')">🏪 Do'kon</div>
+                    <div class="ans-chip" onclick="ansPickChip(this,'Boshqa')">📍 Boshqa</div>
+                </div>
+                <div class="ans-coords" id="addr-name-coords"></div>
+                <button id="addr-name-save" onclick="saveMapAddressWithName()">Saqlash</button>
+            </div>`;
+        document.body.appendChild(ov);
+    }
+    let cEl = document.getElementById('addr-name-coords');
+    if (cEl && window._pickedCoords) cEl.innerHTML = '📍 ' + window._pickedCoords.lat.toFixed(5) + ', ' + window._pickedCoords.lng.toFixed(5);
+    let inp = document.getElementById('addr-name-input');
+    if (inp) inp.value = '';
+    document.querySelectorAll('#addr-name-chips .ans-chip').forEach(c => c.classList.remove('sel'));
+
+    // Nom oynasi xarita USTIDA ochiladi (alohida history state qo'shmaydi).
+    // Nazad bosilsa '__mappicker__' popstate uni yopib xaritaga qaytaradi.
+    ov.style.display = 'flex';
+    requestAnimationFrame(() => { ov.classList.add('show'); });
+    setTimeout(() => { if (inp) inp.focus(); }, 320);
+};
+
+window.closeAddrNameModal = () => {
+    let nm = document.getElementById('addr-name-overlay');
+    if (nm) { nm.classList.remove('show'); setTimeout(() => { nm.style.display = 'none'; }, 220); }
+};
+
+window.ansPickChip = (el, val) => {
+    document.querySelectorAll('#addr-name-chips .ans-chip').forEach(c => c.classList.remove('sel'));
+    if (el) el.classList.add('sel');
+    let inp = document.getElementById('addr-name-input');
+    if (inp) inp.value = val;
+    try { if (typeof _hap === 'function') _hap('selection'); } catch(e){}
+};
+
+window.saveMapAddressWithName = () => {
+    if (!window._pickedCoords) { showToast("Xaritada nuqtani belgilang", "warning"); return; }
+    let inp = document.getElementById('addr-name-input');
+    let name = (inp && inp.value ? inp.value.trim() : '');
+    if (!name) { showToast("Manzilga nom kiriting", "warning"); if (inp) inp.focus(); return; }
+
     let lat = window._pickedCoords.lat, lng = window._pickedCoords.lng;
     let mapLink = `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
-    let addrText = `📍 Xarita: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    let addrText = `📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     if (typeof getAddresses === 'function') {
         let arr = getAddresses();
-        arr.push({ type: 'map', label: 'Xaritadagi manzil', address: addrText, mapLink: mapLink });
+        arr.push({ type: 'map', label: name, address: addrText, mapLink: mapLink });
         if (typeof saveAddresses === 'function') saveAddresses(arr);
         window._dlvSelectedAddr = arr.length - 1;
-        renderCourierAddresses();
+        if (typeof renderCourierAddresses === 'function') renderCourierAddresses();
     }
-    closeMapPicker();
-    showToast("📍 Manzil belgilandi!", "success");
-    _hap('success');
+    // Nom oynasini yopamiz, keyin Nazad orqali xaritani ham yopamiz
+    let nm = document.getElementById('addr-name-overlay');
+    if (nm) { nm.classList.remove('show'); setTimeout(() => { nm.style.display = 'none'; }, 220); }
+    window.history.back(); // '__mappicker__' popstate xaritani yopib, yetkazish oynasiga qaytaradi
+    showToast(`📍 "${name}" manzili saqlandi!`, "success");
+    try { if (typeof _hap === 'function') _hap('success'); } catch(e){}
 };
 
 
