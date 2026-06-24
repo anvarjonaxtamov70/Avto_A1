@@ -4919,6 +4919,46 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             transition: border-color .2s ease, transform .18s ease;
         }
         #adminInventoryModal .inventory-item:active { transform: scale(0.99); }
+        /* ============================================================
+           ✅ OMBOR multi-select — premium checkbox + tanlangan karta holati
+           ============================================================ */
+        #adminInventoryModal .inv-check{
+            -webkit-appearance:none; appearance:none;
+            width:24px !important; height:24px !important;
+            border-radius:8px;
+            border:2px solid rgba(255,255,255,0.25);
+            background:rgba(255,255,255,0.04);
+            cursor:pointer; position:relative;
+            flex-shrink:0; margin-right:12px !important;
+            transition:background .2s ease, border-color .2s ease, transform .15s ease;
+            -webkit-tap-highlight-color:transparent;
+        }
+        #adminInventoryModal .inv-check:active{ transform:scale(0.86); }
+        #adminInventoryModal .inv-check:checked{
+            background:var(--gold-gradient, linear-gradient(135deg,#F0D060,#C9A84C 45%,#96720A));
+            border-color:var(--luxury-gold,#d4af37);
+            box-shadow:0 2px 8px rgba(201,168,76,0.45);
+        }
+        /* Galchka (CSS bilan chizilgan — native accent-color'ga tayanmaydi) */
+        #adminInventoryModal .inv-check:checked::after{
+            content:""; position:absolute;
+            left:8px; top:4px; width:5px; height:10px;
+            border:solid #1a1205; border-width:0 2.5px 2.5px 0;
+            transform:rotate(45deg);
+            animation:invCheckPop .2s ease;
+        }
+        @keyframes invCheckPop{ 0%{transform:rotate(45deg) scale(0);} 60%{transform:rotate(45deg) scale(1.25);} 100%{transform:rotate(45deg) scale(1);} }
+        html[data-theme="light"] #adminInventoryModal .inv-check{ border-color:rgba(0,0,0,0.2); background:rgba(0,0,0,0.03); }
+        /* Tanlangan TOVAR KARTASI — fon + tilla chegara + nozik nur */
+        #adminInventoryModal .inventory-item.inv-selected{
+            background:linear-gradient(160deg, rgba(212,175,55,0.16), rgba(212,175,55,0.05)) !important;
+            border:1px solid var(--luxury-gold,#d4af37) !important;
+            box-shadow:0 6px 22px rgba(201,168,76,0.22), inset 0 0 0 1px rgba(212,175,55,0.18) !important;
+        }
+        #adminInventoryModal .inventory-item.inv-selected .inv-info h4{ color:var(--luxury-gold,#d4af37) !important; }
+        html[data-theme="light"] #adminInventoryModal .inventory-item.inv-selected{
+            background:linear-gradient(160deg, rgba(212,175,55,0.18), rgba(255,253,248,0.95)) !important;
+        }
         #aiBulkModal .ai-luxury-input { border-radius: 14px; transition: border-color .25s ease, box-shadow .25s ease; }
         #aiBulkModal .btn-checkout { transition: transform .18s ease, filter .2s ease; }
         #aiBulkModal .btn-checkout:active { transform: scale(0.97); }
@@ -13351,7 +13391,15 @@ window._invMatchesBrand = (p, f) => {
     if (f === 'uaz') return cats.includes('uaz');
     return true;
 };
-window.invToggleSelect = (id, checked) => { if (checked) window._invSelected[id] = true; else delete window._invSelected[id]; invUpdateBulkBar(); };
+window.invToggleSelect = (el, id) => {
+    let checked = el.checked;
+    if (checked) window._invSelected[id] = true; else delete window._invSelected[id];
+    // Tovar kartasi vizual holatini DARHOL yangilaymiz (qayta render qilmasdan)
+    let card = el.closest('.inventory-item');
+    if (card) card.classList.toggle('inv-selected', checked);
+    try { if (typeof _hap === 'function') _hap('selection'); } catch(e){}
+    invUpdateBulkBar();
+};
 window.invSelectedIds = () => Object.keys(window._invSelected).map(k => parseInt(k)).filter(id => productsDB.some(p => p.id === id));
 window.invClearSelection = () => { window._invSelected = {}; renderAdminInventory(); };
 window.invUpdateBulkBar = () => {
@@ -13447,7 +13495,8 @@ window.renderAdminInventory = () => {
 
     c.innerHTML = summaryHtml + items.map(p => {
         let checked = window._invSelected[p.id] ? 'checked' : '';
-        let checkbox = `<input type="checkbox" class="inv-check" ${checked} onchange="invToggleSelect(${p.id}, this.checked)" style="width:20px; height:20px; accent-color:var(--luxury-gold); margin-right:10px; flex-shrink:0;">`;
+        let selCls = window._invSelected[p.id] ? ' inv-selected' : '';
+        let checkbox = `<input type="checkbox" class="inv-check" ${checked} onchange="invToggleSelect(this, ${p.id})">`;
         let codeHint = p.code ? `<span class="inv-code">🔖 ${p.code}</span>` : '';
         let tot = _stockOf(p);
         let flag = tot <= 0 ? '<span class="inv-flag inv-flag-out">Tugagan</span>' : (tot <= 3 ? '<span class="inv-flag inv-flag-low">Kam qoldi</span>' : '');
@@ -13462,7 +13511,7 @@ window.renderAdminInventory = () => {
                     </div>
                 </div>`).join('');
             return `
-            <div class="inventory-item${urg}" style="flex-direction:column; align-items:stretch;">
+            <div class="inventory-item${urg}${selCls}" style="flex-direction:column; align-items:stretch;">
                 <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
                     <div style="display:flex; align-items:center; flex:1; min-width:0;">${checkbox}<div class="inv-info"><h4>${p.name}${codeHint}</h4><p>${p.price.toLocaleString()} so'm ${flag}</p></div></div>
                     <span class="inv-type-tag">Razmerli</span>
@@ -13475,7 +13524,7 @@ window.renderAdminInventory = () => {
             let mainName = nameParts[0] ? nameParts[0].trim() : p.name;
             let carHint = nameParts[1] ? `<span class="car-hint">· ${nameParts[1].trim()}</span>` : '';
             return `
-            <div class="inventory-item${urg}">
+            <div class="inventory-item${urg}${selCls}">
                 <div style="display:flex; align-items:center; flex:1; min-width:0;">${checkbox}<div class="inv-info"><h4>${mainName}${carHint}${codeHint}</h4><p>${p.price.toLocaleString()} so'm ${flag}</p></div></div>
                 <div class="inv-controls">
                     <input type="number" id="inv-input-${p.id}" class="inv-input" value="${st}">
