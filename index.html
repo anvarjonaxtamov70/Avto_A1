@@ -14321,6 +14321,13 @@ window.openDeliveryModal = () => {
             .dlv-addr-item.selected{background:rgba(48,209,88,0.1);border-color:#30d158;}
             .dlv-addr-radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--glass-border);flex-shrink:0;}
             .dlv-addr-item.selected .dlv-addr-radio{border-color:#30d158;background:radial-gradient(circle,#30d158 40%,transparent 45%);}
+            /* 🗑️ Manzilni o'chirish tugmasi — nozik, premium uslubda */
+            .dlv-addr-del{flex-shrink:0;width:30px;height:30px;border-radius:50%;border:none;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.18s;-webkit-tap-highlight-color:transparent;padding:0;margin-left:2px;}
+            .dlv-addr-del svg{width:15px;height:15px;display:block;}
+            .dlv-addr-del:hover{background:rgba(255,69,58,0.15);color:#ff453a;}
+            .dlv-addr-del:active{transform:scale(0.82);background:rgba(255,69,58,0.28);color:#ff453a;}
+            html[data-theme="light"] .dlv-addr-del{background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.35);}
+            html[data-theme="light"] .dlv-addr-del:hover{background:rgba(255,69,58,0.12);color:#e3002f;}
             #map-picker-overlay{position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;}
             #map-picker-map{flex:1;width:100%;position:relative;}
             #map-picker-bar{padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:rgba(15,15,17,0.97);display:flex;gap:10px;align-items:center;}
@@ -14411,12 +14418,36 @@ window.renderCourierAddresses = () => {
             <div class="dlv-addr-radio"></div>
             <span style="font-size:17px;">${a.type==='home'?'🏠':a.type==='work'?'🏢':'📍'}</span>
             <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#fff;">${a.label||(a.type==='home'?'Uy':a.type==='work'?'Ish':'Manzil')}</div><div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.address}</div></div>
+            <button class="dlv-addr-del" onclick="event.stopPropagation(); deleteDlvAddress(${i})" title="O'chirish" aria-label="Manzilni o'chirish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
         </div>`).join('');
 };
 window.pickDlvAddress = (idx) => {
     window._dlvSelectedAddr = idx;
     renderCourierAddresses();
     _hap('light');
+};
+
+// 🗑️ Saqlangan manzilni o'chirish (tasdiqlash bilan)
+window.deleteDlvAddress = (idx) => {
+    let addrs = (typeof getAddresses === 'function') ? getAddresses() : [];
+    if (!addrs[idx]) return;
+    let nm = addrs[idx].label || addrs[idx].address || 'Ushbu manzil';
+    let doDelete = function() {
+        let arr = (typeof getAddresses === 'function') ? getAddresses() : [];
+        arr.splice(idx, 1);
+        if (typeof saveAddresses === 'function') saveAddresses(arr); // localStorage + Firebase
+        // Tanlangan manzil indeksini to'g'rilaymiz
+        if (window._dlvSelectedAddr === idx) window._dlvSelectedAddr = null;
+        else if (typeof window._dlvSelectedAddr === 'number' && window._dlvSelectedAddr > idx) window._dlvSelectedAddr--;
+        renderCourierAddresses();
+        showToast("Manzil o'chirildi", "success");
+        try { if (typeof _hap === 'function') _hap('success'); } catch(e){}
+    };
+    if (typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm(`"${nm}" manzilini o'chirasizmi?`, function(ok){ if(ok) doDelete(); });
+    } else if (confirm(`"${nm}" manzilini o'chirasizmi?`)) {
+        doDelete();
+    }
 };
 
 window.updateBtsDistricts = () => {
