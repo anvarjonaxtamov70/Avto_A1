@@ -50,9 +50,34 @@
 
         if (lite) {
           root.classList.add('lite');
+          root.classList.add('pf-weak');   // HAQIQIY zaif qurilma belgisi (welcome/rasm uchun)
+        } else {
+          // ⚡ BOOT SMOOTHING: zaif BO'LMAGAN telefonlarda ham dastlabki og'ir
+          //    yuklanish (Firebase parse + ko'p rasm dekod + GPU effektlar) oynasida
+          //    'lite' vaqtincha yoqiladi; kontent chizilgach olib tashlanadi.
+          //    Shu tufayli birinchi 1-2 soniyadagi "qotish" yo'qoladi, premium
+          //    ko'rinish esa yuklangach to'liq tiklanadi.
+          root.classList.add('lite');
+          window.__bootLiteOnly = true;
         }
         window.__perfLite = lite;
         window.__perfReasons = reasons;
+
+        // Boot-lite'ni olib tashlovchi funksiya (faqat zaif bo'lmagan telefonlarda).
+        window.__endBootLite = function(){
+          try {
+            if (window.__bootLiteOnly) {
+              document.documentElement.classList.remove('lite');
+              window.__bootLiteOnly = false;
+            }
+          } catch(e){}
+        };
+        // Xavfsizlik: render bo'lmasa ham, to'liq yuklangach boot-lite'ni yechamiz.
+        try {
+          window.addEventListener('load', function(){
+            if (window.__bootLiteOnly) setTimeout(window.__endBootLite, 3500);
+          });
+        } catch(e){}
       } catch (e) { /* aniqlash imkonsiz bo'lsa, hech narsa qilmaymiz */ }
 
       // 5) ADAPTIV FPS QOROVULI — ishlab turganda kadr tezligi pasayib ketsa,
@@ -7135,12 +7160,20 @@ document.addEventListener('touchmove', function(e) {
             if (url.indexOf('data:') === 0 || url.indexOf('blob:') === 0) return url;
             if (url.indexOf('images.weserv.nl') !== -1) return url;
             if (url.indexOf('http') !== 0) return url;
+            // ⚡ Zaif telefonda (haqiqiy lite) rasmlarni KICHIKROQ so'raymiz:
+            //    DPR=1 (retina 2x emas) + kenglik ~28% kam -> bayt va dekod
+            //    yuki sezilarli pasayadi -> yuklanish silliq, qotish kamayadi.
+            var weak = false;
+            try { weak = !!window.__perfLite; } catch (e) {}
+            var dprCap = weak ? 1 : 2;
             // DPR'ni hisobga olamiz (retina), lekin 2x bilan cheklaymiz (juda katta bo'lmasin)
-            var dpr = Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
-            var tw = Math.round((w || 400) * dpr);
+            var dpr = Math.min(dprCap, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+            var baseW = w || 400;
+            if (weak) baseW = Math.round(baseW * 0.72);
+            var tw = Math.round(baseW * dpr);
             var clean = url.replace(/^https?:\/\//, '');
             return 'https://images.weserv.nl/?url=' + encodeURIComponent(clean) +
-                   '&w=' + tw + '&output=webp&q=80&we';
+                   '&w=' + tw + '&output=webp&q=' + (weak ? 72 : 80) + '&we';
         } catch (e) { return url; }
     }
     window._thumb = _thumb;
@@ -7881,20 +7914,26 @@ document.addEventListener('visibilitychange', function() {
         // animatsiya nol nuqtadan qayta boshlanib "sakrab" ketardi va eski flash
         // qaytib kelardi. Faqat animatsiya tugagach ekranni yopamiz.
 
-        // Animatsiya tugagach (2.5 sekunddan keyin), ilovani ochamiz
+        // ⚡ Zaif telefonda welcome'ni qisqartiramiz (admin/mijoz kutib qolmasin)
+        var _weak = false;
+        try { _weak = document.documentElement.classList.contains('pf-weak') || !!window.__perfLite; } catch(e){}
+        var _holdMs = _weak ? 1000 : 2800;
+        var _fadeMs = _weak ? 350 : 800;
+
+        // Animatsiya tugagach, ilovani ochamiz
         setTimeout(() => {
             screen.classList.add('welcome-fade-out');
             
-            // 0.8 sekunddan keyin elementni domdan butunlay yo'qotamiz
+            // Fade tugagach elementni domdan butunlay yo'qotamiz
             setTimeout(() => {
                 screen.style.display = 'none';
-            }, 800);
+            }, _fadeMs);
             
             // Telefonni yengil titratib (Haptic), "Xush kelibsiz" signali beramiz
             if (typeof tg !== 'undefined' && tg.HapticFeedback) {
                 tg.HapticFeedback.notificationOccurred('success');
             }
-        }, 2800); 
+        }, _holdMs); 
     }
 
     // Ilova yuklanishi bilan ishga tushiramiz
@@ -7994,6 +8033,16 @@ document.addEventListener('visibilitychange', function() {
         
         // 🔥 MANA SHU QATOR QO'SHILDI: Tovarlar chizilgach, ularni "suzib chiqishi" uchun motorni yoqamiz
         setTimeout(initReveal, 100);
+
+        // ⚡ BOOT SMOOTHING TUGADI: tovarlar chizildi -> zaif bo'lmagan telefonda
+        //    vaqtincha yoqilgan 'lite'ni olib tashlaymiz (premium ko'rinish tiklanadi).
+        //    Render lite ostida bo'lib o'tdi -> dastlabki qotish bo'lmaydi.
+        try {
+            if (window.__bootLiteOnly && !window.__bootLiteScheduled) {
+                window.__bootLiteScheduled = true;
+                setTimeout(function(){ if (window.__endBootLite) window.__endBootLite(); }, 700);
+            }
+        } catch(e){}
     }
 function addToCartQuick(e, id) { 
     if(e) e.stopPropagation(); 
@@ -17483,6 +17532,10 @@ html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border
     animation-duration: 2.5s !important;
     animation-iteration-count: 1 !important;
     animation-delay: 0s !important;
+  }
+  /* ⚡ HAQIQIY zaif telefonda welcome animatsiyasini qisqartiramiz (JS hold 1s bilan mos) */
+  html.pf-weak body .welcome-text {
+    animation-duration: 0.9s !important;
   }
   /* Inline style bilan berilgan doimiy animatsiyalarni ham to'xtatamiz */
   html.lite body [style*="floatCart"],
