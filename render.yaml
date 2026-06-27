@@ -1,0 +1,59 @@
+# =====================================================================
+#  Avto_A1 bot — Render.com BEPUL deploy "blueprint"
+#  Render bu faylni avtomatik o'qiydi va xizmatni shu sozlamalar bilan
+#  yaratadi. Maxfiy qiymatlar (sync: false) Render panelida qo'lda
+#  kiritiladi — ular GitHub'ga TUSHMAYDI.
+#
+#  To'liq qo'llanma:  bot/DEPLOY_RENDER.md
+# =====================================================================
+services:
+  - type: web
+    name: avto-a1-bot
+    runtime: python
+    plan: free            # bepul tarif (kredit karta talab qilinmaydi)
+    rootDir: bot          # bot kodi shu papkada
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    healthCheckPath: /health
+    autoDeploy: true      # GitHub'ga push qilinsa, o'zi qayta deploy bo'ladi
+    envVars:
+      # ——— MAJBURIY maxfiy qiymatlar (Render panelida kiritiladi) ———
+      - key: BOT_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      # serviceAccount.json BUTUN MATNI (yoki base64). Storis/profil yozish uchun.
+      - key: SERVICE_ACCOUNT_JSON
+        sync: false
+
+      # ——— Sozlamalar (kerak bo'lsa panelda o'zgartiring) ———
+      - key: ADMIN_IDS
+        value: "5105291033,483425630"
+      - key: MINI_APP_URL
+        value: "https://anvarjonaxtamov70.github.io/Avto_A1/"
+      - key: WORKER_URL
+        value: "https://avtoa1bot.anvaraxtamov70.workers.dev"
+      - key: FIREBASE_DB_URL
+        value: "https://avtoa1shop-default-rtdb.firebaseio.com"
+      - key: GROQ_TEXT_MODEL
+        value: "llama-3.3-70b-versatile"
+      - key: GROQ_VISION_MODEL
+        value: "meta-llama/llama-4-scout-17b-16e-instruct"
+
+      # ——— Do'kon ma'lumotlari ———
+      - key: SHOP_NAME
+        value: "Avto_A1"
+      - key: SHOP_ADMIN
+        value: "Anvar"
+      - key: SHOP_PHONE
+        value: "+998 88 289 30 30"
+      - key: SHOP_TELEGRAM
+        value: "@anvaraxtamov2004"
+      - key: SHOP_ADDRESS
+        value: "Samarqand, yangi zapchast bozori, 19-sektor, 2-do'kon"
+      - key: SHOP_ADDRESS_RU
+        value: "Самарканд, новый рынок автозапчастей, сектор 19, магазин 2"
+      - key: SHOP_HOURS
+        value: "Har kuni 09:00–19:00"
+      - key: SHOP_HOURS_RU
+        value: "Ежедневно 09:00–19:00"
