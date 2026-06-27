@@ -15,6 +15,8 @@
 # =====================================================================
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
 import html
@@ -98,6 +100,42 @@ GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b
 
 # Firebase service-account JSON (401 xatosini hal qiladi)
 SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, os.getenv("SERVICE_ACCOUNT_FILE", "serviceAccount.json"))
+
+
+def _materialize_service_account():
+    """Bulutli server (Render/Railway/Docker) uchun: serviceAccount.json faylini
+    environment variable'dan tiklaydi.
+
+    Bulutda maxfiy faylni `scp` bilan ko'chirib bo'lmaydi — buning o'rniga JSON
+    matni `SERVICE_ACCOUNT_JSON` env'iga qo'yiladi (xohlasangiz base64 holda).
+    Agar fayl allaqachon mavjud bo'lsa (mas. lokal kompyuter), unga TEGILMAYDI.
+    """
+    if os.path.exists(SERVICE_ACCOUNT_FILE):
+        return
+    raw = os.getenv("SERVICE_ACCOUNT_JSON", "").strip()
+    if not raw:
+        return
+    # Qiymat to'g'ridan-to'g'ri JSON ({...}) yoki base64 bo'lishi mumkin.
+    if not raw.startswith("{"):
+        try:
+            raw = base64.b64decode(raw).decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError) as e:
+            logging.error(f"SERVICE_ACCOUNT_JSON base64 dekod xatosi: {e}")
+            return
+    try:
+        json.loads(raw)  # to'g'ri JSON ekanini tekshiramiz (aks holda yozmaymiz)
+    except json.JSONDecodeError as e:
+        logging.error(f"SERVICE_ACCOUNT_JSON yaroqsiz JSON: {e}")
+        return
+    try:
+        with open(SERVICE_ACCOUNT_FILE, "w", encoding="utf-8") as f:
+            f.write(raw)
+        logging.info("serviceAccount.json env'dan tiklandi.")
+    except OSError as e:
+        logging.error(f"serviceAccount.json yozishda xato: {e}")
+
+
+_materialize_service_account()
 
 if not API_TOKEN:
     raise SystemExit("BOT_TOKEN .env faylda topilmadi. .env.example dan .env yarating.")
@@ -1770,12 +1808,50 @@ async def fetch_yandex_image(query):
 
 
 # =====================================================================
+# HEALTH-CHECK HTTP SERVERI (bepul bulut hosting uchun)
+#   - Render kabi bepul "web service" lar 15 daqiqa harakatsizlikdan keyin
+#     UXLAB qoladi. Bot long-polling ishlatadi (kiruvchi HTTP yo'q), shuning
+#     uchun uni uyg'oq tutish uchun kichik HTTP endpoint qo'shamiz.
+#   - Tashqi "ping" xizmati (UptimeRobot / cron-job.org) shu manzilni har
+#     ~10 daqiqada chaqirsa, server uxlamaydi va bot 24/7 ishlaydi.
+#   - FAQAT `PORT` env o'rnatilgan bo'lsa ishga tushadi (Render uni beradi).
+#     Lokal kompyuterda PORT bo'lmagani uchun bu server yoqilmaydi — bot
+#     avvalgidek ishlaydi.
+# =====================================================================
+async def start_health_server():
+    port = os.getenv("PORT")
+    if not port:
+        return  # lokal ishga tushirish — health server kerak emas
+    try:
+        from aiohttp import web
+    except Exception as e:
+        logging.error(f"Health server uchun aiohttp.web yuklanmadi: {e}")
+        return
+
+    async def _ok(_request):
+        return web.Response(text="Avto_A1 bot ishlayapti ✅")
+
+    app = web.Application()
+    app.router.add_get("/", _ok)
+    app.router.add_get("/health", _ok)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(port))
+    await site.start()
+    logging.info(f"Health server {port}-portda ishga tushdi (keep-alive uchun).")
+
+
+# =====================================================================
 # BOTNI ISHGA TUSHIRISH
 # =====================================================================
 async def main():
     logging.info("Bot ishga tushdi!")
     global products_lock
     products_lock = asyncio.Lock()  # event loop ishga tushgach yaratamiz
+
+    # Bepul bulut hostingda (Render) web service uxlab qolmasligi uchun
+    # kichik health-check serverini yoqamiz (PORT berilgan bo'lsa).
+    await start_health_server()
 
     # Birinchi tokenni OLDINDAN olamiz (to_thread — event loop bloklanmaydi),
     # so'ng fonda muntazam yangilab turuvchi vazifani ishga tushiramiz.
