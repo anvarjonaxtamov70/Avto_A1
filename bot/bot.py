@@ -1842,6 +1842,37 @@ async def start_health_server():
 
 
 # =====================================================================
+# O'ZINI-O'ZI UYG'OTISH (SELF-PING) — Render bepul tarifda uxlab qolmaslik uchun
+#   - Render bepul "web service" 15 daqiqa KIRUVCHI trafik bo'lmasa uxlaydi.
+#     Bot long-polling ishlagani uchun o'zicha kiruvchi so'rov olmaydi =>
+#     uxlab qoladi va keyingi xabarga ~1 daqiqa kech javob beradi.
+#   - Yechim: bot O'ZINING ochiq manziliga har ~10 daqiqada GET yuboradi.
+#     Bu kiruvchi trafik hisoblanadi => Render serverni uxlatmaydi.
+#     Natijada TASHQI "ping" xizmati (UptimeRobot) SHART EMAS — bot o'zini
+#     o'zi uyg'oq tutadi.
+#   - Render `RENDER_EXTERNAL_URL` ni avtomatik beradi. Boshqa platformada
+#     `KEEP_ALIVE_URL` env'ini qo'lda berish mumkin. Manzil bo'lmasa (lokal)
+#     bu vazifa hech narsa qilmaydi.
+# =====================================================================
+async def keep_awake():
+    base = os.getenv("KEEP_ALIVE_URL") or os.getenv("RENDER_EXTERNAL_URL")
+    if not base:
+        return  # lokal yoki manzil yo'q — self-ping kerak emas
+    ping_url = base.rstrip("/") + "/health"
+    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "600"))  # soniya (default 10 daqiqa)
+    await asyncio.sleep(60)  # server to'liq ko'tarilishini kutamiz
+    logging.info(f"Self-ping yoqildi: {ping_url} (har {interval}s).")
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(ping_url, timeout=30) as r:
+                    logging.info(f"Self-ping: {r.status}")
+            except Exception as e:
+                logging.warning(f"Self-ping xatosi: {e}")
+            await asyncio.sleep(interval)
+
+
+# =====================================================================
 # BOTNI ISHGA TUSHIRISH
 # =====================================================================
 async def main():
@@ -1852,6 +1883,10 @@ async def main():
     # Bepul bulut hostingda (Render) web service uxlab qolmasligi uchun
     # kichik health-check serverini yoqamiz (PORT berilgan bo'lsa).
     await start_health_server()
+
+    # O'zini-o'zi uyg'oq tutish (self-ping) — Render bepul tarifda uxlab
+    # qolmasligi uchun. Tashqi xizmat (UptimeRobot) shart emas.
+    asyncio.create_task(keep_awake())
 
     # Birinchi tokenni OLDINDAN olamiz (to_thread — event loop bloklanmaydi),
     # so'ng fonda muntazam yangilab turuvchi vazifani ishga tushiramiz.

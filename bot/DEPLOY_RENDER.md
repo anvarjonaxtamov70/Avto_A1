@@ -100,17 +100,28 @@ Loglarda `serviceAccount.json env'dan tiklandi.` ko'rinsa — Firebase yozuvlari
 
 ---
 
-## 6-QADAM (MUHIM): Botni uxlab qolishdan saqlash (tekin "ping")
+## 6-QADAM (MUHIM): Botni uxlab qolishdan saqlash
 
-Bepul web service 15 daqiqa harakatsizlikdan keyin uxlaydi. Uni uyg'oq tutamiz:
+Bepul web service 15 daqiqa harakatsizlikdan keyin uxlaydi. Buni **2 usul** bilan
+hal qilamiz:
 
-1. Render xizmatingiz manzilini nusxalang (masalan `https://avto-a1-bot.onrender.com`).
-2. Tekin "uptime" xizmatiga kiring — masalan **UptimeRobot** (https://uptimerobot.com)
-   yoki **cron-job.org** (https://cron-job.org).
-3. Yangi monitor/job yarating:
+### A) Avtomatik (self-ping) — qo'shimcha sozlash SHART EMAS ✅
+Bot endi o'zining manziliga har ~10 daqiqada "ping" yuboradi va shu bilan o'zini
+uyg'oq tutadi. Render xizmatga `RENDER_EXTERNAL_URL` ni **avtomatik beradi**, shuning
+uchun siz hech narsa qilishingiz kerak emas — deploy bo'lishi bilan ishlaydi.
+Logda `Self-ping yoqildi: ...` va `Self-ping: 200` ko'rinsa — ishlayapti.
+
+> Interval kerak bo'lsa: `KEEP_ALIVE_INTERVAL` env'iga soniyada qiymat bering
+> (default `600` = 10 daqiqa). Boshqa platformada manzil o'zi berilmasa,
+> `KEEP_ALIVE_URL` env'iga to'liq manzilni (mas. `https://...onrender.com`) qo'ying.
+
+### B) Tashqi ping (ixtiyoriy zaxira) 🔁
+Yanada ishonchli bo'lishi uchun tekin "uptime" xizmatini ham qo'shsangiz bo'ladi
+(masalan, server qayta ishga tushib self-ping ulgurmagan holatlar uchun):
+1. Render manzilingizni nusxalang (mas. `https://avto-a1-bot.onrender.com`).
+2. **UptimeRobot** (https://uptimerobot.com) yoki **cron-job.org** da monitor yarating:
    - **URL:** `https://avto-a1-bot.onrender.com/health`
-   - **Interval:** har **10 daqiqa** (5 daqiqa bo'lsa yanada ishonchli).
-4. Saqlang. Endi bu xizmat botni muntazam uyg'otib turadi → bot **24/7** ishlaydi.
+   - **Interval:** har **5–10 daqiqa**.
 
 ---
 
