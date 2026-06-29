@@ -8656,8 +8656,8 @@ window.clearAppCache = () => {
     }
 
     // 🎯 Yetkazib berish turiga qarab to'lov usullari kartochkalarini ko'rsatish/yashirish.
-    //   selectedDelivery.method: 'courier' -> faqat naqd; 'bts' -> karta+ilova (naqd yo'q).
-    //   Aniqlanmagan bo'lsa (xato holat) — barcha usullar ko'rinadi (xavfsiz fallback).
+    //   selectedDelivery.method: 'bts' -> faqat karta+ilova (naqd yo'q);
+    //   'courier' yoki aniqlanmagan holat -> barcha usullar (naqd+karta+ilova).
     function applyPaymentMethodVisibility() {
         var elCard = document.getElementById('pay-opt-card');
         var elApp  = document.getElementById('pay-opt-app');
@@ -8668,14 +8668,12 @@ window.clearAppCache = () => {
         var hide = function(el){ if(el) el.style.setProperty('display', 'none', 'important'); };
 
         var method = (window.selectedDelivery && window.selectedDelivery.method) || null;
-        if (method === 'courier') {
-            // Kuryer manzilga olib boradi — mijoz tovarni qo'lga olganda naqd to'laydi.
-            hide(elCard); hide(elApp); show(elCash);
-        } else if (method === 'bts') {
-            // BTS pochta filialiga jo'natishdan oldin to'lov olinadi — naqd yo'q.
+        if (method === 'bts') {
+            // BTS pochta filialiga jo'natishdan oldin to'lov olinadi — naqd YO'Q.
             show(elCard); show(elApp); hide(elCash);
         } else {
-            // Yetkazish turi noma'lum — hamma usulni ko'rsatamiz.
+            // Kuryer (manzilga) yoki noma'lum holat — barcha to'lov usullari ko'rinadi:
+            // Naqd pul, Karta orqali o'tkazma va Ilova orqali to'lash.
             show(elCard); show(elApp); show(elCash);
         }
     }
@@ -8695,7 +8693,7 @@ window.clearAppCache = () => {
         if(_appDet) _appDet.classList.add('hidden');
 
         // 🎯 YETKAZIB BERISH TURIGA QARAB TO'LOV USULLARINI CHEKLASH
-        //   - Kuryer (manzilga): tovar borganda naqd to'laydi -> FAQAT "Naqd pul".
+        //   - Kuryer (manzilga): barcha usul mavjud — Naqd pul, Karta va Ilova.
         //   - BTS Pochta filialiga: oldindan to'lash kerak -> "Naqd pul" YASHIRILADI,
         //     faqat "Karta orqali o'tkazma" va "Ilova orqali to'lash" qoladi.
         //   Eslatma: .pay-method-card CSS'ida display:flex !important bo'lgani uchun
