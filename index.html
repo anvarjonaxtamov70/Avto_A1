@@ -5915,7 +5915,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     
     <div id="payment-options">
         <!-- 1. KARTA ORQALI -->
-        <div class="pay-method-card" onclick="selectPayment('card')" style="position:relative; overflow:hidden;">
+        <div class="pay-method-card" id="pay-opt-card" onclick="selectPayment('card')" style="position:relative; overflow:hidden;">
             <div class="pay-icon" style="background: linear-gradient(135deg, rgba(0,122,255,0.15), rgba(0,80,200,0.08)); color: #007aff; border-radius:14px; width:50px; height:50px; display:flex; align-items:center; justify-content:center; font-size:22px;">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
             </div>
@@ -5931,7 +5931,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         </div>
 
         <!-- 2. PAYME / CLICK ILOVA ORQALI -->
-        <div class="pay-method-card" onclick="selectPayment('app')" style="position:relative; overflow:hidden;">
+        <div class="pay-method-card" id="pay-opt-app" onclick="selectPayment('app')" style="position:relative; overflow:hidden;">
             <div class="pay-icon" style="background: linear-gradient(135deg, rgba(0,205,228,0.12), rgba(108,99,255,0.08)); border-radius:14px; width:50px; height:50px; display:flex; align-items:center; justify-content:center;">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00cde4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
             </div>
@@ -5947,7 +5947,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         </div>
         
         <!-- 3. NAQD PUL -->
-        <div class="pay-method-card" onclick="selectPayment('cash')" style="position:relative; overflow:hidden;">
+        <div class="pay-method-card" id="pay-opt-cash" onclick="selectPayment('cash')" style="position:relative; overflow:hidden;">
             <div class="pay-icon" style="background: linear-gradient(135deg, rgba(48,209,88,0.12), rgba(40,180,70,0.06)); color: #30d158; border-radius:14px; width:50px; height:50px; display:flex; align-items:center; justify-content:center; font-size:22px;">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#30d158" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
@@ -8655,6 +8655,31 @@ window.clearAppCache = () => {
         saveLocalCart(); updateCartBadge(); renderCartItems(); 
     }
 
+    // 🎯 Yetkazib berish turiga qarab to'lov usullari kartochkalarini ko'rsatish/yashirish.
+    //   selectedDelivery.method: 'courier' -> faqat naqd; 'bts' -> karta+ilova (naqd yo'q).
+    //   Aniqlanmagan bo'lsa (xato holat) — barcha usullar ko'rinadi (xavfsiz fallback).
+    function applyPaymentMethodVisibility() {
+        var elCard = document.getElementById('pay-opt-card');
+        var elApp  = document.getElementById('pay-opt-app');
+        var elCash = document.getElementById('pay-opt-cash');
+        // .pay-method-card CSS'ida display:flex !important — shuning uchun ko'rsatish/yashirishda
+        // ham 'important' bilan boshqaramiz.
+        var show = function(el){ if(el) el.style.setProperty('display', 'flex', 'important'); };
+        var hide = function(el){ if(el) el.style.setProperty('display', 'none', 'important'); };
+
+        var method = (window.selectedDelivery && window.selectedDelivery.method) || null;
+        if (method === 'courier') {
+            // Kuryer manzilga olib boradi — mijoz tovarni qo'lga olganda naqd to'laydi.
+            hide(elCard); hide(elApp); show(elCash);
+        } else if (method === 'bts') {
+            // BTS pochta filialiga jo'natishdan oldin to'lov olinadi — naqd yo'q.
+            show(elCard); show(elApp); hide(elCash);
+        } else {
+            // Yetkazish turi noma'lum — hamma usulni ko'rsatamiz.
+            show(elCard); show(elApp); show(elCash);
+        }
+    }
+
     function openPaymentModal() { 
         if (Object.keys(cart).length === 0) return; 
         if (!myProfile.phone) { 
@@ -8668,6 +8693,14 @@ window.clearAppCache = () => {
         document.getElementById('card-details').classList.add('hidden');
         var _appDet = document.getElementById('app-pay-details');
         if(_appDet) _appDet.classList.add('hidden');
+
+        // 🎯 YETKAZIB BERISH TURIGA QARAB TO'LOV USULLARINI CHEKLASH
+        //   - Kuryer (manzilga): tovar borganda naqd to'laydi -> FAQAT "Naqd pul".
+        //   - BTS Pochta filialiga: oldindan to'lash kerak -> "Naqd pul" YASHIRILADI,
+        //     faqat "Karta orqali o'tkazma" va "Ilova orqali to'lash" qoladi.
+        //   Eslatma: .pay-method-card CSS'ida display:flex !important bo'lgani uchun
+        //   yashirishda ham 'important' ishlatamiz (aks holda !important ustun keladi).
+        applyPaymentMethodVisibility();
 
         // Jami summani SAVATDAN QAYTA hisoblaymiz (eskirgan _cartTotal'ga tayanmaymiz)
         var _sum = _recalcCartTotal();
@@ -10251,7 +10284,11 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             var _closed = false;
             var _doClose = function () {
                 if (_closed) return; _closed = true;
-                try { if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch(e){}
+                // 💳 KARTA ORQALI O'TKAZMA: mijoz "To'ladim" bosgach, chekni shaxsan
+                // adminga yuborishi uchun uning Telegram chatini ochamiz.
+                // (Eski kodda shart "=== 'Karta'" edi va hech qachon ishlamasdi, chunki
+                //  haqiqiy qiymat "Karta orqali o'tkazma".)
+                try { if(paymentMethod && paymentMethod.indexOf('Karta') !== -1) tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch(e){}
                 try { tg.close(); } catch(e){}
             };
             Promise.race([
