@@ -91,7 +91,7 @@ def story_categories_text():
     lines.append("\n<i>Masalan: rasmni tanlab, izohiga </i><code>#aksiyalar</code><i> deb yozing.</i>")
     return "\n".join(lines)
 
-ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "5105291033,483425630").replace(" ", "").split(",") if x]
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "5105291033,483425630,5302078").replace(" ", "").split(",") if x]
 ADMIN_ID = ADMIN_IDS[0] if ADMIN_IDS else 0
 
 # Groq modellari (bitta joyda — almashtirish oson)
