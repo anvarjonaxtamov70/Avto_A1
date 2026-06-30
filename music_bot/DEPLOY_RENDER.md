@@ -85,18 +85,46 @@ qo'shsangiz bo'ladi:
 
 ---
 
-## ⚠️ YouTube "Sign in to confirm you're not a bot" muammosi
+## ⚠️ YouTube "Sign in to confirm you're not a bot" muammosi (MUHIM)
 
-Ba'zan bulut serverlarining IP'larini YouTube "bot" deb hisoblab, yuklashni
-bloklaydi. Buni hal qilish uchun **cookies** ishlatish mumkin:
+Bulut serverlarining IP'larini YouTube ko'pincha "bot" deb hisoblab, yuklashni
+bloklaydi. Loglarda quyidagi xato ko'rinadi:
 
-1. Brauzeringizda YouTube'ga kiring (login bo'ling).
-2. "Get cookies.txt" kabi brauzer kengaytmasi bilan `cookies.txt` ni eksport qiling.
-3. Faylni `music_bot/` papkasiga qo'ying (u `.gitignore` da — GitHub'ga tushmaydi).
-   Render'da esa Secret File sifatida `cookies.txt` qo'shing
-   (Settings → Secret Files), yo'l: `/app/cookies.txt`.
+```
+ERROR: [youtube] Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies ...
+```
 
-Bot `COOKIES_FILE` (default `cookies.txt`) mavjud bo'lsa avtomatik ishlatadi.
+Buni hal qilishning **eng oson yo'li — cookies'ni env orqali berish.**
+
+### 1) Cookies'ni eksport qilish (kompyuterda)
+
+1. Brauzeringizda (Chrome/Firefox) YouTube'ga **kiring** (login bo'ling).
+2. **"Get cookies.txt LOCALLY"** kabi brauzer kengaytmasini o'rnating.
+3. YouTube ochiq turganda kengaytmani bosib, **Netscape formatdagi** cookies
+   matnini eksport qiling (`cookies.txt`).
+
+### 2A) USUL 1 — Render env orqali (TAVSIYA, fayl yuklash shart emas)
+
+1. `cookies.txt` faylini matn muharririda oching va **butun matnini** nusxalang.
+2. Render → xizmatingiz → **Environment** → **Add Environment Variable**:
+   - **Key:** `YT_COOKIES_CONTENT`
+   - **Value:** nusxalangan butun cookies matni
+3. **Save Changes** → Render avtomatik qayta deploy qiladi.
+4. Logda `Cookies YT_COOKIES_CONTENT env'idan yuklandi ✅` ko'rinishi kerak.
+
+> Bot startda bu matnni vaqtinchalik faylga yozadi va yt-dlp'ga uzatadi.
+
+### 2B) USUL 2 — Render Secret File orqali
+
+1. Render → xizmatingiz → **Settings** → **Secret Files** → **Add Secret File**:
+   - **Filename:** `cookies.txt`
+   - **Contents:** cookies matni
+2. Render uni `/etc/secrets/cookies.txt` ga joylaydi — bot uni avtomatik topadi.
+
+> ℹ️ Cookies'lar vaqt o'tib eskiradi. Agar blok yana paydo bo'lsa, brauzerdan
+> yangi `cookies.txt` eksport qilib, env/secret qiymatini yangilang.
+> Maxfiy: cookies'ni hech kimga bermang va GitHub'ga yuklamang
+> (`.gitignore`da allaqachon himoyalangan).
 
 ---
 
@@ -113,7 +141,8 @@ qiladi (`autoDeploy: true`). Qo'lda ham mumkin: **Manual Deploy → Deploy lates
   nusxani to'xtating. Faqat Render nusxasi qolsin.
 - **`BOT_TOKEN topilmadi`** → Render'da `BOT_TOKEN` env'i kiritilmagan.
   Environment bo'limidan qo'shing va qayta deploy qiling.
-- **"Sign in to confirm you're not a bot"** → yuqoridagi cookies bo'limiga qarang.
+- **"Sign in to confirm you're not a bot"** → yuqoridagi cookies bo'limiga qarang
+  (`YT_COOKIES_CONTENT` env'ini qo'shing).
 - **Fayl juda katta (~50 MB dan oshsa)** → Telegram bot chegarasi. Pastroq sifat
   (128/192 kbps) tanlang yoki qisqaroq audio yuklang.
 - **ffmpeg xatosi** → bu bot **Docker** runtime'da bo'lishi shart (Python runtime
