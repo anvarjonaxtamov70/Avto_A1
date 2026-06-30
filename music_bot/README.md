@@ -9,6 +9,10 @@ qilib yuklab beruvchi Telegram bot. `yt-dlp` + `ffmpeg` ishlatadi.
 - 🔎 **Qo'shiq nomi** yozilsa — YouTube'dan o'zi qidirib topadi (`ytsearch`)
 - 🎚 **Sifat tanlash**: 128 / 192 / 320 kbps (default = 320, eng yuqori)
 - 🏷 Metadata (nom, ijrochi) va muqova rasm MP3 ichiga joylanadi
+- 🔑 **PO Token provider** ichiga o'rnatilgan — datacenter IP'lardagi YouTube
+  "bot" blokini avtomatik ochadi (qo'shimcha sozlash shart emas)
+- 🔁 Bir nechta `player_client` bo'yicha avtomatik fallback (web/tv/mweb/android)
+- 🍪 Ixtiyoriy cookies bilan ishonchlilikni yanada oshirish
 - ☁️ Render.com bepul tarifda **24/7** ishlaydi (self-ping bilan uxlab qolmaydi)
 
 ## Fayllar
@@ -16,11 +20,38 @@ qilib yuklab beruvchi Telegram bot. `yt-dlp` + `ffmpeg` ishlatadi.
 | Fayl | Vazifasi |
 |------|----------|
 | `bot.py` | Botning asosiy kodi (aiogram 3.x) |
-| `requirements.txt` | Python kutubxonalari |
-| `Dockerfile` | ffmpeg bilan Docker image |
+| `diag_utils.py` | Toza (stdlib) yordamchi funksiyalar — test qilinadi |
+| `tests/` | `pytest` testlari (`pytest -v`) |
+| `requirements.txt` | Python kutubxonalari (yt-dlp + PO Token plagini) |
+| `Dockerfile` | ffmpeg + Node.js + PO Token server bilan Docker image |
+| `start.sh` | PO Token serverni va botni ishga tushiruvchi skript |
 | `render.yaml` | Render bepul deploy sozlamasi |
 | `.env.example` | Sozlamalar namunasi |
 | `DEPLOY_RENDER.md` | Bepul 24/7 deploy qo'llanmasi |
+
+## 🩺 Diagnostika (`/diag`)
+
+Agar yuklash ishlamasa, Telegram'da botga **`/diag`** yuboring. Bot har bir
+bosqichni sinab, hisobot beradi:
+
+- Python / yt-dlp versiyasi
+- `ffmpeg` va `node` mavjudligi
+- PO Token plagini (pip) o'rnatilganmi
+- PO Token serveri ishlayaptimi (`127.0.0.1:4416`)
+- cookies bormi
+- **har bir `player_client` (web/mweb/tv/android/ios) bo'yicha sinov** — qaysi
+  biri ishlaydi, qaysi biri qanday xato beradi
+
+Natijada ❌ belgili xatolarni Kiro'ga forward qiling — aniq sababini topamiz.
+
+> Faqat admin ishlatishi uchun `ADMIN_ID` env'iga o'z Telegram ID'ingizni yozing.
+
+## 🧪 Testlar
+
+```bash
+cd music_bot
+pytest -v        # diag_utils funksiyalari uchun birlik testlar
+```
 
 ## Tez ishga tushirish (lokal, test uchun)
 
