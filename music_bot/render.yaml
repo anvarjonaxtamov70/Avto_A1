@@ -1,0 +1,30 @@
+# =====================================================================
+#  🎵 Music Bot — Render.com BEPUL deploy "blueprint"
+#  Bot DOCKER orqali ishga tushadi (ffmpeg kerak bo'lgani uchun).
+#
+#  Bu faylni alohida blueprint sifatida ishlatish uchun Render'da
+#  "New + -> Blueprint" tanlab, repo'ni ko'rsating. Agar repo ildizida
+#  boshqa render.yaml bo'lsa, qo'lda "New + -> Web Service" usulini
+#  ishlating (DEPLOY_RENDER.md'ga qarang).
+#
+#  To'liq qo'llanma:  DEPLOY_RENDER.md
+# =====================================================================
+services:
+  - type: web
+    name: music-bot
+    runtime: docker          # ffmpeg kerak -> Docker runtime
+    plan: free               # bepul tarif (kredit karta talab qilinmaydi)
+    rootDir: music_bot       # bot kodi shu papkada
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true         # GitHub'ga push qilinsa, o'zi qayta deploy bo'ladi
+    envVars:
+      # ——— MAJBURIY maxfiy qiymat (Render panelida kiritiladi) ———
+      - key: BOT_TOKEN
+        sync: false
+
+      # ——— Sozlamalar ———
+      - key: DEFAULT_QUALITY
+        value: "320"
+      - key: KEEP_ALIVE_INTERVAL
+        value: "600"
