@@ -3321,10 +3321,54 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         /* Bosish uchun ko'rinmas zonalar (Instagramdek ishlashi uchun) */
         .story-tap-left { position: absolute; left: 0; top: 0; width: 30%; height: 100%; z-index: 5; }
         .story-tap-right { position: absolute; right: 0; top: 0; width: 70%; height: 100%; z-index: 5; }
-        
+
+        /* ============================================================
+           💬 STORIES JAVOB / REAKSIYA PANELI (Instagram uslubi)
+           Glassmorphism, yassi (flat), ixcham. Pastda, video ustida.
+           ============================================================ */
+        .sv-reply-bar {
+            position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
+            display: flex; flex-direction: column; gap: 10px;
+            padding: 14px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+            /* Pastdan yengil qoraytirish -> input o'qiladi, lekin video to'silmaydi */
+            background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0));
+            pointer-events: none;            /* gradient bosishni o'tkazib yuboradi */
+        }
+        .sv-reply-bar > * { pointer-events: auto; }  /* faqat input + tugmalar bosiladi */
+        .sv-reactions { display: flex; justify-content: center; gap: 16px; }
+        .sv-react {
+            width: 46px; height: 46px; border-radius: 50%; border: none;
+            background: rgba(255,255,255,0.13);
+            -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+            font-size: 23px; line-height: 1; cursor: pointer; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.15s ease, background 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .sv-react:active { transform: scale(1.3); background: rgba(255,255,255,0.24); }
+        .sv-reply-inputwrap {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,0.14);
+            -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.18); border-radius: 24px;
+            padding: 5px 5px 5px 16px;
+        }
+        .sv-reply-input {
+            flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+            color: #fff; font-size: 14px; font-family: inherit;
+        }
+        .sv-reply-input::placeholder { color: rgba(255,255,255,0.6); }
+        .sv-reply-send {
+            flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; border: none;
+            background: var(--luxury-gold, #C9A84C); color: #1a1305; font-size: 17px; font-weight: 700;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: transform 0.12s ease; -webkit-tap-highlight-color: transparent;
+        }
+        .sv-reply-send:active { transform: scale(0.88); }
+
         /* 🗑 ADMIN O'CHIRISH TUGMASI (Glassmorphism) */
         .story-admin-delete {
-            position: absolute; bottom: 30px; right: 20px;
+            position: absolute; bottom: 100px; right: 20px;
             background: rgba(255, 69, 58, 0.2); color: #ff453a;
             border: 1px solid rgba(255, 69, 58, 0.5); padding: 10px 18px;
             border-radius: 14px; font-weight: 800; font-size: 13px; z-index: 10;
@@ -12476,6 +12520,97 @@ function initReveal() {
             if (navigator.connection && navigator.connection.saveData) _saveData = true;
         } catch (e) {}
 
+        // ============================================================
+        // 💬 STORIES REAKSIYA / JAVOB TIZIMI
+        //   Mijoz emoji bossa yoki xabar yozsa -> bot (proxy) orqali adminga
+        //   yetkaziladi: Mijoz profili + qaysi video + xabar/reaksiya.
+        //   Admin xabardagi havolaga bosib, to'g'ridan-to'g'ri mijoz lichkasiga
+        //   o'tib javob yoza oladi.
+        // ============================================================
+        function _svEscHtml(s){
+            return String(s == null ? '' : s)
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // Input + panelni bir marta "simlash" (pauza/davom + Enter + tap-zona himoyasi)
+        function _ensureReplyBar() {
+            const bar = document.getElementById('sv-reply-bar');
+            if (bar && !bar._svWired) {
+                bar._svWired = true;
+                // Panel ichidagi bosishlar story tap-zonalariga (oldinga/orqaga) o'tmasin
+                ['click','mousedown','touchstart','touchend'].forEach(ev =>
+                    bar.addEventListener(ev, (e) => e.stopPropagation()));
+            }
+            const inp = document.getElementById('sv-reply-input');
+            if (!inp || inp._svWired) return;
+            inp._svWired = true;
+            inp.addEventListener('focus', () => { try { pauseStory(); } catch(e){} });  // yozayotganda story to'xtaydi
+            inp.addEventListener('blur',  () => { try { resumeStory(); } catch(e){} });
+            inp.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); window.sendStoryReplyFromInput(); }
+            });
+        }
+
+        window.sendStoryReplyFromInput = function () {
+            const inp = document.getElementById('sv-reply-input');
+            if (!inp) return;
+            const txt = inp.value.trim();
+            if (!txt) return;
+            window.sendStoryReaction('message', txt);
+            inp.value = '';
+            try { inp.blur(); } catch(e){}
+        };
+
+        window.sendStoryReaction = function (actionType, content) {
+            try {
+                // 🎬 Joriy story (video/rasm) — qaysi videoga reaksiya bildirilgani
+                const item = (currentPlaylist && currentPlaylist[currentStoryIdx]) ? currentPlaylist[currentStoryIdx] : null;
+                const cat = currentPlaylistId || '-';
+                const capEl = document.getElementById('story-caption');
+                const caption = capEl ? (capEl.textContent || '').trim() : cat;
+                const src = (item && item.src) ? item.src : '';
+                const videoName = src ? src.split('/').pop().split('?')[0]
+                                     : ((item && item.type === 'image') ? 'rasm' : '-');
+                // story_id: agar item.id bo'lsa o'sha, aks holda kategoriya + timestamp
+                const storyId = (item && (item.id || item.story_id)) ? (item.id || item.story_id)
+                                 : (cat + ':' + (item && item.timestamp ? item.timestamp : currentStoryIdx));
+
+                // 👤 Foydalanuvchi (Telegram'dan)
+                const tgUser = (typeof tg !== 'undefined' && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
+                let name = (typeof myProfile !== 'undefined' && myProfile && myProfile.name) ? myProfile.name
+                            : (tgUser ? ((tgUser.first_name || '') + (tgUser.last_name ? ' ' + tgUser.last_name : '')).trim() : '');
+                if (!name) name = 'Mijoz';
+                const uname = (tgUser && tgUser.username) ? tgUser.username : '';
+                const uid = (typeof window.currentUser !== 'undefined' && window.currentUser) ? window.currentUser : (tgUser ? tgUser.id : '');
+                // Profil havolasi: username bo'lsa t.me, aks holda tg://user (ikkalasi ham bosiladi)
+                const profileLink = uname ? ('https://t.me/' + uname) : ('tg://user?id=' + uid);
+                const unamePart = uname ? ('@' + _svEscHtml(uname)) : ('ID: <code>' + _svEscHtml(uid) + '</code>');
+
+                const actionLabel = (actionType === 'reaction') ? 'Reaksiya' : 'Xabar';
+                let contentDisplay = _svEscHtml(content);
+                if (actionType === 'reaction' && content === '❓') {
+                    contentDisplay = '❓ <i>(narx / ma\'lumot so\'rayapti)</i>';
+                }
+
+                // 🤖 Adminga (bot orqali) tayyor formatda
+                const text =
+                    '💬 <b>Stories — ' + actionLabel + '</b>\n\n' +
+                    '👤 Mijoz: <a href="' + profileLink + '">' + _svEscHtml(name) + '</a> (' + unamePart + ')\n' +
+                    '🎬 Story: ' + _svEscHtml(caption) + '\n' +
+                    (src ? ('🎞 Video: <a href="' + _svEscHtml(src) + '">' + _svEscHtml(videoName) + '</a>\n') : '') +
+                    '💬 ' + actionLabel + ': ' + contentDisplay;
+
+                tgProxySend({ chat_id: ADMIN_ID, text: text, parse_mode: 'HTML', disable_web_page_preview: true });
+
+                try { if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light'); } catch(e){}
+                if (typeof showToast === 'function') {
+                    showToast((actionType === 'reaction') ? 'Reaksiya yuborildi ✅' : 'Xabaringiz yuborildi ✅', 'success');
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Yuborishda xatolik, qayta urinib ko\'ring', 'warning');
+            }
+        };
+
         window.startStories = (playlistId, caption) => {
             currentPlaylistId = playlistId;
             currentPlaylist = STORIES_DB[playlistId];
@@ -12513,6 +12648,7 @@ function initReveal() {
             // Swipe-down va sound tugmalarini biriktirish (faqat 1 marta)
             _attachSwipeDownClose();
             _ensureSoundButton();
+            _ensureReplyBar();   // 💬 javob/reaksiya panelini biriktirish
 
             if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             playCurrentStory();
@@ -15017,6 +15153,19 @@ window.saveMapAddressWithName = () => {
     
     <!-- FAQAT ADMIN UCHUN O'CHIRISH TUGMASI -->
     <div class="story-admin-delete" id="admin-story-delete-btn" onclick="deleteCurrentStory()">🗑 O'chirish</div>
+
+    <!-- 💬 JAVOB YOZISH + TEZKOR REAKSIYALAR (Instagram uslubi) -->
+    <div class="sv-reply-bar" id="sv-reply-bar">
+        <div class="sv-reactions">
+            <button type="button" class="sv-react" onclick="sendStoryReaction('reaction','❤️')" aria-label="Yoqdi">❤️</button>
+            <button type="button" class="sv-react" onclick="sendStoryReaction('reaction','🔥')" aria-label="Zo'r">🔥</button>
+            <button type="button" class="sv-react" onclick="sendStoryReaction('reaction','❓')" aria-label="Savol / narx">❓</button>
+        </div>
+        <div class="sv-reply-inputwrap">
+            <input id="sv-reply-input" class="sv-reply-input" type="text" placeholder="Xabar yozing..." maxlength="500" autocomplete="off">
+            <button type="button" class="sv-reply-send" onclick="sendStoryReplyFromInput()" aria-label="Yuborish">➤</button>
+        </div>
+    </div>
  
  
  
