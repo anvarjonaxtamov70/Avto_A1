@@ -3289,11 +3289,11 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             background: #000; z-index: 99999; display: none; flex-direction: column;
         }
         .story-header {
-            /* Telegram tepa paneli (3 nuqta + nazad) ostiga kirib qolmasligi uchun
-               safe-area + tg.contentSafeAreaInset hisoblansin. Ortiqcha 56px =
-               taxminan Telegram bar balandligi (mini app native paneli). */
-            position: absolute; top: calc(15px + var(--safe-top, 0px) + 56px);
-            left: 0; width: 100%; z-index: 10; padding: 0 10px; box-sizing: border-box;
+            /* 📍 Instagram uslubi: progress bar EKRANNING ENG TEPASIDA.
+               Faqat qurilma xavfsiz zonasi (notch/status bar) hisobga olinadi
+               (var(--safe-top)) + kichik 10px nafosat. Hamma elementdan tepada. */
+            position: absolute; top: calc(10px + var(--safe-top, 0px));
+            left: 0; width: 100%; z-index: 60; padding: 0 10px; box-sizing: border-box;
         }
         .story-progress-container {
             display: flex; gap: 4px; width: 100%; margin-bottom: 12px;
@@ -3317,6 +3317,11 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         #story-content {
             flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #111;
         }
+        /* 🌫️ Video yuklanayotganda chiroyli xira (blur) o'tish effekti (Instagram uslubi).
+           Yuklanish holatida .stv-loading klassi qo'shiladi -> blur+xira; o'ynashga
+           tayyor bo'lganda olib tashlanadi -> tiniq. transition silliq o'tkazadi. */
+        #stVideo { transition: filter 0.3s ease, opacity 0.3s ease; }
+        #stVideo.stv-loading { filter: blur(15px); opacity: 0.8; }
         
         /* Bosish uchun ko'rinmas zonalar (Instagramdek ishlashi uchun) */
         .story-tap-left { position: absolute; left: 0; top: 0; width: 30%; height: 100%; z-index: 5; }
@@ -12466,7 +12471,7 @@ function initReveal() {
 
         // Preload va sound holatini saqlash
         let _preloadVideo = null;
-        let _storySoundMuted = true;   // boshlanishida ovozsiz (Instagram qoidasi: brauzer ovozli avtoplay'ni bloklaydi)
+        let _storySoundMuted = false;   // ✅ boshlanishidayoq OVOZLI (unmuted). Telegram WebApp foydalanuvchi ilovani o'zi ochgani uchun ovozli autoplay'ga ruxsat beradi; bloklansa _safePlay() avtomatik muted'ga qaytadi.
         let _storyTouchStartY = 0;
         let _storyTouchCurrentY = 0;
         let _storyIsSwiping = false;
@@ -12563,7 +12568,7 @@ function initReveal() {
                     <div id="sv-loader" style="position:absolute; z-index:2; display:flex; flex-direction:column; align-items:center;">
                         <div class="sv-spinner"></div>
                     </div>
-                    <video id="stVideo" ${poster} playsinline webkit-playsinline preload="auto" autoplay
+                    <video id="stVideo" class="stv-loading" ${poster} playsinline webkit-playsinline preload="auto" autoplay
                            ${_storySoundMuted ? 'muted' : ''}
                            src="${item.src}"
                            style="width:100%;height:100%;object-fit:contain;background:#000;">
@@ -12619,6 +12624,8 @@ function initReveal() {
                 // Yetarli yuklanganда — loader ketadi, video boshlanadi
                 storyVideoElement.addEventListener('canplay', () => {
                     if (loader) loader.style.display = 'none';
+                    // 🌫️ Blur'ni olib tashlaymiz — video tayyor
+                    if (storyVideoElement) storyVideoElement.classList.remove('stv-loading');
                     // 🛡️ Backup: agar autoplay atributi qandaydir sababdan
                     // ishlamagan bo'lsa, qo'lda boshlaymiz
                     if (storyVideoElement.paused) _safePlay();
@@ -12633,9 +12640,13 @@ function initReveal() {
                 // Sekin internet — "waiting" / "stalled" da loader qaytadi
                 storyVideoElement.addEventListener('waiting', () => {
                     if (loader) loader.style.display = 'flex';
+                    // 🌫️ Bufferlanayotganda blur'ni qaytaramiz
+                    if (storyVideoElement) storyVideoElement.classList.add('stv-loading');
                 });
                 storyVideoElement.addEventListener('playing', () => {
                     if (loader) loader.style.display = 'none';
+                    // 🌫️ O'ynay boshladi — blur ketadi (tiniq video)
+                    if (storyVideoElement) storyVideoElement.classList.remove('stv-loading');
                     if (bufferBar) {
                         // 1.2s dan keyin buffering barni yashiramiz (chalg'itmasin)
                         setTimeout(() => { bufferBar.classList.remove('show'); }, 1200);
