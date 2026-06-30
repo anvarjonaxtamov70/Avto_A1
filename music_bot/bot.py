@@ -79,6 +79,16 @@ USER_AGENT = (
 # bgutil POT server bot bilan bir konteynerda 127.0.0.1:4416 da ishlaydi.
 POT_PROVIDER_URL = os.getenv("POT_PROVIDER_URL", "http://127.0.0.1:4416")
 
+# (Ixtiyoriy) Proxy — YouTube blokini chetlab o'tishning eng kuchli usuli.
+# DIQQAT: datacenter (bepul) proxy YouTube'da deyarli ishlamaydi; RESIDENTIAL
+# proxy kerak. Format: http://user:pass@host:port  yoki  socks5://host:port
+PROXY_URL = (
+    os.getenv("PROXY_URL")
+    or os.getenv("HTTPS_PROXY")
+    or os.getenv("HTTP_PROXY")
+    or ""
+).strip()
+
 # Yuklashda ketma-ket sinaladigan player_client'lar. Biri bloklansa,
 # keyingisiga o'tiladi. None = yt-dlp'ning o'z default tartibi (POT bilan).
 # Env orqali o'zgartirish mumkin: YT_PLAYER_CLIENTS="web,mweb,tv,android"
@@ -407,6 +417,8 @@ def _build_opts(quality: str, tmpdir: str, client: str | None):
     cookie_path = _RESOLVED_COOKIES
     if cookie_path and os.path.exists(cookie_path):
         opts["cookiefile"] = cookie_path
+    if PROXY_URL:
+        opts["proxy"] = PROXY_URL
     return opts
 
 
@@ -504,6 +516,8 @@ def _diag_extract(client: str | None, url: str) -> tuple[bool, str]:
     cookie_path = _RESOLVED_COOKIES
     if cookie_path and os.path.exists(cookie_path):
         opts["cookiefile"] = cookie_path
+    if PROXY_URL:
+        opts["proxy"] = PROXY_URL
 
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -537,6 +551,12 @@ def _run_diagnostics_blocking(test_url: str = DIAG_TEST_URL) -> str:
         lines.append(f"✅ Cookies: BOR ({_RESOLVED_COOKIES})")
     else:
         lines.append("➖ Cookies: yo'q (ba'zi videolar uchun KERAK bo'lishi mumkin)")
+    if PROXY_URL:
+        # Maxfiylik uchun proxy parolini ko'rsatmaymiz
+        safe = re.sub(r"//[^@]+@", "//***@", PROXY_URL)
+        lines.append(f"✅ Proxy: BOR ({safe})")
+    else:
+        lines.append("➖ Proxy: yo'q (datacenter IP'da bloklov ehtimoli yuqori)")
 
     # 2) Har bir player_client bo'yicha sinov
     lines.append("-" * 32)
@@ -630,6 +650,8 @@ async def main():
     setup_cookies()  # cookies manbasini aniqlaymiz (env yoki fayl)
     # PO Token serverini startda bir marta tekshiramiz (logga yozamiz)
     logging.info(_check_pot_server())
+    if PROXY_URL:
+        logging.info("Proxy yoqilgan (YouTube so'rovlari proxy orqali ketadi).")
     await start_health_server()
     asyncio.create_task(keep_awake())
     # Buyruqlar menyusi

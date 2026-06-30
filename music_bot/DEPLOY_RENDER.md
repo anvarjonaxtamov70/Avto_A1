@@ -148,6 +148,23 @@ Eng qiyin holatlarda cookies qo'shsangiz, blok deyarli butunlay yo'qoladi:
 > eksport qilib, env/secret qiymatini yangilang. Maxfiy: cookies'ni hech kimga
 > bermang va GitHub'ga yuklamang (`.gitignore`da himoyalangan).
 
+## 🌐 Eng kuchli muqobil: Proxy yoki uy IP'si
+
+Agar cookies bilan ham ayrim videolar ochilmasa, sabab Render'ning datacenter
+IP'si. Ikki kuchli yo'l bor:
+
+### A) Residential proxy (pullik, bulutda eng ishonchli)
+Render → **Environment** → `PROXY_URL` qo'shing:
+- Format: `http://user:pass@host:port` yoki `socks5://host:port`
+- ⚠️ **Bepul/datacenter proxy YouTube'da deyarli ishlamaydi** — residential kerak.
+
+### B) Botni uy IP'sida ishlatish (bepul, eng ishonchli)
+Render o'rniga botni uy internetidagi qurilmada ishga tushiring (eski Android
+telefon — Termux, Raspberry Pi yoki doim yoniq kompyuter). Uy IP'si bloklanmaydi,
+cookies/proxy kerak emas. Batafsil: `README.md` → "YouTube blokini hal qilish".
+
+> Holatni tekshirish: botga `/diag <link>` yuboring.
+
 ---
 
 ## Kodni yangilaganda (kelajakda)
