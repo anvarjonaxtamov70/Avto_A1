@@ -48,8 +48,60 @@ if not BOT_TOKEN:
     raise SystemExit("BOT_TOKEN topilmadi! .env faylga yoki Render env'ga qo'shing.")
 
 # YouTube "bot emasligingizni tasdiqlang" muammosini chetlab o'tish uchun
-# (ixtiyoriy) cookies fayli. Pastdagi DEPLOY qo'llanmasiga qarang.
+# cookies. Ikki usulda berish mumkin (pastdagi DEPLOY qo'llanmasiga qarang):
+#   1) YT_COOKIES_CONTENT env  -> bot startda cookies faylga yozadi (eng oson)
+#   2) cookies.txt fayli       -> COOKIES_FILE env yoki Render Secret File
 COOKIES_FILE = os.getenv("COOKIES_FILE", "cookies.txt")
+YT_COOKIES_CONTENT = os.getenv("YT_COOKIES_CONTENT", "")
+
+# yt-dlp tomonidan ishlatiladigan yakuniy cookies fayl yo'li (startda aniqlanadi)
+_RESOLVED_COOKIES: str | None = None
+
+# YouTube bot-deteksiyasini kamaytirish uchun realistik User-Agent
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+)
+
+
+def setup_cookies() -> str | None:
+    """Cookies manbasini aniqlaydi va yt-dlp uchun fayl yo'lini qaytaradi.
+
+    Tekshirish tartibi:
+      1) YT_COOKIES_CONTENT env (matn) -> faylga yoziladi
+      2) COOKIES_FILE env / cookies.txt (lokal)
+      3) /etc/secrets/cookies.txt (Render Secret File)
+    """
+    global _RESOLVED_COOKIES
+
+    # 1) Env orqali berilgan cookies matnini faylga yozamiz
+    if YT_COOKIES_CONTENT.strip():
+        target = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+        try:
+            with open(target, "w", encoding="utf-8") as f:
+                content = YT_COOKIES_CONTENT
+                if not content.startswith("# Netscape"):
+                    # yt-dlp Netscape formatdagi sarlavhani kutadi
+                    content = "# Netscape HTTP Cookie File\n" + content
+                f.write(content)
+            _RESOLVED_COOKIES = target
+            logging.info("Cookies YT_COOKIES_CONTENT env'idan yuklandi ✅")
+            return target
+        except Exception as e:
+            logging.error(f"Cookies env'ini yozishda xato: {e}")
+
+    # 2) & 3) Mavjud cookies fayllarini qidiramiz
+    for path in (COOKIES_FILE, "/etc/secrets/cookies.txt"):
+        if path and os.path.exists(path):
+            _RESOLVED_COOKIES = path
+            logging.info(f"Cookies fayldan topildi: {path} ✅")
+            return path
+
+    logging.warning(
+        "Cookies topilmadi. YouTube ba'zan 'Sign in to confirm you're not a bot' "
+        "xatosini berishi mumkin. DEPLOY_RENDER.md'dagi cookies bo'limiga qarang."
+    )
+    return None
 
 # Telegram bot orqali yuborish mumkin bo'lgan fayl chegarasi ~50 MB.
 MAX_TG_SIZE = 49 * 1024 * 1024
@@ -204,13 +256,24 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
         await status_msg.delete()
 
     except yt_dlp.utils.DownloadError as e:
-        logging.warning(f"DownloadError: {e}")
-        await status_msg.edit_text(
-            "❌ Yuklashda xatolik. Sabablari:\n"
-            "• Link noto'g'ri yoki video o'chirilgan\n"
-            "• Video yoshга cheklangan / maxfiy\n"
-            "Boshqa link bilan urinib ko'ring."
-        )
+        msg = str(e)
+        logging.warning(f"DownloadError: {msg}")
+        low = msg.lower()
+        if "sign in to confirm" in low or "not a bot" in low or "cookies" in low:
+            # YouTube anti-bot bloki — cookies kerak
+            await status_msg.edit_text(
+                "🤖 <b>YouTube serverni \"bot\" deb hisoblab bloklayapti.</b>\n\n"
+                "Buni hal qilish uchun adminga <b>cookies</b> ulash kerak "
+                "(Render env: <code>YT_COOKIES_CONTENT</code>).\n"
+                "Batafsil: <code>music_bot/DEPLOY_RENDER.md</code> → cookies bo'limi."
+            )
+        else:
+            await status_msg.edit_text(
+                "❌ Yuklashda xatolik. Sabablari:\n"
+                "• Link noto'g'ri yoki video o'chirilgan\n"
+                "• Video yoshга cheklangan / maxfiy\n"
+                "Boshqa link bilan urinib ko'ring."
+            )
     except Exception as e:
         logging.exception("Kutilmagan xato")
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {e}")
@@ -228,6 +291,10 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
         "quiet": True,
         "no_warnings": True,
         "writethumbnail": True,
+        "http_headers": {"User-Agent": USER_AGENT},
+        # YouTube bot-deteksiyasini chetlab o'tishga yordam beradi:
+        # turli "player client"lar orqali urinib ko'radi.
+        "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -239,8 +306,9 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
         ],
     }
     # YouTube anti-bot uchun cookies (mavjud bo'lsa)
-    if os.path.exists(COOKIES_FILE):
-        ydl_opts["cookiefile"] = COOKIES_FILE
+    cookie_path = _RESOLVED_COOKIES
+    if cookie_path and os.path.exists(cookie_path):
+        ydl_opts["cookiefile"] = cookie_path
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -320,6 +388,7 @@ async def keep_awake():
 # =====================================================================
 async def main():
     logging.info("🎵 Music bot ishga tushdi!")
+    setup_cookies()  # cookies manbasini aniqlaymiz (env yoki fayl)
     await start_health_server()
     asyncio.create_task(keep_awake())
     # 409 Conflict oldini olish uchun webhookni tozalaymiz
