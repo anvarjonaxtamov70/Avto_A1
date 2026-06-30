@@ -3328,43 +3328,47 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
            ============================================================ */
         .sv-reply-bar {
             position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
-            display: flex; flex-direction: column; gap: 10px;
-            padding: 14px 12px calc(14px + env(safe-area-inset-bottom, 0px));
-            /* Pastdan yengil qoraytirish -> input o'qiladi, lekin video to'silmaydi */
-            background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0));
+            display: flex; flex-direction: column; gap: 12px;
+            padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+            /* Pastdan juda yengil qoraytirish -> input o'qiladi, video to'silmaydi */
+            background: linear-gradient(to top, rgba(0,0,0,0.45), rgba(0,0,0,0));
             pointer-events: none;            /* gradient bosishni o'tkazib yuboradi */
         }
         .sv-reply-bar > * { pointer-events: auto; }  /* faqat input + tugmalar bosiladi */
-        .sv-reactions { display: flex; justify-content: center; gap: 16px; }
+        /* Tezkor emojilar — QUTISIZ, ramkasiz, soyasiz; fonga tabiiy singadi */
+        .sv-reactions { display: flex; justify-content: center; gap: 24px; }
         .sv-react {
-            width: 46px; height: 46px; border-radius: 50%; border: none;
-            background: rgba(255,255,255,0.13);
-            -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-            font-size: 23px; line-height: 1; cursor: pointer; padding: 0;
-            display: flex; align-items: center; justify-content: center;
-            transition: transform 0.15s ease, background 0.2s ease;
+            background: transparent; border: none; box-shadow: none; padding: 0;
+            font-size: 27px; line-height: 1; cursor: pointer;
+            /* video ustida ko'rinishi uchun faqat nozik soya (quti emas) */
+            filter: drop-shadow(0 1px 4px rgba(0,0,0,0.55));
+            transition: transform 0.15s ease, opacity 0.2s ease;
             -webkit-tap-highlight-color: transparent;
         }
-        .sv-react:active { transform: scale(1.3); background: rgba(255,255,255,0.24); }
+        .sv-react:active { transform: scale(1.35); }
+        .sv-react.sv-react-active { transform: scale(1.18); }
+        /* Reaksiya bildirilgach — tanlanmaganlari xiralashadi (1 marta qoidasi) */
+        .sv-reactions.sv-reacted .sv-react:not(.sv-react-active) { opacity: 0.38; }
+        /* Xabar qatori — to'liq yumaloq (pill), qora-shaffof + blur, ramkasiz, soyasiz */
         .sv-reply-inputwrap {
             display: flex; align-items: center; gap: 8px;
-            background: rgba(255,255,255,0.14);
-            -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.18); border-radius: 24px;
-            padding: 5px 5px 5px 16px;
+            background: rgba(0,0,0,0.5);
+            -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+            border: none; box-shadow: none; border-radius: 999px;
+            padding: 8px 8px 8px 18px;
         }
         .sv-reply-input {
             flex: 1; min-width: 0; background: transparent; border: none; outline: none;
             color: #fff; font-size: 14px; font-family: inherit;
         }
-        .sv-reply-input::placeholder { color: rgba(255,255,255,0.6); }
+        .sv-reply-input::placeholder { color: rgba(255,255,255,0.55); }  /* och kulrang */
         .sv-reply-send {
-            flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; border: none;
-            background: var(--luxury-gold, #C9A84C); color: #1a1305; font-size: 17px; font-weight: 700;
+            flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: none; box-shadow: none;
+            background: rgba(255,255,255,0.18); color: #fff; font-size: 15px;
             cursor: pointer; display: flex; align-items: center; justify-content: center;
-            transition: transform 0.12s ease; -webkit-tap-highlight-color: transparent;
+            transition: transform 0.12s ease, background 0.2s ease; -webkit-tap-highlight-color: transparent;
         }
-        .sv-reply-send:active { transform: scale(0.88); }
+        .sv-reply-send:active { transform: scale(0.88); background: rgba(255,255,255,0.3); }
 
         /* 🗑 ADMIN O'CHIRISH TUGMASI (Glassmorphism) */
         .story-admin-delete {
@@ -12532,12 +12536,59 @@ function initReveal() {
                 .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
+        // ── 2) ANTI-SPAM: localStorage'da (story kaliti -> emoji) reaksiyalar ──
+        //   Firebase rules foydalanuvchi yozuviga ruxsat bermagani uchun qurilma
+        //   xotirasida saqlaymiz: har bir story uchun reaksiya FAQAT 1 marta botga
+        //   ketadi; qayta bosilsa mahalliy yangilanadi (overwrite), bot qotmaydi.
+        function _allStoryReactions(){
+            try { return JSON.parse(localStorage.getItem('avto_story_reactions') || '{}'); }
+            catch(e){ return {}; }
+        }
+        function _getStoryReaction(key){ const m = _allStoryReactions(); return m[key] || null; }
+        function _setStoryReaction(key, emoji){
+            try { const m = _allStoryReactions(); m[key] = emoji; localStorage.setItem('avto_story_reactions', JSON.stringify(m)); } catch(e){}
+        }
+
+        function _currentStoryItem(){
+            return (currentPlaylist && currentPlaylist[currentStoryIdx]) ? currentPlaylist[currentStoryIdx] : null;
+        }
+        // Story'ning BARQAROR kaliti (dedup uchun): id/story_id -> src -> kat:timestamp
+        function _currentStoryKey(){
+            const item = _currentStoryItem();
+            const cat = currentPlaylistId || '-';
+            if (!item) return cat + ':' + currentStoryIdx;
+            return String(item.id || item.story_id || item.src || (cat + ':' + (item.timestamp || currentStoryIdx)));
+        }
+        // 🔢 3) ICHKI RAQAM (FAQAT ADMIN UCHUN, mijozga ko'rinmaydi):
+        //   "kategoriya tartibi . video tartibi"  (mas. 1.2 = 1-kategoriya, 2-video).
+        //   Kategoriya tartibi — tepadagi halqalar (DOM) ko'rinish tartibi bo'yicha.
+        function _currentVideoNumber(){
+            let catIdx = 0;
+            try {
+                const ringEls = document.querySelectorAll('.story-item .story-ring[data-story]');
+                const order = Array.from(ringEls).map(r => r.getAttribute('data-story'));
+                const i = order.indexOf(currentPlaylistId);
+                catIdx = (i >= 0) ? i : 0;
+            } catch(e){}
+            return (catIdx + 1) + '.' + (currentStoryIdx + 1);
+        }
+        // Reaksiya tugmalari holatini joriy story'ga moslash (tanlangan -> faol, qolgani -> xira)
+        function _refreshStoryReactionUI(){
+            try {
+                const reacted = _getStoryReaction(_currentStoryKey());
+                const wrap = document.querySelector('.sv-reactions');
+                document.querySelectorAll('.sv-react').forEach(b =>
+                    b.classList.toggle('sv-react-active', !!reacted && b.getAttribute('data-emoji') === reacted));
+                if (wrap) wrap.classList.toggle('sv-reacted', !!reacted);
+            } catch(e){}
+        }
+        window._refreshStoryReactionUI = _refreshStoryReactionUI;
+
         // Input + panelni bir marta "simlash" (pauza/davom + Enter + tap-zona himoyasi)
         function _ensureReplyBar() {
             const bar = document.getElementById('sv-reply-bar');
             if (bar && !bar._svWired) {
                 bar._svWired = true;
-                // Panel ichidagi bosishlar story tap-zonalariga (oldinga/orqaga) o'tmasin
                 ['click','mousedown','touchstart','touchend'].forEach(ev =>
                     bar.addEventListener(ev, (e) => e.stopPropagation()));
             }
@@ -12561,19 +12612,38 @@ function initReveal() {
             try { inp.blur(); } catch(e){}
         };
 
+        let _lastStoryMsgTs = 0;   // matn xabarlari uchun yengil cooldown (flood'ni oldini oladi)
+
         window.sendStoryReaction = function (actionType, content) {
             try {
-                // 🎬 Joriy story (video/rasm) — qaysi videoga reaksiya bildirilgani
-                const item = (currentPlaylist && currentPlaylist[currentStoryIdx]) ? currentPlaylist[currentStoryIdx] : null;
                 const cat = currentPlaylistId || '-';
                 const capEl = document.getElementById('story-caption');
                 const caption = capEl ? (capEl.textContent || '').trim() : cat;
-                const src = (item && item.src) ? item.src : '';
-                const videoName = src ? src.split('/').pop().split('?')[0]
-                                     : ((item && item.type === 'image') ? 'rasm' : '-');
-                // story_id: agar item.id bo'lsa o'sha, aks holda kategoriya + timestamp
-                const storyId = (item && (item.id || item.story_id)) ? (item.id || item.story_id)
-                                 : (cat + ':' + (item && item.timestamp ? item.timestamp : currentStoryIdx));
+                const storyKey = _currentStoryKey();
+                const videoNo = _currentVideoNumber();
+
+                // ── ANTI-SPAM ──
+                if (actionType === 'reaction') {
+                    // Bu story'ga allaqachon reaksiya bildirilgan -> botga QAYTA yubormaymiz
+                    const prev = _getStoryReaction(storyKey);
+                    if (prev) {
+                        _setStoryReaction(storyKey, content);   // mahalliy overwrite
+                        _refreshStoryReactionUI();
+                        try { if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light'); } catch(e){}
+                        if (typeof showToast === 'function') {
+                            showToast(prev === content ? 'Siz allaqachon reaksiya bildirgansiz' : 'Reaksiyangiz yangilandi ✅', 'info');
+                        }
+                        return;   // 🛑 botga yangi xabar ketmaydi
+                    }
+                } else {
+                    // Matn xabari — flood bo'lmasligi uchun yengil cooldown (8s)
+                    const now = Date.now();
+                    if (now - _lastStoryMsgTs < 8000) {
+                        if (typeof showToast === 'function') showToast('Biroz kuting — oldingi xabaringiz yuborilyapti', 'warning');
+                        return;
+                    }
+                    _lastStoryMsgTs = now;
+                }
 
                 // 👤 Foydalanuvchi (Telegram'dan)
                 const tgUser = (typeof tg !== 'undefined' && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
@@ -12582,25 +12652,31 @@ function initReveal() {
                 if (!name) name = 'Mijoz';
                 const uname = (tgUser && tgUser.username) ? tgUser.username : '';
                 const uid = (typeof window.currentUser !== 'undefined' && window.currentUser) ? window.currentUser : (tgUser ? tgUser.id : '');
-                // Profil havolasi: username bo'lsa t.me, aks holda tg://user (ikkalasi ham bosiladi)
+                // Profil havolasi: username bo'lsa t.me, aks holda tg://user (admin bosib lichkaga o'tadi)
                 const profileLink = uname ? ('https://t.me/' + uname) : ('tg://user?id=' + uid);
                 const unamePart = uname ? ('@' + _svEscHtml(uname)) : ('ID: <code>' + _svEscHtml(uid) + '</code>');
 
-                const actionLabel = (actionType === 'reaction') ? 'Reaksiya' : 'Xabar';
                 let contentDisplay = _svEscHtml(content);
                 if (actionType === 'reaction' && content === '❓') {
                     contentDisplay = '❓ <i>(narx / ma\'lumot so\'rayapti)</i>';
                 }
+                const contentLabel = (actionType === 'reaction') ? 'Emoji' : 'Xabar';
 
-                // 🤖 Adminga (bot orqali) tayyor formatda
+                // 🤖 4) ADMINGA TAYYOR FORMAT
                 const text =
-                    '💬 <b>Stories — ' + actionLabel + '</b>\n\n' +
+                    '🔔 <b>Stories — Yangi xabar/reaksiya keldi!</b>\n\n' +
                     '👤 Mijoz: <a href="' + profileLink + '">' + _svEscHtml(name) + '</a> (' + unamePart + ')\n' +
-                    '🎬 Story: ' + _svEscHtml(caption) + '\n' +
-                    (src ? ('🎞 Video: <a href="' + _svEscHtml(src) + '">' + _svEscHtml(videoName) + '</a>\n') : '') +
-                    '💬 ' + actionLabel + ': ' + contentDisplay;
+                    '🎬 Kategoriya: ' + _svEscHtml(caption) + '\n' +
+                    '🔢 Video tartib raqami: <b>' + videoNo + '</b>\n' +
+                    '💬 ' + contentLabel + ': ' + contentDisplay;
 
                 tgProxySend({ chat_id: ADMIN_ID, text: text, parse_mode: 'HTML', disable_web_page_preview: true });
+
+                // Reaksiya bo'lsa — mahalliy belgilaymiz (shu story'ga qayta yuborilmasin)
+                if (actionType === 'reaction') {
+                    _setStoryReaction(storyKey, content);
+                    _refreshStoryReactionUI();
+                }
 
                 try { if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light'); } catch(e){}
                 if (typeof showToast === 'function') {
@@ -12808,6 +12884,9 @@ function initReveal() {
 
             // 🚀 PRELOAD: keyingi storisni fonда yuklab qo'yamiz
             _preloadNextStory();
+
+            // 💬 Reaksiya tugmalari holatini shu story uchun yangilash (1 marta qoidasi)
+            try { _refreshStoryReactionUI(); } catch(e){}
         };
 
         function _onPressDown(e) {
@@ -15157,9 +15236,9 @@ window.saveMapAddressWithName = () => {
     <!-- 💬 JAVOB YOZISH + TEZKOR REAKSIYALAR (Instagram uslubi) -->
     <div class="sv-reply-bar" id="sv-reply-bar">
         <div class="sv-reactions">
-            <button type="button" class="sv-react" onclick="sendStoryReaction('reaction','❤️')" aria-label="Yoqdi">❤️</button>
-            <button type="button" class="sv-react" onclick="sendStoryReaction('reaction','🔥')" aria-label="Zo'r">🔥</button>
-            <button type="button" class="sv-react" onclick="sendStoryReaction('reaction','❓')" aria-label="Savol / narx">❓</button>
+            <button type="button" class="sv-react" data-emoji="❤️" onclick="sendStoryReaction('reaction','❤️')" aria-label="Yoqdi">❤️</button>
+            <button type="button" class="sv-react" data-emoji="🔥" onclick="sendStoryReaction('reaction','🔥')" aria-label="Zo'r">🔥</button>
+            <button type="button" class="sv-react" data-emoji="❓" onclick="sendStoryReaction('reaction','❓')" aria-label="Savol / narx">❓</button>
         </div>
         <div class="sv-reply-inputwrap">
             <input id="sv-reply-input" class="sv-reply-input" type="text" placeholder="Xabar yozing..." maxlength="500" autocomplete="off">
