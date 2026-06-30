@@ -12,8 +12,10 @@
 # =====================================================================
 import os
 import re
+import html
 import asyncio
 import logging
+import platform
 import tempfile
 import shutil
 from pathlib import Path
@@ -29,9 +31,19 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
+    BotCommand,
 )
 
 import yt_dlp
+
+from diag_utils import (
+    safe_name,
+    is_bot_block,
+    split_chunks,
+    check_cmd,
+    check_pot_plugin,
+    check_pot_server,
+)
 
 # ---------------------------------------------------------------------
 # Sozlamalar
@@ -75,6 +87,13 @@ if _clients_env:
     PLAYER_CLIENTS: list[str | None] = [c.strip() for c in _clients_env.split(",") if c.strip()]
 else:
     PLAYER_CLIENTS = [None, "web", "mweb", "tv", "android", "ios"]
+
+# /diag buyrug'i uchun sinov videosi (barqaror, ommabop). Env orqali o'zgartirsa bo'ladi.
+DIAG_TEST_URL = os.getenv("DIAG_TEST_URL", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+# /diag'ni faqat shu Telegram ID egasi ishlata oladi (ixtiyoriy).
+# Bo'sh bo'lsa — hamma ishlata oladi.
+ADMIN_ID = os.getenv("ADMIN_ID", "").strip()
 
 
 def setup_cookies() -> str | None:
@@ -156,7 +175,8 @@ HELP = (
     "3️⃣ Bot MP3 faylni yuboradi.\n\n"
     "Buyruqlar:\n"
     "/start — boshlash\n"
-    "/help — yordam\n\n"
+    "/help — yordam\n"
+    "/diag — diagnostika (muammoni aniqlash)\n\n"
     "💡 320 kbps = eng yuqori sifat (tavsiya etiladi)."
 )
 
@@ -184,6 +204,27 @@ async def cmd_start(message: Message):
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
     await message.answer(HELP)
+
+
+@dp.message(Command("diag"))
+async def cmd_diag(message: Message):
+    """Diagnostika: har bir bosqichni sinab, qaysi birida xato borligini ko'rsatadi."""
+    if ADMIN_ID and str(message.from_user.id) != ADMIN_ID:
+        await message.answer("⛔ Bu buyruq faqat admin uchun.")
+        return
+    note = await message.answer(
+        "🩺 Diagnostika boshlandi...\nBu 30-90 soniya davom etishi mumkin, kuting ⏳"
+    )
+    try:
+        report = await asyncio.to_thread(_run_diagnostics_blocking)
+    except Exception as e:  # noqa: BLE001
+        logging.exception("Diagnostika xatosi")
+        await note.edit_text(f"❌ Diagnostika xatosi: {e}")
+        return
+    await note.delete()
+    # Telegram 4096 belgidan oshmasligi uchun bo'laklab yuboramiz (HTML'siz)
+    for chunk in _split_chunks(report):
+        await message.answer(chunk, parse_mode=None)
 
 
 @dp.message(F.text)
@@ -272,41 +313,33 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
         msg = str(e)
         logging.warning(f"DownloadError: {msg}")
         low = msg.lower()
+        tech = html.escape(msg.strip().replace("\n", " ")[:600])
         if "sign in to confirm" in low or "not a bot" in low or "cookies" in low:
-            # YouTube anti-bot bloki — cookies kerak
+            # YouTube anti-bot bloki
             await status_msg.edit_text(
                 "🤖 <b>YouTube serverni \"bot\" deb hisoblab bloklayapti.</b>\n\n"
-                "Buni hal qilish uchun adminga <b>cookies</b> ulash kerak "
-                "(Render env: <code>YT_COOKIES_CONTENT</code>).\n"
-                "Batafsil: <code>music_bot/DEPLOY_RENDER.md</code> → cookies bo'limi."
+                "PO Token va cookies bo'lsa ham ochilmadi. Aniq sababni bilish uchun "
+                "<b>/diag</b> buyrug'ini yuboring va natijani Kiro'ga forward qiling.\n\n"
+                f"🔧 <b>Texnik xato:</b>\n<code>{tech}</code>"
             )
         else:
             await status_msg.edit_text(
-                "❌ Yuklashda xatolik. Sabablari:\n"
-                "• Link noto'g'ri yoki video o'chirilgan\n"
-                "• Video yoshга cheklangan / maxfiy\n"
-                "Boshqa link bilan urinib ko'ring."
+                "❌ <b>Yuklashda xatolik.</b>\n"
+                "Sabablari: link noto'g'ri, video o'chirilgan yoki cheklangan.\n"
+                "Tekshirish uchun <b>/diag</b> yuboring.\n\n"
+                f"🔧 <b>Texnik xato:</b>\n<code>{tech}</code>"
             )
     except Exception as e:
         logging.exception("Kutilmagan xato")
-        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {e}")
+        tech = html.escape(str(e)[:600])
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi:\n<code>{tech}</code>")
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def _is_bot_block(err: Exception) -> bool:
     """Xato YouTube anti-bot / login bloki ekanini aniqlaydi."""
-    low = str(err).lower()
-    needles = (
-        "sign in to confirm",
-        "not a bot",
-        "confirm you're not a bot",
-        "http error 403",
-        "this video is unavailable",
-        "please sign in",
-        "cookies",
-    )
-    return any(n in low for n in needles)
+    return is_bot_block(str(err))
 
 
 def _build_opts(quality: str, tmpdir: str, client: str | None):
@@ -400,9 +433,102 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
 
 
 def _safe_name(name: str) -> str:
-    """Fayl nomini xavfsiz qiladi."""
-    name = re.sub(r"[^\w\s\-\.\(\)]", "", name, flags=re.UNICODE).strip()
-    return (name or "audio")[:80]
+    """Fayl nomini xavfsiz qiladi (diag_utils.safe_name)."""
+    return safe_name(name)
+
+
+# =====================================================================
+# DIAGNOSTIKA — /diag buyrug'i har bir bosqichni sinab, qaysi birida
+# xato borligini aniq ko'rsatadi. Natija foydalanuvchiga yuboriladi.
+# Toza tekshiruvlar diag_utils'dan olinadi (mustaqil test qilinadi).
+# =====================================================================
+_check_cmd = check_cmd
+_check_pot_plugin = check_pot_plugin
+_split_chunks = split_chunks
+
+
+def _check_pot_server() -> str:
+    """PO Token serverini joriy POT_PROVIDER_URL bilan tekshiradi."""
+    return check_pot_server(POT_PROVIDER_URL)
+
+
+def _diag_extract(client: str | None, url: str) -> tuple[bool, str]:
+    """Bitta player_client bilan FAQAT ma'lumot oladi (yuklamaydi)."""
+    youtube_args: dict = {}
+    if client:
+        youtube_args["player_client"] = [client]
+    extractor_args: dict = {"youtubepot-bgutilhttp": {"base_url": [POT_PROVIDER_URL]}}
+    if youtube_args:
+        extractor_args["youtube"] = youtube_args
+
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": True,
+        "socket_timeout": 30,
+        "http_headers": {"User-Agent": USER_AGENT},
+        "extractor_args": extractor_args,
+    }
+    cookie_path = _RESOLVED_COOKIES
+    if cookie_path and os.path.exists(cookie_path):
+        opts["cookiefile"] = cookie_path
+
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if "entries" in info:
+                info = (info.get("entries") or [{}])[0] or {}
+            title = info.get("title", "?")
+            return True, f"OK — «{title[:45]}»"
+    except Exception as e:  # noqa: BLE001
+        first = str(e).strip().replace("\n", " ")
+        return False, first[:160]
+
+
+def _run_diagnostics_blocking() -> str:
+    """Barcha tekshiruvlarni bajaradi va matnli hisobot qaytaradi."""
+    lines: list[str] = []
+    lines.append("🩺 MUSIC BOT DIAGNOSTIKA")
+    lines.append("=" * 32)
+
+    # 1) Muhit
+    lines.append(f"Python: {platform.python_version()}")
+    try:
+        lines.append(f"yt-dlp: {yt_dlp.version.__version__}")
+    except Exception as e:  # noqa: BLE001
+        lines.append(f"yt-dlp versiya: ? ({e})")
+    lines.append(_check_cmd("ffmpeg", ["ffmpeg", "-version"]))
+    lines.append(_check_cmd("node", ["node", "--version"]))
+    lines.append(_check_pot_plugin())
+    lines.append(_check_pot_server())
+    if _RESOLVED_COOKIES and os.path.exists(_RESOLVED_COOKIES):
+        lines.append(f"✅ Cookies: BOR ({_RESOLVED_COOKIES})")
+    else:
+        lines.append("➖ Cookies: yo'q (ixtiyoriy)")
+
+    # 2) Har bir player_client bo'yicha sinov
+    lines.append("-" * 32)
+    lines.append(f"Sinov videosi: {DIAG_TEST_URL}")
+    lines.append("Player client'lar bo'yicha sinov (faqat ma'lumot):")
+    any_ok = False
+    for client in PLAYER_CLIENTS:
+        name = client or "default"
+        ok, detail = _diag_extract(client, DIAG_TEST_URL)
+        if ok:
+            any_ok = True
+        mark = "✅" if ok else "❌"
+        lines.append(f"  {mark} {name}: {detail}")
+
+    # 3) Xulosa
+    lines.append("=" * 32)
+    if any_ok:
+        lines.append("XULOSA ✅ Kamida bitta client ishladi — yuklash imkoni bor.")
+        lines.append("Agar baribir yuklamasa, ffmpeg yoki fayl hajmi (50MB) muammosi bo'lishi mumkin.")
+    else:
+        lines.append("XULOSA ❌ HAMMA client bloklandi.")
+        lines.append("Yuqoridagi ❌ xatolarni Kiro'ga yuboring — aniq sababini topamiz.")
+    return "\n".join(lines)
 
 
 # =====================================================================
@@ -463,8 +589,19 @@ async def keep_awake():
 async def main():
     logging.info("🎵 Music bot ishga tushdi!")
     setup_cookies()  # cookies manbasini aniqlaymiz (env yoki fayl)
+    # PO Token serverini startda bir marta tekshiramiz (logga yozamiz)
+    logging.info(_check_pot_server())
     await start_health_server()
     asyncio.create_task(keep_awake())
+    # Buyruqlar menyusi
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Boshlash"),
+            BotCommand(command="help", description="Yordam"),
+            BotCommand(command="diag", description="Diagnostika (muammoni aniqlash)"),
+        ])
+    except Exception as e:  # noqa: BLE001
+        logging.warning(f"set_my_commands xatosi: {e}")
     # 409 Conflict oldini olish uchun webhookni tozalaymiz
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, drop_pending_updates=True)
