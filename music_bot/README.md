@@ -69,6 +69,31 @@ Telegram'da botingizga YouTube linkini yoki qo'shiq nomini yuboring.
 
 Doimiy bepul 24/7 ishlatish uchun **`DEPLOY_RENDER.md`** qo'llanmasiga qarang.
 
+## 🚧 YouTube "Sign in to confirm you're not a bot" blokini hal qilish
+
+YouTube bulut (datacenter) IP'larni — masalan Render'ni — ko'pincha "bot" deb
+biladi. Bot PO Token va ko'p-client fallback ishlatadi, lekin **ba'zi videolar**
+baribir login (cookies) talab qiladi. Eng zo'rdan eng pastgacha yechimlar:
+
+### 1) 🥇 Botni UY IP'sida ishlating (eng zo'r, bepul, ishonchli)
+Residential (uy) IP bloklanmaydi. Botni doim yoniq qurilmada ishga tushiring:
+- **Android telefon (Termux):** `pkg install python ffmpeg && pip install -r requirements.txt && python bot.py`
+- Raspberry Pi yoki doim yoniq kompyuter
+- Bu holda cookies ham, proxy ham **kerak emas**. PORT env bo'lmagani uchun
+  health-server/self-ping avtomatik o'chadi.
+
+### 2) 🥈 Cookies (Render'da qolsangiz)
+Asosiy emas, **zaxira (burner) Google akkaunt** oching va incognito'dan cookies
+eksport qiling → `YT_COOKIES_CONTENT` env. Batafsil: `DEPLOY_RENDER.md`.
+
+### 3) 🥉 Residential proxy (pullik, eng kuchli bulut yechimi)
+`PROXY_URL` env'iga residential proxy bering:
+`http://user:pass@host:port` yoki `socks5://host:port`.
+⚠️ Bepul/datacenter proxy YouTube'da deyarli ishlamaydi.
+
+> Holatni tekshirish: botga `/diag <youtube-link>` yuboring — cookies/proxy
+> bor-yo'qligini va qaysi client ishlashini ko'rsatadi.
+
 ## ⚠️ Yuridik eslatma
 
 Mualliflik huquqi bilan himoyalangan kontentni ruxsatsiz yuklab olish ko'p
