@@ -86,7 +86,10 @@ _clients_env = os.getenv("YT_PLAYER_CLIENTS", "").strip()
 if _clients_env:
     PLAYER_CLIENTS: list[str | None] = [c.strip() for c in _clients_env.split(",") if c.strip()]
 else:
-    PLAYER_CLIENTS = [None, "web", "mweb", "tv", "android", "ios"]
+    # MUHIM tartib: tajriba shuni ko'rsatdiki, "android" va default klientlar
+    # audio formatni ishonchli beradi; web/mweb/tv/ios ko'pincha "Requested
+    # format is not available" beradi. Shuning uchun ishlaydiganlari OLDINDA.
+    PLAYER_CLIENTS = ["android", None, "tv", "web", "mweb", "ios"]
 
 # /diag buyrug'i uchun sinov videosi (barqaror, ommabop). Env orqali o'zgartirsa bo'ladi.
 DIAG_TEST_URL = os.getenv("DIAG_TEST_URL", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
@@ -414,13 +417,13 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
                     return info, mp3
         except yt_dlp.utils.DownloadError as e:
             last_err = e
-            if _is_bot_block(e):
-                logging.warning(
-                    f"client={client or 'default'} bloklandi, keyingisiga o'taman: {e}"
-                )
-                continue
-            # Boshqa turdagi xato (mas. video o'chirilgan) — qayta urinish foydasiz
-            raise
+            # MUHIM: har qanday yuklash xatosida (bot-blok BO'LMASA HAM, mas.
+            # "Requested format is not available") keyingi player_client'ga
+            # o'tamiz. Faqat hamma client tugagach xato qaytaramiz.
+            logging.warning(
+                f"client={client or 'default'} ishlamadi, keyingisiga o'taman: {e}"
+            )
+            continue
         except Exception as e:  # noqa: BLE001
             last_err = e
             logging.warning(f"client={client or 'default'} xatosi: {e}")
@@ -467,6 +470,9 @@ def _diag_extract(client: str | None, url: str) -> tuple[bool, str]:
         "skip_download": True,
         "noplaylist": True,
         "socket_timeout": 30,
+        # Haqiqiy yuklashdagi kabi audio formatni so'raymiz — shunda diagnostika
+        # qaysi client haqiqatan audio bera olishini aniq ko'rsatadi.
+        "format": "bestaudio/best",
         "http_headers": {"User-Agent": USER_AGENT},
         "extractor_args": extractor_args,
     }
