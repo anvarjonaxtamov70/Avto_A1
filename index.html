@@ -3289,17 +3289,15 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             background: #000; z-index: 99999; display: none; flex-direction: column;
         }
         .story-header {
-            /* 📍 Instagram uslubi: progress bar EKRANNING ENG TEPASIDA.
-               Faqat qurilma xavfsiz zonasi (notch/status bar) hisobga olinadi
-               (var(--safe-top)) + kichik 10px nafosat. Hamma elementdan tepada. */
-            position: absolute; top: calc(10px + var(--safe-top, 0px));
+            /* 📍 Telegram uslubi: progress bar EKRANNING ENG TEPASIDA, ingichka. */
+            position: absolute; top: calc(8px + var(--safe-top, 0px));
             left: 0; width: 100%; z-index: 60; padding: 0 10px; box-sizing: border-box;
         }
         .story-progress-container {
             display: flex; gap: 4px; width: 100%; margin-bottom: 12px;
         }
         .story-progress-bg {
-            flex: 1; height: 2.5px; background: rgba(255,255,255,0.3); border-radius: 3px; overflow: hidden;
+            flex: 1; height: 2px; background: rgba(255,255,255,0.28); border-radius: 3px; overflow: hidden;
         }
         .story-progress-fill {
             height: 100%; background: #fff; width: 0%; border-radius: 3px;
@@ -3328,52 +3326,76 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         .story-tap-right { position: absolute; right: 0; top: 0; width: 70%; height: 100%; z-index: 5; }
 
         /* ============================================================
-           💬 STORIES JAVOB / REAKSIYA PANELI (Instagram uslubi)
-           Glassmorphism, yassi (flat), ixcham. Pastda, video ustida.
+           💬 STORIES JAVOB / REAKSIYA PANELI — TELEGRAM USLUBI
+           Transparent-dark pill input + yurakcha -> pop-up reaksiya menyusi.
            ============================================================ */
         .sv-reply-bar {
             position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
-            display: flex; flex-direction: column; gap: 12px;
+            display: flex; flex-direction: column;
             padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
-            /* Pastdan juda yengil qoraytirish -> input o'qiladi, video to'silmaydi */
             background: linear-gradient(to top, rgba(0,0,0,0.45), rgba(0,0,0,0));
-            pointer-events: none;            /* gradient bosishni o'tkazib yuboradi */
+            pointer-events: none;
         }
-        .sv-reply-bar > * { pointer-events: auto; }  /* faqat input + tugmalar bosiladi */
-        /* Tezkor emojilar — QUTISIZ, ramkasiz, soyasiz; fonga tabiiy singadi */
-        .sv-reactions { display: flex; justify-content: center; gap: 24px; }
-        .sv-react {
-            background: transparent; border: none; box-shadow: none; padding: 0;
-            font-size: 27px; line-height: 1; cursor: pointer;
-            /* video ustida ko'rinishi uchun faqat nozik soya (quti emas) */
-            filter: drop-shadow(0 1px 4px rgba(0,0,0,0.55));
-            transition: transform 0.15s ease, opacity 0.2s ease;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .sv-react:active { transform: scale(1.35); }
-        .sv-react.sv-react-active { transform: scale(1.18); }
-        /* Reaksiya bildirilgach — tanlanmaganlari xiralashadi (1 marta qoidasi) */
-        .sv-reactions.sv-reacted .sv-react:not(.sv-react-active) { opacity: 0.38; }
-        /* Xabar qatori — to'liq yumaloq (pill), qora-shaffof + blur, ramkasiz, soyasiz */
+        .sv-reply-bar > * { pointer-events: auto; }
+        /* Tashqariga bosilganda pop-up yopilishi uchun ko'rinmas qatlam */
+        .sv-react-overlay { position: absolute; inset: 0; z-index: 24; display: none; }
+        .sv-react-overlay.show { display: block; }
+        /* Xabar qatori — to'liq yumaloq (pill), transparent-dark + blur, ramkasiz, soyasiz */
         .sv-reply-inputwrap {
             display: flex; align-items: center; gap: 8px;
-            background: rgba(0,0,0,0.5);
-            -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.08);
+            -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
             border: none; box-shadow: none; border-radius: 999px;
-            padding: 8px 8px 8px 18px;
+            padding: 8px 10px 8px 18px;
         }
         .sv-reply-input {
             flex: 1; min-width: 0; background: transparent; border: none; outline: none;
             color: #fff; font-size: 14px; font-family: inherit;
         }
-        .sv-reply-input::placeholder { color: rgba(255,255,255,0.55); }  /* och kulrang */
+        .sv-reply-input::placeholder { color: rgba(255,255,255,0.5); }  /* och kulrang */
+        /* Yuborish tugmasi — faqat matn yozilganda ko'rinadi */
         .sv-reply-send {
             flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: none; box-shadow: none;
             background: rgba(255,255,255,0.18); color: #fff; font-size: 15px;
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; display: none; align-items: center; justify-content: center;
             transition: transform 0.12s ease, background 0.2s ease; -webkit-tap-highlight-color: transparent;
         }
         .sv-reply-send:active { transform: scale(0.88); background: rgba(255,255,255,0.3); }
+        .sv-reply-inputwrap.has-text .sv-reply-send { display: flex; }
+        .sv-reply-inputwrap.has-text .sv-heart-wrap { display: none; }
+        /* Yurakcha (default reaksiya tugmasi) — qutisiz, fonga singadi */
+        .sv-heart-wrap { position: relative; flex: 0 0 auto; display: flex; align-items: center; }
+        .sv-heart-btn {
+            background: transparent; border: none; box-shadow: none; padding: 0;
+            width: 34px; height: 34px; font-size: 22px; line-height: 1; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.45));
+            transition: transform 0.15s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .sv-heart-btn:active { transform: scale(1.25); }
+        /* 🎈 POP-UP REAKSIYA MENYUSI — yarim shaffof blok, silliq chiqadi */
+        .sv-react-popup {
+            position: absolute; bottom: 100%; right: 0; margin-bottom: 4px;
+            display: flex; gap: 12px; padding: 9px 14px;
+            background: rgba(28,28,30,0.72);
+            -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+            border-radius: 999px; box-shadow: 0 6px 22px rgba(0,0,0,0.4);
+            opacity: 0; transform: scale(0.8) translateY(0); transform-origin: bottom right;
+            pointer-events: none;
+            transition: all 0.25s ease-in-out;   /* silliq ochilish/yopilish */
+        }
+        .sv-react-popup.open {
+            opacity: 1; transform: scale(1) translateY(-10px); pointer-events: auto;
+        }
+        .sv-react-popup .sv-react {
+            background: transparent; border: none; box-shadow: none; padding: 0;
+            font-size: 26px; line-height: 1; cursor: pointer;
+            transition: transform 0.15s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .sv-react-popup .sv-react:active { transform: scale(1.4); }
+        .sv-react-popup .sv-react.sv-react-active { transform: scale(1.18); }
 
         /* 🗑 ADMIN O'CHIRISH TUGMASI (Glassmorphism) */
         .story-admin-delete {
@@ -4605,6 +4627,10 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         #story-content {
             background: #050505;
             position: relative;
+            /* 🟦 Telegram uslubi: video pastki burchaklari yumshoq burilgan */
+            border-bottom-left-radius: 16px;
+            border-bottom-right-radius: 16px;
+            overflow: hidden;
         }
 
         /* 🤝 QADAM 6: 'HAMKORLIK' BADGE — banner reklamasini ajratish uchun */
@@ -12612,19 +12638,39 @@ function initReveal() {
             } catch(e){}
             return (catIdx + 1) + '.' + (currentStoryIdx + 1);
         }
-        // Reaksiya tugmalari holatini joriy story'ga moslash (tanlangan -> faol, qolgani -> xira)
+        // Reaksiya holatini joriy story'ga moslash: yurakcha tanlangan emojiga aylanadi,
+        // popup ichidagi tanlangan variant belgilanadi.
         function _refreshStoryReactionUI(){
             try {
                 const reacted = _getStoryReaction(_currentStoryKey());
-                const wrap = document.querySelector('.sv-reactions');
-                document.querySelectorAll('.sv-react').forEach(b =>
+                const heart = document.getElementById('sv-heart-btn');
+                if (heart) { heart.textContent = reacted || '❤️'; heart.classList.toggle('sv-reacted', !!reacted); }
+                document.querySelectorAll('#sv-react-popup .sv-react').forEach(b =>
                     b.classList.toggle('sv-react-active', !!reacted && b.getAttribute('data-emoji') === reacted));
-                if (wrap) wrap.classList.toggle('sv-reacted', !!reacted);
             } catch(e){}
         }
         window._refreshStoryReactionUI = _refreshStoryReactionUI;
 
-        // Input + panelni bir marta "simlash" (pauza/davom + Enter + tap-zona himoyasi)
+        // 🎈 Pop-up reaksiya menyusini ochish/yopish (yurakcha bosilganda)
+        window.toggleReactionPopup = function (e) {
+            if (e) e.stopPropagation();
+            const pop = document.getElementById('sv-react-popup');
+            const ov  = document.getElementById('sv-react-overlay');
+            if (!pop) return;
+            const willOpen = !pop.classList.contains('open');
+            pop.classList.toggle('open', willOpen);
+            if (ov) ov.classList.toggle('show', willOpen);
+            try { if (willOpen && typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light'); } catch(e2){}
+        };
+        window._closeReactionPopup = function (e) {
+            if (e) e.stopPropagation();
+            const pop = document.getElementById('sv-react-popup');
+            const ov  = document.getElementById('sv-react-overlay');
+            if (pop) pop.classList.remove('open');
+            if (ov) ov.classList.remove('show');
+        };
+
+        // Input + panelni bir marta "simlash" (pauza/davom + Enter + has-text + tap-zona himoyasi)
         function _ensureReplyBar() {
             const bar = document.getElementById('sv-reply-bar');
             if (bar && !bar._svWired) {
@@ -12637,6 +12683,11 @@ function initReveal() {
             inp._svWired = true;
             inp.addEventListener('focus', () => { try { pauseStory(); } catch(e){} });  // yozayotganda story to'xtaydi
             inp.addEventListener('blur',  () => { try { resumeStory(); } catch(e){} });
+            // Matn yozilsa -> yuborish tugmasi ko'rinadi, yurakcha yashirinadi (Telegram kabi)
+            inp.addEventListener('input', () => {
+                const wrap = document.getElementById('sv-reply-inputwrap');
+                if (wrap) wrap.classList.toggle('has-text', inp.value.trim().length > 0);
+            });
             inp.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') { e.preventDefault(); window.sendStoryReplyFromInput(); }
             });
@@ -12649,6 +12700,8 @@ function initReveal() {
             if (!txt) return;
             window.sendStoryReaction('message', txt);
             inp.value = '';
+            const wrap = document.getElementById('sv-reply-inputwrap');
+            if (wrap) wrap.classList.remove('has-text');
             try { inp.blur(); } catch(e){}
         };
 
@@ -12656,6 +12709,7 @@ function initReveal() {
 
         window.sendStoryReaction = function (actionType, content) {
             try {
+                if (actionType === 'reaction') { try { window._closeReactionPopup(); } catch(e){} }  // tanlangach popup yopiladi
                 const cat = currentPlaylistId || '-';
                 const capEl = document.getElementById('story-caption');
                 const caption = capEl ? (capEl.textContent || '').trim() : cat;
@@ -12932,7 +12986,7 @@ function initReveal() {
             _preloadNextStory();
 
             // 💬 Reaksiya tugmalari holatini shu story uchun yangilash (1 marta qoidasi)
-            try { _refreshStoryReactionUI(); } catch(e){}
+            try { _refreshStoryReactionUI(); if (window._closeReactionPopup) window._closeReactionPopup(); } catch(e){}
         };
 
         function _onPressDown(e) {
@@ -15279,16 +15333,20 @@ window.saveMapAddressWithName = () => {
     <!-- FAQAT ADMIN UCHUN O'CHIRISH TUGMASI -->
     <div class="story-admin-delete" id="admin-story-delete-btn" onclick="deleteCurrentStory()">🗑 O'chirish</div>
 
-    <!-- 💬 JAVOB YOZISH + TEZKOR REAKSIYALAR (Instagram uslubi) -->
+    <!-- 💬 JAVOB YOZISH + TELEGRAM USLUBIDAGI REAKSIYA (yurakcha -> pop-up menyu) -->
+    <div class="sv-react-overlay" id="sv-react-overlay" onclick="_closeReactionPopup(event)"></div>
     <div class="sv-reply-bar" id="sv-reply-bar">
-        <div class="sv-reactions">
-            <button type="button" class="sv-react" data-emoji="❤️" onclick="sendStoryReaction('reaction','❤️')" aria-label="Yoqdi">❤️</button>
-            <button type="button" class="sv-react" data-emoji="🔥" onclick="sendStoryReaction('reaction','🔥')" aria-label="Zo'r">🔥</button>
-            <button type="button" class="sv-react" data-emoji="❓" onclick="sendStoryReaction('reaction','❓')" aria-label="Savol / narx">❓</button>
-        </div>
-        <div class="sv-reply-inputwrap">
-            <input id="sv-reply-input" class="sv-reply-input" type="text" placeholder="Xabar yozing..." maxlength="500" autocomplete="off">
+        <div class="sv-reply-inputwrap" id="sv-reply-inputwrap">
+            <input id="sv-reply-input" class="sv-reply-input" type="text" placeholder="Xabar yo'llash..." maxlength="500" autocomplete="off">
             <button type="button" class="sv-reply-send" onclick="sendStoryReplyFromInput()" aria-label="Yuborish">➤</button>
+            <div class="sv-heart-wrap">
+                <div class="sv-react-popup" id="sv-react-popup">
+                    <button type="button" class="sv-react" data-emoji="❤️" onclick="sendStoryReaction('reaction','❤️')" aria-label="Yoqdi">❤️</button>
+                    <button type="button" class="sv-react" data-emoji="🔥" onclick="sendStoryReaction('reaction','🔥')" aria-label="Zo'r">🔥</button>
+                    <button type="button" class="sv-react" data-emoji="❓" onclick="sendStoryReaction('reaction','❓')" aria-label="Savol / narx">❓</button>
+                </div>
+                <button type="button" class="sv-heart-btn" id="sv-heart-btn" onclick="toggleReactionPopup(event)" aria-label="Reaksiya">❤️</button>
+            </div>
         </div>
     </div>
  
