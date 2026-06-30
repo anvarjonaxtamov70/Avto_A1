@@ -63,6 +63,19 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
 
+# PO Token (Proof-of-Origin) provider HTTP serverining manzili.
+# bgutil POT server bot bilan bir konteynerda 127.0.0.1:4416 da ishlaydi.
+POT_PROVIDER_URL = os.getenv("POT_PROVIDER_URL", "http://127.0.0.1:4416")
+
+# Yuklashda ketma-ket sinaladigan player_client'lar. Biri bloklansa,
+# keyingisiga o'tiladi. None = yt-dlp'ning o'z default tartibi (POT bilan).
+# Env orqali o'zgartirish mumkin: YT_PLAYER_CLIENTS="web,mweb,tv,android"
+_clients_env = os.getenv("YT_PLAYER_CLIENTS", "").strip()
+if _clients_env:
+    PLAYER_CLIENTS: list[str | None] = [c.strip() for c in _clients_env.split(",") if c.strip()]
+else:
+    PLAYER_CLIENTS = [None, "web", "mweb", "tv", "android", "ios"]
+
 
 def setup_cookies() -> str | None:
     """Cookies manbasini aniqlaydi va yt-dlp uchun fayl yo'lini qaytaradi.
@@ -281,48 +294,109 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def _download_blocking(url: str, quality: str, tmpdir: str):
-    """yt-dlp bilan eng yaxshi audioni yuklab, MP3 ga aylantiradi (bloklovchi)."""
-    outtmpl = os.path.join(tmpdir, "%(id)s.%(ext)s")
-    ydl_opts = {
+def _is_bot_block(err: Exception) -> bool:
+    """Xato YouTube anti-bot / login bloki ekanini aniqlaydi."""
+    low = str(err).lower()
+    needles = (
+        "sign in to confirm",
+        "not a bot",
+        "confirm you're not a bot",
+        "http error 403",
+        "this video is unavailable",
+        "please sign in",
+        "cookies",
+    )
+    return any(n in low for n in needles)
+
+
+def _build_opts(quality: str, tmpdir: str, client: str | None):
+    """Berilgan player_client uchun yt-dlp sozlamalarini quradi."""
+    youtube_args: dict = {}
+    if client:
+        youtube_args["player_client"] = [client]
+
+    extractor_args: dict = {}
+    if youtube_args:
+        extractor_args["youtube"] = youtube_args
+    # PO Token provider (bgutil) HTTP serverining manzili — plagin shu yerdan
+    # token oladi. Default 127.0.0.1:4416 (bot bilan bir konteynerda ishlaydi).
+    extractor_args["youtubepot-bgutilhttp"] = {"base_url": [POT_PROVIDER_URL]}
+
+    opts = {
         "format": "bestaudio/best",
-        "outtmpl": outtmpl,
+        "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "writethumbnail": True,
+        "retries": 3,
+        "fragment_retries": 3,
         "http_headers": {"User-Agent": USER_AGENT},
-        # YouTube bot-deteksiyasini chetlab o'tishga yordam beradi:
-        # turli "player client"lar orqali urinib ko'radi.
-        "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+        "extractor_args": extractor_args,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
-                "preferredquality": quality,  # masalan "320"
+                "preferredquality": quality,
             },
-            {"key": "FFmpegMetadata"},   # nom/ijrochi metadata
-            {"key": "EmbedThumbnail"},   # muqova rasm (mavjud bo'lsa)
+            {"key": "FFmpegMetadata"},
+            {"key": "EmbedThumbnail"},
         ],
     }
-    # YouTube anti-bot uchun cookies (mavjud bo'lsa)
     cookie_path = _RESOLVED_COOKIES
     if cookie_path and os.path.exists(cookie_path):
-        ydl_opts["cookiefile"] = cookie_path
+        opts["cookiefile"] = cookie_path
+    return opts
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        # ytsearch holatida natija "entries" ichida bo'ladi
-        if "entries" in info:
-            info = info["entries"][0]
-        # Yakuniy MP3 fayl yo'lini topamiz
-        vid = info.get("id", "")
-        mp3 = os.path.join(tmpdir, f"{vid}.mp3")
-        if not os.path.exists(mp3):
-            # Ehtiyot uchun papkadagi har qanday mp3 ni qidiramiz
-            mp3_files = list(Path(tmpdir).glob("*.mp3"))
-            mp3 = str(mp3_files[0]) if mp3_files else ""
-        return info, mp3
+
+def _download_blocking(url: str, quality: str, tmpdir: str):
+    """yt-dlp bilan eng yaxshi audioni yuklab, MP3 ga aylantiradi (bloklovchi).
+
+    Bir nechta player_client bo'yicha ketma-ket urinadi: biri YouTube anti-bot
+    blokiga tushsa, keyingisiga o'tadi. PO Token provider ishlab tursa, "web"/
+    "mweb"/"tv" klientlar ham muvaffaqiyatli ishlaydi.
+    """
+    last_err: Exception | None = None
+    for client in PLAYER_CLIENTS:
+        # Har urinishda papkani tozalab, chala fayllar qolmasin
+        for f in Path(tmpdir).glob("*"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+        opts = _build_opts(quality, tmpdir, client)
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                if "entries" in info:
+                    info = info["entries"][0]
+                vid = info.get("id", "")
+                mp3 = os.path.join(tmpdir, f"{vid}.mp3")
+                if not os.path.exists(mp3):
+                    mp3_files = list(Path(tmpdir).glob("*.mp3"))
+                    mp3 = str(mp3_files[0]) if mp3_files else ""
+                if mp3:
+                    logging.info(f"Yuklash muvaffaqiyatli (client={client or 'default'}).")
+                    return info, mp3
+        except yt_dlp.utils.DownloadError as e:
+            last_err = e
+            if _is_bot_block(e):
+                logging.warning(
+                    f"client={client or 'default'} bloklandi, keyingisiga o'taman: {e}"
+                )
+                continue
+            # Boshqa turdagi xato (mas. video o'chirilgan) — qayta urinish foydasiz
+            raise
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+            logging.warning(f"client={client or 'default'} xatosi: {e}")
+            continue
+
+    # Hamma klient ham ishlamadi
+    if last_err:
+        raise last_err
+    raise RuntimeError("Yuklab bo'lmadi (noma'lum sabab).")
 
 
 def _safe_name(name: str) -> str:

@@ -1,31 +1,51 @@
 # =====================================================================
-#  🎵 Music Downloader Bot — Docker image
-#  Render / Railway / Koyeb / Fly.io kabi konteyner platformalarida ishlaydi.
+#  🎵 Music Downloader Bot — Docker image (PO Token bilan)
 #
-#  MUHIM: audioni MP3 ga aylantirish uchun FFMPEG kerak — uni shu yerda
-#  o'rnatamiz. (Render'ning oddiy "Python" runtime'ida ffmpeg yo'q,
-#  shuning uchun ushbu bot DOCKER runtime'da ishga tushiriladi.)
+#  Bu image ICHIDA ikkita narsa ishlaydi:
+#    1) bgutil PO Token provider (Node.js HTTP server, 127.0.0.1:4416)
+#       -> YouTube'ning "Sign in to confirm you're not a bot" blokini ochadi
+#    2) Telegram bot (Python) -> yt-dlp + ffmpeg bilan MP3 yuklaydi
+#
+#  yt-dlp PO Token plagini (pip) avtomatik shu serverdan token oladi.
+#  Hammasi bitta konteynerda => bitta BEPUL Render servisi yetadi.
+#
 #  Maxfiy qiymatlar (BOT_TOKEN) image ICHIGA QO'YILMAYDI — platforma
 #  "environment variables" orqali beriladi.
 # =====================================================================
 FROM python:3.11-slim
 
-# Loglar darhol ko'rinishi uchun
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    NODE_MAJOR=20
 
-# ffmpeg — audio ajratish/konvert qilish uchun MAJBURIY
+# Tizim paketlari: ffmpeg (audio), curl/gnupg/git (build), va Node.js 20
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg curl gnupg ca-certificates git \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# --- PO Token provider (bgutil) serverini build qilamiz ---
+#  Manba: https://github.com/Brainicism/bgutil-ytdlp-pot-provider
+RUN git clone --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil \
+    && cd /opt/bgutil/server \
+    && npm install \
+    && npx tsc
 
 WORKDIR /app
 
-# Avval requirements — Docker qatlam keshidan unumli foydalanish uchun
+# Python kutubxonalari (yt-dlp + PO Token plagini ham shu yerda)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Bot kodi
+# Bot kodi va ishga tushirish skripti
 COPY . .
+RUN chmod +x start.sh
 
-CMD ["python", "bot.py"]
+# start.sh: avval POT serverni fon rejimida, keyin botni ishga tushiradi
+CMD ["bash", "start.sh"]

@@ -16,8 +16,15 @@ xuddi Avto_A1 bot kabi.
 > har 10 daqiqada "ping" qilib uyg'oq tutadi (self-ping) — qo'shimcha sozlash
 > shart emas, deploy bo'lishi bilan ishlaydi.
 
-> 🐳 **Diqqat:** Bu bot `ffmpeg` ga muhtoj, shuning uchun **Docker** runtime'da
-> ishga tushadi. Render buni `Dockerfile` orqali avtomatik quradi.
+> 🐳 **Diqqat:** Bu bot `ffmpeg` va PO Token serveri (Node.js) ga muhtoj,
+> shuning uchun **Docker** runtime'da ishga tushadi. Render buni `Dockerfile`
+> orqali avtomatik quradi. (Build biroz uzunroq — 5-10 daqiqa.)
+
+> 🔑 **Eng muhim yangilik:** YouTube datacenter IP'larni (Render kabi) "bot"
+> deb bloklaydi. Buni ochish uchun botga **PO Token (Proof-of-Origin) provider**
+> o'rnatildi — u konteyner ichida avtomatik ishlaydi, **qo'shimcha sozlash
+> shart emas**. Cookies endi majburiy emas, lekin qo'shsangiz ishonchlilik
+> yanada oshadi.
 
 ---
 
@@ -62,8 +69,12 @@ xuddi Avto_A1 bot kabi.
 
 ## 3-QADAM: Deploy va tekshirish
 
-1. Render Docker image'ni **build** qiladi (ffmpeg o'rnatiladi — 2-5 daqiqa).
-2. **Logs** bo'limini oching. `🎵 Music bot ishga tushdi!` ko'rinsa — tayyor.
+1. Render Docker image'ni **build** qiladi (ffmpeg + Node.js + PO Token server
+   o'rnatiladi — 5-10 daqiqa, birinchi marta sekinroq).
+2. **Logs** bo'limini oching. Quyidagilar ketma-ket ko'rinishi kerak:
+   - `🔑 PO Token provider ishga tushyapti (port 4416)...`
+   - `🎵 Telegram bot ishga tushyapti...`
+   - `🎵 Music bot ishga tushdi!`
 3. Telegram'da botingizga YouTube linkini yoki qo'shiq nomini yuboring.
 4. Sifatni tanlang → bot MP3 faylни yuboradi. ✅
 
@@ -85,23 +96,37 @@ qo'shsangiz bo'ladi:
 
 ---
 
-## ⚠️ YouTube "Sign in to confirm you're not a bot" muammosi (MUHIM)
+## 🔑 PO Token (avtomatik) va cookies (ixtiyoriy, qo'shimcha kuch)
 
-Bulut serverlarining IP'larini YouTube ko'pincha "bot" deb hisoblab, yuklashni
-bloklaydi. Loglarda quyidagi xato ko'rinadi:
+Bulut serverlarining IP'larini YouTube ko'pincha "bot" deb hisoblab bloklaydi:
 
 ```
 ERROR: [youtube] Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies ...
 ```
 
-Buni hal qilishning **eng oson yo'li — cookies'ni env orqali berish.**
+**Yangi yechim:** botga **PO Token provider** o'rnatilgan — u konteyner ichida
+(`127.0.0.1:4416`) avtomatik ishlaydi va yt-dlp'ga kerakli tokenni beradi.
+Bu datacenter IP'lardagi blokни ochadigan eng kuchli usul. **Hech narsa
+sozlash shart emas** — deploy bo'lishi bilan ishlaydi.
+
+Bot bir nechta `player_client` (web → mweb → tv → android → ios) bo'yicha
+ketma-ket urinadi: biri bloklansa, keyingisiga o'tadi.
+
+### Cookies qo'shish (agar baribir blok bo'lsa — ishonchlilikni oshiradi)
+
+Eng qiyin holatlarda cookies qo'shsangiz, blok deyarli butunlay yo'qoladi:
 
 ### 1) Cookies'ni eksport qilish (kompyuterda)
 
-1. Brauzeringizda (Chrome/Firefox) YouTube'ga **kiring** (login bo'ling).
+> 💡 **Muhim maslahat:** cookies'ni **Yashirin (Incognito) oynada** eksport qiling
+> va eksportdan keyin o'sha oynani **logout qilmasdan yoping**. Aks holda YouTube
+> tokenни yangilab, cookies'ni tezda yaroqsiz qiladi (ko'pchilik shu sababdan
+> "cookies ishlamayapti" deydi).
+
+1. Yashirin oynada YouTube'ga **kiring** (login bo'ling).
 2. **"Get cookies.txt LOCALLY"** kabi brauzer kengaytmasini o'rnating.
-3. YouTube ochiq turganda kengaytmani bosib, **Netscape formatdagi** cookies
-   matnini eksport qiling (`cookies.txt`).
+3. YouTube ochiq turganda **Netscape formatdagi** cookies matnini eksport qiling.
+4. Oynani **logout qilmasdan** yoping.
 
 ### 2A) USUL 1 — Render env orqali (TAVSIYA, fayl yuklash shart emas)
 
@@ -112,8 +137,6 @@ Buni hal qilishning **eng oson yo'li — cookies'ni env orqali berish.**
 3. **Save Changes** → Render avtomatik qayta deploy qiladi.
 4. Logda `Cookies YT_COOKIES_CONTENT env'idan yuklandi ✅` ko'rinishi kerak.
 
-> Bot startda bu matnni vaqtinchalik faylga yozadi va yt-dlp'ga uzatadi.
-
 ### 2B) USUL 2 — Render Secret File orqali
 
 1. Render → xizmatingiz → **Settings** → **Secret Files** → **Add Secret File**:
@@ -121,10 +144,9 @@ Buni hal qilishning **eng oson yo'li — cookies'ni env orqali berish.**
    - **Contents:** cookies matni
 2. Render uni `/etc/secrets/cookies.txt` ga joylaydi — bot uni avtomatik topadi.
 
-> ℹ️ Cookies'lar vaqt o'tib eskiradi. Agar blok yana paydo bo'lsa, brauzerdan
-> yangi `cookies.txt` eksport qilib, env/secret qiymatini yangilang.
-> Maxfiy: cookies'ni hech kimga bermang va GitHub'ga yuklamang
-> (`.gitignore`da allaqachon himoyalangan).
+> ℹ️ Cookies'lar vaqt o'tib eskiradi. Blok yana paydo bo'lsa, yangi `cookies.txt`
+> eksport qilib, env/secret qiymatini yangilang. Maxfiy: cookies'ni hech kimga
+> bermang va GitHub'ga yuklamang (`.gitignore`da himoyalangan).
 
 ---
 
