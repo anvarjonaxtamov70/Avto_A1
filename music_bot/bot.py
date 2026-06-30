@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode, ChatAction
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import (
     Message,
     FSInputFile,
@@ -83,6 +83,7 @@ POT_PROVIDER_URL = os.getenv("POT_PROVIDER_URL", "http://127.0.0.1:4416")
 # keyingisiga o'tiladi. None = yt-dlp'ning o'z default tartibi (POT bilan).
 # Env orqali o'zgartirish mumkin: YT_PLAYER_CLIENTS="web,mweb,tv,android"
 _clients_env = os.getenv("YT_PLAYER_CLIENTS", "").strip()
+_CLIENTS_FROM_ENV = bool(_clients_env)
 if _clients_env:
     PLAYER_CLIENTS: list[str | None] = [c.strip() for c in _clients_env.split(",") if c.strip()]
 else:
@@ -90,6 +91,21 @@ else:
     # audio formatni ishonchli beradi; web/mweb/tv/ios ko'pincha "Requested
     # format is not available" beradi. Shuning uchun ishlaydiganlari OLDINDA.
     PLAYER_CLIENTS = ["android", None, "tv", "web", "mweb", "ios"]
+
+
+def _client_order() -> list:
+    """Joriy holatga qarab sinaladigan client tartibini qaytaradi.
+
+    - Env orqali aniq berilgan bo'lsa — o'shani ishlatamiz.
+    - Cookies BOR bo'lsa — autentifikatsiya bilan web/android eng ishonchli,
+      shuning uchun ularni oldinga qo'yamiz (login talab qiluvchi videolar uchun).
+    - Aks holda — android birinchi (PO Token bilan eng barqaror).
+    """
+    if _CLIENTS_FROM_ENV:
+        return PLAYER_CLIENTS
+    if _RESOLVED_COOKIES and os.path.exists(_RESOLVED_COOKIES):
+        return ["android", "web", None, "mweb", "tv", "ios"]
+    return PLAYER_CLIENTS
 
 # /diag buyrug'i uchun sinov videosi (barqaror, ommabop). Env orqali o'zgartirsa bo'ladi.
 DIAG_TEST_URL = os.getenv("DIAG_TEST_URL", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
@@ -179,7 +195,8 @@ HELP = (
     "Buyruqlar:\n"
     "/start — boshlash\n"
     "/help — yordam\n"
-    "/diag — diagnostika (muammoni aniqlash)\n\n"
+    "/diag — diagnostika (muammoni aniqlash)\n"
+    "/diag &lt;link&gt; — aniq videoni sinab ko'rish\n\n"
     "💡 320 kbps = eng yuqori sifat (tavsiya etiladi)."
 )
 
@@ -210,16 +227,21 @@ async def cmd_help(message: Message):
 
 
 @dp.message(Command("diag"))
-async def cmd_diag(message: Message):
-    """Diagnostika: har bir bosqichni sinab, qaysi birida xato borligini ko'rsatadi."""
+async def cmd_diag(message: Message, command: CommandObject):
+    """Diagnostika: har bir bosqichni sinab, qaysi birida xato borligini ko'rsatadi.
+
+    Ixtiyoriy: /diag <youtube-url> — aniq videoni sinab ko'rish uchun.
+    """
     if ADMIN_ID and str(message.from_user.id) != ADMIN_ID:
         await message.answer("⛔ Bu buyruq faqat admin uchun.")
         return
+    # /diag dan keyin URL berilgan bo'lsa — o'shani sinaymiz
+    test_url = (command.args or "").strip() or DIAG_TEST_URL
     note = await message.answer(
         "🩺 Diagnostika boshlandi...\nBu 30-90 soniya davom etishi mumkin, kuting ⏳"
     )
     try:
-        report = await asyncio.to_thread(_run_diagnostics_blocking)
+        report = await asyncio.to_thread(_run_diagnostics_blocking, test_url)
     except Exception as e:  # noqa: BLE001
         logging.exception("Diagnostika xatosi")
         await note.edit_text(f"❌ Diagnostika xatosi: {e}")
@@ -318,11 +340,14 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
         low = msg.lower()
         tech = html.escape(msg.strip().replace("\n", " ")[:600])
         if "sign in to confirm" in low or "not a bot" in low or "cookies" in low:
-            # YouTube anti-bot bloki
+            # YouTube anti-bot bloki — bu video uchun LOGIN (cookies) kerak
             await status_msg.edit_text(
-                "🤖 <b>YouTube serverni \"bot\" deb hisoblab bloklayapti.</b>\n\n"
-                "PO Token va cookies bo'lsa ham ochilmadi. Aniq sababni bilish uchun "
-                "<b>/diag</b> buyrug'ini yuboring va natijani Kiro'ga forward qiling.\n\n"
+                "🤖 <b>Bu video uchun YouTube login (cookies) talab qilyapti.</b>\n\n"
+                "PO Token o'rnatilgan, lekin shu video datacenter IP'dan faqat "
+                "cookies bilan ochiladi.\n\n"
+                "✅ <b>Yechim:</b> Render env'iga <code>YT_COOKIES_CONTENT</code> qo'shing "
+                "(DEPLOY_RENDER.md → cookies bo'limi).\n"
+                "Tekshirish: <code>/diag " + html.escape(url if url.startswith("http") else "") + "</code>\n\n"
                 f"🔧 <b>Texnik xato:</b>\n<code>{tech}</code>"
             )
         else:
@@ -393,7 +418,7 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
     "mweb"/"tv" klientlar ham muvaffaqiyatli ishlaydi.
     """
     last_err: Exception | None = None
-    for client in PLAYER_CLIENTS:
+    for client in _client_order():
         # Har urinishda papkani tozalab, chala fayllar qolmasin
         for f in Path(tmpdir).glob("*"):
             try:
@@ -492,7 +517,7 @@ def _diag_extract(client: str | None, url: str) -> tuple[bool, str]:
         return False, first[:160]
 
 
-def _run_diagnostics_blocking() -> str:
+def _run_diagnostics_blocking(test_url: str = DIAG_TEST_URL) -> str:
     """Barcha tekshiruvlarni bajaradi va matnli hisobot qaytaradi."""
     lines: list[str] = []
     lines.append("🩺 MUSIC BOT DIAGNOSTIKA")
@@ -511,18 +536,22 @@ def _run_diagnostics_blocking() -> str:
     if _RESOLVED_COOKIES and os.path.exists(_RESOLVED_COOKIES):
         lines.append(f"✅ Cookies: BOR ({_RESOLVED_COOKIES})")
     else:
-        lines.append("➖ Cookies: yo'q (ixtiyoriy)")
+        lines.append("➖ Cookies: yo'q (ba'zi videolar uchun KERAK bo'lishi mumkin)")
 
     # 2) Har bir player_client bo'yicha sinov
     lines.append("-" * 32)
-    lines.append(f"Sinov videosi: {DIAG_TEST_URL}")
-    lines.append("Player client'lar bo'yicha sinov (faqat ma'lumot):")
+    lines.append(f"Sinov videosi: {test_url}")
+    lines.append("Player client'lar bo'yicha sinov (audio format):")
     any_ok = False
+    bot_block = False
     for client in PLAYER_CLIENTS:
         name = client or "default"
-        ok, detail = _diag_extract(client, DIAG_TEST_URL)
+        ok, detail = _diag_extract(client, test_url)
         if ok:
             any_ok = True
+        else:
+            if is_bot_block(detail):
+                bot_block = True
         mark = "✅" if ok else "❌"
         lines.append(f"  {mark} {name}: {detail}")
 
@@ -531,8 +560,12 @@ def _run_diagnostics_blocking() -> str:
     if any_ok:
         lines.append("XULOSA ✅ Kamida bitta client ishladi — yuklash imkoni bor.")
         lines.append("Agar baribir yuklamasa, ffmpeg yoki fayl hajmi (50MB) muammosi bo'lishi mumkin.")
+    elif bot_block:
+        lines.append("XULOSA 🤖 Bu video uchun YouTube LOGIN (cookies) talab qilyapti.")
+        lines.append("YECHIM: Render env'iga YT_COOKIES_CONTENT qo'shing.")
+        lines.append("Batafsil: DEPLOY_RENDER.md → cookies bo'limi.")
     else:
-        lines.append("XULOSA ❌ HAMMA client bloklandi.")
+        lines.append("XULOSA ❌ HAMMA client ishlamadi.")
         lines.append("Yuqoridagi ❌ xatolarni Kiro'ga yuboring — aniq sababini topamiz.")
     return "\n".join(lines)
 
