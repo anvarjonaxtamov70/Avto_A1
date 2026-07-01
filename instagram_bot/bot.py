@@ -314,15 +314,23 @@ async def download_and_send(status_msg: Message, url: str) -> bool:
 def _build_opts(tmpdir: str) -> dict:
     """yt-dlp sozlamalarini quradi — MAVJUD ENG YUQORI sifatli video.
 
-    Format cheklovsiz: agar video 4K/2K bo'lsa — o'shani oladi, aks holda
-    eng yuqori mavjud (odatda Instagram 1080p beradi). ffmpeg video+audioni
-    birlashtiradi va mp4 ga o'giradi.
+    Format tanlash: iPhone (iOS) FAQAT H.264 (avc1) kodekni to'liq
+    qo'llab-quvvatlaydi. Shuning uchun avval H.264'ni tanlaymiz (eng yuqori
+    sifatda), keyingina zaxira variantlarga o'tamiz. Bu "video qimirlamaydi,
+    faqat ovoz" muammosini hal qiladi (VP9/AV1 kodek iPhone'da ishlamaydi).
     """
     opts = {
-        # bestvideo+bestaudio (ext cheklovisiz — eng yuqori piksel/bitrate),
-        # zaxira sifatida "best". Bu 4K mavjud bo'lsa 4K, aks holda eng yuqorini oladi.
-        "format": "bestvideo*+bestaudio/best",
-        "format_sort": ["res", "fps", "vcodec:h264", "br"],  # avval eng katta o'lcham
+        # 1) Eng yuqori H.264 (avc1) video + AAC audio — iPhone'da 100% ishlaydi
+        # 2) Zaxira: har qanday mp4
+        # 3) Oxirgi zaxira: umuman eng yaxshisi (kodek muhim bo'lmaganda)
+        "format": (
+            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/"
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/"
+            "best[ext=mp4]/best"
+        ),
+        # H.264 birinchi o'rinda, keyin eng katta o'lcham/fps — iPhone mosligi
+        # sifatdan ustun (baribir Instagram odatda 1080p H.264 beradi).
+        "format_sort": ["vcodec:h264", "res", "fps", "br"],
         "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
@@ -334,6 +342,9 @@ def _build_opts(tmpdir: str) -> dict:
         "socket_timeout": 20,
         "concurrent_fragment_downloads": 8,
         "merge_output_format": "mp4",
+        # faststart: moov atom faylning boshiga ko'chiriladi — iOS/Telegram
+        # videoni tez va to'g'ri o'qiydi (oqim/streaming uchun)
+        "postprocessor_args": {"merger": ["-movflags", "+faststart"]},
         "http_headers": {"User-Agent": USER_AGENT},
     }
     cookie_path = _RESOLVED_COOKIES
