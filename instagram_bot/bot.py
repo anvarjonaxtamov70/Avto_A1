@@ -92,7 +92,8 @@ INSTAGRAM_RE = re.compile(
 WELCOME = (
     "📸 <b>Salom! Men Instagram video yuklovchi botman.</b>\n\n"
     "Menga Instagram <b>Reels</b>, <b>post</b> yoki <b>video</b> linkini yuboring — "
-    "men uni <b>yuqori sifatda (HD)</b> yuklab beraman.\n\n"
+    "men uni <b>mavjud eng yuqori sifatda</b> yuklab beraman "
+    "(agar video 4K/2K bo'lsa — o'shani, aks holda Full HD 1080p).\n\n"
     "Shunchaki linkni tashlang 👇\n"
     "<i>masalan: https://www.instagram.com/reel/xxxxx/</i>\n\n"
     "⚠️ <i>Diqqat: mualliflik huquqi himoyalangan kontentni faqat shaxsiy "
@@ -175,7 +176,18 @@ async def on_text(message: Message):
         url = "https://" + url
 
     status_msg = await message.answer("⏬ Yuklanmoqda, biroz kuting…")
-    await download_and_send(status_msg, url)
+    ok = await download_and_send(status_msg, url)
+
+    # Music bot kabi TOZALASH: video muvaffaqiyatli yuborilgach, chatда faqat
+    # toza video qolishi uchun ortiqcha xabarlarni o'chiramiz:
+    #   - foydalanuvchi yuborgan link xabari (message)
+    #   - "Yuklanmoqda..." status xabari (status_msg) allaqachon
+    #     download_and_send ichida muvaffaqiyatда o'chiriladi.
+    if ok:
+        try:
+            await message.delete()
+        except Exception as e:
+            log.warning(f"Foydalanuvchi xabarini o'chirib bo'lmadi: {e}")
 
 
 # ---------------------------------------------------------------------
@@ -240,31 +252,40 @@ async def download_and_send(status_msg: Message, url: str) -> bool:
             return False
 
         size = os.path.getsize(filepath)
-        if size > MAX_TG_SIZE:
-            await status_msg.edit_text(
-                "⚠️ Video juda katta (Telegram chegarasi ~50 MB).\n"
-                "Kaltaroq yoki past sifatli video bilan urinib ko'ring."
-            )
-            return False
 
         title = (info.get("title") or info.get("description") or "video")[:60]
         duration = int(info.get("duration") or 0)
         width = info.get("width") or None
         height = info.get("height") or None
+        res_label = f"{height}p" if height else "eng yuqori"
 
-        await status_msg.edit_text("📤 Yuborilmoqda...")
+        await status_msg.edit_text(f"📤 Yuborilmoqda... ({res_label})")
         await bot.send_chat_action(chat_id, ChatAction.UPLOAD_VIDEO)
 
-        video = FSInputFile(filepath, filename=f"{_safe_name(title)}.mp4")
-        # Caption'siz (toza video) yuboriladi
-        await bot.send_video(
-            chat_id,
-            video=video,
-            duration=duration or None,
-            width=width,
-            height=height,
-            supports_streaming=True,
-        )
+        fname = f"{_safe_name(title)}.mp4"
+
+        # Telegram bot chegarasi ~50MB. Katta bo'lsa — video sifatida yubora
+        # olmaymiz. Bunday holda DOCUMENT sifatida yuboramiz (sifat YO'QOLMAYDI,
+        # foydalanuvchi to'liq 4K/HD faylni oladi, faqat player'da emas).
+        if size > MAX_TG_SIZE:
+            log.info(f"Fayl {size/1024/1024:.1f}MB > 50MB — document sifatida yuboriladi.")
+            document = FSInputFile(filepath, filename=fname)
+            await bot.send_document(
+                chat_id,
+                document=document,
+                disable_content_type_detection=True,
+            )
+        else:
+            video = FSInputFile(filepath, filename=fname)
+            # Caption'siz (toza video) yuboriladi
+            await bot.send_video(
+                chat_id,
+                video=video,
+                duration=duration or None,
+                width=width,
+                height=height,
+                supports_streaming=True,
+            )
         await status_msg.delete()
         return True
 
@@ -302,10 +323,25 @@ async def download_and_send(status_msg: Message, url: str) -> bool:
 
 
 def _build_opts(tmpdir: str) -> dict:
-    """yt-dlp sozlamalarini quradi — eng yuqori sifatli video."""
+    """yt-dlp sozlamalarini quradi — MAVJUD ENG YUQORI sifatli video.
+
+    Format tanlash: iPhone (iOS) FAQAT H.264 (avc1) kodekni to'liq
+    qo'llab-quvvatlaydi. Shuning uchun avval H.264'ni tanlaymiz (eng yuqori
+    sifatda), keyingina zaxira variantlarga o'tamiz. Bu "video qimirlamaydi,
+    faqat ovoz" muammosini hal qiladi (VP9/AV1 kodek iPhone'da ishlamaydi).
+    """
     opts = {
-        # Eng yaxshi video + audio (mp4 afzal). ffmpeg bo'lsa birlashtiradi.
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        # 1) Eng yuqori H.264 (avc1) video + AAC audio — iPhone'da 100% ishlaydi
+        # 2) Zaxira: har qanday mp4
+        # 3) Oxirgi zaxira: umuman eng yaxshisi (kodek muhim bo'lmaganda)
+        "format": (
+            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/"
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/"
+            "best[ext=mp4]/best"
+        ),
+        # H.264 birinchi o'rinda, keyin eng katta o'lcham/fps — iPhone mosligi
+        # sifatdan ustun (baribir Instagram odatda 1080p H.264 beradi).
+        "format_sort": ["vcodec:h264", "res", "fps", "br"],
         "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
@@ -317,6 +353,9 @@ def _build_opts(tmpdir: str) -> dict:
         "socket_timeout": 20,
         "concurrent_fragment_downloads": 8,
         "merge_output_format": "mp4",
+        # faststart: moov atom faylning boshiga ko'chiriladi — iOS/Telegram
+        # videoni tez va to'g'ri o'qiydi (oqim/streaming uchun)
+        "postprocessor_args": {"merger": ["-movflags", "+faststart"]},
         "http_headers": {"User-Agent": USER_AGENT},
     }
     cookie_path = _RESOLVED_COOKIES
