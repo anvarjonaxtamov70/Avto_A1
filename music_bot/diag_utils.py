@@ -64,6 +64,16 @@ def check_pot_plugin() -> str:
         return "❌ PO Token plagini (pip): TOPILMADI (requirements.txt tekshiring)"
 
 
+def check_ejs() -> str:
+    """yt-dlp-ejs (JS challenge solver) o'rnatilganini tekshiradi."""
+    try:
+        from importlib import metadata
+        v = metadata.version("yt-dlp-ejs")
+        return f"✅ yt-dlp-ejs (JS solver): BOR — v{v}"
+    except Exception:
+        return "❌ yt-dlp-ejs (JS solver): TOPILMADI (requirements.txt tekshiring)"
+
+
 def check_pot_server(url: str) -> str:
     """PO Token HTTP serveriga ulanib bo'lishini tekshiradi."""
     try:

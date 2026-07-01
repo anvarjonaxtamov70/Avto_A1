@@ -18,9 +18,9 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     NODE_MAJOR=20
 
-# Tizim paketlari: ffmpeg (audio), curl/gnupg/git (build), va Node.js 20
+# Tizim paketlari: ffmpeg (audio), curl/gnupg/git/unzip (build), va Node.js 20
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg curl gnupg ca-certificates git \
+    && apt-get install -y --no-install-recommends ffmpeg curl gnupg ca-certificates git unzip \
     && mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
         | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
@@ -29,6 +29,14 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# --- Deno (JS runtime) ---
+#  yt-dlp YouTube'ning n-parametr / signature (JS) challenge'ini yechish uchun
+#  JS runtime talab qiladi. Bo'lmasa formatlar ochilmay "Requested format is
+#  not available" xatosi chiqadi. Deno + yt-dlp-ejs shu muammoni hal qiladi.
+ENV DENO_INSTALL=/usr/local
+RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y \
+    && deno --version
 
 # --- PO Token provider (bgutil) serverini build qilamiz ---
 #  Manba: https://github.com/Brainicism/bgutil-ytdlp-pot-provider

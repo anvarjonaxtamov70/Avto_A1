@@ -11,6 +11,8 @@ qilib yuklab beruvchi Telegram bot. `yt-dlp` + `ffmpeg` ishlatadi.
 - 🏷 Metadata (nom, ijrochi) va muqova rasm MP3 ichiga joylanadi
 - 🔑 **PO Token provider** ichiga o'rnatilgan — datacenter IP'lardagi YouTube
   "bot" blokini avtomatik ochadi (qo'shimcha sozlash shart emas)
+- 🧩 **Deno + yt-dlp-ejs** — YouTube'ning JS (n-parametr/signature) challenge'ini
+  yechadi, "Requested format is not available" muammosini kamaytiradi
 - 🔁 Bir nechta `player_client` bo'yicha avtomatik fallback (web/tv/mweb/android)
 - 🍪 Ixtiyoriy cookies bilan ishonchlilikni yanada oshirish
 - ☁️ Render.com bepul tarifda **24/7** ishlaydi (self-ping bilan uxlab qolmaydi)
@@ -23,7 +25,7 @@ qilib yuklab beruvchi Telegram bot. `yt-dlp` + `ffmpeg` ishlatadi.
 | `diag_utils.py` | Toza (stdlib) yordamchi funksiyalar — test qilinadi |
 | `tests/` | `pytest` testlari (`pytest -v`) |
 | `requirements.txt` | Python kutubxonalari (yt-dlp + PO Token plagini) |
-| `Dockerfile` | ffmpeg + Node.js + PO Token server bilan Docker image |
+| `Dockerfile` | ffmpeg + Node.js + Deno + PO Token server bilan Docker image |
 | `start.sh` | PO Token serverni va botni ishga tushiruvchi skript |
 | `render.yaml` | Render bepul deploy sozlamasi |
 | `.env.example` | Sozlamalar namunasi |
