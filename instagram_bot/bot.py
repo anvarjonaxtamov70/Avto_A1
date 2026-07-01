@@ -74,8 +74,7 @@ USER_AGENT = (
 # Telegram fayl chegarasi ~50 MB
 MAX_TG_SIZE = 49 * 1024 * 1024
 
-# Yuklash uchun umumiy timeout (soniya)
-# Yuklash (+ kerak bo'lsa qayta kodlash) uchun umumiy timeout (soniya)
+# Yuklash + qayta kodlash uchun umumiy timeout (soniya)
 DOWNLOAD_TIMEOUT = int(os.getenv("DOWNLOAD_TIMEOUT", "180"))
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -385,96 +384,59 @@ def _download_blocking(url: str, tmpdir: str):
         candidates.sort(key=lambda p: 0 if p.suffix == ".mp4" else 1)
         filepath = str(candidates[0]) if candidates else ""
 
-        # iPhone (iOS) mosligi. TEZLIK uchun AQLLI: agar video allaqachon
-        # H.264 8-bit yuv420p bo'lsa (Instagram'ning ko'p videolari shunday) —
-        # QAYTA KODLAMAYMIZ, faqat tez faststart remux (deyarli bir zumda).
-        # Faqat mos bo'lmagan (VP9/AV1/10-bit/HDR) videolar qayta kodlanadi.
+        # iPhone (iOS) 100% mosligi uchun qayta kodlaymiz (H.264 8-bit yuv420p).
+        # Bu "video qimirlamaydi, faqat ovoz" muammosini butunlay hal qiladi —
+        # manba 10-bit/HDR/VP9/AV1 bo'lsa ham.
         if filepath:
-            filepath = _make_ios_compatible(filepath, tmpdir)
+            filepath = _reencode_ios(filepath, tmpdir)
         return info, filepath
 
 
-def _video_meta(path: str) -> tuple[str, str]:
-    """ffprobe bilan video kodek va pixel formatini qaytaradi (codec, pix_fmt).
+def _reencode_ios(src_path: str, tmpdir: str) -> str:
+    """Videoni iPhone (iOS/Telegram) 100% o'qiydigan formatga qayta kodlaydi.
 
-    ffprobe yo'q yoki xato bo'lsa ('', '') qaytaradi.
-    """
-    ffprobe = shutil.which("ffprobe")
-    if not ffprobe:
-        return "", ""
-    try:
-        out = subprocess.run(
-            [ffprobe, "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=codec_name,pix_fmt",
-             "-of", "default=noprint_wrappers=1:nokey=1", path],
-            capture_output=True, text=True, timeout=20,
-        ).stdout.lower().split()
-        codec = out[0] if len(out) > 0 else ""
-        pix_fmt = out[1] if len(out) > 1 else ""
-        return codec, pix_fmt
-    except Exception as e:  # noqa: BLE001
-        logging.warning(f"ffprobe xatosi: {e}")
-        return "", ""
+    - Video: H.264 (libx264), High profile, 8-bit yuv420p
+    - Audio: AAC 128k
+    - +faststart (moov atom boshda — tez oqim)
+    - Sifat: CRF 20 (yuqori sifat, ko'zga bilinmas kamayish)
 
-
-def _make_ios_compatible(src_path: str, tmpdir: str) -> str:
-    """Videoni iPhone (iOS/Telegram) o'qiydigan holatga keltiradi.
-
-    AQLLI mantiq (tezlik uchun):
-      1) Video allaqachon H.264 + 8-bit yuv420p bo'lsa -> QAYTA KODLAMAYMIZ,
-         faqat tez `-c copy` faststart remux (deyarli bir zumda, CPU deyarli yo'q).
-      2) Aks holda (VP9/AV1/10-bit/HDR) -> to'liq H.264 8-bit yuv420p re-encode.
-
-    ffmpeg yo'q yoki xato bo'lsa -> asl fayl (bot buzilmaydi).
+    ffmpeg yo'q bo'lsa yoki xato bo'lsa — asl faylni qaytaradi (buzilmaydi).
     """
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
-        logging.warning("ffmpeg topilmadi — asl fayl yuboriladi.")
+        logging.warning("ffmpeg topilmadi — qayta kodlash o'tkazib yuborildi.")
         return src_path
 
     base = os.path.splitext(os.path.basename(src_path))[0]
     out_path = os.path.join(tmpdir, f"{base}_ios.mp4")
+    # Asl fayl bilan to'qnashmasin
     if os.path.abspath(out_path) == os.path.abspath(src_path):
         out_path = os.path.join(tmpdir, f"{base}_ios2.mp4")
 
-    codec, pix_fmt = _video_meta(src_path)
-    already_ok = ("h264" in codec) and pix_fmt.startswith("yuv420p") and ("10" not in pix_fmt)
-
-    if already_ok:
-        # TEZ yo'l: qayta kodlashsiz faqat faststart (stream copy) — bir zumda
-        cmd = [
-            ffmpeg, "-y", "-i", src_path,
-            "-c", "copy", "-movflags", "+faststart", out_path,
-        ]
-        tag = "tez remux (qayta kodlashsiz)"
-        timeout = 60
-    else:
-        # SEKIN yo'l: faqat mos bo'lmagan videolar uchun to'liq re-encode
-        cmd = [
-            ffmpeg, "-y", "-i", src_path,
-            "-c:v", "libx264", "-profile:v", "high", "-level", "4.1",
-            "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "veryfast",
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart", out_path,
-        ]
-        tag = f"to'liq re-encode (manba: {codec or '?'}/{pix_fmt or '?'})"
-        timeout = 150
-
+    cmd = [
+        ffmpeg, "-y", "-i", src_path,
+        "-c:v", "libx264", "-profile:v", "high", "-level", "4.1",
+        "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "veryfast",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        out_path,
+    ]
     try:
         subprocess.run(
             cmd, check=True,
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=timeout,
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            timeout=150,
         )
         if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-            logging.info(f"iOS mosligi: {tag} ✅")
+            logging.info("iOS uchun qayta kodlandi ✅ (H.264 yuv420p).")
             return out_path
     except subprocess.TimeoutExpired:
-        logging.warning("iOS moslashtirish vaqti tugadi — asl fayl.")
+        logging.warning("Qayta kodlash vaqt tugadi — asl fayl yuboriladi.")
     except subprocess.CalledProcessError as e:
         err = (e.stderr or b"").decode("utf-8", "ignore")[:300]
-        logging.warning(f"iOS moslashtirish xatosi: {err}")
+        logging.warning(f"Qayta kodlash xatosi: {err}")
     except Exception as e:  # noqa: BLE001
-        logging.warning(f"iOS moslashtirish kutilmagan xato: {e}")
+        logging.warning(f"Qayta kodlash kutilmagan xato: {e}")
     return src_path
 
 
@@ -522,8 +484,7 @@ async def keep_awake():
     if not base:
         return
     ping_url = base.rstrip("/") + "/health"
-    # 240s (4 min) — Render 15 min da uxlaydi. Tezroq ping = kamroq uxlash.
-    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "240"))
+    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "300"))
     await asyncio.sleep(10)
     log.info(f"Self-ping yoqildi: {ping_url} (har {interval}s).")
     while True:
