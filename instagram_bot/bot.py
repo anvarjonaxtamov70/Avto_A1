@@ -16,6 +16,7 @@ import re
 import html
 import asyncio
 import logging
+import subprocess
 import tempfile
 import shutil
 from pathlib import Path
@@ -73,8 +74,8 @@ USER_AGENT = (
 # Telegram fayl chegarasi ~50 MB
 MAX_TG_SIZE = 49 * 1024 * 1024
 
-# Yuklash uchun umumiy timeout (soniya)
-DOWNLOAD_TIMEOUT = int(os.getenv("DOWNLOAD_TIMEOUT", "90"))
+# Yuklash + qayta kodlash uchun umumiy timeout (soniya)
+DOWNLOAD_TIMEOUT = int(os.getenv("DOWNLOAD_TIMEOUT", "180"))
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -382,7 +383,61 @@ def _download_blocking(url: str, tmpdir: str):
         # mp4 ni birinchi qo'yamiz
         candidates.sort(key=lambda p: 0 if p.suffix == ".mp4" else 1)
         filepath = str(candidates[0]) if candidates else ""
+
+        # iPhone (iOS) 100% mosligi uchun qayta kodlaymiz (H.264 8-bit yuv420p).
+        # Bu "video qimirlamaydi, faqat ovoz" muammosini butunlay hal qiladi —
+        # manba 10-bit/HDR/VP9/AV1 bo'lsa ham.
+        if filepath:
+            filepath = _reencode_ios(filepath, tmpdir)
         return info, filepath
+
+
+def _reencode_ios(src_path: str, tmpdir: str) -> str:
+    """Videoni iPhone (iOS/Telegram) 100% o'qiydigan formatga qayta kodlaydi.
+
+    - Video: H.264 (libx264), High profile, 8-bit yuv420p
+    - Audio: AAC 128k
+    - +faststart (moov atom boshda — tez oqim)
+    - Sifat: CRF 20 (yuqori sifat, ko'zga bilinmas kamayish)
+
+    ffmpeg yo'q bo'lsa yoki xato bo'lsa — asl faylni qaytaradi (buzilmaydi).
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        logging.warning("ffmpeg topilmadi — qayta kodlash o'tkazib yuborildi.")
+        return src_path
+
+    base = os.path.splitext(os.path.basename(src_path))[0]
+    out_path = os.path.join(tmpdir, f"{base}_ios.mp4")
+    # Asl fayl bilan to'qnashmasin
+    if os.path.abspath(out_path) == os.path.abspath(src_path):
+        out_path = os.path.join(tmpdir, f"{base}_ios2.mp4")
+
+    cmd = [
+        ffmpeg, "-y", "-i", src_path,
+        "-c:v", "libx264", "-profile:v", "high", "-level", "4.1",
+        "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "veryfast",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        out_path,
+    ]
+    try:
+        subprocess.run(
+            cmd, check=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            timeout=150,
+        )
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            logging.info("iOS uchun qayta kodlandi ✅ (H.264 yuv420p).")
+            return out_path
+    except subprocess.TimeoutExpired:
+        logging.warning("Qayta kodlash vaqt tugadi — asl fayl yuboriladi.")
+    except subprocess.CalledProcessError as e:
+        err = (e.stderr or b"").decode("utf-8", "ignore")[:300]
+        logging.warning(f"Qayta kodlash xatosi: {err}")
+    except Exception as e:  # noqa: BLE001
+        logging.warning(f"Qayta kodlash kutilmagan xato: {e}")
+    return src_path
 
 
 def _safe_name(name: str) -> str:
