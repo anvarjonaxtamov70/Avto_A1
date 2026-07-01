@@ -360,6 +360,18 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
                 "Tekshirish: <code>/diag " + html.escape(url if url.startswith("http") else "") + "</code>\n\n"
                 f"🔧 <b>Texnik xato:</b>\n<code>{tech}</code>"
             )
+        elif "requested format is not available" in low or "only images are available" in low:
+            # YouTube bu video uchun serverga faqat SABR oqim beryapti
+            await status_msg.edit_text(
+                "⛔ <b>Bu videoni bu serverdan yuklab bo'lmaydi.</b>\n\n"
+                "YouTube bu video uchun serverga faqat <b>SABR</b> oqim beryapti — "
+                "yuklab bo'ladigan oddiy format yo'q (yt-dlp'ning hal qilinmagan muammosi).\n\n"
+                "💡 <b>Nima qilish mumkin:</b>\n"
+                "• Boshqa (oddiy/mashhur) qo'shiqni sinab ko'ring — ular ishlashi mumkin\n"
+                "• Tub yechim: botni uy IP'sida ishlatish yoki residential "
+                "<code>PROXY_URL</code> qo'shish\n\n"
+                f"🔧 <b>Texnik xato:</b>\n<code>{tech}</code>"
+            )
         else:
             await status_msg.edit_text(
                 "❌ <b>Yuklashda xatolik.</b>\n"
@@ -577,6 +589,7 @@ def _run_diagnostics_blocking(test_url: str = DIAG_TEST_URL) -> str:
     lines.append("Client sinovi (audio format):")
     any_ok = False
     bot_block = False
+    sabr_wall = False  # cookies bot-blokni o'tdi, lekin format yo'q (SABR)
     for client in PLAYER_CLIENTS:
         name = client or "default"
         # Avval cookies'SIZ
@@ -594,6 +607,8 @@ def _run_diagnostics_blocking(test_url: str = DIAG_TEST_URL) -> str:
                 any_ok = True
                 lines.append(f"  ✅ {name} (cookies bilan): {detail2}")
                 continue
+            if "format is not available" in detail2.lower():
+                sabr_wall = True
             lines.append(f"  ❌ {name}: cookies'siz→{detail[:60]} | cookies→{detail2[:60]}")
         else:
             lines.append(f"  ❌ {name}: {detail}")
@@ -602,14 +617,21 @@ def _run_diagnostics_blocking(test_url: str = DIAG_TEST_URL) -> str:
     lines.append("=" * 32)
     if any_ok:
         lines.append("XULOSA ✅ Kamida bitta kombinatsiya ishladi — yuklash imkoni bor.")
-    elif bot_block:
+    elif sabr_wall:
+        lines.append("XULOSA ⛔ Bu videoni bu serverdan yuklab BO'LMAYDI.")
+        lines.append("Cookies bot tekshiruvidan o'tdi, LEKIN YouTube bu video uchun")
+        lines.append("datacenter IP'ga faqat SABR oqim beryapti (yuklab bo'ladigan format yo'q).")
+        lines.append("Bu yt-dlp'ning hal qilinmagan muammosi — kod bilan tuzatib bo'lmaydi.")
+        lines.append("YECHIM: residential IP (uy qurilmasi) yoki residential PROXY_URL.")
+        lines.append("MASLAHAT: oddiy/mashhur videolar ishlashi mumkin — boshqa link sinang.")
+    elif bot_block and not have_cookies:
         lines.append("XULOSA 🤖 YouTube LOGIN (cookies) talab qilyapti.")
         lines.append("Render env'iga YT_COOKIES_CONTENT qo'shing (DEPLOY_RENDER.md).")
     else:
-        lines.append("XULOSA ❌ Hamma kombinatsiya 'format yo'q' berdi.")
-        lines.append("Sabab: Render datacenter IP + YouTube SABR cheklovi.")
-        lines.append("Eng ishonchli yechim: botni UY IP'sida ishlatish yoki")
-        lines.append("residential PROXY_URL qo'shish (README → blokni hal qilish).")
+        lines.append("XULOSA ❌ Hamma kombinatsiya ishlamadi.")
+        lines.append("Sabab: Render datacenter IP + YouTube cheklovi.")
+        lines.append("Eng ishonchli yechim: uy IP'si yoki residential PROXY_URL")
+        lines.append("(README → 'YouTube blokini hal qilish').")
     return "\n".join(lines)
 
 
