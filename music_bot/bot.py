@@ -98,24 +98,19 @@ _CLIENTS_FROM_ENV = bool(_clients_env)
 if _clients_env:
     PLAYER_CLIENTS: list[str | None] = [c.strip() for c in _clients_env.split(",") if c.strip()]
 else:
-    # MUHIM tartib: tajriba shuni ko'rsatdiki, "android" va default klientlar
-    # audio formatni ishonchli beradi; web/mweb/tv/ios ko'pincha "Requested
-    # format is not available" beradi. Shuning uchun ishlaydiganlari OLDINDA.
-    PLAYER_CLIENTS = ["android", None, "tv", "web", "mweb", "ios"]
+    # Tezlik uchun qisqa ro'yxat: "android" ishonchli va tez (audio formatni
+    # to'g'ri beradi), keyin default va web zaxira sifatida. Kamroq urinish =
+    # tezroq javob. Kengaytirish uchun YT_PLAYER_CLIENTS env'idan foydalaning.
+    PLAYER_CLIENTS = ["android", None, "web"]
 
 
 def _client_order() -> list:
-    """Joriy holatga qarab sinaladigan client tartibini qaytaradi.
+    """Sinaladigan client tartibini qaytaradi.
 
-    - Env orqali aniq berilgan bo'lsa — o'shani ishlatamiz.
-    - Cookies BOR bo'lsa — autentifikatsiya bilan web/android eng ishonchli,
-      shuning uchun ularni oldinga qo'yamiz (login talab qiluvchi videolar uchun).
-    - Aks holda — android birinchi (PO Token bilan eng barqaror).
+    Cookies bor-yo'qligiga qarab tartib o'zgartirilmaydi — cookies alohida
+    2-bosqichda (faqat login kerak bo'lsa) qo'llanadi. Bu ortiqcha urinishlarni
+    kamaytirib, tezlikni oshiradi. Env orqali o'zgartirish mumkin.
     """
-    if _CLIENTS_FROM_ENV:
-        return PLAYER_CLIENTS
-    if _RESOLVED_COOKIES and os.path.exists(_RESOLVED_COOKIES):
-        return ["android", "web", None, "mweb", "tv", "ios"]
     return PLAYER_CLIENTS
 
 # /diag buyrug'i uchun sinov videosi (barqaror, ommabop). Env orqali o'zgartirsa bo'ladi.
@@ -296,7 +291,7 @@ async def on_quality(call: CallbackQuery):
         await call.answer("Avval link yoki qo'shiq nomini yuboring.", show_alert=True)
         return
 
-    await call.message.edit_text(f"⏬ Yuklab olinmoqda... ({quality} kbps)\nBiroz kuting ⏳")
+    await call.message.edit_text("⏬ Yuklanmoqda, biroz kuting…")
     await download_and_send(call.message, url, quality)
     await call.answer()
 
@@ -331,7 +326,7 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
         performer = info.get("uploader") or info.get("artist") or ""
         duration = int(info.get("duration") or 0)
 
-        await status_msg.edit_text("📤 Telegram'ga yuborilmoqda...")
+        await status_msg.edit_text("📤 Yuborilmoqda...")
         await bot.send_chat_action(chat_id, ChatAction.UPLOAD_DOCUMENT)
 
         audio = FSInputFile(filepath, filename=f"{_safe_name(title)}.mp3")
@@ -341,7 +336,8 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
             title=title[:60],
             performer=performer[:60] if performer else None,
             duration=duration or None,
-            caption=f"🎵 <b>{title}</b>\n🎧 {quality} kbps",
+            # Fayl tagida faqat qo'shiq nomi — ixcham va nozik
+            caption=f"<b>{html.escape(title)}</b>",
         )
         await status_msg.delete()
 
@@ -417,9 +413,12 @@ def _build_opts(quality: str, tmpdir: str, client: str | None, use_cookies: bool
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        "writethumbnail": True,
-        "retries": 3,
-        "fragment_retries": 3,
+        # Tezlik uchun: kam qayta-urinish va tez timeout (sekin tarmoqda osilib
+        # qolmasin), thumbnail yuklab/embed qilmaymiz (ortiqcha vaqt va tarmoq).
+        "retries": 1,
+        "fragment_retries": 1,
+        "socket_timeout": 20,
+        "concurrent_fragment_downloads": 4,
         "http_headers": {"User-Agent": USER_AGENT},
         "extractor_args": extractor_args,
         "postprocessors": [
@@ -429,7 +428,6 @@ def _build_opts(quality: str, tmpdir: str, client: str | None, use_cookies: bool
                 "preferredquality": quality,
             },
             {"key": "FFmpegMetadata"},
-            {"key": "EmbedThumbnail"},
         ],
     }
     cookie_path = _RESOLVED_COOKIES
@@ -449,11 +447,12 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
     """
     last_err: Exception | None = None
     cookies_available = bool(_RESOLVED_COOKIES and os.path.exists(_RESOLVED_COOKIES))
-    # Urinish rejasi: AVVAL cookies'SIZ (odatiy videolar uchun ko'proq format
-    # mavjud), KEYIN cookies BILAN (login/yosh cheklovi bo'lgan videolar uchun).
-    cookie_modes = [False, True] if cookies_available else [False]
+    bot_block_seen = False
 
-    for use_cookies in cookie_modes:
+    def _attempt(use_cookies: bool):
+        """Barcha client'lar bo'yicha bir bosqich urinadi. Muvaffaqiyatda
+        (info, mp3) qaytaradi, aks holda None."""
+        nonlocal last_err, bot_block_seen
         tag = "cookies bilan" if use_cookies else "cookies'siz"
         for client in _client_order():
             # Har urinishda papkani tozalab, chala fayllar qolmasin
@@ -481,16 +480,29 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
                         return info, mp3
             except yt_dlp.utils.DownloadError as e:
                 last_err = e
-                logging.warning(
-                    f"client={client or 'default'} ({tag}) ishlamadi, keyingisi: {e}"
-                )
+                if _is_bot_block(e):
+                    bot_block_seen = True
+                logging.warning(f"client={client or 'default'} ({tag}) ishlamadi: {e}")
                 continue
             except Exception as e:  # noqa: BLE001
                 last_err = e
                 logging.warning(f"client={client or 'default'} ({tag}) xatosi: {e}")
                 continue
+        return None
 
-    # Hamma kombinatsiya ham ishlamadi
+    # 1-bosqich: cookies'SIZ — tez va odatiy videolar uchun eng yaxshi
+    res = _attempt(False)
+    if res:
+        return res
+
+    # 2-bosqich: cookies BILAN — FAQAT login (bot-blok) muammosi bo'lgan bo'lsa.
+    # Agar xato "format yo'q" (SABR) bo'lsa, cookies ham yordam bermaydi —
+    # behuda 6 marta urinib vaqt sarflamaymiz.
+    if cookies_available and bot_block_seen:
+        res = _attempt(True)
+        if res:
+            return res
+
     if last_err:
         raise last_err
     raise RuntimeError("Yuklab bo'lmadi (noma'lum sabab).")
