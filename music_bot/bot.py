@@ -269,14 +269,15 @@ async def on_text(message: Message):
         url = YOUTUBE_RE.search(text).group(0)
         if not url.startswith("http"):
             url = "https://" + url
-        PENDING[message.from_user.id] = url
+        # url va foydalanuvchi xabari ID'sini saqlaymiz (keyin o'chirish uchun)
+        PENDING[message.from_user.id] = (url, message.message_id)
         await message.answer(
             "✅ Link qabul qilindi.\n🎚 <b>Sifatni tanlang:</b>",
             reply_markup=quality_keyboard(),
         )
     else:
         # Qo'shiq nomi — YouTube'dan qidiramiz (ytsearch)
-        PENDING[message.from_user.id] = f"ytsearch1:{text}"
+        PENDING[message.from_user.id] = (f"ytsearch1:{text}", message.message_id)
         await message.answer(
             f"🔎 <b>«{text}»</b> bo'yicha qidiraman.\n🎚 <b>Sifatni tanlang:</b>",
             reply_markup=quality_keyboard(),
@@ -286,20 +287,29 @@ async def on_text(message: Message):
 @dp.callback_query(F.data.startswith("q:"))
 async def on_quality(call: CallbackQuery):
     quality = call.data.split(":", 1)[1]
-    url = PENDING.pop(call.from_user.id, None)
-    if not url:
+    pending = PENDING.pop(call.from_user.id, None)
+    if not pending:
         await call.answer("Avval link yoki qo'shiq nomini yuboring.", show_alert=True)
         return
+    url, user_msg_id = pending
 
     await call.message.edit_text("⏬ Yuklanmoqda, biroz kuting…")
-    await download_and_send(call.message, url, quality)
+    ok = await download_and_send(call.message, url, quality)
+    # Muvaffaqiyatli bo'lsa — foydalanuvchi yuborgan link xabarini o'chiramiz,
+    # shunda chatda faqat bot yuborgan qo'shiq qoladi.
+    if ok:
+        try:
+            await bot.delete_message(call.message.chat.id, user_msg_id)
+        except Exception as e:  # noqa: BLE001
+            logging.warning(f"Foydalanuvchi xabarini o'chirib bo'lmadi: {e}")
     await call.answer()
 
 
 # ---------------------------------------------------------------------
 # Yuklab olish va yuborish
 # ---------------------------------------------------------------------
-async def download_and_send(status_msg: Message, url: str, quality: str):
+async def download_and_send(status_msg: Message, url: str, quality: str) -> bool:
+    """Yuklab, audio yuboradi. Muvaffaqiyatda True qaytaradi."""
     chat_id = status_msg.chat.id
     tmpdir = tempfile.mkdtemp(prefix="music_")
     try:
@@ -312,7 +322,7 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
 
         if not filepath or not os.path.exists(filepath):
             await status_msg.edit_text("❌ Faylni yuklab bo'lmadi. Boshqa link bilan urinib ko'ring.")
-            return
+            return False
 
         size = os.path.getsize(filepath)
         if size > MAX_TG_SIZE:
@@ -320,7 +330,7 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
                 "⚠️ Fayl juda katta (Telegram chegarasi ~50 MB).\n"
                 "Pastroq sifat (128 yoki 192 kbps) bilan urinib ko'ring."
             )
-            return
+            return False
 
         title = info.get("title", "audio")
         performer = info.get("uploader") or info.get("artist") or ""
@@ -330,16 +340,17 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
         await bot.send_chat_action(chat_id, ChatAction.UPLOAD_DOCUMENT)
 
         audio = FSInputFile(filepath, filename=f"{_safe_name(title)}.mp3")
+        # Fayl tagida hech qanday yozuv yo'q (caption berilmaydi).
+        # Qo'shiq nomi/ijrochi audio metadatasida (Telegram player'da) ko'rinadi.
         await bot.send_audio(
             chat_id,
             audio=audio,
             title=title[:60],
             performer=performer[:60] if performer else None,
             duration=duration or None,
-            # Fayl tagida faqat qo'shiq nomi — ixcham va nozik
-            caption=f"<b>{html.escape(title)}</b>",
         )
         await status_msg.delete()
+        return True
 
     except yt_dlp.utils.DownloadError as e:
         msg = str(e)
@@ -382,6 +393,7 @@ async def download_and_send(status_msg: Message, url: str, quality: str):
         await status_msg.edit_text(f"❌ Xatolik yuz berdi:\n<code>{tech}</code>")
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+    return False  # bu yergacha yetdi => xato bo'lgan
 
 
 def _is_bot_block(err: Exception) -> bool:
