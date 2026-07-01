@@ -42,6 +42,7 @@ from diag_utils import (
     split_chunks,
     check_cmd,
     check_pot_plugin,
+    check_ejs,
     check_pot_server,
 )
 
@@ -507,6 +508,7 @@ def _safe_name(name: str) -> str:
 # =====================================================================
 _check_cmd = check_cmd
 _check_pot_plugin = check_pot_plugin
+_check_ejs = check_ejs
 _split_chunks = split_chunks
 
 
@@ -569,7 +571,9 @@ def _run_diagnostics_blocking(test_url: str = DIAG_TEST_URL) -> str:
         lines.append(f"yt-dlp versiya: ? ({e})")
     lines.append(_check_cmd("ffmpeg", ["ffmpeg", "-version"]))
     lines.append(_check_cmd("node", ["node", "--version"]))
+    lines.append(_check_cmd("deno", ["deno", "--version"]))
     lines.append(_check_pot_plugin())
+    lines.append(_check_ejs())
     lines.append(_check_pot_server())
     if _RESOLVED_COOKIES and os.path.exists(_RESOLVED_COOKIES):
         lines.append(f"✅ Cookies: BOR ({_RESOLVED_COOKIES})")

@@ -16,6 +16,7 @@ from diag_utils import (  # noqa: E402
     split_chunks,
     check_cmd,
     check_pot_plugin,
+    check_ejs,
     check_pot_server,
 )
 
@@ -111,3 +112,9 @@ def test_check_pot_server_up():
 def test_check_pot_plugin_returns_status():
     res = check_pot_plugin()
     assert "PO Token plagini" in res
+
+
+# ---------- check_ejs ----------
+def test_check_ejs_returns_status():
+    res = check_ejs()
+    assert "yt-dlp-ejs" in res
