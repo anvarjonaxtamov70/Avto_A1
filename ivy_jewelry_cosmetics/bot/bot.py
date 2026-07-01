@@ -16,9 +16,18 @@
 =====================================================================
 """
 import os
+import json
+import base64
+import binascii
 import asyncio
 import logging
 import urllib.parse
+
+# aiohttp — keep-alive health server + self-ping uchun (bulutda 24/7 ishlash)
+try:
+    import aiohttp
+except Exception:
+    aiohttp = None
 
 # .env faylni avtomatik yuklash (ixtiyoriy)
 try:
@@ -59,6 +68,40 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
 
 if not BOT_TOKEN:
     raise SystemExit("❌ BOT_TOKEN environment o'zgaruvchisi kerak! .env faylga qo'ying (.env.example ga qarang).")
+
+# =====================================================================
+# SERVICE ACCOUNT'NI ENV'DAN TIKLASH (bulutli hosting uchun)
+#   Render/Railway/Docker'da maxfiy faylni `scp` bilan ko'chirib bo'lmaydi.
+#   Buning o'rniga serviceAccount.json MATNI `SERVICE_ACCOUNT_JSON` env'iga
+#   (to'g'ridan-to'g'ri JSON yoki base64 holida) qo'yiladi. Bot ishga tushganda
+#   uni fayl sifatida tiklaydi. Fayl allaqachon mavjud bo'lsa (lokal) — tegilmaydi.
+# =====================================================================
+def _materialize_service_account():
+    if os.path.exists(SERVICE_ACCOUNT_FILE):
+        return
+    raw = os.getenv("SERVICE_ACCOUNT_JSON", "").strip()
+    if not raw:
+        return
+    if not raw.startswith("{"):
+        try:
+            raw = base64.b64decode(raw).decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError) as e:
+            log.error("SERVICE_ACCOUNT_JSON base64 dekod xatosi: %s", e)
+            return
+    try:
+        json.loads(raw)  # to'g'ri JSON ekanini tekshiramiz
+    except json.JSONDecodeError as e:
+        log.error("SERVICE_ACCOUNT_JSON yaroqsiz JSON: %s", e)
+        return
+    try:
+        with open(SERVICE_ACCOUNT_FILE, "w", encoding="utf-8") as f:
+            f.write(raw)
+        log.info("serviceAccount.json env'dan tiklandi.")
+    except OSError as e:
+        log.error("serviceAccount.json yozishda xato: %s", e)
+
+
+_materialize_service_account()
 
 # =====================================================================
 # FIREBASE ADMIN (ixtiyoriy — bo'lmasa suhbat baribir ishlaydi)
@@ -443,11 +486,79 @@ async def handle_photo_redirect(message: types.Message):
     )
 
 # =====================================================================
+# KEEP-ALIVE HEALTH SERVER (bulutda 24/7 ishlash uchun)
+#   Render bepul "web service" ochiq PORT kutadi va health-check qiladi.
+#   Bot long-polling ishlagani uchun o'zicha HTTP port ochmaydi — shuning
+#   uchun kichik aiohttp server ochamiz. FAQAT `PORT` env berilgan bo'lsa
+#   yoqiladi (Render uni avtomatik beradi). Lokal kompyuterda PORT yo'q =>
+#   server yoqilmaydi, bot avvalgidek ishlaydi.
+# =====================================================================
+async def start_health_server():
+    port = os.getenv("PORT")
+    if not port:
+        return  # lokal ishga tushirish — health server kerak emas
+    if aiohttp is None:
+        log.error("Health server uchun aiohttp o'rnatilmagan (requirements.txt).")
+        return
+    from aiohttp import web
+
+    async def _ok(_request):
+        return web.Response(text="Ivy bot ishlayapti ✅")
+
+    app = web.Application()
+    app.router.add_get("/", _ok)
+    app.router.add_get("/health", _ok)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(port))
+    await site.start()
+    log.info("Health server %s-portda ishga tushdi (keep-alive uchun).", port)
+
+
+# =====================================================================
+# O'ZINI-O'ZI UYG'OTISH (SELF-PING)
+#   Render bepul web service 15 daqiqa kiruvchi trafik bo'lmasa uxlaydi.
+#   Bot o'z manziliga har ~10 daqiqada GET yuboradi => uxlab qolmaydi va
+#   24/7 ishlaydi. Tashqi "ping" xizmati (UptimeRobot) SHART EMAS.
+#   Render `RENDER_EXTERNAL_URL` ni avtomatik beradi; boshqa platformada
+#   `KEEP_ALIVE_URL` ni qo'lda berish mumkin.
+# =====================================================================
+async def keep_awake():
+    base = os.getenv("KEEP_ALIVE_URL") or os.getenv("RENDER_EXTERNAL_URL")
+    if not base or aiohttp is None:
+        return  # lokal yoki manzil yo'q — self-ping kerak emas
+    ping_url = base.rstrip("/") + "/health"
+    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "600"))  # soniya (default 10 daqiqa)
+    await asyncio.sleep(60)  # server to'liq ko'tarilishini kutamiz
+    log.info("Self-ping yoqildi: %s (har %ss).", ping_url, interval)
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(ping_url, timeout=30) as r:
+                    log.info("Self-ping: %s", r.status)
+            except Exception as e:
+                log.warning("Self-ping xatosi: %s", e)
+            await asyncio.sleep(interval)
+
+
+# =====================================================================
 # ISHGA TUSHIRISH
 # =====================================================================
 async def main():
     log.info("✅ Ivy bot ishga tushdi! Admin(lar): %s", ADMIN_IDS)
-    await dp.start_polling(bot)
+
+    # Bepul bulut hostingda (Render) web service uxlab qolmasligi uchun
+    # kichik health-check serverini yoqamiz (PORT berilgan bo'lsa).
+    await start_health_server()
+
+    # O'zini-o'zi uyg'oq tutish (self-ping) — tashqi xizmat shart emas.
+    asyncio.create_task(keep_awake())
+
+    # Webhook + kutilayotgan eski yangilanishlarni tozalaymiz — bu "409 Conflict"
+    # sababini yo'qotadi. Eslatma: botni AYNI vaqtda IKKI nusxada ishga tushirmang!
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot, drop_pending_updates=True,
+                           allowed_updates=dp.resolve_used_update_types())
 
 if __name__ == "__main__":
     try:

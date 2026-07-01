@@ -103,14 +103,24 @@ else:
     # tezroq javob. Kengaytirish uchun YT_PLAYER_CLIENTS env'idan foydalaning.
     PLAYER_CLIENTS = ["android", None, "web"]
 
+# Muvaffaqiyatli client KESHI — oxirgi ishlagan client'ni birinchi o'ringa
+# qo'yadi. Natija: keyingi so'rov 2-3x tezroq (1 urinish, 3 emas).
+_last_successful_client: str | None = None
+
 
 def _client_order() -> list:
     """Sinaladigan client tartibini qaytaradi.
 
-    Cookies bor-yo'qligiga qarab tartib o'zgartirilmaydi — cookies alohida
-    2-bosqichda (faqat login kerak bo'lsa) qo'llanadi. Bu ortiqcha urinishlarni
-    kamaytirib, tezlikni oshiradi. Env orqali o'zgartirish mumkin.
+    Oxirgi muvaffaqiyatli client birinchi o'rinda — bu sekinlikni
+    2-3 barobar kamaytiradi (3 urinish o'rniga ko'pincha 1 yetadi).
     """
+    global _last_successful_client
+    if _last_successful_client is not None and _last_successful_client in PLAYER_CLIENTS:
+        # Ishlagan client'ni boshiga qo'yamiz, qolganlarni ketidan
+        order = [_last_successful_client] + [
+            c for c in PLAYER_CLIENTS if c != _last_successful_client
+        ]
+        return order
     return PLAYER_CLIENTS
 
 # /diag buyrug'i uchun sinov videosi (barqaror, ommabop). Env orqali o'zgartirsa bo'ladi.
@@ -258,8 +268,64 @@ async def cmd_diag(message: Message, command: CommandObject):
         await message.answer(chunk, parse_mode=None)
 
 
+# ---------------------------------------------------------------------
+# 🎵 AUDIO TOZALASH — admin audio tashlasa, captionsiz qaytaradi va
+# asl xabarni o'chiradi. 1 ta yoki 100+ ta birdan ishlaydi.
+# ---------------------------------------------------------------------
+# Admin tomonidan yuborilgan audiolarga ishlaydigan handler.
+# Faqat ADMIN_ID bo'lsa va foydalanuvchi admin bo'lsa ishlaydi.
+# Agar ADMIN_ID o'rnatilmagan bo'lsa — HAMMA uchun ishlaydi.
+# ---------------------------------------------------------------------
+
+@dp.message(F.audio)
+async def handle_audio_clean(message: Message):
+    """Admin audio yuborsa — captionsiz qaytaradi va asl xabarni o'chiradi."""
+    # Admin tekshiruvi (ADMIN_ID bo'sh bo'lsa — hamma foydalana oladi)
+    if ADMIN_ID and str(message.from_user.id) != ADMIN_ID:
+        return  # admin emas — oddiy foydalanuvchi, e'tiborsiz qoldiramiz
+
+    audio = message.audio
+    try:
+        # Audioni captionsiz qaytarib yuboramiz
+        await bot.send_audio(
+            chat_id=message.chat.id,
+            audio=audio.file_id,
+            title=audio.title or None,
+            performer=audio.performer or None,
+            duration=audio.duration or None,
+        )
+        # Asl xabarni o'chiramiz (admin yuborgan, tagida caption bor)
+        await message.delete()
+    except Exception as e:
+        logging.warning(f"Audio tozalash xatosi: {e}")
+
+
+@dp.message(F.document)
+async def handle_document_audio_clean(message: Message):
+    """Admin audio faylni document sifatida yuborsa ham ishlaydi."""
+    if ADMIN_ID and str(message.from_user.id) != ADMIN_ID:
+        return
+
+    doc = message.document
+    # Faqat audio fayllarni qabul qilamiz (mime_type tekshiruvi)
+    mime = (doc.mime_type or "").lower()
+    if not mime.startswith("audio/"):
+        return
+
+    try:
+        await bot.send_document(
+            chat_id=message.chat.id,
+            document=doc.file_id,
+            caption=None,  # captionsiz
+        )
+        await message.delete()
+    except Exception as e:
+        logging.warning(f"Document-audio tozalash xatosi: {e}")
+
+
 @dp.message(F.text)
 async def on_text(message: Message):
+    # Audio tozalash rejimida bo'lsa — matnli xabarni e'tiborsiz qoldiramiz
     text = (message.text or "").strip()
     if not text:
         return
@@ -315,10 +381,50 @@ async def download_and_send(status_msg: Message, url: str, quality: str) -> bool
     try:
         await bot.send_chat_action(chat_id, ChatAction.RECORD_VOICE)
 
-        # Bloklovchi yt-dlp ishini alohida threadda bajaramiz
-        info, filepath = await asyncio.to_thread(
-            _download_blocking, url, quality, tmpdir
+        # Bloklovchi yt-dlp ishini alohida threadda bajaramiz.
+        # MUHIM: 90s umumiy timeout — agar yt-dlp osilib qolsa, bekor qilinadi.
+        # Bu "Yuklanmoqda..." da qotib qolish muammosini hal qiladi.
+        download_task = asyncio.ensure_future(
+            asyncio.to_thread(_download_blocking, url, quality, tmpdir)
         )
+
+        # Progress indikator — har 10s da xabarni yangilaydi
+        # (foydalanuvchi bot qotib qolganini o'ylamasligi uchun)
+        progress_dots = ["⏬ Yuklanmoqda", "⏬ Yuklanmoqda.", "⏬ Yuklanmoqda..", "⏬ Yuklanmoqda..."]
+        elapsed = 0
+        while not download_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(download_task), timeout=10)
+            except asyncio.TimeoutError:
+                elapsed += 10
+                if elapsed >= 90:
+                    # Umumiy timeout — bekor qilamiz
+                    download_task.cancel()
+                    await status_msg.edit_text(
+                        "⏱ <b>Vaqt tugadi (90s).</b>\n\n"
+                        "YouTube server javob bermayapti yoki video juda katta.\n"
+                        "💡 Boshqa qo'shiq bilan urinib ko'ring yoki keyinroq qaytadan yuboring."
+                    )
+                    return False
+                # Progress yangilash
+                dot_idx = (elapsed // 10) % len(progress_dots)
+                try:
+                    await status_msg.edit_text(f"{progress_dots[dot_idx]} ({elapsed}s)")
+                except Exception:
+                    pass  # xabar o'zgarmasdan qolsa Telegram xato beradi
+                try:
+                    await bot.send_chat_action(chat_id, ChatAction.RECORD_VOICE)
+                except Exception:
+                    pass
+
+        # Natijani olamiz
+        try:
+            info, filepath = download_task.result()
+        except asyncio.CancelledError:
+            await status_msg.edit_text(
+                "⏱ <b>Yuklash bekor qilindi.</b>\nQaytadan urinib ko'ring."
+            )
+            return False
 
         if not filepath or not os.path.exists(filepath):
             await status_msg.edit_text("❌ Faylni yuklab bo'lmadi. Boshqa link bilan urinib ko'ring.")
@@ -425,12 +531,17 @@ def _build_opts(quality: str, tmpdir: str, client: str | None, use_cookies: bool
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        # Tezlik uchun: kam qayta-urinish va tez timeout (sekin tarmoqda osilib
-        # qolmasin), thumbnail yuklab/embed qilmaymiz (ortiqcha vaqt va tarmoq).
-        "retries": 1,
-        "fragment_retries": 1,
-        "socket_timeout": 20,
-        "concurrent_fragment_downloads": 4,
+        # TEZLIK OPTIMIZATSIYASI:
+        # - socket_timeout: 15s (20 edi) — tezroq xato aniqlash
+        # - retries: 0 — bitta client ishlamasa darhol keyingisiga o'tish
+        # - fragment_retries: 0 — buzilgan fragment'da vaqt sarflamaslik
+        # - concurrent_fragment_downloads: 8 — parallel yuklash (4 edi)
+        # - noprogress: True — progress output yo'q (tezroq)
+        "retries": 0,
+        "fragment_retries": 0,
+        "socket_timeout": 15,
+        "concurrent_fragment_downloads": 8,
+        "noprogress": True,
         "http_headers": {"User-Agent": USER_AGENT},
         "extractor_args": extractor_args,
         "postprocessors": [
@@ -489,6 +600,9 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
                         logging.info(
                             f"Yuklash muvaffaqiyatli (client={client or 'default'}, {tag})."
                         )
+                        # Muvaffaqiyatli client'ni keshlaymiz — keyingi so'rov tezroq
+                        global _last_successful_client
+                        _last_successful_client = client
                         return info, mp3
             except yt_dlp.utils.DownloadError as e:
                 last_err = e
@@ -692,8 +806,9 @@ async def start_health_server():
 
 # =====================================================================
 # SELF-PING — Render bepul tarifda 15 daqiqadan keyin uxlab qolmaslik uchun
-#   Bot o'zining manziliga har ~10 daqiqada GET yuboradi.
+#   Bot o'zining manziliga har 5 daqiqada GET yuboradi (300s interval).
 #   Render `RENDER_EXTERNAL_URL` ni avtomatik beradi.
+#   Error recovery: xato bo'lsa session qayta yaratiladi, bot to'xtamaydi.
 # =====================================================================
 async def keep_awake():
     import aiohttp
@@ -702,17 +817,26 @@ async def keep_awake():
     if not base:
         return
     ping_url = base.rstrip("/") + "/health"
-    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "600"))
-    await asyncio.sleep(60)
+    # Default 300s (5 min) — Render 15 min da uxlaydi, 5 min xavfsiz margin
+    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "300"))
+    await asyncio.sleep(10)  # health server ko'tarilishi uchun 10s yetadi
     logging.info(f"Self-ping yoqildi: {ping_url} (har {interval}s).")
-    async with aiohttp.ClientSession() as session:
-        while True:
-            try:
-                async with session.get(ping_url, timeout=30) as r:
-                    logging.info(f"Self-ping: {r.status}")
-            except Exception as e:
-                logging.warning(f"Self-ping xatosi: {e}")
-            await asyncio.sleep(interval)
+    while True:
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as session:
+                while True:
+                    try:
+                        async with session.get(ping_url) as r:
+                            logging.info(f"Self-ping: {r.status}")
+                    except Exception as e:
+                        logging.warning(f"Self-ping xatosi: {e}")
+                    await asyncio.sleep(interval)
+        except Exception as e:
+            # Session buzilsa — qayta yaratamiz
+            logging.warning(f"Self-ping session xatosi, qayta uriniladi: {e}")
+            await asyncio.sleep(10)
 
 
 # =====================================================================

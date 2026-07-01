@@ -1,0 +1,49 @@
+# =====================================================================
+#  💎 Ivy — Jewelry & Cosmetics bot  ·  Render.com BEPUL deploy "blueprint"
+#
+#  Bot Python runtime'da ishlaydi (qo'shimcha tizim paketi kerak emas).
+#  Render bepul "web service" ochiq PORT kutadi — bot ichidagi kichik
+#  health-server (/health) shu talabni qondiradi va self-ping bilan
+#  botni 24/7 uyg'oq tutadi.
+#
+#  Ishlatish: Render'da "New + -> Blueprint" -> repo'ni tanlang.
+#  Agar repo ildizida boshqa render.yaml bo'lsa, qo'lda "New + -> Web
+#  Service" usulini ishlating (DEPLOY_RENDER.md'ga qarang).
+#
+#  To'liq qo'llanma:  DEPLOY_RENDER.md
+# =====================================================================
+services:
+  - type: web
+    name: ivy-jewelry-bot
+    runtime: python
+    plan: free                               # bepul tarif (kredit karta talab qilinmaydi)
+    rootDir: ivy_jewelry_cosmetics/bot        # bot kodi shu papkada
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    healthCheckPath: /health
+    autoDeploy: true                          # GitHub'ga push qilinsa, o'zi qayta deploy bo'ladi
+    envVars:
+      # ——— MAJBURIY maxfiy qiymat (Render panelida kiritiladi) ———
+      - key: BOT_TOKEN
+        sync: false
+
+      # ——— Ixtiyoriy (AI suhbat uchun) ———
+      - key: GROQ_API_KEY
+        sync: false
+
+      # ——— Ixtiyoriy (profil/storis Firebase'ga yozish uchun) ———
+      # serviceAccount.json MATNI (base64 yoki JSON). DEPLOY_RENDER.md 1-QADAM.
+      - key: SERVICE_ACCOUNT_JSON
+        sync: false
+
+      # ——— Sozlamalar ———
+      - key: ADMIN_IDS
+        value: "1209673004,5105291033"
+      - key: MINI_APP_URL
+        value: "https://anvarjonaxtamov70.github.io/Avto_A1/ivy_jewelry_cosmetics/"
+      - key: FIREBASE_DB_URL
+        value: "https://ivyj-6d8e4-default-rtdb.asia-southeast1.firebasedatabase.app"
+      - key: GROQ_MODEL
+        value: "llama-3.3-70b-versatile"
+      - key: KEEP_ALIVE_INTERVAL
+        value: "600"
