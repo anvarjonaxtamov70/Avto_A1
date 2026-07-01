@@ -392,6 +392,27 @@ def _download_blocking(url: str, tmpdir: str):
         return info, filepath
 
 
+def _video_meta(path: str) -> tuple[str, str]:
+    """ffprobe bilan video kodek va pixel formatini qaytaradi (codec, pix_fmt).
+    ffprobe yo'q yoki xato bo'lsa ('', '') qaytaradi."""
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return "", ""
+    try:
+        out = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=codec_name,pix_fmt",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, timeout=20,
+        ).stdout.lower().split()
+        codec = out[0] if len(out) > 0 else ""
+        pix_fmt = out[1] if len(out) > 1 else ""
+        return codec, pix_fmt
+    except Exception as e:  # noqa: BLE001
+        logging.warning(f"ffprobe xatosi: {e}")
+        return "", ""
+
+
 def _reencode_ios(src_path: str, tmpdir: str) -> str:
     """Videoni iPhone (iOS/Telegram) 100% o'qiydigan formatga qayta kodlaydi.
 
@@ -413,22 +434,33 @@ def _reencode_ios(src_path: str, tmpdir: str) -> str:
     if os.path.abspath(out_path) == os.path.abspath(src_path):
         out_path = os.path.join(tmpdir, f"{base}_ios2.mp4")
 
-    cmd = [
-        ffmpeg, "-y", "-i", src_path,
-        "-c:v", "libx264", "-profile:v", "high", "-level", "4.1",
-        "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "veryfast",
-        "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart",
-        out_path,
-    ]
+    # TEZLIK: video allaqachon H.264 8-bit yuv420p bo'lsa — qayta KODLAMAYMIZ,
+    # faqat tez faststart remux (stream copy, deyarli bir zumda, CPU deyarli yo'q).
+    # Faqat mos bo'lmagan (VP9/AV1/10-bit/HDR) videolar to'liq re-encode qilinadi.
+    codec, pix_fmt = _video_meta(src_path)
+    already_ok = ("h264" in codec) and pix_fmt.startswith("yuv420p") and ("10" not in pix_fmt)
+    if already_ok:
+        cmd = [ffmpeg, "-y", "-i", src_path, "-c", "copy",
+               "-movflags", "+faststart", out_path]
+        tag, timeout = "tez remux (qayta kodlashsiz)", 60
+    else:
+        cmd = [
+            ffmpeg, "-y", "-i", src_path,
+            "-c:v", "libx264", "-profile:v", "high", "-level", "4.1",
+            "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "veryfast",
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            out_path,
+        ]
+        tag, timeout = f"to'liq re-encode ({codec or '?'}/{pix_fmt or '?'})", 150
     try:
         subprocess.run(
             cmd, check=True,
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-            timeout=150,
+            timeout=timeout,
         )
         if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-            logging.info("iOS uchun qayta kodlandi ✅ (H.264 yuv420p).")
+            logging.info(f"iOS mosligi: {tag} ✅")
             return out_path
     except subprocess.TimeoutExpired:
         logging.warning("Qayta kodlash vaqt tugadi — asl fayl yuboriladi.")
@@ -484,7 +516,8 @@ async def keep_awake():
     if not base:
         return
     ping_url = base.rstrip("/") + "/health"
-    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "300"))
+    # 240s (4 min) — Render 15 min da uxlaydi. Tezroq ping = kamroq uxlash.
+    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "240"))
     await asyncio.sleep(10)
     log.info(f"Self-ping yoqildi: {ping_url} (har {interval}s).")
     while True:
