@@ -176,7 +176,18 @@ async def on_text(message: Message):
         url = "https://" + url
 
     status_msg = await message.answer("⏬ Yuklanmoqda, biroz kuting…")
-    await download_and_send(status_msg, url)
+    ok = await download_and_send(status_msg, url)
+
+    # Music bot kabi TOZALASH: video muvaffaqiyatli yuborilgach, chatда faqat
+    # toza video qolishi uchun ortiqcha xabarlarni o'chiramiz:
+    #   - foydalanuvchi yuborgan link xabari (message)
+    #   - "Yuklanmoqda..." status xabari (status_msg) allaqachon
+    #     download_and_send ichida muvaffaqiyatда o'chiriladi.
+    if ok:
+        try:
+            await message.delete()
+        except Exception as e:
+            log.warning(f"Foydalanuvchi xabarini o'chirib bo'lmadi: {e}")
 
 
 # ---------------------------------------------------------------------
