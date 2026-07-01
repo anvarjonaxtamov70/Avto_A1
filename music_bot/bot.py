@@ -258,8 +258,64 @@ async def cmd_diag(message: Message, command: CommandObject):
         await message.answer(chunk, parse_mode=None)
 
 
+# ---------------------------------------------------------------------
+# 🎵 AUDIO TOZALASH — admin audio tashlasa, captionsiz qaytaradi va
+# asl xabarni o'chiradi. 1 ta yoki 100+ ta birdan ishlaydi.
+# ---------------------------------------------------------------------
+# Admin tomonidan yuborilgan audiolarga ishlaydigan handler.
+# Faqat ADMIN_ID bo'lsa va foydalanuvchi admin bo'lsa ishlaydi.
+# Agar ADMIN_ID o'rnatilmagan bo'lsa — HAMMA uchun ishlaydi.
+# ---------------------------------------------------------------------
+
+@dp.message(F.audio)
+async def handle_audio_clean(message: Message):
+    """Admin audio yuborsa — captionsiz qaytaradi va asl xabarni o'chiradi."""
+    # Admin tekshiruvi (ADMIN_ID bo'sh bo'lsa — hamma foydalana oladi)
+    if ADMIN_ID and str(message.from_user.id) != ADMIN_ID:
+        return  # admin emas — oddiy foydalanuvchi, e'tiborsiz qoldiramiz
+
+    audio = message.audio
+    try:
+        # Audioni captionsiz qaytarib yuboramiz
+        await bot.send_audio(
+            chat_id=message.chat.id,
+            audio=audio.file_id,
+            title=audio.title or None,
+            performer=audio.performer or None,
+            duration=audio.duration or None,
+        )
+        # Asl xabarni o'chiramiz (admin yuborgan, tagida caption bor)
+        await message.delete()
+    except Exception as e:
+        logging.warning(f"Audio tozalash xatosi: {e}")
+
+
+@dp.message(F.document)
+async def handle_document_audio_clean(message: Message):
+    """Admin audio faylni document sifatida yuborsa ham ishlaydi."""
+    if ADMIN_ID and str(message.from_user.id) != ADMIN_ID:
+        return
+
+    doc = message.document
+    # Faqat audio fayllarni qabul qilamiz (mime_type tekshiruvi)
+    mime = (doc.mime_type or "").lower()
+    if not mime.startswith("audio/"):
+        return
+
+    try:
+        await bot.send_document(
+            chat_id=message.chat.id,
+            document=doc.file_id,
+            caption=None,  # captionsiz
+        )
+        await message.delete()
+    except Exception as e:
+        logging.warning(f"Document-audio tozalash xatosi: {e}")
+
+
 @dp.message(F.text)
 async def on_text(message: Message):
+    # Audio tozalash rejimida bo'lsa — matnli xabarni e'tiborsiz qoldiramiz
     text = (message.text or "").strip()
     if not text:
         return
