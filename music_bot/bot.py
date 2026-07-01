@@ -103,14 +103,24 @@ else:
     # tezroq javob. Kengaytirish uchun YT_PLAYER_CLIENTS env'idan foydalaning.
     PLAYER_CLIENTS = ["android", None, "web"]
 
+# Muvaffaqiyatli client KESHI — oxirgi ishlagan client'ni birinchi o'ringa
+# qo'yadi. Natija: keyingi so'rov 2-3x tezroq (1 urinish, 3 emas).
+_last_successful_client: str | None = None
+
 
 def _client_order() -> list:
     """Sinaladigan client tartibini qaytaradi.
 
-    Cookies bor-yo'qligiga qarab tartib o'zgartirilmaydi — cookies alohida
-    2-bosqichda (faqat login kerak bo'lsa) qo'llanadi. Bu ortiqcha urinishlarni
-    kamaytirib, tezlikni oshiradi. Env orqali o'zgartirish mumkin.
+    Oxirgi muvaffaqiyatli client birinchi o'rinda — bu sekinlikni
+    2-3 barobar kamaytiradi (3 urinish o'rniga ko'pincha 1 yetadi).
     """
+    global _last_successful_client
+    if _last_successful_client is not None and _last_successful_client in PLAYER_CLIENTS:
+        # Ishlagan client'ni boshiga qo'yamiz, qolganlarni ketidan
+        order = [_last_successful_client] + [
+            c for c in PLAYER_CLIENTS if c != _last_successful_client
+        ]
+        return order
     return PLAYER_CLIENTS
 
 # /diag buyrug'i uchun sinov videosi (barqaror, ommabop). Env orqali o'zgartirsa bo'ladi.
@@ -481,12 +491,17 @@ def _build_opts(quality: str, tmpdir: str, client: str | None, use_cookies: bool
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        # Tezlik uchun: kam qayta-urinish va tez timeout (sekin tarmoqda osilib
-        # qolmasin), thumbnail yuklab/embed qilmaymiz (ortiqcha vaqt va tarmoq).
-        "retries": 1,
-        "fragment_retries": 1,
-        "socket_timeout": 20,
-        "concurrent_fragment_downloads": 4,
+        # TEZLIK OPTIMIZATSIYASI:
+        # - socket_timeout: 15s (20 edi) — tezroq xato aniqlash
+        # - retries: 0 — bitta client ishlamasa darhol keyingisiga o'tish
+        # - fragment_retries: 0 — buzilgan fragment'da vaqt sarflamaslik
+        # - concurrent_fragment_downloads: 8 — parallel yuklash (4 edi)
+        # - noprogress: True — progress output yo'q (tezroq)
+        "retries": 0,
+        "fragment_retries": 0,
+        "socket_timeout": 15,
+        "concurrent_fragment_downloads": 8,
+        "noprogress": True,
         "http_headers": {"User-Agent": USER_AGENT},
         "extractor_args": extractor_args,
         "postprocessors": [
@@ -545,6 +560,9 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
                         logging.info(
                             f"Yuklash muvaffaqiyatli (client={client or 'default'}, {tag})."
                         )
+                        # Muvaffaqiyatli client'ni keshlaymiz — keyingi so'rov tezroq
+                        global _last_successful_client
+                        _last_successful_client = client
                         return info, mp3
             except yt_dlp.utils.DownloadError as e:
                 last_err = e
@@ -748,8 +766,9 @@ async def start_health_server():
 
 # =====================================================================
 # SELF-PING — Render bepul tarifda 15 daqiqadan keyin uxlab qolmaslik uchun
-#   Bot o'zining manziliga har ~10 daqiqada GET yuboradi.
+#   Bot o'zining manziliga har 5 daqiqada GET yuboradi (300s interval).
 #   Render `RENDER_EXTERNAL_URL` ni avtomatik beradi.
+#   Error recovery: xato bo'lsa session qayta yaratiladi, bot to'xtamaydi.
 # =====================================================================
 async def keep_awake():
     import aiohttp
@@ -758,17 +777,26 @@ async def keep_awake():
     if not base:
         return
     ping_url = base.rstrip("/") + "/health"
-    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "600"))
-    await asyncio.sleep(60)
+    # Default 300s (5 min) — Render 15 min da uxlaydi, 5 min xavfsiz margin
+    interval = int(os.getenv("KEEP_ALIVE_INTERVAL", "300"))
+    await asyncio.sleep(10)  # health server ko'tarilishi uchun 10s yetadi
     logging.info(f"Self-ping yoqildi: {ping_url} (har {interval}s).")
-    async with aiohttp.ClientSession() as session:
-        while True:
-            try:
-                async with session.get(ping_url, timeout=30) as r:
-                    logging.info(f"Self-ping: {r.status}")
-            except Exception as e:
-                logging.warning(f"Self-ping xatosi: {e}")
-            await asyncio.sleep(interval)
+    while True:
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as session:
+                while True:
+                    try:
+                        async with session.get(ping_url) as r:
+                            logging.info(f"Self-ping: {r.status}")
+                    except Exception as e:
+                        logging.warning(f"Self-ping xatosi: {e}")
+                    await asyncio.sleep(interval)
+        except Exception as e:
+            # Session buzilsa — qayta yaratamiz
+            logging.warning(f"Self-ping session xatosi, qayta uriniladi: {e}")
+            await asyncio.sleep(10)
 
 
 # =====================================================================
