@@ -380,15 +380,20 @@ def _is_bot_block(err: Exception) -> bool:
     return is_bot_block(str(err))
 
 
-def _build_opts(quality: str, tmpdir: str, client: str | None):
-    """Berilgan player_client uchun yt-dlp sozlamalarini quradi."""
+def _build_opts(quality: str, tmpdir: str, client: str | None, use_cookies: bool = True):
+    """Berilgan player_client uchun yt-dlp sozlamalarini quradi.
+
+    use_cookies=False bo'lsa, cookies ishlatilmaydi (odatiy videolar uchun
+    ko'pincha cookies'SIZ ko'proq format mavjud bo'ladi).
+    """
     youtube_args: dict = {}
     if client:
         youtube_args["player_client"] = [client]
+    # PO-token yetishmagan formatlarni ham qamrab olamiz — bu "Requested format
+    # is not available" xatosini ko'p holatda davolaydi.
+    youtube_args["formats"] = ["missing_pot"]
 
-    extractor_args: dict = {}
-    if youtube_args:
-        extractor_args["youtube"] = youtube_args
+    extractor_args: dict = {"youtube": youtube_args}
     # PO Token provider (bgutil) HTTP serverining manzili — plagin shu yerdan
     # token oladi. Default 127.0.0.1:4416 (bot bilan bir konteynerda ishlaydi).
     extractor_args["youtubepot-bgutilhttp"] = {"base_url": [POT_PROVIDER_URL]}
@@ -415,7 +420,7 @@ def _build_opts(quality: str, tmpdir: str, client: str | None):
         ],
     }
     cookie_path = _RESOLVED_COOKIES
-    if cookie_path and os.path.exists(cookie_path):
+    if use_cookies and cookie_path and os.path.exists(cookie_path):
         opts["cookiefile"] = cookie_path
     if PROXY_URL:
         opts["proxy"] = PROXY_URL
@@ -430,43 +435,49 @@ def _download_blocking(url: str, quality: str, tmpdir: str):
     "mweb"/"tv" klientlar ham muvaffaqiyatli ishlaydi.
     """
     last_err: Exception | None = None
-    for client in _client_order():
-        # Har urinishda papkani tozalab, chala fayllar qolmasin
-        for f in Path(tmpdir).glob("*"):
+    cookies_available = bool(_RESOLVED_COOKIES and os.path.exists(_RESOLVED_COOKIES))
+    # Urinish rejasi: AVVAL cookies'SIZ (odatiy videolar uchun ko'proq format
+    # mavjud), KEYIN cookies BILAN (login/yosh cheklovi bo'lgan videolar uchun).
+    cookie_modes = [False, True] if cookies_available else [False]
+
+    for use_cookies in cookie_modes:
+        tag = "cookies bilan" if use_cookies else "cookies'siz"
+        for client in _client_order():
+            # Har urinishda papkani tozalab, chala fayllar qolmasin
+            for f in Path(tmpdir).glob("*"):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+
+            opts = _build_opts(quality, tmpdir, client, use_cookies=use_cookies)
             try:
-                f.unlink()
-            except OSError:
-                pass
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    if "entries" in info:
+                        info = info["entries"][0]
+                    vid = info.get("id", "")
+                    mp3 = os.path.join(tmpdir, f"{vid}.mp3")
+                    if not os.path.exists(mp3):
+                        mp3_files = list(Path(tmpdir).glob("*.mp3"))
+                        mp3 = str(mp3_files[0]) if mp3_files else ""
+                    if mp3:
+                        logging.info(
+                            f"Yuklash muvaffaqiyatli (client={client or 'default'}, {tag})."
+                        )
+                        return info, mp3
+            except yt_dlp.utils.DownloadError as e:
+                last_err = e
+                logging.warning(
+                    f"client={client or 'default'} ({tag}) ishlamadi, keyingisi: {e}"
+                )
+                continue
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                logging.warning(f"client={client or 'default'} ({tag}) xatosi: {e}")
+                continue
 
-        opts = _build_opts(quality, tmpdir, client)
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                if "entries" in info:
-                    info = info["entries"][0]
-                vid = info.get("id", "")
-                mp3 = os.path.join(tmpdir, f"{vid}.mp3")
-                if not os.path.exists(mp3):
-                    mp3_files = list(Path(tmpdir).glob("*.mp3"))
-                    mp3 = str(mp3_files[0]) if mp3_files else ""
-                if mp3:
-                    logging.info(f"Yuklash muvaffaqiyatli (client={client or 'default'}).")
-                    return info, mp3
-        except yt_dlp.utils.DownloadError as e:
-            last_err = e
-            # MUHIM: har qanday yuklash xatosida (bot-blok BO'LMASA HAM, mas.
-            # "Requested format is not available") keyingi player_client'ga
-            # o'tamiz. Faqat hamma client tugagach xato qaytaramiz.
-            logging.warning(
-                f"client={client or 'default'} ishlamadi, keyingisiga o'taman: {e}"
-            )
-            continue
-        except Exception as e:  # noqa: BLE001
-            last_err = e
-            logging.warning(f"client={client or 'default'} xatosi: {e}")
-            continue
-
-    # Hamma klient ham ishlamadi
+    # Hamma kombinatsiya ham ishlamadi
     if last_err:
         raise last_err
     raise RuntimeError("Yuklab bo'lmadi (noma'lum sabab).")
@@ -492,14 +503,15 @@ def _check_pot_server() -> str:
     return check_pot_server(POT_PROVIDER_URL)
 
 
-def _diag_extract(client: str | None, url: str) -> tuple[bool, str]:
+def _diag_extract(client: str | None, url: str, use_cookies: bool = True) -> tuple[bool, str]:
     """Bitta player_client bilan FAQAT ma'lumot oladi (yuklamaydi)."""
-    youtube_args: dict = {}
+    youtube_args: dict = {"formats": ["missing_pot"]}
     if client:
         youtube_args["player_client"] = [client]
-    extractor_args: dict = {"youtubepot-bgutilhttp": {"base_url": [POT_PROVIDER_URL]}}
-    if youtube_args:
-        extractor_args["youtube"] = youtube_args
+    extractor_args: dict = {
+        "youtube": youtube_args,
+        "youtubepot-bgutilhttp": {"base_url": [POT_PROVIDER_URL]},
+    }
 
     opts = {
         "quiet": True,
@@ -514,7 +526,7 @@ def _diag_extract(client: str | None, url: str) -> tuple[bool, str]:
         "extractor_args": extractor_args,
     }
     cookie_path = _RESOLVED_COOKIES
-    if cookie_path and os.path.exists(cookie_path):
+    if use_cookies and cookie_path and os.path.exists(cookie_path):
         opts["cookiefile"] = cookie_path
     if PROXY_URL:
         opts["proxy"] = PROXY_URL
@@ -558,35 +570,46 @@ def _run_diagnostics_blocking(test_url: str = DIAG_TEST_URL) -> str:
     else:
         lines.append("➖ Proxy: yo'q (datacenter IP'da bloklov ehtimoli yuqori)")
 
-    # 2) Har bir player_client bo'yicha sinov
+    # 2) Har bir player_client bo'yicha sinov (cookies'SIZ va cookies BILAN)
     lines.append("-" * 32)
     lines.append(f"Sinov videosi: {test_url}")
-    lines.append("Player client'lar bo'yicha sinov (audio format):")
+    have_cookies = bool(_RESOLVED_COOKIES and os.path.exists(_RESOLVED_COOKIES))
+    lines.append("Client sinovi (audio format):")
     any_ok = False
     bot_block = False
     for client in PLAYER_CLIENTS:
         name = client or "default"
-        ok, detail = _diag_extract(client, test_url)
+        # Avval cookies'SIZ
+        ok, detail = _diag_extract(client, test_url, use_cookies=False)
         if ok:
             any_ok = True
+            lines.append(f"  ✅ {name} (cookies'siz): {detail}")
+            continue
+        if is_bot_block(detail):
+            bot_block = True
+        # cookies bo'lsa — cookies BILAN ham sinaymiz
+        if have_cookies:
+            ok2, detail2 = _diag_extract(client, test_url, use_cookies=True)
+            if ok2:
+                any_ok = True
+                lines.append(f"  ✅ {name} (cookies bilan): {detail2}")
+                continue
+            lines.append(f"  ❌ {name}: cookies'siz→{detail[:60]} | cookies→{detail2[:60]}")
         else:
-            if is_bot_block(detail):
-                bot_block = True
-        mark = "✅" if ok else "❌"
-        lines.append(f"  {mark} {name}: {detail}")
+            lines.append(f"  ❌ {name}: {detail}")
 
     # 3) Xulosa
     lines.append("=" * 32)
     if any_ok:
-        lines.append("XULOSA ✅ Kamida bitta client ishladi — yuklash imkoni bor.")
-        lines.append("Agar baribir yuklamasa, ffmpeg yoki fayl hajmi (50MB) muammosi bo'lishi mumkin.")
+        lines.append("XULOSA ✅ Kamida bitta kombinatsiya ishladi — yuklash imkoni bor.")
     elif bot_block:
-        lines.append("XULOSA 🤖 Bu video uchun YouTube LOGIN (cookies) talab qilyapti.")
-        lines.append("YECHIM: Render env'iga YT_COOKIES_CONTENT qo'shing.")
-        lines.append("Batafsil: DEPLOY_RENDER.md → cookies bo'limi.")
+        lines.append("XULOSA 🤖 YouTube LOGIN (cookies) talab qilyapti.")
+        lines.append("Render env'iga YT_COOKIES_CONTENT qo'shing (DEPLOY_RENDER.md).")
     else:
-        lines.append("XULOSA ❌ HAMMA client ishlamadi.")
-        lines.append("Yuqoridagi ❌ xatolarni Kiro'ga yuboring — aniq sababini topamiz.")
+        lines.append("XULOSA ❌ Hamma kombinatsiya 'format yo'q' berdi.")
+        lines.append("Sabab: Render datacenter IP + YouTube SABR cheklovi.")
+        lines.append("Eng ishonchli yechim: botni UY IP'sida ishlatish yoki")
+        lines.append("residential PROXY_URL qo'shish (README → blokni hal qilish).")
     return "\n".join(lines)
 
 
