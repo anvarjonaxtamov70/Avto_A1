@@ -315,10 +315,50 @@ async def download_and_send(status_msg: Message, url: str, quality: str) -> bool
     try:
         await bot.send_chat_action(chat_id, ChatAction.RECORD_VOICE)
 
-        # Bloklovchi yt-dlp ishini alohida threadda bajaramiz
-        info, filepath = await asyncio.to_thread(
-            _download_blocking, url, quality, tmpdir
+        # Bloklovchi yt-dlp ishini alohida threadda bajaramiz.
+        # MUHIM: 90s umumiy timeout — agar yt-dlp osilib qolsa, bekor qilinadi.
+        # Bu "Yuklanmoqda..." da qotib qolish muammosini hal qiladi.
+        download_task = asyncio.ensure_future(
+            asyncio.to_thread(_download_blocking, url, quality, tmpdir)
         )
+
+        # Progress indikator — har 10s da xabarni yangilaydi
+        # (foydalanuvchi bot qotib qolganini o'ylamasligi uchun)
+        progress_dots = ["⏬ Yuklanmoqda", "⏬ Yuklanmoqda.", "⏬ Yuklanmoqda..", "⏬ Yuklanmoqda..."]
+        elapsed = 0
+        while not download_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(download_task), timeout=10)
+            except asyncio.TimeoutError:
+                elapsed += 10
+                if elapsed >= 90:
+                    # Umumiy timeout — bekor qilamiz
+                    download_task.cancel()
+                    await status_msg.edit_text(
+                        "⏱ <b>Vaqt tugadi (90s).</b>\n\n"
+                        "YouTube server javob bermayapti yoki video juda katta.\n"
+                        "💡 Boshqa qo'shiq bilan urinib ko'ring yoki keyinroq qaytadan yuboring."
+                    )
+                    return False
+                # Progress yangilash
+                dot_idx = (elapsed // 10) % len(progress_dots)
+                try:
+                    await status_msg.edit_text(f"{progress_dots[dot_idx]} ({elapsed}s)")
+                except Exception:
+                    pass  # xabar o'zgarmasdan qolsa Telegram xato beradi
+                try:
+                    await bot.send_chat_action(chat_id, ChatAction.RECORD_VOICE)
+                except Exception:
+                    pass
+
+        # Natijani olamiz
+        try:
+            info, filepath = download_task.result()
+        except asyncio.CancelledError:
+            await status_msg.edit_text(
+                "⏱ <b>Yuklash bekor qilindi.</b>\nQaytadan urinib ko'ring."
+            )
+            return False
 
         if not filepath or not os.path.exists(filepath):
             await status_msg.edit_text("❌ Faylni yuklab bo'lmadi. Boshqa link bilan urinib ko'ring.")
