@@ -92,8 +92,7 @@ INSTAGRAM_RE = re.compile(
 WELCOME = (
     "📸 <b>Salom! Men Instagram video yuklovchi botman.</b>\n\n"
     "Menga Instagram <b>Reels</b>, <b>post</b> yoki <b>video</b> linkini yuboring — "
-    "men uni <b>mavjud eng yuqori sifatda</b> yuklab beraman "
-    "(agar video 4K/2K bo'lsa — o'shani, aks holda Full HD 1080p).\n\n"
+    "men uni <b>yuqori sifatda (HD)</b> yuklab beraman.\n\n"
     "Shunchaki linkni tashlang 👇\n"
     "<i>masalan: https://www.instagram.com/reel/xxxxx/</i>\n\n"
     "⚠️ <i>Diqqat: mualliflik huquqi himoyalangan kontentni faqat shaxsiy "
@@ -241,40 +240,31 @@ async def download_and_send(status_msg: Message, url: str) -> bool:
             return False
 
         size = os.path.getsize(filepath)
+        if size > MAX_TG_SIZE:
+            await status_msg.edit_text(
+                "⚠️ Video juda katta (Telegram chegarasi ~50 MB).\n"
+                "Kaltaroq yoki past sifatli video bilan urinib ko'ring."
+            )
+            return False
 
         title = (info.get("title") or info.get("description") or "video")[:60]
         duration = int(info.get("duration") or 0)
         width = info.get("width") or None
         height = info.get("height") or None
-        res_label = f"{height}p" if height else "eng yuqori"
 
-        await status_msg.edit_text(f"📤 Yuborilmoqda... ({res_label})")
+        await status_msg.edit_text("📤 Yuborilmoqda...")
         await bot.send_chat_action(chat_id, ChatAction.UPLOAD_VIDEO)
 
-        fname = f"{_safe_name(title)}.mp4"
-
-        # Telegram bot chegarasi ~50MB. Katta bo'lsa — video sifatida yubora
-        # olmaymiz. Bunday holda DOCUMENT sifatida yuboramiz (sifat YO'QOLMAYDI,
-        # foydalanuvchi to'liq 4K/HD faylni oladi, faqat player'da emas).
-        if size > MAX_TG_SIZE:
-            log.info(f"Fayl {size/1024/1024:.1f}MB > 50MB — document sifatida yuboriladi.")
-            document = FSInputFile(filepath, filename=fname)
-            await bot.send_document(
-                chat_id,
-                document=document,
-                disable_content_type_detection=True,
-            )
-        else:
-            video = FSInputFile(filepath, filename=fname)
-            # Caption'siz (toza video) yuboriladi
-            await bot.send_video(
-                chat_id,
-                video=video,
-                duration=duration or None,
-                width=width,
-                height=height,
-                supports_streaming=True,
-            )
+        video = FSInputFile(filepath, filename=f"{_safe_name(title)}.mp4")
+        # Caption'siz (toza video) yuboriladi
+        await bot.send_video(
+            chat_id,
+            video=video,
+            duration=duration or None,
+            width=width,
+            height=height,
+            supports_streaming=True,
+        )
         await status_msg.delete()
         return True
 
@@ -312,17 +302,10 @@ async def download_and_send(status_msg: Message, url: str) -> bool:
 
 
 def _build_opts(tmpdir: str) -> dict:
-    """yt-dlp sozlamalarini quradi — MAVJUD ENG YUQORI sifatli video.
-
-    Format cheklovsiz: agar video 4K/2K bo'lsa — o'shani oladi, aks holda
-    eng yuqori mavjud (odatda Instagram 1080p beradi). ffmpeg video+audioni
-    birlashtiradi va mp4 ga o'giradi.
-    """
+    """yt-dlp sozlamalarini quradi — eng yuqori sifatli video."""
     opts = {
-        # bestvideo+bestaudio (ext cheklovisiz — eng yuqori piksel/bitrate),
-        # zaxira sifatida "best". Bu 4K mavjud bo'lsa 4K, aks holda eng yuqorini oladi.
-        "format": "bestvideo*+bestaudio/best",
-        "format_sort": ["res", "fps", "vcodec:h264", "br"],  # avval eng katta o'lcham
+        # Eng yaxshi video + audio (mp4 afzal). ffmpeg bo'lsa birlashtiradi.
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
