@@ -28,7 +28,6 @@ import urllib.parse
 from collections import OrderedDict
 
 import aiohttp
-import pandas as pd
 from dotenv import load_dotenv
 
 import google.auth.transport.requests
@@ -880,6 +879,10 @@ async def process_rate(message: types.Message, state: FSMContext):
 
 
 def parse_excel_file(file_path, usd_rate, markup_pct, next_id, partiya_nomi):
+    # pandas FAQAT shu yerda kerak — startda emas, faqat Excel import qilinganda
+    # yuklanadi. Bu botning doimiy (baseline) xotira sarfini ~150MB kamaytiradi
+    # (Render 512MB bepul tarifda OOM oldini oladi).
+    import pandas as pd
     try:
         try:
             df = pd.read_excel(file_path, header=None)
