@@ -30,6 +30,9 @@ from aiogram.types import (
     Message,
     FSInputFile,
     BotCommand,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
 )
 
 import yt_dlp
@@ -86,6 +89,37 @@ INSTAGRAM_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Foydalanuvchi linkini sifat tanlangunча vaqtincha saqlaymiz
+# {user_id: (url, user_message_id)}
+PENDING: dict[int, tuple] = {}
+
+# 3 xil sifat. Har birida TEZLIK uchun avval progressive MP4 (birlashtirishsiz),
+# h264 (iPhone-mos), balandligi cheklangan. Faqat progressive bo'lmasa merge.
+def _fmt(height: int) -> str:
+    return (
+        f"best[ext=mp4][vcodec^=avc1][height<={height}]/"
+        f"best[ext=mp4][height<={height}]/"
+        f"b[ext=mp4][height<={height}]/"
+        f"bestvideo[ext=mp4][height<={height}]+bestaudio[ext=m4a]/"
+        f"best[height<={height}]/best"
+    )
+
+QUALITY_FORMATS = {
+    "high": _fmt(1080),   # 🎬 1080p (Full HD)
+    "mid": _fmt(720),     # 📱 720p (HD)
+    "low": _fmt(480),     # ⚡ 480p (tez, kichik)
+}
+QUALITY_LABELS = {"high": "1080p", "mid": "720p", "low": "480p"}
+
+
+def quality_keyboard() -> InlineKeyboardMarkup:
+    """3 xil sifatni tanlash tugmalari."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🎬 1080p", callback_data="igq:high"),
+        InlineKeyboardButton(text="📱 720p", callback_data="igq:mid"),
+        InlineKeyboardButton(text="⚡ 480p", callback_data="igq:low"),
+    ]])
+
 
 # ---------------------------------------------------------------------
 # Matnlar
@@ -104,7 +138,8 @@ WELCOME = (
 HELP = (
     "ℹ️ <b>Qanday ishlataman:</b>\n\n"
     "1️⃣ Instagram Reels / post / video linkini yuboring.\n"
-    "2️⃣ Bot avtomatik yuqori sifatda yuklab beradi.\n\n"
+    "2️⃣ Sifatni tanlang: 🎬 1080p / 📱 720p / ⚡ 480p.\n"
+    "3️⃣ Bot o'sha sifatda tez yuklab beradi.\n\n"
     "Buyruqlar:\n"
     "/start — boshlash\n"
     "/help — yordam\n\n"
@@ -176,26 +211,46 @@ async def on_text(message: Message):
     if not url.startswith("http"):
         url = "https://" + url
 
-    status_msg = await message.answer("⏬ Yuklanmoqda, biroz kuting…")
-    ok = await download_and_send(status_msg, url)
+    # Linkni saqlaymiz va sifat tanlashni so'raymiz (yuklash callback'da bo'ladi)
+    PENDING[message.from_user.id] = (url, message.message_id)
+    await message.answer(
+        "🎚 <b>Sifatni tanlang:</b>\n"
+        "🎬 1080p — eng yuqori · 📱 720p — HD · ⚡ 480p — eng tez",
+        reply_markup=quality_keyboard(),
+    )
 
-    # Music bot kabi TOZALASH: video muvaffaqiyatli yuborilgach, chatда faqat
-    # toza video qolishi uchun ortiqcha xabarlarni o'chiramiz:
-    #   - foydalanuvchi yuborgan link xabari (message)
-    #   - "Yuklanmoqda..." status xabari (status_msg) allaqachon
-    #     download_and_send ichida muvaffaqiyatда o'chiriladi.
+
+@dp.callback_query(F.data.startswith("igq:"))
+async def on_quality(call: CallbackQuery):
+    """Sifat tanlangach — o'sha sifatda yuklab, toza yuboradi."""
+    quality = call.data.split(":", 1)[1]
+    pending = PENDING.pop(call.from_user.id, None)
+    if not pending:
+        await call.answer("Avval Instagram link yuboring.", show_alert=True)
+        return
+    url, user_msg_id = pending
+    fmt = QUALITY_FORMATS.get(quality, QUALITY_FORMATS["high"])
+    label = QUALITY_LABELS.get(quality, "")
+
+    await call.message.edit_text(f"⏬ Yuklanmoqda ({label}), biroz kuting…")
+    ok = await download_and_send(call.message, url, fmt)
+
+    # Music bot kabi TOZALASH: muvaffaqiyatда chatда faqat toza video qoladi.
+    # Status xabari (call.message) download_and_send ichida o'chiriladi;
+    # bu yerda foydalanuvchi yuborgan link xabarini o'chiramiz.
     if ok:
         try:
-            await message.delete()
+            await bot.delete_message(call.message.chat.id, user_msg_id)
         except Exception as e:
             log.warning(f"Foydalanuvchi xabarini o'chirib bo'lmadi: {e}")
+    await call.answer()
 
 
 # ---------------------------------------------------------------------
 # Yuklab olish va yuborish
 # ---------------------------------------------------------------------
-async def download_and_send(status_msg: Message, url: str) -> bool:
-    """Instagram videoni yuklab, yuboradi. Muvaffaqiyatda True qaytaradi."""
+async def download_and_send(status_msg: Message, url: str, fmt: str) -> bool:
+    """Instagram videoni tanlangan sifatda (fmt) yuklab, yuboradi."""
     chat_id = status_msg.chat.id
     tmpdir = tempfile.mkdtemp(prefix="ig_")
     try:
@@ -204,7 +259,7 @@ async def download_and_send(status_msg: Message, url: str) -> bool:
         # Bloklovchi yt-dlp ishini alohida threadda bajaramiz.
         # 90s umumiy timeout — agar yt-dlp osilib qolsa, bekor qilinadi.
         download_task = asyncio.ensure_future(
-            asyncio.to_thread(_download_blocking, url, tmpdir)
+            asyncio.to_thread(_download_blocking, url, tmpdir, fmt)
         )
 
         # Progress indikator — har 10s xabar yangilanadi
@@ -323,25 +378,15 @@ async def download_and_send(status_msg: Message, url: str) -> bool:
     return False
 
 
-def _build_opts(tmpdir: str) -> dict:
-    """yt-dlp sozlamalarini quradi — MAVJUD ENG YUQORI sifatli video.
+def _build_opts(tmpdir: str, fmt: str) -> dict:
+    """yt-dlp sozlamalarini quradi. Format (fmt) tashqaridan — tanlangan sifat.
 
-    Format tanlash: iPhone (iOS) FAQAT H.264 (avc1) kodekni to'liq
-    qo'llab-quvvatlaydi. Shuning uchun avval H.264'ni tanlaymiz (eng yuqori
-    sifatda), keyingina zaxira variantlarga o'tamiz. Bu "video qimirlamaydi,
-    faqat ovoz" muammosini hal qiladi (VP9/AV1 kodek iPhone'da ishlamaydi).
+    Har bir sifat uchun avval progressive MP4 (birlashtirishsiz, tez, iPhone-mos
+    H.264) tanlanadi; faqat progressive bo'lmasa video+audio birlashtiriladi.
     """
     opts = {
-        # 1) Eng yuqori H.264 (avc1) video + AAC audio — iPhone'da 100% ishlaydi
-        # 2) Zaxira: har qanday mp4
-        # 3) Oxirgi zaxira: umuman eng yaxshisi (kodek muhim bo'lmaganda)
-        "format": (
-            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/"
-            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/"
-            "best[ext=mp4]/best"
-        ),
-        # H.264 birinchi o'rinda, keyin eng katta o'lcham/fps — iPhone mosligi
-        # sifatdan ustun (baribir Instagram odatda 1080p H.264 beradi).
+        "format": fmt,
+        # H.264 birinchi o'rinda — iPhone mosligi ustun
         "format_sort": ["vcodec:h264", "res", "fps", "br"],
         "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
         "noplaylist": True,
@@ -367,9 +412,9 @@ def _build_opts(tmpdir: str) -> dict:
     return opts
 
 
-def _download_blocking(url: str, tmpdir: str):
-    """yt-dlp bilan Instagram videoni yuklaydi (bloklovchi funksiya)."""
-    opts = _build_opts(tmpdir)
+def _download_blocking(url: str, tmpdir: str, fmt: str):
+    """yt-dlp bilan Instagram videoni tanlangan sifatda (fmt) yuklaydi."""
+    opts = _build_opts(tmpdir, fmt)
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         if "entries" in info:
