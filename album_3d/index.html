@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D Foto Albom</title>
+    <meta name="theme-color" content="#1a1410">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <!-- 3D kitob-varaqlash kutubxonasi (page-flip / StPageFlip) -->
+    <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        :root {
+            --bg1: #201811;
+            --bg2: #0f0b07;
+            --gold: #c9a35b;
+            --gold-soft: #e6cf9b;
+            --paper: #fbf6ec;
+            --ink: #2c2418;
+        }
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Montserrat', sans-serif;
+            background: radial-gradient(circle at 50% 30%, var(--bg1) 0%, var(--bg2) 100%);
+            color: var(--paper);
+            user-select: none;
+        }
+        #app {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+        .title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--gold-soft);
+            margin-bottom: 10px;
+            text-align: center;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        }
+        /* Kitob konteyneri — 3D perspektiva */
+        #book-wrap {
+            perspective: 2200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            width: 100%;
+            max-height: 78vh;
+        }
+        #book {
+            touch-action: pan-y;
+        }
+        /* Har bir varaq */
+        .page {
+            background: var(--paper);
+            overflow: hidden;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.12);
+        }
+        .page img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            pointer-events: none;
+        }
+        /* Muqova (birinchi va oxirgi qattiq varaq) */
+        .page.cover {
+            background: linear-gradient(135deg, #3a2b1a 0%, #22190f 100%);
+            color: var(--gold-soft);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(201,163,91,0.35);
+            box-shadow: inset 0 0 60px rgba(0,0,0,0.5);
+        }
+        .cover .cover-emoji { font-size: 54px; margin-bottom: 14px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
+        .cover .cover-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 30px; font-weight: 700; letter-spacing: 3px; text-align: center; padding: 0 20px;
+        }
+        .cover .cover-sub { margin-top: 10px; font-size: 12px; letter-spacing: 3px; opacity: 0.7; text-transform: uppercase; }
+        .cover .cover-line { width: 60px; height: 2px; background: var(--gold); margin: 16px 0; border-radius: 2px; }
+        /* Sahifa raqami */
+        .page .pnum {
+            position: absolute; bottom: 8px; width: 100%; text-align: center;
+            font-size: 11px; color: rgba(44,36,24,0.5); letter-spacing: 1px;
+        }
+        /* Boshqaruv tugmalari */
+        .controls {
+            display: flex; align-items: center; gap: 18px; margin-top: 14px;
+        }
+        .btn {
+            width: 48px; height: 48px; border-radius: 50%;
+            border: 1px solid rgba(201,163,91,0.4);
+            background: rgba(255,255,255,0.05);
+            color: var(--gold-soft); font-size: 20px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.15s ease, background 0.2s ease;
+            backdrop-filter: blur(6px);
+        }
+        .btn:active { transform: scale(0.9); background: rgba(201,163,91,0.18); }
+        .counter {
+            font-size: 13px; color: var(--gold-soft); letter-spacing: 1px; min-width: 70px; text-align: center;
+        }
+        /* Yuklanish / bo'sh holat */
+        #status {
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 14px;
+            background: radial-gradient(circle at 50% 30%, var(--bg1) 0%, var(--bg2) 100%);
+            z-index: 5;
+        }
+        #status .big { font-size: 46px; }
+        #status .msg { color: var(--gold-soft); font-size: 15px; max-width: 300px; line-height: 1.6; }
+        .spinner {
+            width: 38px; height: 38px; border: 3px solid rgba(201,163,91,0.25);
+            border-top-color: var(--gold); border-radius: 50%; animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hidden { display: none !important; }
+        .hint { margin-top: 8px; font-size: 11px; opacity: 0.5; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="title" id="albumTitle">✦ FOTO ALBOM ✦</div>
+        <div id="book-wrap">
+            <div id="book"></div>
+        </div>
+        <div class="controls">
+            <button class="btn" id="prevBtn" aria-label="Oldingi">‹</button>
+            <div class="counter" id="counter">— / —</div>
+            <button class="btn" id="nextBtn" aria-label="Keyingi">›</button>
+        </div>
+        <div class="hint">Varaqlash uchun cheklab torting yoki tugmalardan foydalaning</div>
+    </div>
+
+    <div id="status">
+        <div class="spinner" id="spinner"></div>
+        <div class="big hidden" id="statusEmoji">📷</div>
+        <div class="msg" id="statusMsg">Albom yuklanmoqda…</div>
+    </div>
+
+    <script>
+    // =====================================================================
+    //  SOZLAMALAR
+    //  1) Firebase config — o'z loyihangiznikini qo'ying (Console > Project settings)
+    //  2) WORKER_URL — Cloudflare Worker manzili (rasmlarni token'siz uzatadi)
+    //     Bo'sh qoldirilsa yoki Firebase sozlanmasa — DEMO rasmlar ko'rsatiladi.
+    // =====================================================================
+    var FIREBASE_CONFIG = {
+        apiKey: "",
+        databaseURL: "",   // masalan: https://xxx-default-rtdb.firebaseio.com
+    };
+    // Cloudflare Worker (album_3d/cloudflare-worker.js) manzili. Oxirida / bo'lmasin.
+    var WORKER_URL = "";   // masalan: https://album.<user>.workers.dev
+
+    // ---------------------------------------------------------------------
+    var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    if (tg) { try { tg.expand(); tg.ready(); } catch (e) {} }
+
+    var statusEl = document.getElementById('status');
+    var statusMsg = document.getElementById('statusMsg');
+    var statusEmoji = document.getElementById('statusEmoji');
+    var spinner = document.getElementById('spinner');
+    var bookEl = document.getElementById('book');
+    var counterEl = document.getElementById('counter');
+
+    var pageFlip = null;
+
+    function showStatus(emoji, msg) {
+        spinner.classList.add('hidden');
+        statusEmoji.classList.remove('hidden');
+        statusEmoji.textContent = emoji;
+        statusMsg.textContent = msg;
+        statusEl.classList.remove('hidden');
+    }
+    function hideStatus() { statusEl.classList.add('hidden'); }
+
+    // Rasm manzilini quramiz: worker orqali (token yashirin) yoki to'g'ridan-to'g'ri
+    function imageUrl(item) {
+        if (typeof item === 'string') return item;         // tayyor URL
+        if (item && item.url) return item.url;              // to'g'ridan-to'g'ri URL
+        if (item && item.id && WORKER_URL) {                // file_id -> worker proxy
+            return WORKER_URL.replace(/\/$/, '') + '/media?id=' + encodeURIComponent(item.id);
+        }
+        return '';
+    }
+
+    // Kitob o'lchamini ekранga moslaymiz
+    function bookSize() {
+        var wrap = document.getElementById('book-wrap');
+        var maxW = Math.min(wrap.clientWidth - 20, 460);
+        var maxH = wrap.clientHeight - 20;
+        // 3:4 nisbat (portret sahifa)
+        var w = maxW, h = w * 1.33;
+        if (h > maxH) { h = maxH; w = h / 1.33; }
+        return { w: Math.round(w), h: Math.round(h) };
+    }
+
+    // Sahifa HTML'ini yaratadi
+    function makePage(html, isCover) {
+        var d = document.createElement('div');
+        d.className = 'page' + (isCover ? ' cover' : '');
+        d.setAttribute('data-density', isCover ? 'hard' : 'soft');
+        d.innerHTML = html;
+        return d;
+    }
+
+    function buildBook(images) {
+        var sz = bookSize();
+        // Eski kitobni tozalaymiz
+        bookEl.innerHTML = '';
+
+        var pagesHtml = [];
+        // Old muqova
+        pagesHtml.push(makePage(
+            '<div class="cover-emoji">📖</div>' +
+            '<div class="cover-title">FOTO ALBOM</div>' +
+            '<div class="cover-line"></div>' +
+            '<div class="cover-sub">Xotiralar to\'plami</div>', true));
+
+        // Rasm sahifalari
+        images.forEach(function (item, i) {
+            var src = imageUrl(item);
+            pagesHtml.push(makePage(
+                '<img src="' + src + '" alt="rasm ' + (i + 1) + '" ' +
+                'onerror="this.style.opacity=0.15">' +
+                '<div class="pnum">' + (i + 1) + '</div>'));
+        });
+
+        // Juft sahifa bo'lishi uchun (muqova + rasmlar) toq bo'lsa bo'sh sahifa
+        var total = 1 + images.length;
+        if (total % 2 !== 0) {
+            pagesHtml.push(makePage('<div class="pnum"></div>'));
+        }
+        // Orqa muqova
+        pagesHtml.push(makePage(
+            '<div class="cover-emoji">✦</div>' +
+            '<div class="cover-sub">Tamom</div>', true));
+
+        pagesHtml.forEach(function (p) { bookEl.appendChild(p); });
+
+        // page-flip ni ishga tushiramiz
+        pageFlip = new St.PageFlip(bookEl, {
+            width: sz.w,
+            height: sz.h,
+            size: 'fixed',
+            minWidth: 200, maxWidth: 600,
+            minHeight: 260, maxHeight: 900,
+            maxShadowOpacity: 0.5,
+            showCover: true,
+            mobileScrollSupport: true,
+            flippingTime: 700,
+            useMouseEvents: true,
+            drawShadow: true,
+        });
+        pageFlip.loadFromHTML(document.querySelectorAll('#book .page'));
+
+        updateCounter();
+        pageFlip.on('flip', function () { updateCounter(); if (tg) { try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {} } });
+    }
+
+    function updateCounter() {
+        if (!pageFlip) return;
+        var cur = pageFlip.getCurrentPageIndex() + 1;
+        var tot = pageFlip.getPageCount();
+        counterEl.textContent = cur + ' / ' + tot;
+    }
+
+    document.getElementById('prevBtn').onclick = function () { if (pageFlip) pageFlip.flipPrev(); };
+    document.getElementById('nextBtn').onclick = function () { if (pageFlip) pageFlip.flipNext(); };
+
+    // Ekran o'lchami o'zgarsa — qayta quramiz
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+            if (window.__albumImages) buildBook(window.__albumImages);
+        }, 300);
+    });
+
+    // DEMO rasmlar (Firebase sozlanmagan bo'lsa — kitob baribir ishlab turadi)
+    var DEMO = [
+        "https://picsum.photos/id/1015/600/800",
+        "https://picsum.photos/id/1025/600/800",
+        "https://picsum.photos/id/1039/600/800",
+        "https://picsum.photos/id/1043/600/800",
+        "https://picsum.photos/id/1052/600/800",
+        "https://picsum.photos/id/1062/600/800"
+    ];
+
+    function start(images) {
+        if (!images || images.length === 0) {
+            showStatus('📭', "Albom hozircha bo'sh. Bot orqali rasm qo'shing.");
+            return;
+        }
+        window.__albumImages = images;
+        hideStatus();
+        // page-flip DOM tayyor bo'lgach ishlashi uchun kichik kechikish
+        setTimeout(function () { buildBook(images); }, 60);
+    }
+
+    // Firebase'dan rasmlarni o'qiymiz (bo'lmasa DEMO)
+    function loadImages() {
+        var ok = FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('http') === 0;
+        if (!ok) { start(DEMO); return; }
+        try {
+            firebase.initializeApp(FIREBASE_CONFIG);
+            firebase.database().ref('album/pages').orderByChild('ts').once('value')
+                .then(function (snap) {
+                    var arr = [];
+                    snap.forEach(function (c) { arr.push(c.val()); });
+                    start(arr.length ? arr : DEMO);
+                })
+                .catch(function (e) { console.error(e); start(DEMO); });
+        } catch (e) { console.error(e); start(DEMO); }
+    }
+
+    // page-flip yuklanganini kutamiz
+    function waitLib(tries) {
+        if (window.St && window.St.PageFlip) { loadImages(); return; }
+        if (tries <= 0) { showStatus('⚠️', "Kutubxona yuklanmadi. Internetni tekshiring."); return; }
+        setTimeout(function () { waitLib(tries - 1); }, 200);
+    }
+    waitLib(25);
+    </script>
+</body>
+</html>
