@@ -335,10 +335,15 @@ def _build_opts(tmpdir: str) -> dict:
         # 1) Eng yuqori H.264 (avc1) video + AAC audio — iPhone'da 100% ishlaydi
         # 2) Zaxira: har qanday mp4
         # 3) Oxirgi zaxira: umuman eng yaxshisi (kodek muhim bo'lmaganda)
+        # TEZLIK: avval Instagram'ning TAYYOR progressive MP4 faylini olamiz
+        # (bitta fayl, birlashtirish/merge SHART EMAS — shuning uchun juda tez).
+        # Bu odatda H.264 HD (720p/1080p) va iPhone-mos. Faqat progressive
+        # umuman bo'lmasa, oxirgi zaxira sifatida video+audio birlashtiriladi.
         "format": (
-            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/"
-            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/"
-            "best[ext=mp4]/best"
+            "best[ext=mp4][vcodec^=avc1]/"   # progressive H.264 mp4 (tez, HD, iPhone-mos)
+            "best[ext=mp4]/"                 # har qanday progressive mp4
+            "b[ext=mp4]/"
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"  # oxirgi zaxira: merge
         ),
         # H.264 birinchi o'rinda, keyin eng katta o'lcham/fps — iPhone mosligi
         # sifatdan ustun (baribir Instagram odatda 1080p H.264 beradi).
