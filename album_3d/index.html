@@ -3,329 +3,617 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>3D Foto Albom</title>
-    <meta name="theme-color" content="#1a1410">
+    <title>Foto Albom · 3D</title>
+    <meta name="theme-color" content="#05030a">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- 3D kitob-varaqlash kutubxonasi (page-flip / StPageFlip) -->
-    <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
+    <!-- Haqiqiy 3D dvigatel (WebGL) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         :root {
-            --bg1: #201811;
-            --bg2: #0f0b07;
-            --gold: #c9a35b;
-            --gold-soft: #e6cf9b;
-            --paper: #fbf6ec;
-            --ink: #2c2418;
+            --accent: #e9c877;
+            --accent-soft: #fbeec6;
+            --accent-rgb: 233, 200, 119;
+            --glass: rgba(255,255,255,0.05);
+            --glass-brd: rgba(255,255,255,0.12);
         }
         html, body {
-            height: 100%;
-            overflow: hidden;
+            height: 100%; overflow: hidden;
             font-family: 'Montserrat', sans-serif;
-            background: radial-gradient(circle at 50% 30%, var(--bg1) 0%, var(--bg2) 100%);
-            color: var(--paper);
-            user-select: none;
+            background: #05030a; color: #f5efe0;
+            user-select: none; -webkit-user-select: none;
         }
-        #app {
-            position: fixed;
-            inset: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 12px;
+
+        /* Chuqurlikdagi nebula fon (canvas orqasida) */
+        #bg {
+            position: fixed; inset: 0; z-index: 0;
+            background:
+                radial-gradient(90% 70% at 50% 30%, #1b1226 0%, #0a0712 45%, #05030a 100%);
         }
-        .title {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: 2px;
-            color: var(--gold-soft);
-            margin-bottom: 10px;
+        #bg::before {
+            content: ""; position: absolute; inset: -20%;
+            background:
+                radial-gradient(closest-side at 25% 35%, rgba(var(--accent-rgb),0.14), transparent),
+                radial-gradient(closest-side at 78% 68%, rgba(140,110,255,0.12), transparent);
+            filter: blur(40px);
+            animation: bgdrift 24s ease-in-out infinite alternate;
+        }
+        @keyframes bgdrift { from { transform: translate(-2%, -1%) scale(1); } to { transform: translate(3%, 2%) scale(1.08); } }
+        #bg::after {
+            content: ""; position: absolute; inset: 0;
+            background: radial-gradient(120% 120% at 50% 50%, transparent 55%, rgba(0,0,0,0.6) 100%);
+        }
+
+        /* WebGL canvas */
+        #gl { position: fixed; inset: 0; z-index: 1; display: block; touch-action: none; }
+
+        /* Interfeys */
+        #ui { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+        .brand {
+            position: absolute; top: calc(env(safe-area-inset-top) + 16px); left: 0; right: 0;
             text-align: center;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
         }
-        /* Kitob konteyneri — 3D perspektiva */
-        #book-wrap {
-            perspective: 2200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 1;
-            width: 100%;
-            max-height: 78vh;
+        .brand .t {
+            font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 700; letter-spacing: 5px;
+            background: linear-gradient(100deg, var(--accent-soft), #fff, var(--accent));
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            background-size: 200% auto; animation: shine 7s linear infinite; text-transform: uppercase;
         }
-        #book {
-            touch-action: pan-y;
+        @keyframes shine { to { background-position: 200% center; } }
+        .brand .s { font-size: 9px; letter-spacing: 6px; opacity: 0.5; margin-top: 4px; text-transform: uppercase; }
+
+        /* Pastki minimal boshqaruv */
+        .dock {
+            position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 20px);
+            display: flex; flex-direction: column; align-items: center; gap: 14px; pointer-events: none;
         }
-        /* Har bir varaq */
-        .page {
-            background: var(--paper);
-            overflow: hidden;
-            box-shadow: inset 0 0 30px rgba(0,0,0,0.12);
+        .rail {
+            width: 46%; max-width: 260px; height: 2px; border-radius: 2px;
+            background: rgba(255,255,255,0.14); position: relative; overflow: hidden;
         }
-        .page img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            pointer-events: none;
-        }
-        /* Muqova (birinchi va oxirgi qattiq varaq) */
-        .page.cover {
-            background: linear-gradient(135deg, #3a2b1a 0%, #22190f 100%);
-            color: var(--gold-soft);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(201,163,91,0.35);
-            box-shadow: inset 0 0 60px rgba(0,0,0,0.5);
-        }
-        .cover .cover-emoji { font-size: 54px; margin-bottom: 14px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
-        .cover .cover-title {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 30px; font-weight: 700; letter-spacing: 3px; text-align: center; padding: 0 20px;
-        }
-        .cover .cover-sub { margin-top: 10px; font-size: 12px; letter-spacing: 3px; opacity: 0.7; text-transform: uppercase; }
-        .cover .cover-line { width: 60px; height: 2px; background: var(--gold); margin: 16px 0; border-radius: 2px; }
-        /* Sahifa raqami */
-        .page .pnum {
-            position: absolute; bottom: 8px; width: 100%; text-align: center;
-            font-size: 11px; color: rgba(44,36,24,0.5); letter-spacing: 1px;
-        }
-        /* Boshqaruv tugmalari */
-        .controls {
-            display: flex; align-items: center; gap: 18px; margin-top: 14px;
-        }
-        .btn {
-            width: 48px; height: 48px; border-radius: 50%;
-            border: 1px solid rgba(201,163,91,0.4);
-            background: rgba(255,255,255,0.05);
-            color: var(--gold-soft); font-size: 20px; cursor: pointer;
+        .rail > i { position: absolute; top: 0; left: 0; height: 100%; width: 12%;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            border-radius: 2px; transition: transform .55s cubic-bezier(.2,.8,.2,1); }
+        .nav { display: flex; align-items: center; gap: 22px; pointer-events: auto; }
+        .arw {
+            width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--glass-brd);
+            background: var(--glass); color: var(--accent-soft); font-size: 22px; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
-            transition: transform 0.15s ease, background 0.2s ease;
-            backdrop-filter: blur(6px);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            transition: transform .18s cubic-bezier(.34,1.56,.64,1), background .2s;
         }
-        .btn:active { transform: scale(0.9); background: rgba(201,163,91,0.18); }
-        .counter {
-            font-size: 13px; color: var(--gold-soft); letter-spacing: 1px; min-width: 70px; text-align: center;
+        .arw:active { transform: scale(0.85); background: rgba(var(--accent-rgb),0.2); }
+        .count {
+            font-family: 'Cormorant Garamond', serif; font-size: 17px; letter-spacing: 3px;
+            color: var(--accent-soft); min-width: 84px; text-align: center;
         }
-        /* Yuklanish / bo'sh holat */
+        .count b { color: #fff; font-weight: 700; }
+        .hint { font-size: 9px; letter-spacing: 3px; opacity: 0.4; text-transform: uppercase; }
+
+        /* Fullscreen ko'rish (fokus) */
+        #viewer {
+            position: fixed; inset: 0; z-index: 20; background: rgba(3,2,7,0.96);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity .4s ease;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        }
+        #viewer.show { opacity: 1; pointer-events: auto; }
+        #viewer img {
+            max-width: 94vw; max-height: 84vh; border-radius: 12px;
+            box-shadow: 0 40px 120px rgba(0,0,0,0.75), 0 0 0 1px rgba(var(--accent-rgb),0.18);
+            transform: scale(.86); transition: transform .45s cubic-bezier(.2,.9,.2,1);
+            touch-action: none; will-change: transform;
+        }
+        #viewer.show img { transform: scale(1); }
+        .vclose {
+            position: absolute; top: calc(env(safe-area-inset-top) + 14px); right: 16px;
+            width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--glass-brd);
+            background: var(--glass); color: #fff; font-size: 20px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);
+        }
+        .vcap {
+            position: absolute; bottom: calc(env(safe-area-inset-bottom) + 20px); width: 100%;
+            text-align: center; font-family: 'Cormorant Garamond', serif; letter-spacing: 3px;
+            color: var(--accent-soft); font-size: 15px;
+        }
+
+        /* Loading */
         #status {
-            position: absolute; inset: 0; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 14px;
-            background: radial-gradient(circle at 50% 30%, var(--bg1) 0%, var(--bg2) 100%);
-            z-index: 5;
+            position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 20px;
+            background: radial-gradient(circle at 50% 35%, #16101f 0%, #05030a 100%);
+            transition: opacity .7s ease;
         }
-        #status .big { font-size: 46px; }
-        #status .msg { color: var(--gold-soft); font-size: 15px; max-width: 300px; line-height: 1.6; }
-        .spinner {
-            width: 38px; height: 38px; border: 3px solid rgba(201,163,91,0.25);
-            border-top-color: var(--gold); border-radius: 50%; animation: spin 0.9s linear infinite;
+        .orb { width: 70px; height: 70px; position: relative; }
+        .orb i {
+            position: absolute; inset: 0; border-radius: 50%;
+            border: 2px solid transparent; border-top-color: var(--accent);
+            animation: spin 1.1s linear infinite;
         }
+        .orb i:nth-child(2) { inset: 10px; border-top-color: rgba(var(--accent-rgb),0.5); animation-duration: 1.6s; animation-direction: reverse; }
+        .orb i:nth-child(3) { inset: 20px; border-top-color: var(--accent-soft); animation-duration: 0.9s; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        #status .big { font-size: 50px; filter: drop-shadow(0 6px 14px rgba(0,0,0,0.5)); }
+        #status .msg { color: var(--accent-soft); font-size: 13px; letter-spacing: 2px; max-width: 300px; line-height: 1.7; }
+        .pct { font-family: 'Cormorant Garamond', serif; font-size: 15px; letter-spacing: 2px; color: rgba(var(--accent-rgb),0.85); }
+
+        /* Fallback (WebGL yo'q) */
+        #fallback {
+            position: fixed; inset: 0; z-index: 5; display: none;
+            overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch; align-items: center; gap: 16px; padding: 0 12vw;
+        }
+        #fallback.on { display: flex; }
+        #fallback .fc { flex: 0 0 auto; scroll-snap-align: center; width: 74vw; max-width: 420px; height: 74vh; }
+        #fallback img { width: 100%; height: 100%; object-fit: cover; border-radius: 14px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+
         .hidden { display: none !important; }
-        .hint { margin-top: 8px; font-size: 11px; opacity: 0.5; letter-spacing: 1px; }
+        .fade { opacity: 0 !important; }
+
+        @media (max-width: 380px) { .brand .t { font-size: 18px; letter-spacing: 3px; } }
     </style>
 </head>
 <body>
-    <div id="app">
-        <div class="title" id="albumTitle">✦ FOTO ALBOM ✦</div>
-        <div id="book-wrap">
-            <div id="book"></div>
+    <div id="bg"></div>
+    <canvas id="gl"></canvas>
+    <div id="fallback"></div>
+
+    <div id="ui">
+        <div class="brand">
+            <div class="t">Foto Albom</div>
+            <div class="s">3D Galereya</div>
         </div>
-        <div class="controls">
-            <button class="btn" id="prevBtn" aria-label="Oldingi">‹</button>
-            <div class="counter" id="counter">— / —</div>
-            <button class="btn" id="nextBtn" aria-label="Keyingi">›</button>
+        <div class="dock">
+            <div class="rail"><i id="rail"></i></div>
+            <div class="nav">
+                <button class="arw" id="prev" aria-label="Oldingi">‹</button>
+                <div class="count" id="count"><b>—</b> / —</div>
+                <button class="arw" id="next" aria-label="Keyingi">›</button>
+            </div>
+            <div class="hint">Suring &nbsp;·&nbsp; rasmni bosing</div>
         </div>
-        <div class="hint">Varaqlash uchun cheklab torting yoki tugmalardan foydalaning</div>
+    </div>
+
+    <div id="viewer">
+        <button class="vclose" id="vclose">✕</button>
+        <img id="vimg" src="" alt="">
+        <div class="vcap" id="vcap"></div>
     </div>
 
     <div id="status">
-        <div class="spinner" id="spinner"></div>
+        <div class="orb"><i></i><i></i><i></i></div>
         <div class="big hidden" id="statusEmoji">📷</div>
-        <div class="msg" id="statusMsg">Albom yuklanmoqda…</div>
+        <div class="msg" id="statusMsg">Galereya tayyorlanmoqda…</div>
+        <div class="pct" id="pct"></div>
     </div>
 
     <script>
     // =====================================================================
-    //  SOZLAMALAR
-    //  WORKER_URL — Cloudflare Worker manzili (rasm ro'yxati /list va
-    //  rasmlar /media shu yerdan keladi). Oxirida / bo'lsa ham mayli.
-    //  Bo'sh yoki xatolik bo'lsa — DEMO rasmlar ko'rsatiladi.
+    //  WORKER — rasm ro'yxati (/list) va rasmlar (/media?id=). Bo'sh/xato
+    //  bo'lsa DEMO ko'rsatiladi. Botga hech narsa qilish shart emas.
     // =====================================================================
     var WORKER_URL = "https://albom-ayman.anvaraxtamov70.workers.dev";
 
-    // ---------------------------------------------------------------------
     var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-    if (tg) { try { tg.expand(); tg.ready(); } catch (e) {} }
+    if (tg) { try { tg.expand(); tg.ready(); tg.setHeaderColor && tg.setHeaderColor('#05030a'); } catch (e) {} }
+    function haptic(k) { if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.impactOccurred(k || 'light'); } catch (e) {} } }
 
-    var statusEl = document.getElementById('status');
-    var statusMsg = document.getElementById('statusMsg');
-    var statusEmoji = document.getElementById('statusEmoji');
-    var spinner = document.getElementById('spinner');
-    var bookEl = document.getElementById('book');
-    var counterEl = document.getElementById('counter');
-
-    var pageFlip = null;
+    var $ = function (id) { return document.getElementById(id); };
+    var statusEl = $('status'), statusMsg = $('statusMsg'), statusEmoji = $('statusEmoji'), pctEl = $('pct');
 
     function showStatus(emoji, msg) {
-        spinner.classList.add('hidden');
-        statusEmoji.classList.remove('hidden');
-        statusEmoji.textContent = emoji;
-        statusMsg.textContent = msg;
-        statusEl.classList.remove('hidden');
+        document.querySelector('.orb').classList.add('hidden'); pctEl.textContent = '';
+        statusEmoji.classList.remove('hidden'); statusEmoji.textContent = emoji;
+        statusMsg.textContent = msg; statusEl.classList.remove('hidden', 'fade');
     }
-    function hideStatus() { statusEl.classList.add('hidden'); }
+    function hideStatus() { statusEl.classList.add('fade'); setTimeout(function () { statusEl.classList.add('hidden'); }, 750); }
 
-    // Rasm manzilini quramiz: worker orqali (token yashirin) yoki to'g'ridan-to'g'ri
     function imageUrl(item) {
-        if (typeof item === 'string') return item;         // tayyor URL
-        if (item && item.url) return item.url;              // to'g'ridan-to'g'ri URL
-        if (item && item.id && WORKER_URL) {                // file_id -> worker proxy
-            return WORKER_URL.replace(/\/$/, '') + '/media?id=' + encodeURIComponent(item.id);
-        }
+        if (typeof item === 'string') return item;
+        if (item && item.url) return item.url;
+        if (item && item.id && WORKER_URL) return WORKER_URL.replace(/\/$/, '') + '/media?id=' + encodeURIComponent(item.id);
         return '';
     }
 
-    // Kitob o'lchamini ekранga moslaymiz
-    function bookSize() {
-        var wrap = document.getElementById('book-wrap');
-        var maxW = Math.min(wrap.clientWidth - 20, 460);
-        var maxH = wrap.clientHeight - 20;
-        // 3:4 nisbat (portret sahifa)
-        var w = maxW, h = w * 1.33;
-        if (h > maxH) { h = maxH; w = h / 1.33; }
-        return { w: Math.round(w), h: Math.round(h) };
-    }
-
-    // Sahifa HTML'ini yaratadi
-    function makePage(html, isCover) {
-        var d = document.createElement('div');
-        d.className = 'page' + (isCover ? ' cover' : '');
-        d.setAttribute('data-density', isCover ? 'hard' : 'soft');
-        d.innerHTML = html;
-        return d;
-    }
-
-    function buildBook(images) {
-        var sz = bookSize();
-        // Eski kitobni tozalaymiz
-        bookEl.innerHTML = '';
-
-        var pagesHtml = [];
-        // Old muqova
-        pagesHtml.push(makePage(
-            '<div class="cover-emoji">📖</div>' +
-            '<div class="cover-title">FOTO ALBOM</div>' +
-            '<div class="cover-line"></div>' +
-            '<div class="cover-sub">Xotiralar to\'plami</div>', true));
-
-        // Rasm sahifalari
-        images.forEach(function (item, i) {
-            var src = imageUrl(item);
-            pagesHtml.push(makePage(
-                '<img src="' + src + '" alt="rasm ' + (i + 1) + '" ' +
-                'onerror="this.style.opacity=0.15">' +
-                '<div class="pnum">' + (i + 1) + '</div>'));
-        });
-
-        // Juft sahifa bo'lishi uchun (muqova + rasmlar) toq bo'lsa bo'sh sahifa
-        var total = 1 + images.length;
-        if (total % 2 !== 0) {
-            pagesHtml.push(makePage('<div class="pnum"></div>'));
-        }
-        // Orqa muqova
-        pagesHtml.push(makePage(
-            '<div class="cover-emoji">✦</div>' +
-            '<div class="cover-sub">Tamom</div>', true));
-
-        pagesHtml.forEach(function (p) { bookEl.appendChild(p); });
-
-        // page-flip ni ishga tushiramiz
-        pageFlip = new St.PageFlip(bookEl, {
-            width: sz.w,
-            height: sz.h,
-            size: 'fixed',
-            minWidth: 200, maxWidth: 600,
-            minHeight: 260, maxHeight: 900,
-            maxShadowOpacity: 0.5,
-            showCover: true,
-            mobileScrollSupport: true,
-            flippingTime: 700,
-            useMouseEvents: true,
-            drawShadow: true,
-        });
-        pageFlip.loadFromHTML(document.querySelectorAll('#book .page'));
-
-        updateCounter();
-        pageFlip.on('flip', function () { updateCounter(); if (tg) { try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {} } });
-    }
-
-    function updateCounter() {
-        if (!pageFlip) return;
-        var cur = pageFlip.getCurrentPageIndex() + 1;
-        var tot = pageFlip.getPageCount();
-        counterEl.textContent = cur + ' / ' + tot;
-    }
-
-    document.getElementById('prevBtn').onclick = function () { if (pageFlip) pageFlip.flipPrev(); };
-    document.getElementById('nextBtn').onclick = function () { if (pageFlip) pageFlip.flipNext(); };
-
-    // Ekran o'lchami o'zgarsa — qayta quramiz
-    var resizeTimer;
-    window.addEventListener('resize', function () {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(function () {
-            if (window.__albumImages) buildBook(window.__albumImages);
-        }, 300);
-    });
-
-    // DEMO rasmlar (Firebase sozlanmagan bo'lsa — kitob baribir ishlab turadi)
     var DEMO = [
-        "https://picsum.photos/id/1015/600/800",
-        "https://picsum.photos/id/1025/600/800",
-        "https://picsum.photos/id/1039/600/800",
-        "https://picsum.photos/id/1043/600/800",
-        "https://picsum.photos/id/1052/600/800",
-        "https://picsum.photos/id/1062/600/800"
+        "https://picsum.photos/id/1015/800/1000","https://picsum.photos/id/1025/800/1000",
+        "https://picsum.photos/id/1039/800/1000","https://picsum.photos/id/1043/800/1000",
+        "https://picsum.photos/id/1052/800/1000","https://picsum.photos/id/1062/800/1000",
+        "https://picsum.photos/id/1074/800/1000","https://picsum.photos/id/1080/800/1000",
+        "https://picsum.photos/id/103/800/1000","https://picsum.photos/id/110/800/1000"
     ];
 
-    function start(images) {
-        if (!images || images.length === 0) {
-            showStatus('📭', "Albom hozircha bo'sh. Bot orqali rasm qo'shing.");
-            return;
-        }
-        window.__albumImages = images;
-        hideStatus();
-        // page-flip DOM tayyor bo'lgach ishlashi uchun kichik kechikish
-        setTimeout(function () { buildBook(images); }, 60);
+    var IMG_URLS = [];
+
+    // =====================================================================
+    //  3D GALEREYA (Three.js core)
+    // =====================================================================
+    var G = {
+        scene: null, camera: null, renderer: null, group: null,
+        photos: [], N: 0, R: 6, step: 0,
+        current: 0, target: 0, velocity: 0,
+        dragging: false, moved: 0, lastX: 0, downX: 0, downY: 0, downT: 0,
+        raycaster: null, particles: null, running: false, lastIdx: -1
+    };
+    var PHOTO_H = 3.0, PHOTO_W = PHOTO_H * 0.75, CAM_D = 5.4;
+    var BG_COLOR = 0x08050f;
+
+    function hasWebGL() {
+        try {
+            var c = document.createElement('canvas');
+            return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
+        } catch (e) { return false; }
     }
 
-    // Worker'dan rasm ro'yxatini o'qiymiz (bo'lmasa/xato bo'lsa — DEMO)
+    // Yumshoq dumaloq zarra teksturasi (canvas)
+    function sparkTexture() {
+        var c = document.createElement('canvas'); c.width = c.height = 64;
+        var x = c.getContext('2d'); var g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+        g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,240,200,0.6)');
+        g.addColorStop(1, 'rgba(255,240,200,0)');
+        x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+        var t = new THREE.Texture(c); t.needsUpdate = true; return t;
+    }
+
+    // Rangli "yuklanmoqda" placeholder tekstura
+    function placeholderTexture(i) {
+        var c = document.createElement('canvas'); c.width = 300; c.height = 400;
+        var x = c.getContext('2d');
+        var hue = (i * 47) % 360;
+        var g = x.createLinearGradient(0, 0, 300, 400);
+        g.addColorStop(0, 'hsl(' + hue + ',35%,22%)'); g.addColorStop(1, 'hsl(' + ((hue + 40) % 360) + ',35%,12%)');
+        x.fillStyle = g; x.fillRect(0, 0, 300, 400);
+        var t = new THREE.Texture(c); t.needsUpdate = true; t.encoding = THREE.sRGBEncoding; return t;
+    }
+
+    function initGL() {
+        var canvas = $('gl');
+        G.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        G.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        G.renderer.setSize(window.innerWidth, window.innerHeight);
+        G.renderer.outputEncoding = THREE.sRGBEncoding;
+
+        G.scene = new THREE.Scene();
+        G.camera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.1, 100);
+
+        G.group = new THREE.Group();
+        G.scene.add(G.group);
+        G.raycaster = new THREE.Raycaster();
+
+        buildParticles();
+    }
+
+    function buildParticles() {
+        var count = 220, pos = new Float32Array(count * 3);
+        for (var i = 0; i < count; i++) {
+            var r = 6 + Math.random() * 22, a = Math.random() * Math.PI * 2, y = (Math.random() - 0.5) * 26;
+            pos[i * 3] = Math.cos(a) * r; pos[i * 3 + 1] = y; pos[i * 3 + 2] = Math.sin(a) * r;
+        }
+        var geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        var mat = new THREE.PointsMaterial({
+            size: 0.14, map: sparkTexture(), transparent: true, opacity: 0.7,
+            blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffe9b8
+        });
+        G.particles = new THREE.Points(geo, mat);
+        G.scene.add(G.particles);
+    }
+
+    function layout() {
+        G.N = IMG_URLS.length;
+        G.step = (Math.PI * 2) / G.N;
+        // Qo'shni rasmlar ustma-ust tushmasligi uchun radius
+        var chord = PHOTO_W * 1.6;
+        G.R = Math.max(chord / (2 * Math.sin(G.step / 2)), PHOTO_H * 1.35);
+        // Juda katta radiusni cheklaymiz (ko'p rasmlarda)
+        G.R = Math.min(G.R, 26);
+
+        var camZ = G.R + CAM_D;
+        G.camera.position.set(0, 0.2, camZ);
+        G.camera.lookAt(0, 0, 0);
+
+        G.scene.fog = new THREE.Fog(BG_COLOR, CAM_D + 0.5, CAM_D + G.R * 1.7);
+    }
+
+    function buildPhotos() {
+        var geo = new THREE.PlaneGeometry(PHOTO_H, PHOTO_H); // kvadrat; width scale.x bilan
+        var loader = new THREE.TextureLoader();
+        loader.crossOrigin = 'anonymous';
+        var loaded = 0;
+
+        for (var i = 0; i < G.N; i++) {
+            (function (i) {
+                var a = i * G.step;
+                var mat = new THREE.MeshBasicMaterial({
+                    map: placeholderTexture(i), side: THREE.FrontSide, transparent: true, toneMapped: false
+                });
+                var mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(G.R * Math.sin(a), 0, G.R * Math.cos(a));
+                mesh.rotation.y = a;
+                mesh.scale.x = PHOTO_W / PHOTO_H; // ~0.75 boshlang'ich
+                mesh.userData.index = i;
+                mesh.userData.baseAspect = PHOTO_W / PHOTO_H;
+                G.group.add(mesh);
+
+                // Fokusdagi rasm ortidagi porlash (ramka nuri)
+                var glowMat = new THREE.MeshBasicMaterial({
+                    color: 0xe9c877, transparent: true, opacity: 0, side: THREE.FrontSide,
+                    blending: THREE.AdditiveBlending, depthWrite: false
+                });
+                var glow = new THREE.Mesh(geo, glowMat);
+                glow.position.copy(mesh.position);
+                glow.rotation.y = a;
+                glow.scale.set(mesh.scale.x * 1.14, 1.12, 1);
+                glow.position.x -= Math.sin(a) * 0.06;
+                glow.position.z -= Math.cos(a) * 0.06;
+                G.group.add(glow);
+
+                G.photos.push({ mesh: mesh, glow: glow, angle: a });
+
+                var img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = function () {
+                    var tex = new THREE.Texture(img);
+                    tex.needsUpdate = true; tex.encoding = THREE.sRGBEncoding;
+                    tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+                    mat.map = tex; mat.needsUpdate = true;
+                    var asp = Math.min(img.naturalWidth / img.naturalHeight, 1.3);
+                    if (!asp || !isFinite(asp)) asp = 0.75;
+                    mesh.userData.baseAspect = asp;
+                    glow.scale.x = asp * 1.14;
+                };
+                img.onerror = function () { /* placeholder qoladi */ };
+                img.src = IMG_URLS[i];
+
+                // Yuklanish progressini kuzatamiz (birinchi ekranga tez o'tamiz)
+                var trk = new Image();
+                trk.onload = trk.onerror = function () { loaded++; pctEl.textContent = loaded + ' / ' + G.N; };
+                trk.src = IMG_URLS[i];
+            })(i);
+        }
+    }
+
+    function updateCount() {
+        var idx = ((Math.round(G.current) % G.N) + G.N) % G.N;
+        if (idx !== G.lastIdx) { G.lastIdx = idx; haptic('light'); }
+        $('count').innerHTML = '<b>' + String(idx + 1).padStart(2, '0') + '</b> / ' + String(G.N).padStart(2, '0');
+        var p = G.N > 1 ? idx / (G.N - 1) : 0;
+        var rail = $('rail'); var w = rail.parentNode.clientWidth - rail.clientWidth;
+        rail.style.transform = 'translateX(' + (p * w) + 'px)';
+    }
+
+    function shortAngle(a) { a = a % (Math.PI * 2); if (a > Math.PI) a -= Math.PI * 2; if (a < -Math.PI) a += Math.PI * 2; return a; }
+
+    var lastT = 0;
+    function animate(t) {
+        if (!G.running) return;
+        requestAnimationFrame(animate);
+        var dt = Math.min((t - lastT) / 1000 || 0.016, 0.05); lastT = t;
+
+        // Inersiya + tekislash
+        if (!G.dragging) {
+            G.target += G.velocity;
+            G.velocity *= 0.9;
+            if (Math.abs(G.velocity) < 0.0009) {
+                G.velocity = 0;
+                G.target = Math.round(G.target); // snap
+            }
+        }
+        G.current += (G.target - G.current) * Math.min(1, dt * 9);
+
+        G.group.rotation.y = -G.current * G.step;
+
+        // Har rasm: fokusga qarab kattalik / yorqinlik / porlash
+        for (var i = 0; i < G.photos.length; i++) {
+            var ph = G.photos[i];
+            var world = shortAngle(ph.angle - G.current * G.step);
+            var f = Math.max(0, Math.cos(world));      // fokusda 1
+            var pop = 1 + 0.16 * f * f;
+            var asp = ph.mesh.userData.baseAspect || 0.75;
+            ph.mesh.scale.set(asp * pop, pop, 1);
+            var bright = 0.42 + 0.58 * f;
+            ph.mesh.material.color.setScalar(bright);
+            ph.glow.material.opacity = Math.pow(f, 5) * 0.75;
+            ph.glow.scale.set(asp * pop * 1.14, pop * 1.12, 1);
+        }
+
+        if (G.particles) { G.particles.rotation.y += dt * 0.02; G.particles.rotation.x = Math.sin(t / 6000) * 0.05; }
+
+        G.renderer.render(G.scene, G.camera);
+    }
+
+    // ---------- Interaksiya ----------
+    function bindEvents() {
+        var canvas = $('gl');
+
+        canvas.addEventListener('pointerdown', function (e) {
+            G.dragging = true; G.moved = 0; G.velocity = 0;
+            G.lastX = G.downX = e.clientX; G.downY = e.clientY; G.downT = performance.now();
+            canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+        });
+        canvas.addEventListener('pointermove', function (e) {
+            if (!G.dragging) return;
+            var dx = e.clientX - G.lastX; G.lastX = e.clientX;
+            G.moved += Math.abs(dx);
+            var k = 0.006; // sezuvchanlik
+            G.target -= dx * k;
+            G.current -= dx * k * 0.6;
+        });
+        function up(e) {
+            if (!G.dragging) return; G.dragging = false;
+            var dt = (performance.now() - G.downT) || 1;
+            var totalDx = (e.clientX != null ? e.clientX : G.lastX) - G.downX;
+            var totalDy = (e.clientY != null ? e.clientY : G.downY) - G.downY;
+
+            if (G.moved < 8 && Math.abs(totalDy) < 12 && dt < 400) {
+                // Tap — qaysi rasm bosildi?
+                handleTap(e);
+                G.target = Math.round(G.target);
+            } else {
+                // Inersiya
+                G.velocity = -(totalDx / dt) * 0.02;
+                G.velocity = Math.max(-0.9, Math.min(0.9, G.velocity));
+                if (Math.abs(G.velocity) < 0.02) G.target = Math.round(G.target);
+            }
+        }
+        canvas.addEventListener('pointerup', up);
+        canvas.addEventListener('pointercancel', function () { G.dragging = false; G.target = Math.round(G.target); });
+
+        // Wheel (desktop)
+        canvas.addEventListener('wheel', function (e) {
+            e.preventDefault();
+            G.target += (e.deltaY > 0 ? 1 : -1);
+        }, { passive: false });
+
+        window.addEventListener('resize', onResize);
+
+        $('prev').onclick = function () { G.target = Math.round(G.target) - 1; };
+        $('next').onclick = function () { G.target = Math.round(G.target) + 1; };
+        document.addEventListener('keydown', function (e) {
+            if ($('viewer').classList.contains('show')) { if (e.key === 'Escape') closeViewer(); return; }
+            if (e.key === 'ArrowLeft') G.target = Math.round(G.target) - 1;
+            else if (e.key === 'ArrowRight') G.target = Math.round(G.target) + 1;
+            else if (e.key === 'Enter') openViewer((((Math.round(G.current) % G.N) + G.N) % G.N));
+        });
+    }
+
+    function handleTap(e) {
+        var rect = $('gl').getBoundingClientRect();
+        var mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        var my = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        G.raycaster.setFromCamera({ x: mx, y: my }, G.camera);
+        var meshes = G.photos.map(function (p) { return p.mesh; });
+        var hits = G.raycaster.intersectObjects(meshes, false);
+        var frontIdx = (((Math.round(G.current) % G.N) + G.N) % G.N);
+        if (hits.length) {
+            var idx = hits[0].object.userData.index;
+            if (idx === frontIdx) openViewer(idx);   // fokusdagini bossa — to'liq ekran
+            else G.target = G.current + shortAngle(G.photos[idx].angle - G.current * G.step) / G.step; // yon rasm — markazga
+        }
+    }
+
+    function onResize() {
+        if (!G.renderer) return;
+        G.renderer.setSize(window.innerWidth, window.innerHeight);
+        G.camera.aspect = window.innerWidth / window.innerHeight;
+        G.camera.updateProjectionMatrix();
+    }
+
+    // ---------- Fullscreen ko'rish ----------
+    var vScale = 1, vTX = 0, vTY = 0, vLastTap = 0, pinch0 = 0, sc0 = 1, vsx = 0, vsy = 0;
+    function vApply() { $('vimg').style.transform = 'scale(' + vScale + ') translate(' + vTX + 'px,' + vTY + 'px)'; }
+    function openViewer(idx) {
+        vScale = 1; vTX = 0; vTY = 0; vApply();
+        $('vimg').src = IMG_URLS[idx] || '';
+        $('vcap').textContent = (idx + 1) + ' / ' + G.N;
+        $('viewer').classList.add('show'); haptic('medium');
+    }
+    function closeViewer() { $('viewer').classList.remove('show'); }
+    function vDist(t) { var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY; return Math.hypot(dx, dy); }
+    function bindViewer() {
+        var v = $('viewer'), img = $('vimg');
+        $('vclose').onclick = closeViewer;
+        v.addEventListener('click', function (e) { if (e.target === v) closeViewer(); });
+        img.addEventListener('click', function () {
+            var now = Date.now();
+            if (now - vLastTap < 300) { vScale = vScale > 1 ? 1 : 2.3; vTX = 0; vTY = 0; vApply(); }
+            vLastTap = now;
+        });
+        img.addEventListener('touchstart', function (e) { if (e.touches.length === 2) { pinch0 = vDist(e.touches); sc0 = vScale; } }, { passive: true });
+        img.addEventListener('touchmove', function (e) {
+            if (e.touches.length === 2 && pinch0) { vScale = Math.max(1, Math.min(4, sc0 * (vDist(e.touches) / pinch0))); vApply(); e.preventDefault(); }
+        }, { passive: false });
+        v.addEventListener('touchstart', function (e) { if (e.touches.length === 1) { vsx = e.touches[0].clientX; vsy = e.touches[0].clientY; } }, { passive: true });
+        v.addEventListener('touchend', function (e) {
+            if (vScale > 1.05) return;
+            var t = e.changedTouches[0], dx = t.clientX - vsx, dy = t.clientY - vsy;
+            if (dy > 90 && Math.abs(dy) > Math.abs(dx)) closeViewer();
+            else if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+                var cur = (((Math.round(G.current) % G.N) + G.N) % G.N);
+                var nx = ((cur + (dx < 0 ? 1 : -1)) % G.N + G.N) % G.N;
+                G.target = Math.round(G.current) + (dx < 0 ? 1 : -1);
+                openViewer(nx);
+            }
+        }, { passive: true });
+    }
+
+    // ---------- Fallback (WebGL yo'q) ----------
+    function startFallback() {
+        var f = $('fallback'); f.classList.add('on');
+        f.innerHTML = IMG_URLS.map(function (u, i) {
+            return '<div class="fc"><img src="' + u + '" alt="rasm ' + (i + 1) + '"></div>';
+        }).join('');
+        $('gl').style.display = 'none';
+        document.querySelector('.hint').textContent = 'Suring';
+        hideStatus();
+    }
+
+    // ---------- Ishga tushirish ----------
+    function start(images) {
+        if (!images || !images.length) { showStatus('📭', "Albom hozircha bo'sh. Bot orqali rasm qo'shing."); return; }
+        IMG_URLS = images.map(imageUrl);
+
+        if (!hasWebGL() || !window.THREE) { startFallback(); return; }
+
+        initGL();
+        layout();
+        buildPhotos();
+        bindEvents();
+        bindViewer();
+        updateCount();
+
+        // Ilk kadr chizilgach ekranni ochamiz
+        G.running = true;
+        requestAnimationFrame(animate);
+        setTimeout(function () { hideStatus(); }, 500);
+
+        // count'ni davriy yangilaymiz
+        setInterval(updateCount, 120);
+    }
+
     function loadImages() {
         if (!WORKER_URL) { start(DEMO); return; }
+        var done = false;
+        var to = setTimeout(function () { if (!done) { done = true; start(DEMO); } }, 6000);
+        fetch(WORKER_URL.replace(/\/$/, '') + '/list')
+            .then(function (r) { return r.json(); })
+            .then(function (arr) {
+                if (done) return; done = true; clearTimeout(to);
+                if (!Array.isArray(arr)) arr = [];
+                arr.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+                start(arr.length ? arr : DEMO);
+            })
+            .catch(function (e) { if (done) return; done = true; clearTimeout(to); console.error(e); start(DEMO); });
+    }
+
+    function waitLib(tries) {
+        if (window.THREE) { loadImages(); return; }
+        if (tries <= 0) {
+            // THREE yuklanmadi — rasmlarni baribir ko'rsatamiz (fallback)
+            loadImagesNoGL();
+            return;
+        }
+        setTimeout(function () { waitLib(tries - 1); }, 200);
+    }
+    function loadImagesNoGL() {
+        if (!WORKER_URL) { IMG_URLS = DEMO.slice(); startFallback(); return; }
         fetch(WORKER_URL.replace(/\/$/, '') + '/list')
             .then(function (r) { return r.json(); })
             .then(function (arr) {
                 if (!Array.isArray(arr)) arr = [];
                 arr.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
-                start(arr.length ? arr : DEMO);
+                var src = arr.length ? arr : DEMO;
+                if (!src.length) { showStatus('📭', "Albom bo'sh."); return; }
+                IMG_URLS = src.map(imageUrl); startFallback();
             })
-            .catch(function (e) { console.error(e); start(DEMO); });
+            .catch(function () { IMG_URLS = DEMO.slice(); startFallback(); });
     }
 
-    // page-flip yuklanganini kutamiz
-    function waitLib(tries) {
-        if (window.St && window.St.PageFlip) { loadImages(); return; }
-        if (tries <= 0) { showStatus('⚠️', "Kutubxona yuklanmadi. Internetni tekshiring."); return; }
-        setTimeout(function () { waitLib(tries - 1); }, 200);
-    }
-    waitLib(25);
+    waitLib(30);
     </script>
 </body>
 </html>
