@@ -3,207 +3,580 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>3D Foto Albom</title>
-    <meta name="theme-color" content="#1a1410">
+    <title>✦ Foto Albom · 3D</title>
+    <meta name="theme-color" content="#0b0710">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- 3D kitob-varaqlash kutubxonasi (page-flip / StPageFlip) -->
     <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        /* ============================================================
+           TEMALAR (theme) — --accent va fon o'zgaradi
+        ============================================================ */
         :root {
-            --bg1: #201811;
-            --bg2: #0f0b07;
-            --gold: #c9a35b;
-            --gold-soft: #e6cf9b;
+            --bg1: #1a1020;
+            --bg2: #070409;
+            --accent: #d9b46a;
+            --accent-soft: #f2ddaa;
+            --accent-rgb: 217, 180, 106;
             --paper: #fbf6ec;
             --ink: #2c2418;
+            --glass: rgba(255,255,255,0.06);
+            --glass-brd: rgba(255,255,255,0.14);
         }
+        [data-theme="rose"] {
+            --bg1: #2a0f1c; --bg2: #0a0407;
+            --accent: #ff8fb1; --accent-soft: #ffd0dd; --accent-rgb: 255, 143, 177;
+        }
+        [data-theme="ocean"] {
+            --bg1: #08202e; --bg2: #02080d;
+            --accent: #5fd0e6; --accent-soft: #c3f2fb; --accent-rgb: 95, 208, 230;
+        }
+        [data-theme="emerald"] {
+            --bg1: #0a2418; --bg2: #030805;
+            --accent: #6ee7a8; --accent-soft: #c9f7dd; --accent-rgb: 110, 231, 168;
+        }
+        [data-theme="violet"] {
+            --bg1: #1e0f38; --bg2: #06030f;
+            --accent: #b78bff; --accent-soft: #e2d2ff; --accent-rgb: 183, 139, 255;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html, body {
             height: 100%;
             overflow: hidden;
             font-family: 'Montserrat', sans-serif;
-            background: radial-gradient(circle at 50% 30%, var(--bg1) 0%, var(--bg2) 100%);
             color: var(--paper);
+            background: #05030a;
             user-select: none;
+            -webkit-user-select: none;
         }
+
+        /* ============================================================
+           ANIMATSION FON — aurora + zarralar (bokeh)
+        ============================================================ */
+        #bg {
+            position: fixed; inset: 0; z-index: 0; overflow: hidden;
+            background:
+                radial-gradient(120% 90% at 50% -10%, var(--bg1) 0%, var(--bg2) 60%, #05030a 100%);
+            transition: background 0.8s ease;
+        }
+        .aurora {
+            position: absolute; border-radius: 50%;
+            filter: blur(70px); opacity: 0.5; mix-blend-mode: screen;
+            background: radial-gradient(circle, rgba(var(--accent-rgb),0.65), transparent 65%);
+            transition: background 0.8s ease;
+        }
+        .a1 { width: 60vw; height: 60vw; top: -18vh; left: -12vw; animation: drift1 16s ease-in-out infinite; }
+        .a2 { width: 55vw; height: 55vw; bottom: -20vh; right: -14vw; opacity: 0.4;
+              background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 60%);
+              animation: drift2 20s ease-in-out infinite; }
+        .a3 { width: 40vw; height: 40vw; top: 40%; left: 55%; opacity: 0.3; animation: drift3 24s ease-in-out infinite; }
+        @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(6vw,5vh) scale(1.15)} }
+        @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-5vw,-4vh) scale(1.1)} }
+        @keyframes drift3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-8vw,6vh)} }
+        #stars { position: absolute; inset: 0; pointer-events: none; }
+        .spark {
+            position: absolute; width: 3px; height: 3px; border-radius: 50%;
+            background: var(--accent-soft);
+            box-shadow: 0 0 8px 1px rgba(var(--accent-rgb),0.9);
+            animation: floatUp linear infinite;
+            opacity: 0;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.6); opacity: 0; }
+            10% { opacity: 0.9; }
+            90% { opacity: 0.6; }
+            100% { transform: translateY(-110vh) scale(1.1); opacity: 0; }
+        }
+        /* nozik vinyet + grain his */
+        #bg::after {
+            content: ""; position: absolute; inset: 0; pointer-events: none;
+            background: radial-gradient(120% 120% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%);
+        }
+
+        /* ============================================================
+           APP LAYOUT
+        ============================================================ */
         #app {
-            position: fixed;
-            inset: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 12px;
+            position: fixed; inset: 0; z-index: 2;
+            display: flex; flex-direction: column; align-items: center;
+            padding: calc(env(safe-area-inset-top) + 10px) 12px calc(env(safe-area-inset-bottom) + 10px);
         }
-        .title {
+
+        /* Sarlavha + top bar */
+        .topbar {
+            width: 100%; max-width: 620px;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; padding: 2px 4px;
+        }
+        .brand {
+            display: flex; flex-direction: column; line-height: 1.05;
+        }
+        .brand .t {
             font-family: 'Cormorant Garamond', serif;
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: 2px;
-            color: var(--gold-soft);
-            margin-bottom: 10px;
-            text-align: center;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            font-size: 21px; font-weight: 700; letter-spacing: 2px;
+            background: linear-gradient(100deg, var(--accent-soft), #fff, var(--accent));
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            background-size: 200% auto; animation: shine 6s linear infinite;
         }
-        /* Kitob konteyneri — 3D perspektiva */
+        @keyframes shine { to { background-position: 200% center; } }
+        .brand .s {
+            font-size: 9px; letter-spacing: 4px; text-transform: uppercase;
+            color: rgba(var(--accent-rgb), 0.8); margin-top: 2px;
+        }
+        .top-actions { display: flex; gap: 8px; }
+        .icon-btn {
+            width: 40px; height: 40px; border-radius: 14px;
+            border: 1px solid var(--glass-brd); background: var(--glass);
+            color: var(--accent-soft); font-size: 17px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            transition: transform .18s cubic-bezier(.34,1.56,.64,1), background .2s, border-color .2s;
+            position: relative; overflow: hidden;
+        }
+        .icon-btn:active { transform: scale(0.86); }
+        .icon-btn.on { background: rgba(var(--accent-rgb),0.22); border-color: rgba(var(--accent-rgb),0.6); box-shadow: 0 0 14px rgba(var(--accent-rgb),0.35); }
+
+        /* ============================================================
+           KITOB (3D flipbook)
+        ============================================================ */
+        #stage {
+            flex: 1; width: 100%; display: flex; align-items: center; justify-content: center;
+            min-height: 0; position: relative;
+        }
         #book-wrap {
-            perspective: 2200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 1;
-            width: 100%;
-            max-height: 78vh;
+            perspective: 2400px; display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+            transition: opacity .4s ease, transform .4s ease;
         }
-        #book {
-            touch-action: pan-y;
-        }
-        /* Har bir varaq */
+        #book { touch-action: pan-y; filter: drop-shadow(0 30px 40px rgba(0,0,0,0.55)); }
         .page {
-            background: var(--paper);
-            overflow: hidden;
-            box-shadow: inset 0 0 30px rgba(0,0,0,0.12);
+            background: var(--paper); overflow: hidden; position: relative;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.14);
         }
+        .page .imgwrap { position: absolute; inset: 0; overflow: hidden; }
         .page img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            pointer-events: none;
+            width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none;
+            transform: scale(1.06); transition: transform 6s ease;
         }
-        /* Muqova (birinchi va oxirgi qattiq varaq) */
+        .page.kb img { animation: ken 12s ease-in-out infinite alternate; }
+        @keyframes ken {
+            from { transform: scale(1.04) translate(0,0); }
+            to   { transform: scale(1.16) translate(-2%, -2%); }
+        }
+        /* rasm ustidagi nozik gradient + tap belgisi */
+        .page .glow { position: absolute; inset: 0; pointer-events: none;
+            background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.28)); }
+        .page .pnum {
+            position: absolute; bottom: 8px; width: 100%; text-align: center;
+            font-size: 11px; color: rgba(44,36,24,0.55); letter-spacing: 2px; z-index: 3;
+            font-family: 'Cormorant Garamond', serif;
+        }
+        .page .tapz {
+            position: absolute; right: 10px; top: 10px; z-index: 3;
+            width: 30px; height: 30px; border-radius: 50%;
+            background: rgba(0,0,0,0.32); color: #fff; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px); opacity: 0; transition: opacity .3s;
+        }
+        .page:hover .tapz { opacity: 0.85; }
+
+        /* Muqova */
         .page.cover {
-            background: linear-gradient(135deg, #3a2b1a 0%, #22190f 100%);
-            color: var(--gold-soft);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(201,163,91,0.35);
-            box-shadow: inset 0 0 60px rgba(0,0,0,0.5);
+            background:
+                radial-gradient(120% 120% at 30% 20%, rgba(var(--accent-rgb),0.28), transparent 55%),
+                linear-gradient(135deg, #26170f 0%, #140b09 100%);
+            color: var(--accent-soft);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border: 1px solid rgba(var(--accent-rgb),0.4);
+            box-shadow: inset 0 0 80px rgba(0,0,0,0.6);
         }
-        .cover .cover-emoji { font-size: 54px; margin-bottom: 14px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
+        .cover::before {
+            content: ""; position: absolute; inset: 10px; border: 1px solid rgba(var(--accent-rgb),0.35);
+            border-radius: 3px; pointer-events: none;
+        }
+        .cover .cover-emoji { font-size: 52px; margin-bottom: 14px; filter: drop-shadow(0 6px 14px rgba(0,0,0,0.6)); animation: floaty 4s ease-in-out infinite; }
+        @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
         .cover .cover-title {
             font-family: 'Cormorant Garamond', serif;
             font-size: 30px; font-weight: 700; letter-spacing: 3px; text-align: center; padding: 0 20px;
+            background: linear-gradient(100deg, var(--accent-soft), #fff, var(--accent));
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            background-size: 200% auto; animation: shine 5s linear infinite;
         }
-        .cover .cover-sub { margin-top: 10px; font-size: 12px; letter-spacing: 3px; opacity: 0.7; text-transform: uppercase; }
-        .cover .cover-line { width: 60px; height: 2px; background: var(--gold); margin: 16px 0; border-radius: 2px; }
-        /* Sahifa raqami */
-        .page .pnum {
-            position: absolute; bottom: 8px; width: 100%; text-align: center;
-            font-size: 11px; color: rgba(44,36,24,0.5); letter-spacing: 1px;
+        .cover .cover-sub { margin-top: 10px; font-size: 11px; letter-spacing: 4px; opacity: 0.75; text-transform: uppercase; }
+        .cover .cover-line { width: 64px; height: 2px; background: var(--accent); margin: 16px 0; border-radius: 2px; box-shadow: 0 0 12px rgba(var(--accent-rgb),0.7); }
+
+        /* ============================================================
+           PASTKI BOSHQARUV
+        ============================================================ */
+        .dock {
+            width: 100%; max-width: 620px;
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
         }
-        /* Boshqaruv tugmalari */
-        .controls {
-            display: flex; align-items: center; gap: 18px; margin-top: 14px;
+        .progress {
+            width: 78%; max-width: 380px; height: 4px; border-radius: 4px;
+            background: rgba(255,255,255,0.1); overflow: hidden;
         }
+        .progress > i {
+            display: block; height: 100%; width: 0%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-soft));
+            box-shadow: 0 0 10px rgba(var(--accent-rgb),0.7);
+            border-radius: 4px; transition: width .5s cubic-bezier(.4,0,.2,1);
+        }
+        .controls { display: flex; align-items: center; gap: 14px; }
         .btn {
-            width: 48px; height: 48px; border-radius: 50%;
-            border: 1px solid rgba(201,163,91,0.4);
-            background: rgba(255,255,255,0.05);
-            color: var(--gold-soft); font-size: 20px; cursor: pointer;
+            width: 50px; height: 50px; border-radius: 50%;
+            border: 1px solid var(--glass-brd); background: var(--glass);
+            color: var(--accent-soft); font-size: 22px; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
-            transition: transform 0.15s ease, background 0.2s ease;
-            backdrop-filter: blur(6px);
+            transition: transform .18s cubic-bezier(.34,1.56,.64,1), background .2s;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
         }
-        .btn:active { transform: scale(0.9); background: rgba(201,163,91,0.18); }
+        .btn:active { transform: scale(0.85); background: rgba(var(--accent-rgb),0.2); }
+        .btn.play {
+            width: 62px; height: 62px; font-size: 24px;
+            background: linear-gradient(135deg, rgba(var(--accent-rgb),0.28), rgba(var(--accent-rgb),0.08));
+            border-color: rgba(var(--accent-rgb),0.5);
+            box-shadow: 0 6px 22px rgba(var(--accent-rgb),0.28);
+            position: relative;
+        }
+        /* Slideshow progress ring */
+        .ring { position: absolute; inset: -3px; border-radius: 50%; pointer-events: none; }
         .counter {
-            font-size: 13px; color: var(--gold-soft); letter-spacing: 1px; min-width: 70px; text-align: center;
+            font-size: 12px; color: var(--accent-soft); letter-spacing: 2px; min-width: 72px; text-align: center;
+            font-family: 'Cormorant Garamond', serif; font-weight: 600;
         }
-        /* Yuklanish / bo'sh holat */
+        .hint { font-size: 10px; opacity: 0.45; letter-spacing: 2px; text-transform: uppercase; }
+
+        /* ============================================================
+           GRID (galereya) rejimi
+        ============================================================ */
+        #grid {
+            position: absolute; inset: 0; z-index: 3; overflow-y: auto; overflow-x: hidden;
+            padding: 8px 8px 90px; display: grid; gap: 8px;
+            grid-template-columns: repeat(auto-fill, minmax(30%, 1fr));
+            align-content: start;
+            -webkit-overflow-scrolling: touch;
+        }
+        .gcell {
+            position: relative; border-radius: 12px; overflow: hidden; cursor: pointer;
+            aspect-ratio: 3/4; background: rgba(255,255,255,0.04);
+            border: 1px solid var(--glass-brd);
+            opacity: 0; transform: translateY(18px) scale(.96);
+            animation: gin .5s cubic-bezier(.2,.8,.2,1) forwards;
+        }
+        @keyframes gin { to { opacity: 1; transform: none; } }
+        .gcell img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s ease; }
+        .gcell:active img { transform: scale(1.08); }
+        .gcell .gn {
+            position: absolute; left: 6px; bottom: 6px; font-size: 10px; letter-spacing: 1px;
+            padding: 2px 7px; border-radius: 8px; background: rgba(0,0,0,0.45); color: var(--accent-soft);
+            backdrop-filter: blur(4px);
+        }
+
+        /* ============================================================
+           LIGHTBOX (to'liq ekran + zoom)
+        ============================================================ */
+        #lightbox {
+            position: fixed; inset: 0; z-index: 40; background: rgba(4,2,8,0.94);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity .35s ease;
+            backdrop-filter: blur(8px);
+        }
+        #lightbox.show { opacity: 1; pointer-events: auto; }
+        #lightbox img {
+            max-width: 94vw; max-height: 82vh; border-radius: 10px;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.7);
+            transform: scale(.9); transition: transform .35s cubic-bezier(.2,.9,.2,1);
+            touch-action: none;
+        }
+        #lightbox.show img { transform: scale(1); }
+        .lb-close {
+            position: absolute; top: calc(env(safe-area-inset-top) + 14px); right: 16px;
+            width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--glass-brd);
+            background: var(--glass); color: #fff; font-size: 20px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px);
+        }
+        .lb-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--glass-brd);
+            background: var(--glass); color: #fff; font-size: 24px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px);
+        }
+        .lb-prev { left: 12px; } .lb-next { right: 12px; }
+        .lb-cap {
+            position: absolute; bottom: calc(env(safe-area-inset-bottom) + 18px); width: 100%;
+            text-align: center; font-family: 'Cormorant Garamond', serif; letter-spacing: 2px;
+            color: var(--accent-soft); font-size: 14px;
+        }
+
+        /* ============================================================
+           THEME SHEET (mavzu tanlash)
+        ============================================================ */
+        #sheet {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+            background: rgba(14,9,18,0.92); backdrop-filter: blur(18px);
+            border-top: 1px solid var(--glass-brd);
+            border-radius: 22px 22px 0 0; padding: 16px 18px calc(env(safe-area-inset-bottom) + 22px);
+            transform: translateY(115%); transition: transform .4s cubic-bezier(.2,.9,.2,1);
+        }
+        #sheet.show { transform: translateY(0); }
+        #sheet .grip { width: 42px; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.25); margin: 0 auto 14px; }
+        #sheet h3 { font-family: 'Cormorant Garamond', serif; font-weight: 600; letter-spacing: 2px; font-size: 16px; margin-bottom: 12px; color: var(--accent-soft); }
+        .swatches { display: flex; gap: 12px; flex-wrap: wrap; }
+        .sw {
+            width: 46px; height: 46px; border-radius: 14px; cursor: pointer; position: relative;
+            border: 2px solid transparent; transition: transform .18s, border-color .2s;
+        }
+        .sw:active { transform: scale(.9); }
+        .sw.sel { border-color: #fff; }
+        .sw[data-t="gold"]    { background: linear-gradient(135deg,#d9b46a,#8a6a2f); }
+        .sw[data-t="rose"]    { background: linear-gradient(135deg,#ff8fb1,#a13e5c); }
+        .sw[data-t="ocean"]   { background: linear-gradient(135deg,#5fd0e6,#1c6d80); }
+        .sw[data-t="emerald"] { background: linear-gradient(135deg,#6ee7a8,#1f7d4f); }
+        .sw[data-t="violet"]  { background: linear-gradient(135deg,#b78bff,#5a2ea6); }
+        #scrim { position: fixed; inset: 0; z-index: 49; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity .35s; }
+        #scrim.show { opacity: 1; pointer-events: auto; }
+
+        /* ============================================================
+           STATUS / LOADING
+        ============================================================ */
         #status {
-            position: absolute; inset: 0; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 14px;
-            background: radial-gradient(circle at 50% 30%, var(--bg1) 0%, var(--bg2) 100%);
-            z-index: 5;
+            position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 18px;
+            background: radial-gradient(circle at 50% 35%, var(--bg1) 0%, #05030a 100%);
+            transition: opacity .6s ease;
         }
-        #status .big { font-size: 46px; }
-        #status .msg { color: var(--gold-soft); font-size: 15px; max-width: 300px; line-height: 1.6; }
-        .spinner {
-            width: 38px; height: 38px; border: 3px solid rgba(201,163,91,0.25);
-            border-top-color: var(--gold); border-radius: 50%; animation: spin 0.9s linear infinite;
+        .book-loader { width: 66px; height: 50px; position: relative; perspective: 300px; }
+        .book-loader .leaf {
+            position: absolute; inset: 0; left: 50%; width: 50%;
+            background: linear-gradient(135deg, var(--accent-soft), var(--accent));
+            transform-origin: left center; border-radius: 0 6px 6px 0;
+            animation: flip 1.6s ease-in-out infinite; box-shadow: 0 0 14px rgba(var(--accent-rgb),0.4);
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        .book-loader .base {
+            position: absolute; inset: 0; right: 50%; width: 50%;
+            background: linear-gradient(135deg,#3a2b1a,#22190f); border-radius: 6px 0 0 6px;
+            border: 1px solid rgba(var(--accent-rgb),0.4);
+        }
+        @keyframes flip { 0%,15%{transform:rotateY(0)} 50%,65%{transform:rotateY(-165deg)} 100%{transform:rotateY(0)} }
+        #status .msg { color: var(--accent-soft); font-size: 14px; max-width: 300px; line-height: 1.6; letter-spacing: 1px; }
+        #status .big { font-size: 50px; filter: drop-shadow(0 6px 14px rgba(0,0,0,0.5)); }
+        .loadbar { width: 160px; height: 3px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; }
+        .loadbar > i { display:block; height:100%; width:40%; border-radius:3px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            animation: sweep 1.2s ease-in-out infinite; }
+        @keyframes sweep { 0%{transform:translateX(-120%)} 100%{transform:translateX(320%)} }
+
         .hidden { display: none !important; }
-        .hint { margin-top: 8px; font-size: 11px; opacity: 0.5; letter-spacing: 1px; }
+        .fadeout { opacity: 0 !important; }
+
+        /* Toast */
+        #toast {
+            position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 96px); transform: translate(-50%, 20px);
+            z-index: 70; background: rgba(20,14,24,0.94); color: var(--accent-soft);
+            border: 1px solid var(--glass-brd); padding: 10px 18px; border-radius: 14px; font-size: 12px;
+            letter-spacing: 1px; opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s;
+            backdrop-filter: blur(10px); max-width: 84vw;
+        }
+        #toast.show { opacity: 1; transform: translate(-50%, 0); }
     </style>
 </head>
 <body>
-    <div id="app">
-        <div class="title" id="albumTitle">✦ FOTO ALBOM ✦</div>
-        <div id="book-wrap">
-            <div id="book"></div>
-        </div>
-        <div class="controls">
-            <button class="btn" id="prevBtn" aria-label="Oldingi">‹</button>
-            <div class="counter" id="counter">— / —</div>
-            <button class="btn" id="nextBtn" aria-label="Keyingi">›</button>
-        </div>
-        <div class="hint">Varaqlash uchun cheklab torting yoki tugmalardan foydalaning</div>
+    <!-- Animatsion fon -->
+    <div id="bg">
+        <div class="aurora a1"></div>
+        <div class="aurora a2"></div>
+        <div class="aurora a3"></div>
+        <div id="stars"></div>
     </div>
 
+    <div id="app">
+        <div class="topbar">
+            <div class="brand">
+                <div class="t" id="albumTitle">Foto Albom</div>
+                <div class="s">Xotiralar to'plami</div>
+            </div>
+            <div class="top-actions">
+                <button class="icon-btn" id="viewBtn" title="Ko'rinish">▦</button>
+                <button class="icon-btn on" id="soundBtn" title="Tovush">♪</button>
+                <button class="icon-btn" id="themeBtn" title="Mavzu">✦</button>
+                <button class="icon-btn" id="shareBtn" title="Ulashish">↗</button>
+            </div>
+        </div>
+
+        <div id="stage">
+            <div id="book-wrap"><div id="book"></div></div>
+            <div id="grid" class="hidden"></div>
+        </div>
+
+        <div class="dock" id="dock">
+            <div class="progress"><i id="progBar"></i></div>
+            <div class="controls">
+                <button class="btn" id="prevBtn" aria-label="Oldingi">‹</button>
+                <button class="btn play" id="playBtn" aria-label="Slayd">
+                    <svg class="ring" viewBox="0 0 68 68"><circle cx="34" cy="34" r="32" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2"/><circle id="ringFg" cx="34" cy="34" r="32" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201" transform="rotate(-90 34 34)"/></svg>
+                    <span id="playIcon">▶</span>
+                </button>
+                <button class="btn" id="nextBtn" aria-label="Keyingi">›</button>
+            </div>
+            <div class="counter" id="counter">— / —</div>
+            <div class="hint" id="hint">Varaqlash uchun torting yoki tugmani bosing</div>
+        </div>
+    </div>
+
+    <!-- Lightbox -->
+    <div id="lightbox">
+        <button class="lb-close" id="lbClose">✕</button>
+        <button class="lb-nav lb-prev" id="lbPrev">‹</button>
+        <img id="lbImg" src="" alt="">
+        <button class="lb-nav lb-next" id="lbNext">›</button>
+        <div class="lb-cap" id="lbCap"></div>
+    </div>
+
+    <!-- Theme sheet -->
+    <div id="scrim"></div>
+    <div id="sheet">
+        <div class="grip"></div>
+        <h3>✦ Mavzu tanlang</h3>
+        <div class="swatches">
+            <div class="sw sel" data-t="gold"></div>
+            <div class="sw" data-t="rose"></div>
+            <div class="sw" data-t="ocean"></div>
+            <div class="sw" data-t="emerald"></div>
+            <div class="sw" data-t="violet"></div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Loading / status -->
     <div id="status">
-        <div class="spinner" id="spinner"></div>
+        <div class="book-loader" id="loader"><div class="base"></div><div class="leaf"></div></div>
         <div class="big hidden" id="statusEmoji">📷</div>
         <div class="msg" id="statusMsg">Albom yuklanmoqda…</div>
+        <div class="loadbar" id="loadbar"><i></i></div>
     </div>
 
     <script>
     // =====================================================================
-    //  SOZLAMALAR
-    //  WORKER_URL — Cloudflare Worker manzili (rasm ro'yxati /list va
-    //  rasmlar /media shu yerdan keladi). Oxirida / bo'lsa ham mayli.
+    //  SOZLAMALAR — Worker manzili (rasm ro'yxati /list, rasmlar /media)
     //  Bo'sh yoki xatolik bo'lsa — DEMO rasmlar ko'rsatiladi.
     // =====================================================================
     var WORKER_URL = "https://albom-ayman.anvaraxtamov70.workers.dev";
 
     // ---------------------------------------------------------------------
     var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-    if (tg) { try { tg.expand(); tg.ready(); } catch (e) {} }
+    if (tg) { try { tg.expand(); tg.ready(); tg.setHeaderColor && tg.setHeaderColor('#0b0710'); } catch (e) {} }
 
-    var statusEl = document.getElementById('status');
-    var statusMsg = document.getElementById('statusMsg');
-    var statusEmoji = document.getElementById('statusEmoji');
-    var spinner = document.getElementById('spinner');
-    var bookEl = document.getElementById('book');
-    var counterEl = document.getElementById('counter');
+    var $ = function (id) { return document.getElementById(id); };
+    var statusEl = $('status'), statusMsg = $('statusMsg'), statusEmoji = $('statusEmoji');
+    var loader = $('loader'), loadbar = $('loadbar');
+    var bookEl = $('book'), bookWrap = $('book-wrap'), gridEl = $('grid');
+    var counterEl = $('counter'), progBar = $('progBar'), ringFg = $('ringFg');
 
     var pageFlip = null;
+    var IMAGES = [];        // asl ma'lumot (item obyektlari yoki url)
+    var IMG_URLS = [];      // tayyor url lar
+    var isGrid = false;
+    var playing = false, playTimer = null, playStart = 0, playRAF = null;
+    var SLIDE_MS = 3200;
+    var soundOn = true;
+    var lbIndex = 0;
+
+    /* ---------- Fon zarralar ---------- */
+    (function makeStars() {
+        var box = $('stars'), n = 26, html = '';
+        for (var i = 0; i < n; i++) {
+            var left = Math.random() * 100;
+            var dur = 9 + Math.random() * 12;
+            var delay = Math.random() * -20;
+            var size = 1.5 + Math.random() * 3;
+            html += '<span class="spark" style="left:' + left + '%;bottom:-10px;width:' + size + 'px;height:' + size +
+                    'px;animation-duration:' + dur + 's;animation-delay:' + delay + 's"></span>';
+        }
+        box.innerHTML = html;
+    })();
+
+    /* ---------- Tovush (WebAudio, faylsiz) ---------- */
+    var actx = null;
+    function ac() {
+        if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+        return actx;
+    }
+    function flipSound() {
+        if (!soundOn) return;
+        var c = ac(); if (!c) return;
+        try {
+            if (c.state === 'suspended') c.resume();
+            // qog'oz varaq shovqini — filtrlangan shovqin portlashi
+            var dur = 0.28, sr = c.sampleRate, buf = c.createBuffer(1, sr * dur, sr);
+            var data = buf.getChannelData(0);
+            for (var i = 0; i < data.length; i++) {
+                var t = i / data.length;
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2.5);
+            }
+            var src = c.createBufferSource(); src.buffer = buf;
+            var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 0.7;
+            var g = c.createGain(); g.gain.value = 0.22;
+            src.connect(bp); bp.connect(g); g.connect(c.destination);
+            src.start();
+        } catch (e) {}
+    }
+    function tick() {
+        if (!soundOn) return; var c = ac(); if (!c) return;
+        try {
+            if (c.state === 'suspended') c.resume();
+            var o = c.createOscillator(), g = c.createGain();
+            o.frequency.value = 880; o.type = 'sine';
+            g.gain.setValueAtTime(0.0001, c.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.12, c.currentTime + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.14);
+            o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + 0.15);
+        } catch (e) {}
+    }
+    function haptic(kind) { if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.impactOccurred(kind || 'light'); } catch (e) {} } }
+
+    /* ---------- Toast ---------- */
+    var toastTimer;
+    function toast(msg) {
+        var t = $('toast'); t.textContent = msg; t.classList.add('show');
+        clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+    }
 
     function showStatus(emoji, msg) {
-        spinner.classList.add('hidden');
-        statusEmoji.classList.remove('hidden');
-        statusEmoji.textContent = emoji;
-        statusMsg.textContent = msg;
-        statusEl.classList.remove('hidden');
+        loader.classList.add('hidden'); loadbar.classList.add('hidden');
+        statusEmoji.classList.remove('hidden'); statusEmoji.textContent = emoji;
+        statusMsg.textContent = msg; statusEl.classList.remove('hidden'); statusEl.classList.remove('fadeout');
     }
-    function hideStatus() { statusEl.classList.add('hidden'); }
+    function hideStatus() {
+        statusEl.classList.add('fadeout');
+        setTimeout(function () { statusEl.classList.add('hidden'); }, 650);
+    }
 
-    // Rasm manzilini quramiz: worker orqali (token yashirin) yoki to'g'ridan-to'g'ri
+    /* ---------- Rasm URL ---------- */
     function imageUrl(item) {
-        if (typeof item === 'string') return item;         // tayyor URL
-        if (item && item.url) return item.url;              // to'g'ridan-to'g'ri URL
-        if (item && item.id && WORKER_URL) {                // file_id -> worker proxy
+        if (typeof item === 'string') return item;
+        if (item && item.url) return item.url;
+        if (item && item.id && WORKER_URL) {
             return WORKER_URL.replace(/\/$/, '') + '/media?id=' + encodeURIComponent(item.id);
         }
         return '';
     }
 
-    // Kitob o'lchamini ekранga moslaymiz
+    /* ---------- Kitob o'lchami ---------- */
     function bookSize() {
-        var wrap = document.getElementById('book-wrap');
-        var maxW = Math.min(wrap.clientWidth - 20, 460);
-        var maxH = wrap.clientHeight - 20;
-        // 3:4 nisbat (portret sahifa)
-        var w = maxW, h = w * 1.33;
-        if (h > maxH) { h = maxH; w = h / 1.33; }
+        var maxW = Math.min(bookWrap.clientWidth - 16, 460);
+        var maxH = bookWrap.clientHeight - 16;
+        var w = maxW, h = w * 1.34;
+        if (h > maxH) { h = maxH; w = h / 1.34; }
         return { w: Math.round(w), h: Math.round(h) };
     }
 
-    // Sahifa HTML'ini yaratadi
     function makePage(html, isCover) {
         var d = document.createElement('div');
         d.className = 'page' + (isCover ? ' cover' : '');
@@ -212,58 +585,61 @@
         return d;
     }
 
-    function buildBook(images) {
+    /* ---------- Kitobni qurish ---------- */
+    function buildBook() {
         var sz = bookSize();
-        // Eski kitobni tozalaymiz
         bookEl.innerHTML = '';
-
-        var pagesHtml = [];
-        // Old muqova
-        pagesHtml.push(makePage(
+        var pages = [];
+        pages.push(makePage(
             '<div class="cover-emoji">📖</div>' +
             '<div class="cover-title">FOTO ALBOM</div>' +
             '<div class="cover-line"></div>' +
             '<div class="cover-sub">Xotiralar to\'plami</div>', true));
 
-        // Rasm sahifalari
-        images.forEach(function (item, i) {
-            var src = imageUrl(item);
-            pagesHtml.push(makePage(
-                '<img src="' + src + '" alt="rasm ' + (i + 1) + '" ' +
-                'onerror="this.style.opacity=0.15">' +
-                '<div class="pnum">' + (i + 1) + '</div>'));
+        IMG_URLS.forEach(function (src, i) {
+            pages.push(makePage(
+                '<div class="imgwrap"><img src="' + src + '" alt="rasm ' + (i + 1) + '" ' +
+                'onload="this.parentNode.parentNode.classList.add(\'kb\')" ' +
+                'onerror="this.style.opacity=0.12"></div>' +
+                '<div class="glow"></div>' +
+                '<div class="tapz">⛶</div>' +
+                '<div class="pnum">— ' + (i + 1) + ' —</div>',
+                false));
         });
 
-        // Juft sahifa bo'lishi uchun (muqova + rasmlar) toq bo'lsa bo'sh sahifa
-        var total = 1 + images.length;
-        if (total % 2 !== 0) {
-            pagesHtml.push(makePage('<div class="pnum"></div>'));
-        }
-        // Orqa muqova
-        pagesHtml.push(makePage(
+        var total = 1 + IMG_URLS.length;
+        if (total % 2 !== 0) pages.push(makePage('<div class="pnum"></div>'));
+        pages.push(makePage(
             '<div class="cover-emoji">✦</div>' +
+            '<div class="cover-line"></div>' +
             '<div class="cover-sub">Tamom</div>', true));
 
-        pagesHtml.forEach(function (p) { bookEl.appendChild(p); });
+        pages.forEach(function (p) { bookEl.appendChild(p); });
 
-        // page-flip ni ishga tushiramiz
         pageFlip = new St.PageFlip(bookEl, {
-            width: sz.w,
-            height: sz.h,
-            size: 'fixed',
-            minWidth: 200, maxWidth: 600,
-            minHeight: 260, maxHeight: 900,
-            maxShadowOpacity: 0.5,
-            showCover: true,
-            mobileScrollSupport: true,
-            flippingTime: 700,
-            useMouseEvents: true,
-            drawShadow: true,
+            width: sz.w, height: sz.h, size: 'fixed',
+            minWidth: 200, maxWidth: 620, minHeight: 260, maxHeight: 940,
+            maxShadowOpacity: 0.55, showCover: true, mobileScrollSupport: true,
+            flippingTime: 750, useMouseEvents: true, drawShadow: true, swipeDistance: 20,
         });
         pageFlip.loadFromHTML(document.querySelectorAll('#book .page'));
-
         updateCounter();
-        pageFlip.on('flip', function () { updateCounter(); if (tg) { try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {} } });
+
+        pageFlip.on('flip', function () {
+            updateCounter(); flipSound(); haptic('light');
+            if (pageFlip.getCurrentPageIndex() >= pageFlip.getPageCount() - 1) celebrate();
+        });
+
+        // Rasm sahifasini bosganda lightbox
+        bookEl.querySelectorAll('.page .tapz, .page .imgwrap').forEach(function (el) {
+            el.addEventListener('click', function (ev) {
+                var pageDiv = el.closest('.page');
+                var imgs = Array.prototype.slice.call(bookEl.querySelectorAll('.page .imgwrap img'));
+                var thisImg = pageDiv.querySelector('img');
+                var idx = imgs.indexOf(thisImg);
+                if (idx >= 0) { ev.stopPropagation(); openLightbox(idx); }
+            });
+        });
     }
 
     function updateCounter() {
@@ -271,28 +647,229 @@
         var cur = pageFlip.getCurrentPageIndex() + 1;
         var tot = pageFlip.getPageCount();
         counterEl.textContent = cur + ' / ' + tot;
+        var pct = tot > 1 ? ((cur - 1) / (tot - 1)) * 100 : 0;
+        progBar.style.width = pct + '%';
     }
 
-    document.getElementById('prevBtn').onclick = function () { if (pageFlip) pageFlip.flipPrev(); };
-    document.getElementById('nextBtn').onclick = function () { if (pageFlip) pageFlip.flipNext(); };
+    /* ---------- Grid (galereya) ---------- */
+    function buildGrid() {
+        gridEl.innerHTML = '';
+        IMG_URLS.forEach(function (src, i) {
+            var c = document.createElement('div');
+            c.className = 'gcell';
+            c.style.animationDelay = (i * 45) + 'ms';
+            c.innerHTML = '<img src="' + src + '" alt="rasm ' + (i + 1) + '" onerror="this.style.opacity=0.12">' +
+                          '<div class="gn">' + (i + 1) + '</div>';
+            c.addEventListener('click', function () { haptic('light'); openLightbox(i); });
+            gridEl.appendChild(c);
+        });
+    }
 
-    // Ekran o'lchami o'zgarsa — qayta quramiz
-    var resizeTimer;
-    window.addEventListener('resize', function () {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(function () {
-            if (window.__albumImages) buildBook(window.__albumImages);
-        }, 300);
+    function setView(grid) {
+        isGrid = grid;
+        stopPlay();
+        if (grid) {
+            buildGrid();
+            gridEl.classList.remove('hidden');
+            bookWrap.classList.add('hidden');
+            $('viewBtn').textContent = '📖';
+            $('viewBtn').classList.add('on');
+            $('dock').style.visibility = 'hidden';
+            $('hint').textContent = 'Kattalashtirish uchun rasmni bosing';
+        } else {
+            gridEl.classList.add('hidden');
+            bookWrap.classList.remove('hidden');
+            $('viewBtn').textContent = '▦';
+            $('viewBtn').classList.remove('on');
+            $('dock').style.visibility = 'visible';
+            $('hint').textContent = 'Varaqlash uchun torting yoki tugmani bosing';
+        }
+    }
+
+    /* ---------- Lightbox ---------- */
+    var lb = $('lightbox'), lbImg = $('lbImg'), lbCap = $('lbCap');
+    var lbScale = 1, lbTX = 0, lbTY = 0;
+    function applyLB() { lbImg.style.transform = 'scale(' + lbScale + ') translate(' + lbTX + 'px,' + lbTY + 'px)'; }
+    function openLightbox(i) {
+        lbIndex = i; lbScale = 1; lbTX = 0; lbTY = 0;
+        lbImg.src = IMG_URLS[i] || '';
+        lbCap.textContent = (i + 1) + ' / ' + IMG_URLS.length;
+        lb.classList.add('show'); haptic('medium'); tick();
+    }
+    function closeLightbox() { lb.classList.remove('show'); lbScale = 1; }
+    function lbGo(dir) {
+        var n = IMG_URLS.length; if (!n) return;
+        lbIndex = (lbIndex + dir + n) % n;
+        lbScale = 1; lbTX = 0; lbTY = 0; applyLB();
+        lbImg.style.opacity = 0.2;
+        setTimeout(function () { lbImg.src = IMG_URLS[lbIndex]; lbImg.style.opacity = 1;
+            lbCap.textContent = (lbIndex + 1) + ' / ' + IMG_URLS.length; }, 120);
+        flipSound(); haptic('light');
+    }
+    $('lbClose').onclick = closeLightbox;
+    $('lbPrev').onclick = function () { lbGo(-1); };
+    $('lbNext').onclick = function () { lbGo(1); };
+    lb.addEventListener('click', function (e) { if (e.target === lb) closeLightbox(); });
+    // double-tap zoom
+    var lastTap = 0;
+    lbImg.addEventListener('click', function () {
+        var now = Date.now();
+        if (now - lastTap < 300) { lbScale = lbScale > 1 ? 1 : 2.2; lbTX = 0; lbTY = 0; applyLB(); }
+        lastTap = now;
+    });
+    // pinch zoom
+    var pinchStart = 0, startScale = 1;
+    lbImg.addEventListener('touchstart', function (e) {
+        if (e.touches.length === 2) { pinchStart = dist(e.touches); startScale = lbScale; }
+    }, { passive: true });
+    lbImg.addEventListener('touchmove', function (e) {
+        if (e.touches.length === 2 && pinchStart) {
+            var s = startScale * (dist(e.touches) / pinchStart);
+            lbScale = Math.max(1, Math.min(4, s)); applyLB(); e.preventDefault();
+        }
+    }, { passive: false });
+    function dist(t) { var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY; return Math.hypot(dx, dy); }
+    // swipe navigatsiya (bir barmoq)
+    var sx = 0, sy = 0;
+    lb.addEventListener('touchstart', function (e) { if (e.touches.length === 1) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; } }, { passive: true });
+    lb.addEventListener('touchend', function (e) {
+        if (lbScale > 1.05) return;
+        var t = e.changedTouches[0]; var dx = t.clientX - sx, dy = t.clientY - sy;
+        if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) lbGo(dx < 0 ? 1 : -1);
+        else if (dy > 80) closeLightbox();
+    }, { passive: true });
+
+    /* ---------- Slideshow ---------- */
+    function ringSet(p) { ringFg.style.strokeDashoffset = (201 * (1 - p)).toFixed(1); }
+    function startPlay() {
+        if (isGrid || !pageFlip) return;
+        playing = true; $('playIcon').textContent = '❚❚';
+        $('playBtn').classList.add('on'); toast('Slayd-shou yoqildi');
+        var loop = function () {
+            playStart = Date.now();
+            var step = function () {
+                var p = Math.min(1, (Date.now() - playStart) / SLIDE_MS);
+                ringSet(p);
+                if (p >= 1) {
+                    if (pageFlip.getCurrentPageIndex() >= pageFlip.getPageCount() - 1) pageFlip.flip(0);
+                    else pageFlip.flipNext();
+                    playStart = Date.now();
+                }
+                if (playing) playRAF = requestAnimationFrame(step);
+            };
+            step();
+        };
+        loop();
+    }
+    function stopPlay() {
+        playing = false; if (playRAF) cancelAnimationFrame(playRAF);
+        ringSet(0); $('playIcon').textContent = '▶'; $('playBtn').classList.remove('on');
+    }
+    function togglePlay() { playing ? (stopPlay(), toast('Slayd-shou to\'xtatildi')) : startPlay(); }
+
+    /* ---------- Konfetti / uchqun (oxirgi sahifa) ---------- */
+    var celebrated = false;
+    function celebrate() {
+        if (celebrated) return; celebrated = true;
+        setTimeout(function () { celebrated = false; }, 4000);
+        haptic('medium');
+        for (var i = 0; i < 30; i++) {
+            var s = document.createElement('span');
+            var size = 5 + Math.random() * 7;
+            s.style.cssText = 'position:fixed;z-index:65;top:45%;left:50%;width:' + size + 'px;height:' + size +
+                'px;border-radius:2px;pointer-events:none;background:var(--accent-soft);opacity:0.95';
+            document.body.appendChild(s);
+            var ang = Math.random() * Math.PI * 2, vel = 120 + Math.random() * 220;
+            var dx = Math.cos(ang) * vel, dy = Math.sin(ang) * vel - 120;
+            s.animate([
+                { transform: 'translate(0,0) rotate(0)', opacity: 1 },
+                { transform: 'translate(' + dx + 'px,' + (dy + 320) + 'px) rotate(' + (Math.random() * 720) + 'deg)', opacity: 0 }
+            ], { duration: 1400 + Math.random() * 700, easing: 'cubic-bezier(.2,.7,.3,1)' })
+             .onfinish = function () { this.effect.target.remove(); };
+        }
+    }
+
+    /* ---------- Theme ---------- */
+    var sheet = $('sheet'), scrim = $('scrim');
+    function openSheet() { sheet.classList.add('show'); scrim.classList.add('show'); }
+    function closeSheet() { sheet.classList.remove('show'); scrim.classList.remove('show'); }
+    scrim.onclick = closeSheet;
+    document.querySelectorAll('.sw').forEach(function (sw) {
+        sw.addEventListener('click', function () {
+            document.querySelectorAll('.sw').forEach(function (x) { x.classList.remove('sel'); });
+            sw.classList.add('sel');
+            var t = sw.getAttribute('data-t');
+            if (t === 'gold') document.documentElement.removeAttribute('data-theme');
+            else document.documentElement.setAttribute('data-theme', t);
+            try { localStorage.setItem('album_theme', t); } catch (e) {}
+            haptic('light'); tick();
+        });
+    });
+    (function initTheme() {
+        try {
+            var t = localStorage.getItem('album_theme');
+            if (t && t !== 'gold') {
+                document.documentElement.setAttribute('data-theme', t);
+                document.querySelectorAll('.sw').forEach(function (x) { x.classList.toggle('sel', x.getAttribute('data-t') === t); });
+            }
+        } catch (e) {}
+    })();
+
+    /* ---------- Top actions ---------- */
+    $('viewBtn').onclick = function () { setView(!isGrid); haptic('light'); tick(); };
+    $('themeBtn').onclick = function () { openSheet(); haptic('light'); };
+    $('soundBtn').onclick = function () {
+        soundOn = !soundOn;
+        $('soundBtn').classList.toggle('on', soundOn);
+        $('soundBtn').textContent = soundOn ? '♪' : '♪̶';
+        toast(soundOn ? 'Tovush yoqildi' : 'Tovush o\'chirildi');
+        if (soundOn) tick();
+    };
+    $('shareBtn').onclick = function () {
+        var url = location.href;
+        if (tg && tg.openTelegramLink) {
+            try { tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent('📖 Foto Albomni ko\'ring')); return; } catch (e) {}
+        }
+        if (navigator.share) { navigator.share({ title: 'Foto Albom', url: url }).catch(function () {}); return; }
+        try { navigator.clipboard.writeText(url); toast('Havola nusxalandi'); } catch (e) { toast(url); }
+        haptic('light');
+    };
+
+    /* ---------- Controls ---------- */
+    $('prevBtn').onclick = function () { if (pageFlip) { pageFlip.flipPrev(); tick(); } };
+    $('nextBtn').onclick = function () { if (pageFlip) { pageFlip.flipNext(); tick(); } };
+    $('playBtn').onclick = function () { ac() && ac().resume && ac().resume(); togglePlay(); haptic('light'); };
+
+    // Klaviatura (desktop)
+    document.addEventListener('keydown', function (e) {
+        if (lb.classList.contains('show')) {
+            if (e.key === 'ArrowLeft') lbGo(-1);
+            else if (e.key === 'ArrowRight') lbGo(1);
+            else if (e.key === 'Escape') closeLightbox();
+            return;
+        }
+        if (!pageFlip || isGrid) return;
+        if (e.key === 'ArrowLeft') pageFlip.flipPrev();
+        else if (e.key === 'ArrowRight') pageFlip.flipNext();
     });
 
-    // DEMO rasmlar (Firebase sozlanmagan bo'lsa — kitob baribir ishlab turadi)
+    /* ---------- Resize ---------- */
+    var rtimer;
+    window.addEventListener('resize', function () {
+        clearTimeout(rtimer);
+        rtimer = setTimeout(function () { if (!isGrid && IMG_URLS.length) { var idx = pageFlip ? pageFlip.getCurrentPageIndex() : 0; buildBook(); if (pageFlip) try { pageFlip.turnToPage(idx); } catch (e) {} } }, 320);
+    });
+
+    /* ---------- DEMO ---------- */
     var DEMO = [
         "https://picsum.photos/id/1015/600/800",
         "https://picsum.photos/id/1025/600/800",
         "https://picsum.photos/id/1039/600/800",
         "https://picsum.photos/id/1043/600/800",
         "https://picsum.photos/id/1052/600/800",
-        "https://picsum.photos/id/1062/600/800"
+        "https://picsum.photos/id/1062/600/800",
+        "https://picsum.photos/id/1074/600/800",
+        "https://picsum.photos/id/1080/600/800"
     ];
 
     function start(images) {
@@ -300,18 +877,19 @@
             showStatus('📭', "Albom hozircha bo'sh. Bot orqali rasm qo'shing.");
             return;
         }
-        window.__albumImages = images;
+        IMAGES = images;
+        IMG_URLS = images.map(imageUrl);
         hideStatus();
-        // page-flip DOM tayyor bo'lgach ishlashi uchun kichik kechikish
-        setTimeout(function () { buildBook(images); }, 60);
+        setTimeout(function () { buildBook(); }, 120);
     }
 
-    // Worker'dan rasm ro'yxatini o'qiymiz (bo'lmasa/xato bo'lsa — DEMO)
     function loadImages() {
         if (!WORKER_URL) { start(DEMO); return; }
+        var timeout = setTimeout(function () { /* sekin bo'lsa fon davom etaveradi */ }, 100);
         fetch(WORKER_URL.replace(/\/$/, '') + '/list')
             .then(function (r) { return r.json(); })
             .then(function (arr) {
+                clearTimeout(timeout);
                 if (!Array.isArray(arr)) arr = [];
                 arr.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
                 start(arr.length ? arr : DEMO);
@@ -319,13 +897,12 @@
             .catch(function (e) { console.error(e); start(DEMO); });
     }
 
-    // page-flip yuklanganini kutamiz
     function waitLib(tries) {
         if (window.St && window.St.PageFlip) { loadImages(); return; }
         if (tries <= 0) { showStatus('⚠️', "Kutubxona yuklanmadi. Internetni tekshiring."); return; }
         setTimeout(function () { waitLib(tries - 1); }, 200);
     }
-    waitLib(25);
+    waitLib(30);
     </script>
 </body>
 </html>
