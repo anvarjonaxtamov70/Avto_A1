@@ -1,16 +1,16 @@
 """
 =====================================================================
- 📖 3D FOTO ALBOM — Telegram bot
+ 📖 3D FOTO ALBOM — Telegram bot (Firebase KERAK EMAS)
 ---------------------------------------------------------------------
  Vazifasi:
-  - Admin rasm(lar) tashlaydi  -> bot ularni Firebase'ga qo'shadi
-    (faqat rasm file_id saqlanadi; Mini App Cloudflare Worker orqali
-     ko'rsatadi, shuning uchun BOT_TOKEN hech qayerga sirqib chiqmaydi).
+  - Admin rasm(lar) tashlaydi -> bot rasm file_id sini Cloudflare Worker'ga
+    yuboradi (POST /add). Worker uni KV'da saqlaydi.
+  - Mini App Worker'dan /list o'qib, /media orqali rasmlarni ko'rsatadi.
   - Har kim "📖 Albomni ochish" tugmasi bilan 3D albomni ochadi.
   - /clear (admin) — albomni tozalaydi.
 
- ⚠️ XAVFSIZLIK: token/kalit kodda saqlanmaydi — hammasi .env dan.
- Render 24/7 uchun health-server + self-ping (Avto_A1 kabi).
+ ⚠️ token/parol kodda saqlanmaydi — hammasi .env dan.
+ Render 24/7 uchun health-server + self-ping.
 =====================================================================
 """
 import os
@@ -23,6 +23,7 @@ try:
 except Exception:
     pass
 
+import aiohttp
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import (InlineKeyboardMarkup, InlineKeyboardButton,
@@ -41,56 +42,15 @@ MINI_APP_URL = os.getenv(
 ).strip()
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",")
              if x.strip().lstrip("-").isdigit()]
-FIREBASE_DB_URL = os.getenv("FIREBASE_DB_URL", "").strip()
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "serviceAccount.json").strip()
+# Cloudflare Worker manzili (oxirida / bo'lsa ham mayli) va yozish paroli
+WORKER_URL = os.getenv("WORKER_URL", "").strip().rstrip("/")
+WORKER_SECRET = os.getenv("WORKER_SECRET", "").strip()
 
 if not BOT_TOKEN:
     raise SystemExit("❌ BOT_TOKEN kerak! .env faylga qo'ying (.env.example ga qarang).")
-
-# =====================================================================
-# FIREBASE ADMIN (rasm ro'yxatini yozish uchun)
-# =====================================================================
-fb_db = None
-try:
-    if os.path.exists(SERVICE_ACCOUNT_FILE) and FIREBASE_DB_URL:
-        import firebase_admin
-        from firebase_admin import credentials, db as _fb_rtdb
-        cred = credentials.Certificate(SERVICE_ACCOUNT_FILE)
-        firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
-        fb_db = _fb_rtdb
-        log.info("✅ Firebase Admin ulandi.")
-    else:
-        log.warning("⚠️ Firebase sozlanmagan — rasm qo'shish o'chiq (albomni ochish ishlaydi).")
-except Exception as e:
-    log.error("Firebase init xato: %s", e)
-    fb_db = None
-
-
-async def fb_set(path, data):
-    if not fb_db:
-        return False
-    def _s():
-        fb_db.reference(path).set(data)
-        return True
-    try:
-        return await asyncio.to_thread(_s)
-    except Exception as e:
-        log.error("fb_set %s: %s", path, e)
-        return False
-
-
-async def fb_delete(path):
-    if not fb_db:
-        return False
-    def _d():
-        fb_db.reference(path).delete()
-        return True
-    try:
-        return await asyncio.to_thread(_d)
-    except Exception as e:
-        log.error("fb_delete %s: %s", path, e)
-        return False
-
+if not WORKER_URL or not WORKER_SECRET:
+    log.warning("⚠️ WORKER_URL / WORKER_SECRET yo'q — rasm qo'shish o'chiq "
+                "(albomni ochish baribir ishlaydi).")
 
 # =====================================================================
 bot = Bot(token=BOT_TOKEN)
@@ -112,6 +72,36 @@ menu = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="📖 Albomni ochish", web_app=WebAppInfo(url=MINI_APP_URL))]],
     resize_keyboard=True,
 )
+
+
+async def worker_add(file_id: str) -> bool:
+    """Rasm file_id sini Worker'ga qo'shadi (POST /add)."""
+    if not WORKER_URL or not WORKER_SECRET:
+        return False
+    url = f"{WORKER_URL}/add?token={WORKER_SECRET}"
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as s:
+            async with s.post(url, json={"id": file_id}) as r:
+                data = await r.json(content_type=None)
+                return bool(data and data.get("ok"))
+    except Exception as e:
+        log.error("worker_add xato: %s", e)
+        return False
+
+
+async def worker_clear() -> bool:
+    """Albomni tozalaydi (POST /clear)."""
+    if not WORKER_URL or not WORKER_SECRET:
+        return False
+    url = f"{WORKER_URL}/clear?token={WORKER_SECRET}"
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as s:
+            async with s.post(url) as r:
+                data = await r.json(content_type=None)
+                return bool(data and data.get("ok"))
+    except Exception as e:
+        log.error("worker_clear xato: %s", e)
+        return False
 
 
 # =====================================================================
@@ -140,37 +130,31 @@ async def start_cmd(message: types.Message):
 async def clear_cmd(message: types.Message):
     if not is_admin(message.from_user.id):
         return
-    ok = await fb_delete("album/pages")
+    ok = await worker_clear()
     await message.answer("🧹 Albom tozalandi." if ok else
-                         "❌ Tozalab bo'lmadi (Firebase sozlanganmi?).")
+                         "❌ Tozalab bo'lmadi (WORKER_URL/WORKER_SECRET sozlanganmi?).")
 
 
 # =====================================================================
-# RASM QABUL QILISH (admin) — album/pages ga file_id yoziladi
+# RASM QABUL QILISH (admin) — Worker'ga file_id yuboriladi
 # =====================================================================
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.answer("Albomni ko'rish uchun 📖 tugmasini bosing.", reply_markup=menu)
         return
-
-    # Eng katta o'lchamli rasmni olamiz
-    file_id = message.photo[-1].file_id
-    page_id = str(message.message_id)
-    # ts — tartib uchun (yuborilgan vaqt, millisekund)
-    ts = int(message.date.timestamp() * 1000)
-
-    ok = await fb_set(f"album/pages/{page_id}", {"id": file_id, "ts": ts})
+    file_id = message.photo[-1].file_id  # eng katta o'lchamli
+    ok = await worker_add(file_id)
     if ok:
         await message.reply("✅ Rasm albomga qo'shildi 📸", reply_markup=open_button())
     else:
         await message.reply(
             "❌ Rasmni saqlab bo'lmadi.\n"
-            "Firebase (SERVICE_ACCOUNT_FILE + FIREBASE_DB_URL) sozlanganmi?"
+            "Worker (WORKER_URL + WORKER_SECRET + KV) sozlanganmi?"
         )
 
 
-# Rasm document sifatida yuborilsa ham qo'llab-quvvatlaymiz
+# Rasm document sifatida yuborilsa ham
 @dp.message(F.document)
 async def handle_doc(message: types.Message):
     if not is_admin(message.from_user.id):
@@ -178,12 +162,9 @@ async def handle_doc(message: types.Message):
     mime = (message.document.mime_type or "").lower()
     if not mime.startswith("image/"):
         return
-    file_id = message.document.file_id
-    page_id = str(message.message_id)
-    ts = int(message.date.timestamp() * 1000)
-    ok = await fb_set(f"album/pages/{page_id}", {"id": file_id, "ts": ts})
+    ok = await worker_add(message.document.file_id)
     await message.reply("✅ Rasm albomga qo'shildi 📸" if ok else
-                        "❌ Saqlab bo'lmadi (Firebase sozlanganmi?).",
+                        "❌ Saqlab bo'lmadi (Worker sozlanganmi?).",
                         reply_markup=open_button() if ok else None)
 
 
@@ -213,7 +194,6 @@ async def start_health_server():
 
 
 async def keep_awake():
-    import aiohttp
     base = os.getenv("KEEP_ALIVE_URL") or os.getenv("RENDER_EXTERNAL_URL")
     if not base:
         return

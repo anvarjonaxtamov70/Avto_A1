@@ -6,8 +6,6 @@
     <title>3D Foto Albom</title>
     <meta name="theme-color" content="#1a1410">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <!-- 3D kitob-varaqlash kutubxonasi (page-flip / StPageFlip) -->
     <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -156,16 +154,11 @@
     <script>
     // =====================================================================
     //  SOZLAMALAR
-    //  1) Firebase config — o'z loyihangiznikini qo'ying (Console > Project settings)
-    //  2) WORKER_URL — Cloudflare Worker manzili (rasmlarni token'siz uzatadi)
-    //     Bo'sh qoldirilsa yoki Firebase sozlanmasa — DEMO rasmlar ko'rsatiladi.
+    //  WORKER_URL — Cloudflare Worker manzili (rasm ro'yxati /list va
+    //  rasmlar /media shu yerdan keladi). Oxirida / bo'lsa ham mayli.
+    //  Bo'sh yoki xatolik bo'lsa — DEMO rasmlar ko'rsatiladi.
     // =====================================================================
-    var FIREBASE_CONFIG = {
-        apiKey: "",
-        databaseURL: "",   // masalan: https://xxx-default-rtdb.firebaseio.com
-    };
-    // Cloudflare Worker (album_3d/cloudflare-worker.js) manzili. Oxirida / bo'lmasin.
-    var WORKER_URL = "";   // masalan: https://album.<user>.workers.dev
+    var WORKER_URL = "https://albom-ayman.anvaraxtamov70.workers.dev";
 
     // ---------------------------------------------------------------------
     var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -313,20 +306,17 @@
         setTimeout(function () { buildBook(images); }, 60);
     }
 
-    // Firebase'dan rasmlarni o'qiymiz (bo'lmasa DEMO)
+    // Worker'dan rasm ro'yxatini o'qiymiz (bo'lmasa/xato bo'lsa — DEMO)
     function loadImages() {
-        var ok = FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('http') === 0;
-        if (!ok) { start(DEMO); return; }
-        try {
-            firebase.initializeApp(FIREBASE_CONFIG);
-            firebase.database().ref('album/pages').orderByChild('ts').once('value')
-                .then(function (snap) {
-                    var arr = [];
-                    snap.forEach(function (c) { arr.push(c.val()); });
-                    start(arr.length ? arr : DEMO);
-                })
-                .catch(function (e) { console.error(e); start(DEMO); });
-        } catch (e) { console.error(e); start(DEMO); }
+        if (!WORKER_URL) { start(DEMO); return; }
+        fetch(WORKER_URL.replace(/\/$/, '') + '/list')
+            .then(function (r) { return r.json(); })
+            .then(function (arr) {
+                if (!Array.isArray(arr)) arr = [];
+                arr.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+                start(arr.length ? arr : DEMO);
+            })
+            .catch(function (e) { console.error(e); start(DEMO); });
     }
 
     // page-flip yuklanganini kutamiz
