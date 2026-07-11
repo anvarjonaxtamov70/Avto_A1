@@ -34,8 +34,17 @@ RUN apt-get update \
 #  yt-dlp YouTube'ning n-parametr / signature (JS) challenge'ini yechish uchun
 #  JS runtime talab qiladi. Bo'lmasa formatlar ochilmay "Requested format is
 #  not available" xatosi chiqadi. Deno + yt-dlp-ejs shu muammoni hal qiladi.
+#
+#  MUHIM: deno.land/install.sh HECH QANDAY "-y" (avto-tasdiqlash) flagini
+#  qabul qilmaydi — u interaktiv so'rov bermaydi. Skriptga uzatilgan birinchi
+#  argument DENO VERSIYASI (release tag) sifatida talqin qilinadi. "-y"
+#  yuborilsa, skript "https://github.com/denoland/deno/releases/download/-y/..."
+#  manzilidan yuklashga urinadi — bu URL mavjud emas (404), shu sababli
+#  RUN buyrug'i XATO bilan tugaydi va BUTUN Docker build MUVAFFAQIYATSIZ
+#  bo'ladi (bot Render'da umuman ishga tushmaydi). Shu uchun argumentsiz
+#  chaqiramiz — bu eng so'nggi Deno versiyasini o'rnatadi.
 ENV DENO_INSTALL=/usr/local
-RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y \
+RUN curl -fsSL https://deno.land/install.sh | sh \
     && deno --version
 
 # --- PO Token provider (bgutil) serverini build qilamiz ---
