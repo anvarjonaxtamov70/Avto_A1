@@ -21,6 +21,19 @@ name: Keep Alive (botlarni uyg'oq tutish)
 #     Value: https://xxx.onrender.com https://yyy.onrender.com
 #  (bo'sh joy yoki yangi qatordan ajratib yozing). Bu o'rnatilsa,
 #  pastdagi standart ro'yxat o'rniga shu ishlatiladi.
+#
+#  ⚠️⚠️ MUHIM — RENDER BEPUL TARIF SOATLARI (750 soat/oy) ⚠️⚠️
+#  Render bepul tarifda oyiga JAMI ~750 "instance hour" beriladi va bu limit
+#  akkauntdagi BARCHA bepul xizmatlarga BIRGALIKDA tegishli.
+#      1 xizmat 24/7 uyg'oq  ≈ 720 soat/oy  -> deyarli butun limit
+#      2 xizmat 24/7 uyg'oq  ≈ 1440 soat/oy -> limit oy o'rtasida tugaydi
+#  Limit tugasa Render xizmatlarni TO'XTATADI va bot keyingi oygacha
+#  ishlamaydi (aynan "start bossam javob bermayapti" holati).
+#
+#  Shu sababli standart ro'yxatda FAQAT BITTA — asosiy bot bor.
+#  Qolgan botlarni ham qo'shmoqchi bo'lsangiz, avval hisoblab ko'ring:
+#  ular kam ishlatilsa, uxlab turishiga ruxsat bergan yaxshiroq (birinchi
+#  xabarda 30-60 soniya kechikadi, lekin soatlar tejaladi).
 # =====================================================================
 on:
   schedule:
@@ -53,12 +66,12 @@ jobs:
         run: |
           set -u
 
-          # ——— Standart ro'yxat (render.yaml'dagi xizmat nomlari asosida) ———
-          DEFAULT_URLS="https://avto-a1-bot.onrender.com
-          https://music-bot.onrender.com
-          https://instagram-bot.onrender.com
-          https://album-bot.onrender.com
-          https://ivy-jewelry-bot.onrender.com"
+          # ——— Standart: FAQAT asosiy bot ———
+          # Render bepul tarifda oyiga ~750 instance-hour bor (barcha bepul
+          # xizmatlarga birgalikda). 1 xizmatni 24/7 uyg'oq tutish ≈ 720 soat,
+          # ya'ni limitning deyarli hammasi. Shuning uchun bu yerda bitta
+          # xizmat. Boshqalarini KEEP_ALIVE_URLS variable'i orqali qo'shing.
+          DEFAULT_URLS="https://avto-a1-bot.onrender.com"
 
           if [ -n "${URL_INPUT// /}" ]; then
             URLS="$URL_INPUT"

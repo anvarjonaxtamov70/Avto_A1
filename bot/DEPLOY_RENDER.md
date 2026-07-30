@@ -128,6 +128,13 @@ uyg'otadi. Bepul, hech qanday ro'yxatdan o'tish shart emas.
 - **Manzillarni moslash:** repo **Settings → Secrets and variables → Actions →
   Variables** bo'limida `KEEP_ALIVE_URLS` nomli variable yarating va manzillarni
   bo'sh joy/yangi qator bilan ajratib yozing. Bo'lmasa, standart ro'yxat ishlatiladi.
+- ⚠️ **Render bepul tarifda oyiga ~750 "instance hour"** bor va u akkauntdagi
+  **barcha** bepul xizmatlarga birgalikda tegishli. Bitta xizmatni 24/7 uyg'oq
+  tutish ≈ **720 soat/oy** — ya'ni limitning deyarli hammasi. Ikkita xizmatni
+  24/7 tutsangiz, limit oy o'rtasida tugaydi va Render xizmatlarni **to'xtatadi**
+  (bot "start"ga javob bermay qoladi). Shu sababli keep-alive ro'yxatida
+  standart holda **faqat asosiy bot** turadi; kam ishlatiladigan botlar uxlab
+  tursin (birinchi xabar 30–60 soniya kechikadi, lekin soat tejaladi).
 - ⚠️ GitHub 60 kun repoda hech qanday harakat bo'lmasa, `schedule` workflow'larini
   o'chirib qo'yadi. Odatda muammo bo'lmaydi (kod tez-tez yangilanadi), lekin
   Actions sahifasida "enable" tugmasi chiqsa — bosib qo'ying.
