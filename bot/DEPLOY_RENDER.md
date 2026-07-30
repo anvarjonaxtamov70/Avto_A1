@@ -115,7 +115,24 @@ Logda `Self-ping yoqildi: ...` va `Self-ping: 200` ko'rinsa — ishlayapti.
 > (default `600` = 10 daqiqa). Boshqa platformada manzil o'zi berilmasa,
 > `KEEP_ALIVE_URL` env'iga to'liq manzilni (mas. `https://...onrender.com`) qo'ying.
 
-### B) Tashqi ping (ixtiyoriy zaxira) 🔁
+### B) GitHub Actions ping (ENG ISHONCHLI) ⭐
+Self-ping'ning bitta kamchiligi bor: agar Render xizmatni **butunlay to'xtatsa**
+(spin down), bot jarayoni ham o'chadi va u endi o'zini uyg'ota olmaydi. Shu sababli
+repoda **`.github/workflows/keep-alive.yml`** workflow'i bor — u GitHub serverlarida
+**har 10 daqiqada** botlarning `/health` manziliga so'rov yuboradi va uxlaganini
+uyg'otadi. Bepul, hech qanday ro'yxatdan o'tish shart emas.
+
+- **Botni HOZIR uyg'otish:** GitHub → **Actions** → *Keep Alive (botlarni uyg'oq
+  tutish)* → **Run workflow**. (Xohlasangiz `url` maydoniga faqat bitta manzilni
+  yozing.) Uxlagan xizmat 30–60 soniyada tiklanadi.
+- **Manzillarni moslash:** repo **Settings → Secrets and variables → Actions →
+  Variables** bo'limida `KEEP_ALIVE_URLS` nomli variable yarating va manzillarni
+  bo'sh joy/yangi qator bilan ajratib yozing. Bo'lmasa, standart ro'yxat ishlatiladi.
+- ⚠️ GitHub 60 kun repoda hech qanday harakat bo'lmasa, `schedule` workflow'larini
+  o'chirib qo'yadi. Odatda muammo bo'lmaydi (kod tez-tez yangilanadi), lekin
+  Actions sahifasida "enable" tugmasi chiqsa — bosib qo'ying.
+
+### C) Tashqi ping (ixtiyoriy zaxira) 🔁
 Yanada ishonchli bo'lishi uchun tekin "uptime" xizmatini ham qo'shsangiz bo'ladi
 (masalan, server qayta ishga tushib self-ping ulgurmagan holatlar uchun):
 1. Render manzilingizni nusxalang (mas. `https://avto-a1-bot.onrender.com`).
