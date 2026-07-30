@@ -258,6 +258,10 @@ TEXTS = {
         "order_yolda": "🚚 #{code} raqamli buyurtmangiz yo'lga chiqdi!{detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.",
         "order_yetkazildi": "🏁 #{code} raqamli buyurtmangiz yetkazib berildi.{detail}\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.",
         "order_bekor_qilingan": "❌ #{code} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30",
+        "unexpected_error": ("Uzr, kutilmagan xatolik yuz berdi 🙏\n\n"
+                             "Iltimos, birozdan so'ng qayta urinib ko'ring yoki /start bosing. "
+                             "Muammo davom etsa, biz bilan bog'laning."),
+        "error_toast": "Xatolik yuz berdi, qayta urinib ko'ring",
     },
     "ru": {
         "welcome_new": "Здравствуйте! Добро пожаловать в магазин Avto_A1!",
@@ -301,6 +305,10 @@ TEXTS = {
         "order_yolda": "🚚 Ваш заказ #{code} в пути!{detail}\n\n📦 Скоро доставим по адресу, держите телефон под рукой.",
         "order_yetkazildi": "🏁 Ваш заказ #{code} доставлен.{detail}\n\n🙏 Спасибо за покупку! Ждём вас снова.",
         "order_bekor_qilingan": "❌ Ваш заказ #{code} отменён.\n\nПо вопросам свяжитесь с нами: +998 88 289 30 30",
+        "unexpected_error": ("Извините, произошла неожиданная ошибка 🙏\n\n"
+                             "Пожалуйста, попробуйте ещё раз через минуту или нажмите /start. "
+                             "Если проблема повторяется — свяжитесь с нами."),
+        "error_toast": "Произошла ошибка, попробуйте снова",
     },
 }
 
@@ -1808,6 +1816,83 @@ async def process_new_orders(bot: Bot):
 async def fetch_yandex_image(query):
     # bulk_import_fixed shu funksiyani kutadi — saqlab qolamiz (rasm qidiruv o'chirilgan)
     return ""
+
+
+# =====================================================================
+# GLOBAL XATO HANDLERI — bot "JIM QOLMASLIGI" uchun
+#   Muammo: agar biror handler ichida kutilmagan xato chiqsa (masalan
+#   Firebase javob bermadi, Telegram HTML'ni rad etdi, kutilmagan None),
+#   aiogram xatoni faqat logga yozadi. Foydalanuvchi esa HECH QANDAY javob
+#   olmaydi — "start bosdim, bot ishlamayapti" degan holat aynan shunday
+#   ko'rinadi va sababi faqat server logida qoladi.
+#
+#   Yechim: dispatcher darajasidagi bitta global handler —
+#     1) foydalanuvchiga tushunarli xabar yuboradi (jim qolmaydi),
+#     2) adminga qisqa xato ma'lumotini yuboradi (5 daqiqada bir marta,
+#        spam bo'lmasligi uchun),
+#     3) to'liq traceback'ni logga yozadi.
+#   Handler ichida hech qanday xato tashqariga chiqmasligi kerak, shuning
+#   uchun har bir qadam alohida try/except ichida.
+# =====================================================================
+_last_admin_error_alert = 0.0
+ADMIN_ERROR_ALERT_INTERVAL = 300  # soniya — adminga xabar yuborish oralig'i
+
+
+@dp.errors()
+async def global_error_handler(event):
+    exc = getattr(event, "exception", None)
+    update = getattr(event, "update", None)
+
+    # 1) To'liq traceback — server logiga (Render -> Logs bo'limida ko'rinadi).
+    #    exc_info'ni xato obyektidan olamiz: shunda traceback global xato
+    #    handleridan tashqarida chaqirilganda ham to'g'ri chiqadi.
+    logging.error(
+        f"Kutilmagan xato (handler ushlamadi): {exc!r}",
+        exc_info=exc if isinstance(exc, BaseException) else False,
+    )
+
+    msg = getattr(update, "message", None) or getattr(update, "edited_message", None)
+    call = getattr(update, "callback_query", None)
+    user = getattr(msg or call, "from_user", None)
+    # Tilni FAQAT xotira keshidan olamiz — Firebase so'rovi qilmaymiz, chunki
+    # xatoning sababi aynan Firebase bo'lishi mumkin (yana 10s kutib qolmaymiz).
+    lang = DEFAULT_LANG
+    if user is not None:
+        cached = users_db.get(user.id) or {}
+        lang = cached.get("lang", DEFAULT_LANG)
+
+    # 2) Foydalanuvchi javobsiz qolmasin
+    if call is not None:
+        try:
+            await call.answer(t(lang, "error_toast"))
+        except Exception:
+            pass  # eski/muddati o'tgan callback — muhim emas
+    target = msg or getattr(call, "message", None)
+    if target is not None:
+        try:
+            await target.answer(t(lang, "unexpected_error"))
+        except Exception as e:
+            logging.error(f"Foydalanuvchiga xato xabarini yuborib bo'lmadi: {e}")
+
+    # 3) Admin xabardor bo'lsin (lekin xabar yog'diradigan darajada emas)
+    global _last_admin_error_alert
+    now = time.monotonic()
+    if ADMIN_ID and (now - _last_admin_error_alert) >= ADMIN_ERROR_ALERT_INTERVAL:
+        _last_admin_error_alert = now
+        try:
+            who = str(user.id) if user is not None else "—"
+            await bot.send_message(
+                ADMIN_ID,
+                "⚠️ <b>Botda kutilmagan xatolik</b>\n\n"
+                f"Foydalanuvchi: <code>{esc(who)}</code>\n"
+                f"Xato: <code>{esc(type(exc).__name__)}: {esc(str(exc)[:300])}</code>\n\n"
+                "<i>To'liq ma'lumot server loglarida (Render → Logs).</i>",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logging.error(f"Adminga xato xabarini yuborib bo'lmadi: {e}")
+
+    return True  # xato ko'rildi/hal qilindi — aiogram qayta ko'tarmaydi
 
 
 # =====================================================================
