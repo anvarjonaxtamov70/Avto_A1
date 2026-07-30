@@ -86,7 +86,11 @@ Repoda tayyor **`render.yaml`** fayli bor — Render barcha sozlamalarni undan o
 
 1. Render avtomatik **build** qiladi va botni ishga tushiradi (1-3 daqiqa).
 2. **Logs** bo'limini oching. `Bot ishga tushdi!` yozuvini ko'rsangiz — tayyor.
-3. Telegram'da botingizga `/start` yozib tekshiring.
+3. **Telegram'da adminga xabar keladi:** `🟢 Bot ishga tushdi — Qayerda: Render`.
+   Bu xabar kelsa, deploy muvaffaqiyatli va bot bulutda ishlayapti (loglarni
+   ochish shart emas). Bot to'xtaganda `🔴 Bot to'xtadi` xabari keladi — shunda
+   darhol bilasiz. Kerak bo'lmasa `ADMIN_NOTIFY_LIFECYCLE=0` qilib qo'ying.
+4. Telegram'da botingizga `/start` yozib tekshiring.
 
 > Endi **kompyuteringizdagi botni to'xtating** (`Ctrl+C`) — bitta nusxa qoidasi.
 
