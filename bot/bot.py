@@ -1876,6 +1876,55 @@ async def keep_awake():
 
 
 # =====================================================================
+# ADMINGA "YOQILDI / O'CHDI" XABARI
+#   Nima uchun: bot bulutda (Render) ishlayaptimi yoki umuman o'chib
+#   qolganmi — buni bilish uchun ilgari Render loglarini ochish kerak edi.
+#   Endi bot ishga tushganda va to'xtaganda ADMIN Telegram'da xabar oladi.
+#   Shu bilan:
+#     - deploy muvaffaqiyatli bo'lganini darhol ko'rasiz;
+#     - bot to'xtab qolsa (Render uxlatdi/limit tugadi) xabardor bo'lasiz;
+#     - hozir bot QAYERDA ishlayotganini bilasiz (bu muhim — bot faqat
+#       BITTA joyda ishlashi kerak, aks holda Telegram 409 beradi).
+#   O'chirish kerak bo'lsa: ADMIN_NOTIFY_LIFECYCLE=0 env'ini bering.
+# =====================================================================
+ADMIN_NOTIFY_LIFECYCLE = os.getenv("ADMIN_NOTIFY_LIFECYCLE", "1").strip() not in ("0", "false", "no", "")
+
+
+def where_am_i():
+    """Bot qaysi muhitda ishlayotganini qisqa matn qilib qaytaradi."""
+    if os.getenv("RENDER_EXTERNAL_URL") or os.getenv("RENDER_SERVICE_NAME"):
+        name = os.getenv("RENDER_SERVICE_NAME", "render")
+        return f"Render (<code>{esc(name)}</code>) ☁️"
+    if os.getenv("KEEP_ALIVE_URL"):
+        return "bulutli server ☁️"
+    return "lokal kompyuter (VS Code) 💻"
+
+
+async def notify_admin_lifecycle(started: bool):
+    """Adminga bot yoqilgani/o'chgani haqida xabar yuboradi (xato bo'lsa — jim)."""
+    if not (ADMIN_NOTIFY_LIFECYCLE and ADMIN_ID):
+        return
+    if started:
+        text = (f"🟢 <b>Bot ishga tushdi</b>\n\nQayerda: {where_am_i()}\n\n"
+                "<i>Eslatma: bot faqat bitta joyda ishlashi kerak. Agar "
+                "kompyuteringizda ham yoqilgan bo'lsa, uni to'xtating.</i>")
+    else:
+        text = (f"🔴 <b>Bot to'xtadi</b>\n\nQayerda: {where_am_i()}\n\n"
+                "<i>Sabab: qayta deploy, server to'xtatildi yoki bepul soat "
+                "limiti tugadi. Yashil xabar kelmasa — bot ishlamayapti.</i>")
+    try:
+        await bot.send_message(ADMIN_ID, text, parse_mode="HTML")
+    except Exception as e:
+        logging.warning(f"Adminga holat xabarini yuborib bo'lmadi: {e}")
+
+
+async def _on_shutdown(*args, **kwargs):
+    """Dispatcher to'xtaganda chaqiriladi (aiogram shutdown hook)."""
+    logging.info("Bot to'xtatilmoqda...")
+    await notify_admin_lifecycle(started=False)
+
+
+# =====================================================================
 # BOTNI ISHGA TUSHIRISH
 # =====================================================================
 async def main():
@@ -1906,6 +1955,20 @@ async def main():
     # Eslatma: botni AYNI vaqtda IKKI nusxada ishga tushirmang — Telegram baribir
     # 409 beradi (har bir bot uchun faqat bitta getUpdates iste'molchisi bo'ladi).
     await bot.delete_webhook(drop_pending_updates=True)
+
+    # Adminga "yoqildi" xabari — deploy muvaffaqiyatli bo'lganini bilish uchun.
+    await notify_admin_lifecycle(started=True)
+
+    # "O'chdi" xabari — dispatcher to'xtash hodisasiga ulanadi (Render SIGTERM
+    # yuborganda ham ishlaydi). getattr bilan ehtiyot: aiogram versiyasida bu
+    # observer bo'lmasa ham bot ishga tushishdan to'xtab qolmaydi.
+    shutdown_observer = getattr(dp, "shutdown", None)
+    if shutdown_observer is not None:
+        try:
+            shutdown_observer.register(_on_shutdown)
+        except Exception as e:
+            logging.warning(f"Shutdown hook ro'yxatga olinmadi: {e}")
+
     await dp.start_polling(bot, drop_pending_updates=True,
                            allowed_updates=dp.resolve_used_update_types())
 
