@@ -1,32 +1,37 @@
 name: Keep Alive (botlarni uyg'oq tutish)
 
 # =====================================================================
-#  NEGA BU KERAK?
-#  Render.com bepul "web service" 15 daqiqa KIRUVCHI so'rov bo'lmasa
-#  uxlab qoladi (spin down) — konteyner butunlay to'xtaydi.
-#  Bot ichidagi "self-ping" bu holatda YORDAM BERMAYDI, chunki bot
-#  jarayonining o'zi ham o'chgan bo'ladi va ping yubora olmaydi.
+#  NEGA BU FAYL O'ZGARTIRILDI? — 2026-08 dagi «bot ishlamayapti» sababi
 #
-#  Shu sababli TASHQARIDAN ping kerak. Bu workflow har 10 daqiqada
-#  botlarning /health manziliga GET yuboradi — uxlagan bo'lsa uyg'otadi,
-#  uyg'oq bo'lsa uyg'oq holda saqlaydi. Butunlay BEPUL.
+#  Render bepul tarifda IKKI CHEKLOV bor:
+#    1) 15 daqiqa so'rov bo'lmasa xizmat uxlaydi (spin down);
+#    2) BUTUN WORKSPACE uchun oyiga 750 "instance hour" beriladi.
+#       Kvota tugasa — bepul xizmatlar KEYINGI OYGA QADAR TO'XTATILADI
+#       va /health doimiy 503 qaytaradi.
 #
-#  QO'LDA UYG'OTISH: GitHub -> Actions -> "Keep Alive (botlarni uyg'oq
-#  tutish)" -> "Run workflow" tugmasi. Xohlasangiz faqat bitta manzilni
-#  ham kiritishingiz mumkin.
+#  Ilgari bu workflow har 10 daqiqada, KUNIGA 24 SOAT ping yuborardi.
+#  Bitta xizmatni 24/7 uyg'oq tutish = ~720 soat/oy. Zimmer + Avto_A1
+#  ikkalasi birga = ~1440 soat/oy, kvota esa 750 — ya'ni kvota oyning
+#  o'rtasida tugab, IKKALA BOT HAM o'chib qolardi. Aynan shu bo'ldi.
+#
+#  YECHIM: faqat ISH VAQTIDA uyg'oq tutamiz.
+#    04:00–13:50 UTC = 09:00–18:50 Toshkent (do'kon ish vaqti)
+#    Hisob: 2 xizmat x ~10 soat x 31 kun = ~620 soat < 750 ✅
+#
+#  Kechasi bot uxlaydi — mijoz yozganda 30–60 soniyada o'zi uyg'onadi.
+#  24/7 uyg'oq bo'lishi SHART bo'lsa, yagona yo'l — pullik tarif
+#  (xizmat uchun $7/oy) yoki faqat BITTA botni 24/7 qoldirish.
 #
 #  MANZILLARNI O'ZGARTIRISH: Settings -> Secrets and variables ->
 #  Actions -> Variables -> New variable:
 #     Name:  KEEP_ALIVE_URLS
 #     Value: https://xxx.onrender.com https://yyy.onrender.com
-#  (bo'sh joy yoki yangi qatordan ajratib yozing). Bu o'rnatilsa,
-#  pastdagi standart ro'yxat o'rniga shu ishlatiladi.
 # =====================================================================
 on:
   schedule:
-    # Har 10 daqiqada (GitHub cron'ni band paytlarda bir necha daqiqa
-    # kechiktirishi mumkin — bu normal, 15 daqiqa limitiga yetadi).
-    - cron: '*/10 * * * *'
+    # Faqat ish vaqti: 04:00–13:50 UTC (= 09:00–18:50 Toshkent), har 10 daqiqada.
+    # DIQQAT: bu qatorni 24 soatga qaytarsangiz kvota yana tugaydi.
+    - cron: '*/10 4-13 * * *'
   workflow_dispatch:
     inputs:
       url:
@@ -34,7 +39,6 @@ on:
         required: false
         default: ''
 
-# Bir vaqtda faqat bitta ping ishlasin (navbat yig'ilib ketmasligi uchun)
 concurrency:
   group: keep-alive
   cancel-in-progress: false
@@ -47,18 +51,19 @@ jobs:
     steps:
       - name: Ping
         env:
-          # Repo variable (KEEP_ALIVE_URLS) bo'lsa — o'sha ishlatiladi
           URLS_VAR: ${{ vars.KEEP_ALIVE_URLS }}
           URL_INPUT: ${{ github.event.inputs.url }}
         run: |
           set -u
 
-          # ——— Standart ro'yxat (render.yaml'dagi xizmat nomlari asosida) ———
-          DEFAULT_URLS="https://avto-a1-bot.onrender.com
-          https://music-bot.onrender.com
-          https://instagram-bot.onrender.com
-          https://album-bot.onrender.com
-          https://ivy-jewelry-bot.onrender.com"
+          # ——— Standart ro'yxat ———
+          # FAQAT haqiqatan Render'da mavjud xizmat. Ilgari bu ro'yxatda
+          # music-bot / instagram-bot / album-bot / ivy-jewelry-bot ham bor
+          # edi, lekin ularning hammasi 404 qaytaradi (Render'da bunday
+          # xizmat yo'q). Natijada workflow ASOSIY bot sog'lom bo'lganda ham
+          # doim qizil bo'lib turardi va haqiqiy nosozlik ko'rinmasdi.
+          # Ularni deploy qilganingizda KEEP_ALIVE_URLS variable'iga qo'shing.
+          DEFAULT_URLS="https://avto-a1-bot.onrender.com"
 
           if [ -n "${URL_INPUT// /}" ]; then
             URLS="$URL_INPUT"
@@ -68,11 +73,13 @@ jobs:
             echo "KEEP_ALIVE_URLS repo variable'i ishlatilyapti."
           else
             URLS="$DEFAULT_URLS"
-            echo "Standart manzillar ro'yxati ishlatilyapti."
+            echo "Standart manzil ishlatilyapti."
           fi
 
           ok=0
           fail=0
+          suspended=0
+          missing=0
 
           for raw in $URLS; do
             base="${raw%/}"
@@ -80,8 +87,7 @@ jobs:
             url="$base/health"
 
             code=""
-            # Uxlagan xizmat "sovuq start" uchun 60 soniyagacha vaqt oladi,
-            # shuning uchun uzun timeout + 3 marta urinish.
+            # Uxlagan xizmat "sovuq start" uchun 60 soniyagacha vaqt oladi
             for attempt in 1 2 3; do
               code=$(curl -sS -o /dev/null -L \
                        -w '%{http_code}' \
@@ -97,21 +103,34 @@ jobs:
 
             case "$code" in
               2*|3*)
-                echo "✅ $url -> $code"
+                echo "✅ $url -> $code (uyg'oq)"
                 ok=$((ok + 1))
                 ;;
+              404)
+                # Render'da bunday xizmat YO'Q — uyquga aloqasi yo'q
+                echo "::warning title=Xizmat topilmadi::$url -> 404. Render'da bu nomdagi xizmat mavjud emas. Manzilni tekshiring yoki KEEP_ALIVE_URLS dan olib tashlang."
+                missing=$((missing + 1))
+                ;;
+              503)
+                # 3 marta urinishdan keyin ham 503 — bu UYQU EMAS.
+                # Eng ehtimolli sabab: bepul kvota (750 soat/oy) tugagan yoki
+                # oxirgi deploy yiqilgan.
+                echo "::error title=Xizmat to'xtatilgan (503)::$url -> 503. Bu sovuq start EMAS (3 marta urinildi). Tekshiring: (1) Render -> Billing -> free instance hours tugaganmi? (2) Render -> xizmat -> Events: oxirgi deploy yiqilganmi? (3) Logs: bot ishga tushayotganda xato beryaptimi?"
+                suspended=$((suspended + 1))
+                ;;
               *)
-                echo "::warning title=Ping muvaffaqiyatsiz::$url -> $code (xizmat mavjud emasmi yoki manzil noto'g'ri?)"
+                echo "::warning title=Ping muvaffaqiyatsiz::$url -> $code"
                 fail=$((fail + 1))
                 ;;
             esac
           done
 
           echo ""
-          echo "Natija: $ok ta uyg'oq, $fail ta javob bermadi."
+          echo "Natija: $ok uyg'oq | $suspended to'xtatilgan(503) | $missing topilmadi(404) | $fail boshqa xato"
 
-          # Hech biri javob bermasa — workflow'ni qizil qilamiz (xabar kelishi uchun).
-          if [ "$ok" -eq 0 ]; then
-            echo "::error title=Hech bir bot javob bermadi::Manzillarni tekshiring (KEEP_ALIVE_URLS variable) yoki Render panelida xizmat holatini ko'ring."
+          # Faqat HAQIQIY muammoda qizil bo'ladi: bitta ham uyg'oq emas VA
+          # sababi 404 (ya'ni shunchaki ro'yxatda keraksiz manzil) emas.
+          if [ "$ok" -eq 0 ] && [ $((suspended + fail)) -gt 0 ]; then
+            echo "::error title=Bot javob bermadi::Yuqoridagi izohlarni o'qing."
             exit 1
           fi

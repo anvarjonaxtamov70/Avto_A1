@@ -45,7 +45,9 @@ def _node_items(node):
         return [(str(i), v) for i, v in enumerate(node)]
     return []
 
-GROQ_TEXT_MODEL = os.getenv("GROQ_TEXT_MODEL", "llama-3.3-70b-versatile")
+# DIQQAT: `llama-3.3-70b-versatile` Groq bepul/developer tarifida
+# 2026-08-16 da O'CHIRILDI. O'rniga `openai/gpt-oss-120b`.
+GROQ_TEXT_MODEL = os.getenv("GROQ_TEXT_MODEL", "openai/gpt-oss-120b")
 
 # Bir so'rovda nechta qatorni qabul qilamiz (suiiste'mol/qotishni oldini olish)
 MAX_LINES = 200
