@@ -93,9 +93,34 @@ def story_categories_text():
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "5105291033,483425630,5302078").replace(" ", "").split(",") if x]
 ADMIN_ID = ADMIN_IDS[0] if ADMIN_IDS else 0
 
-# Groq modellari (bitta joyda — almashtirish oson)
-GROQ_TEXT_MODEL = os.getenv("GROQ_TEXT_MODEL", "llama-3.3-70b-versatile")
-GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+# =====================================================================
+#  GROQ MODELLARI
+#
+#  DIQQAT — AI 2026-yil avgustda ISHLAMAY QOLGANINING SABABI SHU YERDA:
+#  Groq bepul/developer tarifida ikkala eski modelni O'CHIRIB TASHLADI:
+#
+#    llama-3.3-70b-versatile ................ 2026-08-16 da o'chdi
+#      -> o'rniga: openai/gpt-oss-120b
+#    meta-llama/llama-4-scout-17b-16e-instruct  2026-07-17 da o'chdi
+#      -> o'rniga: qwen/qwen3.6-27b (rasmni tushunadi)
+#
+#  Model o'chgach Groq 404/400 qaytaradi, `groq_chat` esa 3 marta urinib
+#  `None` qaytaradi — foydalanuvchi uchun bu "AI umuman javob bermayapti"
+#  bo'lib ko'rinadi. Model nomini almashtirishning o'zi kifoya.
+#
+#  MUHIM: bu qiymatlar Render panelidagi GROQ_TEXT_MODEL / GROQ_VISION_MODEL
+#  o'zgaruvchilari bilan USTIDAN YOZILADI. Render'da eski nom turgan bo'lsa,
+#  shu faylni tuzatish YETARLI EMAS — panelda ham yangilash yoki o'sha
+#  o'zgaruvchilarni butunlay o'chirib tashlash kerak.
+# =====================================================================
+GROQ_TEXT_MODEL = os.getenv("GROQ_TEXT_MODEL", "openai/gpt-oss-120b")
+GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.6-27b")
+
+# Asosiy model o'chib qolsa yoki xato bersa — shu zaxira modellar sinaladi.
+# Shu ro'yxat bo'lmasa, Groq keyingi marta model o'chirganda AI yana jimgina
+# o'lib qolardi va sababi loglarda ko'rinmasdi.
+GROQ_TEXT_FALLBACKS = ["openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
+GROQ_VISION_FALLBACKS = ["openai/gpt-oss-120b"]
 
 # Firebase service-account JSON (401 xatosini hal qiladi)
 SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, os.getenv("SERVICE_ACCOUNT_FILE", "serviceAccount.json"))
@@ -514,25 +539,83 @@ def fb_items(node):
 # =====================================================================
 # GROQ — markaziy yordamchi (retry + xato boshqaruvi)
 # =====================================================================
+def _model_is_gone(error: Exception) -> bool:
+    """Xato «bunday model yo'q» degani (o'chirilgan/nomi noto'g'ri) — shundaymi?
+
+    Bunday holatda qayta urinishning MA'NOSI YO'Q: model qaytib kelmaydi.
+    Darhol zaxira modelga o'tish kerak.
+    """
+    text = str(error).lower()
+    return any(
+        marker in text
+        for marker in (
+            "model_not_found",
+            "does not exist",
+            "not found",
+            "decommissioned",
+            "deprecated",
+            "has been shut down",
+        )
+    )
+
+
 async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
-    """Groq chat. Vaqtinchalik xatoda qayta uriniadi. Muvaffaqiyatsizda None."""
+    """Groq chat. Vaqtinchalik xatoda qayta uriniadi. Muvaffaqiyatsizda None.
+
+    Model o'chirilgan bo'lsa (Groq vaqti-vaqti bilan eski modellarni
+    o'chiradi) — zaxira modellarga o'tadi va buni loglarga ANIQ yozadi.
+    Ilgari bu holat oddiy `warning` bo'lib ketardi va AI «sababsiz»
+    jim qolardi.
+    """
     if groq_client is None:
+        logging.error("GROQ_API_KEY berilmagan — AI o'chirilgan.")
         return None
-    model = model or GROQ_TEXT_MODEL
-    delay = 1.5
-    for attempt in range(1, max_retries + 1):
-        try:
-            resp = await groq_client.chat.completions.create(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-            )
-            return (resp.choices[0].message.content or "").strip()
-        except Exception as e:
-            logging.warning(f"Groq urinish {attempt}/{max_retries} xato: {e}")
-            if attempt < max_retries:
-                await asyncio.sleep(delay)
-                delay *= 2
+
+    primary = model or GROQ_TEXT_MODEL
+    fallbacks = (
+        GROQ_VISION_FALLBACKS if primary == GROQ_VISION_MODEL else GROQ_TEXT_FALLBACKS
+    )
+    # Takrorlanmasin
+    candidates = [primary] + [m for m in fallbacks if m != primary]
+
+    for candidate in candidates:
+        delay = 1.5
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = await groq_client.chat.completions.create(
+                    messages=messages,
+                    model=candidate,
+                    temperature=temperature,
+                )
+                if candidate != primary:
+                    logging.warning(
+                        "Groq: «%s» ishlamadi, zaxira model «%s» ishlatildi. "
+                        "GROQ_TEXT_MODEL/GROQ_VISION_MODEL ni yangilang.",
+                        primary,
+                        candidate,
+                    )
+                return (resp.choices[0].message.content or "").strip()
+            except Exception as e:
+                if _model_is_gone(e):
+                    logging.error(
+                        "Groq modeli «%s» MAVJUD EMAS (o'chirilgan yoki nomi xato): %s "
+                        "— zaxira modelga o'tilyapti.",
+                        candidate,
+                        e,
+                    )
+                    break  # qayta urinish behuda, keyingi modelga o'tamiz
+                logging.warning(
+                    "Groq «%s» urinish %s/%s xato: %s", candidate, attempt, max_retries, e
+                )
+                if attempt < max_retries:
+                    await asyncio.sleep(delay)
+                    delay *= 2
+
+    logging.error(
+        "Groq: hech bir model javob bermadi (sinalgan: %s). "
+        "Modellar o'chirilgan bo'lishi mumkin — console.groq.com/docs/deprecations",
+        candidates,
+    )
     return None
 
 
