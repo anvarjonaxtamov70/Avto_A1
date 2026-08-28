@@ -32,6 +32,9 @@ const cors = {
 const DEFAULT_ADMIN_IDS = ["5105291033", "483425630"];
 const DEFAULT_DB_URL = "https://avtoa1shop-default-rtdb.firebaseio.com";
 const DEFAULT_REFERRAL_BONUS = 20000;
+// Taklif qilingan do'stning BIRINCHI buyurtmasi shu summadan OSHIQ bo'lishi shart.
+// Aks holda taklif qilgan odamga bonus berilmaydi.
+const DEFAULT_REFERRAL_MIN_ORDER = 100000;
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -203,33 +206,119 @@ export default {
         const already = await rtdbGet(dbUrl, "referralRedeemed/" + redeemer, accessToken);
         if (already) return json({ ok: false, error: "allaqachon ishlatilgan" }, 409);
 
-        const bonus = parseInt(env.REFERRAL_BONUS || String(DEFAULT_REFERRAL_BONUS), 10) || DEFAULT_REFERRAL_BONUS;
         const now = Date.now();
 
-        // 3) guardni avval o'rnatamiz (ikki marta bonus berilmasligi uchun)
+        // ⚠️ MUHIM O'ZGARISH: BU YERDA PUL BERILMAYDI.
+        //    Ilgari kod kiritilishi bilanoq inviter'ga bonus yozilardi — hech kim
+        //    hech narsa sotib olmasa ham. Bu soxta akkauntlar bilan cheksiz "pul"
+        //    yasash imkonini berardi. Endi faqat BOG'LANISH qayd etiladi;
+        //    bonus /referral-qualify da, do'stning haqiqiy xaridi tekshirilgach beriladi.
         await rtdbPut(
           dbUrl,
           "referralRedeemed/" + redeemer,
-          { code: codeUp, refUid: refUid, date: now },
+          { code: codeUp, refUid: refUid, date: now, paid: false },
           accessToken
         );
 
-        // 4) inviter cashback — ATOMIK increment (server value)
+        // "Kim orqasidan kim kirgan" — tekshirib bo'ladigan indeks (admin uchun ham)
+        await rtdbPut(
+          dbUrl,
+          "referrals/" + refUid + "/" + redeemer,
+          { uid: redeemer, date: now, paid: false },
+          accessToken
+        );
+
+        // Inviter ro'yxatida ko'rinishi uchun (hali "kutilmoqda" holatida)
+        await rtdbPut(
+          dbUrl,
+          "users/" + refUid + "/phase2/referrals/" + redeemer,
+          { uid: redeemer, date: now, paid: false },
+          accessToken
+        );
+
+        return json({ ok: true, pending: true, refUid });
+      } catch (e) {
+        return json({ ok: false, error: String(e) }, 500);
+      }
+    }
+
+    // ---------- /referral-qualify : do'st haqiqatda xarid qilgach bonus berish ----------
+    // Shartlar (HAMMASI server tomonda bazadan tekshiriladi — mijoz so'ziga ishonilmaydi):
+    //   1. Bu foydalanuvchi kimningdir kodini kiritgan bo'lishi kerak (referralRedeemed);
+    //   2. bonus hali to'lanmagan bo'lishi kerak (paid !== true);
+    //   3. uning BIRINCHI (eng eski) YETKAZIB BERILGAN buyurtmasi bo'lishi kerak;
+    //   4. o'sha buyurtma summasi REFERRAL_MIN_ORDER dan OSHIQ bo'lishi kerak.
+    if (path === "/referral-qualify") {
+      try {
+        const { initData } = await request.json();
+        if (!initData || typeof initData !== "string") {
+          return json({ ok: false, error: "initData yoq" }, 400);
+        }
+        const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
+        if (!verified.ok) return json({ ok: false, error: verified.error }, 401);
+
+        const redeemer = String(verified.user.id);
+        const dbUrl = (env.FIREBASE_DB_URL || DEFAULT_DB_URL).replace(/\/$/, "");
+        const accessToken = await getAccessToken(env);
+
+        // 1) bog'lanish bormi?
+        const link = await rtdbGet(dbUrl, "referralRedeemed/" + redeemer, accessToken);
+        if (!link || !link.refUid) return json({ ok: false, error: "referral yoq" }, 404);
+        if (link.paid === true) return json({ ok: false, error: "allaqachon tolangan" }, 409);
+        const refUid = String(link.refUid);
+        if (refUid === redeemer) return json({ ok: false, error: "oz kodi" }, 400);
+
+        // 2) buyurtmalarni SERVERDA o'qiymiz
+        const ordersRaw = await rtdbGet(dbUrl, "users/" + redeemer + "/orders", accessToken);
+        const orders = !ordersRaw
+          ? []
+          : (Array.isArray(ordersRaw) ? ordersRaw : Object.keys(ordersRaw).map((k) => ordersRaw[k])).filter(Boolean);
+
+        const delivered = orders.filter((o) => o && o.status === "yetkazildi");
+        if (!delivered.length) return json({ ok: false, error: "yetkazilgan buyurtma yoq" }, 412);
+
+        // 3) BIRINCHI yetkazilgan buyurtma (eng eski)
+        delivered.sort((a, b) => (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0));
+        const first = delivered[0];
+
+        // 4) haqiqatda to'langan summa (cashback chegirmasidan keyin)
+        const gross = parseInt(first.total, 10) || 0;
+        const used = parseInt(first.cashbackUsed, 10) || 0;
+        const paidAmount = first.payable != null ? (parseInt(first.payable, 10) || 0) : Math.max(0, gross - used);
+
+        const minOrder =
+          parseInt(env.REFERRAL_MIN_ORDER || String(DEFAULT_REFERRAL_MIN_ORDER), 10) || DEFAULT_REFERRAL_MIN_ORDER;
+        if (paidAmount <= minOrder) {
+          return json({ ok: false, error: "summa yetarli emas", need: minOrder, got: paidAmount }, 412);
+        }
+
+        const bonus = parseInt(env.REFERRAL_BONUS || String(DEFAULT_REFERRAL_BONUS), 10) || DEFAULT_REFERRAL_BONUS;
+        const now = Date.now();
+
+        // 5) guardni AVVAL yopamiz (ikki marta to'lanmasligi uchun)
+        await rtdbPatch(
+          dbUrl,
+          "referralRedeemed/" + redeemer,
+          { paid: true, paidAt: now, bonus: bonus, orderCode: String(first.code || first.id || ""), orderAmount: paidAmount },
+          accessToken
+        );
+
+        // 6) inviter cashback — ATOMIK increment.
+        //    Mijoz tomonida balans = cashbackTotal − cashbackSpent bo'lgani uchun
+        //    faqat "yig'ilgan" hisoblagichni oshiramiz, balans o'zi hisoblanadi.
         await rtdbPatch(
           dbUrl,
           "users/" + refUid + "/phase2",
-          {
-            cashback: { ".sv": { increment: bonus } },
-            cashbackTotal: { ".sv": { increment: bonus } },
-          },
+          { cashbackTotal: { ".sv": { increment: bonus } } },
           accessToken
         );
 
-        // 5) referral yozuvi + bildirishnoma (push id; mijoz tomoni toArray bilan o'qiydi)
-        await rtdbPost(
+        // 7) holatni belgilaymiz + bildirishnoma
+        await rtdbPatch(dbUrl, "referrals/" + refUid + "/" + redeemer, { paid: true, paidAt: now, bonus: bonus }, accessToken);
+        await rtdbPatch(
           dbUrl,
-          "users/" + refUid + "/phase2/referrals",
-          { uid: redeemer, date: now },
+          "users/" + refUid + "/phase2/referrals/" + redeemer,
+          { paid: true, paidAt: now, bonus: bonus },
           accessToken
         );
         await rtdbPost(
@@ -238,15 +327,34 @@ export default {
           {
             id: "n" + now,
             icon: "\uD83E\uDD1D",
-            title: "Yangi referral!",
-            text: "Do'stingiz kodingizni ishlatdi. +" + bonus + " so'm bonus!",
+            title: "Referral bonus!",
+            text: "Do'stingiz birinchi xaridini qildi. +" + bonus + " so'm cashback qo'shildi!",
             date: now,
             read: false,
           },
           accessToken
         );
 
-        return json({ ok: true, bonus, refUid });
+        // 8) inviter'ga Telegram xabari (bo'lmasa ham jarayon buzilmaydi)
+        try {
+          if (env.BOT_TOKEN) {
+            await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: refUid,
+                parse_mode: "HTML",
+                text:
+                  "\uD83E\uDD1D <b>Referral bonus!</b>\n\nSiz taklif qilgan do'stingiz birinchi xaridini qildi.\n" +
+                  "\uD83C\uDF81 <b>+" +
+                  bonus.toLocaleString("ru-RU").replace(/,/g, " ") +
+                  " so'm</b> cashback hisobingizga qo'shildi.\n\nRahmat!",
+              }),
+            });
+          }
+        } catch (_) {}
+
+        return json({ ok: true, bonus, refUid, orderAmount: paidAmount });
       } catch (e) {
         return json({ ok: false, error: String(e) }, 500);
       }

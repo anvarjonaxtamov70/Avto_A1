@@ -8823,10 +8823,16 @@ window.clearAppCache = () => {
     }
     
     function selectPayment(t) { 
-        var _sum = _recalcCartTotal();
+        var _gross = _recalcCartTotal();
+        // 🎁 Cashback ishlatilgan bo'lsa — ko'rsatiladigan summa TO'LANADIGAN summa
+        var _cbUse = 0;
+        try { if (window._cbGetApplied) _cbUse = window._cbGetApplied(_gross); } catch(e) {}
+        var _sum = Math.max(0, _gross - _cbUse);
+        var _cbLine = _cbUse > 0 ? ("\nCashback: −" + _cbUse.toLocaleString() + " so'm") : '';
         if(t === 'cash') { 
             // Naqd pul — tasdiqlash so'rash
-            tg.showConfirm("Buyurtmani tasdiqlaysizmi?\n\nJami: " + _sum.toLocaleString() + " so'm\nTo'lov: Naqd pul (yetkazilganda)", function(ok) {
+            tg.showConfirm("Buyurtmani tasdiqlaysizmi?\n\nTovarlar: " + _gross.toLocaleString() + " so'm" + _cbLine +
+                "\nTo'lanadi: " + _sum.toLocaleString() + " so'm\nTo'lov: Naqd pul (yetkazilganda)", function(ok) {
                 if(ok) {
                     confirmOrder('Naqd pul (yetkazilganda)');
                 }
@@ -10352,8 +10358,34 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                 }
             } 
         }
-        adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
-        
+        // ============================================================
+        // 🎁 CASHBACKNI TO'LOVDA ISHLATISH
+        // ------------------------------------------------------------
+        // Mijoz to'lov oynasida "Cashback ishlatish" ni yoqqan bo'lsa,
+        // balansdan summa yechiladi va TO'LANADIGAN summa kamayadi.
+        //   total    — tovarlarning to'liq narxi (o'zgarmaydi, hisobot uchun)
+        //   cbUsed   — ishlatilgan cashback
+        //   payable  — mijoz haqiqatda to'laydigan pul
+        // Cashback keyingi safar AYNAN payable'dan hisoblanadi (cashback ustiga
+        // cashback berilmaydi).
+        // ============================================================
+        var cbUsed = 0;
+        try {
+            if (window._cbGetApplied) cbUsed = window._cbGetApplied(total);
+        } catch (e) { cbUsed = 0; }
+        var payable = Math.max(0, total - cbUsed);
+
+        adminText += `\n💰 <b>Tovarlar summasi:</b> ${total.toLocaleString()} so'm`;
+        if (cbUsed > 0) {
+            adminText += `\n🎁 <b>Cashback ishlatildi:</b> −${cbUsed.toLocaleString()} so'm`;
+            adminText += `\n💵 <b>TO'LANADI:</b> ${payable.toLocaleString()} so'm`;
+        }
+        // 👑 VIP mijoz belgisi — admin darhol ko'radi
+        try {
+            var _vipTag = (window.VIP && window.VIP.orderTag) ? window.VIP.orderTag() : '';
+            if (_vipTag) adminText += `\n\n${escTg(_vipTag)}`;
+        } catch (e) {}
+
         // 1. ADMINGA XABAR YUBORISH
         const res = await tgProxySend({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" });
         
@@ -10366,17 +10398,31 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             }
 
             // 2. MIJOZGA TASDIQLASH XABARI
-            tgProxySend({ chat_id: cUser, text: `✅ Buyurtmangiz qabul qilindi!\n🆔 Kod: #${newOrderCode}\n📞 Bog'lanish: ${profPhone}` }); 
-            
+            tgProxySend({ chat_id: cUser, text: `✅ Buyurtmangiz qabul qilindi!\n🆔 Kod: #${newOrderCode}` +
+                (cbUsed > 0 ? `\n🎁 Cashback: −${cbUsed.toLocaleString()} so'm\n💵 To'lanadi: ${payable.toLocaleString()} so'm` : '') +
+                `\n📞 Bog'lanish: ${profPhone}` });
+
+            // 🎁 Ishlatilgan cashbackni balansdan YECHAMIZ (buyurtma yozilishidan oldin)
+            if (cbUsed > 0) {
+                try {
+                    if (window.Phase2 && window.Phase2.spendCashback) {
+                        window.Phase2.spendCashback(cbUsed, 'Buyurtma ' + newOrderCode + ' — to\'lovda ishlatildi');
+                    }
+                } catch (e) { _dwarn('[cashback] spend xato:', e); }
+            }
+
             // 3. TARIXGA VA BAZAGA YOZISH
             myOrders.unshift({ 
                 id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), 
                 time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, 
+                cashbackUsed: cbUsed, payable: payable,
                 status: 'kutilmoqda', customerName: profName, customerPhone: profPhone,
                 customerAddress: fetchedAddress, customerUsername: userTgLink,
                 deliveryMethod: (window.selectedDelivery ? window.selectedDelivery.method : ''),
                 deliveryMapLink: (window.selectedDelivery && window.selectedDelivery.mapLink) || ''
             }); 
+            // Keyingi buyurtma uchun tanlovni tozalaymiz
+            try { if (window._cbResetApplied) window._cbResetApplied(); } catch (e) {}
             
             saveLocalOrders(); 
             cart = {}; 
@@ -15438,24 +15484,43 @@ document.addEventListener('click', function (e) {
     /* ----------------------- Sozlamalar ----------------------- */
     var LS_KEY = 'avto_phase2';
     var CASHBACK_RATE = 0.01;     // har xariddan 1% cashback
-    var REFERRAL_BONUS = 20000;   // referral uchun ikki tomonga ham bonus (so'm)
+    var REFERRAL_BONUS = 20000;   // referral bonusi — FAQAT taklif qilgan odamga (so'm)
+    var REFERRAL_MIN_ORDER = 100000; // do'stning 1-buyurtmasi shu summadan OSHIQ bo'lishi shart
     var WARRANTY_DAYS = 14;       // standart kafolat muddati (kun)
     var DAY = 86400000;
+    // 🤖 Bot foydalanuvchi nomi — referral havolasi (t.me/<bot>?startapp=KOD) uchun.
+    //    Agar bot nomi boshqacha bo'lsa — FAQAT shu yerni o'zgartirish kifoya.
+    //    Havola noto'g'ri bo'lsa ham referral ishlaydi: matnda KOD ham yuboriladi.
+    var BOT_USERNAME = 'avtoa1bot';
     var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     /* ----------------------- Holat ----------------------- */
     function defaultState() {
         return {
             theme: 'dark',
+            // 💰 CASHBACK LEGERI (MUHIM):
+            //   cashbackTotal — umr bo'yi YIG'ILGAN (faqat o'sadi)
+            //   cashbackSpent — umr bo'yi SARFLANGAN (faqat o'sadi)
+            //   cashback      — HISOBLANADIGAN balans = cashbackTotal − cashbackSpent
+            // Nega shunday: ilgari `cashback` to'g'ridan saqlanib, sinxronlashda
+            // Math.max bilan birlashtirilardi. Math.max balansni FAQAT ko'tarardi —
+            // ya'ni sarflash (kamayish) darhol "tirilib" qaytardi va cashbackni
+            // ishlatish PRINSIPIAL imkonsiz edi. Ikki monoton hisoblagich esa
+            // Math.max bilan xavfsiz birlashadi, balans esa ulardan chiqariladi.
             cashback: 0,
             cashbackTotal: 0,
+            cashbackSpent: 0,
             cashbackHistory: [],
             achievements: {},   // {id: unlockedTimestamp}
             achSeen: 0,         // foydalanuvchi ko'rgan yutuqlar soni (badge uchun)
-            processedOrders: {},// {orderId: {t, cb}} — cashback/kafolat berilgan buyurtmalar (ikki marta bermaslik uchun)
+            // {orderId: {t, cb, st}} — cashback/kafolat berilgan buyurtmalar.
+            //   st: 'yetkazildi' (berilgan) | 'bekor' (qaytarib olingan)
+            processedOrders: {},
             referralCode: '',
             referredBy: '',
-            referrals: [],      // [{uid, date}]
+            referredByUid: '',   // kim taklif qilgani (uid) — "kim orqasidan kim kirgan"
+            referralPaid: false, // taklif qilgan odamga bonus to'langanmi
+            referrals: [],      // [{uid, date, paid}]
             notifications: [],  // [{id, icon, title, text, date, read}]
             warranties: [],     // [{id, name, code, start, days, qty, notified}]
             themeSwitched: false
@@ -15637,18 +15702,57 @@ document.addEventListener('click', function (e) {
     /* ============================================================
        🎁 2. BONUS / CASHBACK
        ============================================================ */
+    /** Balansni ikki monoton hisoblagichdan qayta hisoblaydi (manba — leger). */
+    function recalcBalance() {
+        var earned = parseInt(P.state.cashbackTotal, 10) || 0;
+        var spent = parseInt(P.state.cashbackSpent, 10) || 0;
+        P.state.cashbackTotal = earned;
+        P.state.cashbackSpent = spent;
+        P.state.cashback = Math.max(0, earned - spent);
+        return P.state.cashback;
+    }
+    P.recalcBalance = recalcBalance;
+    P.balance = function () { return recalcBalance(); };
+
     function addCashback(amount, note, type) {
         amount = Math.round(amount);
-        if (!amount) return;
+        if (!amount || amount < 0) return;
         if (type === 'spend') {
-            P.state.cashback = Math.max(0, P.state.cashback - amount);
+            // Balansdan ortiq sarflash mumkin emas
+            var avail = recalcBalance();
+            if (amount > avail) amount = avail;
+            if (amount <= 0) return;
+            P.state.cashbackSpent = (parseInt(P.state.cashbackSpent, 10) || 0) + amount;
         } else {
-            P.state.cashback += amount;
-            P.state.cashbackTotal += amount;
+            P.state.cashbackTotal = (parseInt(P.state.cashbackTotal, 10) || 0) + amount;
         }
+        recalcBalance();
         P.state.cashbackHistory.unshift({ date: Date.now(), amount: amount, type: type || 'earn', note: note || '' });
         if (P.state.cashbackHistory.length > 80) P.state.cashbackHistory.length = 80;
     }
+
+    /**
+     * Cashbackni SARFLASH — to'lov paytida chaqiriladi.
+     * @returns {number} haqiqatda sarflangan summa (balansdan oshmaydi)
+     */
+    P.spendCashback = function (amount, note) {
+        amount = Math.round(parseInt(amount, 10) || 0);
+        var avail = recalcBalance();
+        if (amount > avail) amount = avail;
+        if (amount <= 0) return 0;
+        addCashback(amount, note || 'Buyurtmada ishlatildi', 'spend');
+        save();
+        return amount;
+    };
+    /** Bekor qilingan buyurtmada sarflangan cashbackni qaytarish. */
+    P.refundSpentCashback = function (amount, note) {
+        amount = Math.round(parseInt(amount, 10) || 0);
+        if (amount <= 0) return 0;
+        // Sarflanganni kamaytirmaymiz (monoton) — o'rniga "earn" sifatida qaytaramiz
+        addCashback(amount, note || 'Bekor qilingan buyurtma — qaytarildi', 'earn');
+        save();
+        return amount;
+    };
 
     P.openCashback = function () {
         var box = document.getElementById('p2-cashback-body');
@@ -15662,7 +15766,12 @@ document.addEventListener('click', function (e) {
                 '<div class="p2-cb-sub">Jami yig\'ilgan: ' + fmtSom(P.state.cashbackTotal) + " so'm · har xariddan " + (+(CASHBACK_RATE * 100).toFixed(2)) + '%</div>' +
                 '</div>' +
                 '<div style="background:rgba(48,209,88,0.10);border:1px solid rgba(48,209,88,0.25);border-radius:14px;padding:13px 15px;margin-bottom:18px;font-size:12px;color:var(--text-muted);line-height:1.5;">' +
-                '💡 Cashback har bir buyurtmangizdan avtomatik yig\'iladi. Keyingi xaridda operatorga aytib, balansingizdan foydalanishingiz mumkin.</div>' +
+                '💡 Cashback buyurtma <b>qo\'lingizga yetkazilgandan keyin</b> hisobingizga tushadi. ' +
+                'Keyingi xaridda <b>to\'lov oynasida</b> uni to\'g\'ridan-to\'g\'ri ishlatishingiz mumkin.</div>' +
+                (P.state.cashbackSpent > 0
+                    ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:14px;padding:0 4px;">' +
+                      '<span>Jami sarflangan</span><b style="color:var(--text-main,#fff);">' + fmtSom(P.state.cashbackSpent) + " so'm</b></div>"
+                    : '') +
                 '<div class="p2-sec-title">📜 Tarix</div>' +
                 (h.length ? h.map(function (x) {
                     var sign = x.type === 'spend' ? '−' : '+';
@@ -16009,12 +16118,27 @@ document.addEventListener('click', function (e) {
             } catch (e) {}
         }
     }
+    /** Referral havolasi — bosilsa Mini App kod bilan ochiladi (startapp). */
+    function referralLink() {
+        var code = P.state.referralCode || '';
+        if (!BOT_USERNAME || !code) return '';
+        return 'https://t.me/' + BOT_USERNAME + '?startapp=' + encodeURIComponent(code);
+    }
+    P.referralLink = referralLink;
+
     P.shareReferral = function () {
         var code = P.state.referralCode;
-        var msg = "🚗 Avto A1 — sifatli avto ehtiyot qismlar!\nMening taklif kodim: " + code + "\nRo'yxatdan o'tib, ikkalamiz ham " + fmtSom(REFERRAL_BONUS) + " so'm bonus olamiz!";
+        var link = referralLink();
+        // Havola + KOD ikkalasi ham yuboriladi: bot nomi o'zgargan bo'lsa ham
+        // do'st kodni qo'lda kiritib referraldan foydalana oladi.
+        var msg = "🚗 Avto A1 — original avto ehtiyot qismlar\n\n" +
+            "Mening taklif kodim: " + code + "\n" +
+            (link ? "\nIlovani ochish: " + link + "\n" : '') +
+            "\nKodni kiritib, birinchi xaridingizni qilsangiz — ikkalamizga ham foyda!";
         try {
             if (window.tg && tg.openTelegramLink) {
-                tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent('https://t.me/') + '&text=' + encodeURIComponent(msg));
+                tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link || 'https://t.me/') +
+                    '&text=' + encodeURIComponent(msg));
                 return;
             }
         } catch (e) {}
@@ -16025,27 +16149,55 @@ document.addEventListener('click', function (e) {
     P.copyReferral = function () {
         if (navigator.clipboard) { navigator.clipboard.writeText(P.state.referralCode); toast('Kod nusxalandi!', 'success'); hap('selection'); }
     };
-    P.redeemReferral = function () {
-        var inp = document.getElementById('p2-ref-input');
-        if (!inp) return;
-        var code = (inp.value || '').trim().toUpperCase();
-        if (!code) { toast('Kodni kiriting', 'warning'); return; }
-        if (P.state.referredBy) { toast('Siz allaqachon kod kiritgansiz', 'warning'); return; }
-        if (code === P.state.referralCode) { toast("O'z kodingizni kirita olmaysiz", 'warning'); return; }
-        if (!hasFB()) { toast('Internetni tekshiring', 'warning'); return; }
+    // ============================================================
+    // 🤝 REFERRAL — QAYTA QURILGAN MANTIQ
+    // ------------------------------------------------------------
+    // ⚠️ ILGARI QANDAY XATO ISHLAGAN:
+    //   • kod kiritilishi BILANOQ ikki tomonga ham 20 000 so'm berilardi —
+    //     hech kim hech narsa sotib olmasa ham. Ya'ni odam 10 ta soxta akkaunt
+    //     ochib, bir-biriga kod kiritib, cheksiz "pul" yasashi mumkin edi;
+    //   • kiritgan odamning o'z bonusi CLIENT tomonda yozilardi (soxtalashtirish oson);
+    //   • "kim kimni taklif qilgani" faqat inviter tugunida array bo'lib yotardi —
+    //     tekshirib bo'lmaydi, holati (to'landi/to'lanmadi) yo'q edi.
+    //
+    // ENDI (talab bo'yicha):
+    //   1. Kod kiritilganda PUL BERILMAYDI — faqat "kim orqasidan kim kirgan"
+    //      bog'lanishi yoziladi (server: referralRedeemed/{uid} va referrals/{inviter}/{uid}).
+    //   2. Taklif qilgan odamga 20 000 so'm FAQAT shu shartlar bajarilganda:
+    //        • do'st haqiqatda xarid qilgan bo'lsa (buyurtma YETKAZILGAN),
+    //        • bu do'stning BIRINCHI buyurtmasi bo'lsa,
+    //        • va o'sha buyurtma 100 000 so'mdan OSHIQ bo'lsa.
+    //   3. Tekshiruv SERVER tomonda (Cloudflare Worker) bazadan o'qib bajariladi —
+    //      mijozning so'ziga ishonilmaydi. Takror to'lov server guard bilan bloklangan.
+    // ============================================================
+    P.redeemReferral = function (silentCode) {
+        var code = silentCode
+            ? String(silentCode).trim().toUpperCase()
+            : (function () {
+                var inp = document.getElementById('p2-ref-input');
+                return inp ? (inp.value || '').trim().toUpperCase() : '';
+            })();
+        if (!code) { if (!silentCode) toast('Kodni kiriting', 'warning'); return; }
+        if (P.state.referredBy) { if (!silentCode) toast('Siz allaqachon kod kiritgansiz', 'warning'); return; }
+        if (code === P.state.referralCode) { if (!silentCode) toast("O'z kodingizni kirita olmaysiz", 'warning'); return; }
+        if (!hasFB()) { if (!silentCode) toast('Internetni tekshiring', 'warning'); return; }
+
         firebase.database().ref('refcodes/' + code).once('value').then(function (snap) {
             var refUid = snap.val();
-            if (!refUid || String(refUid) === String(P.uid)) { toast("Kod noto'g'ri", 'warning'); return; }
-            // O'zimizga bonus
+            if (!refUid || String(refUid) === String(P.uid)) {
+                if (!silentCode) toast("Kod noto'g'ri", 'warning');
+                return;
+            }
+            // Faqat BOG'LANISH yoziladi — pul yo'q
             P.state.referredBy = code;
-            addCashback(REFERRAL_BONUS, "Referral bonus (kod: " + code + ")", 'earn');
-            pushNotif('🤝', 'Referral bonus!', fmtSom(REFERRAL_BONUS) + " so'm bonus hisobingizga qo'shildi.", { silent: true });
+            P.state.referredByUid = String(refUid);
+            P.state.referralPaid = false;
+            pushNotif('🤝', 'Taklif kodi qabul qilindi',
+                "Birinchi buyurtmangiz " + fmtSom(REFERRAL_MIN_ORDER) + " so'mdan oshib yetkazilgach, " +
+                "sizni taklif qilgan do'stingiz " + fmtSom(REFERRAL_BONUS) + " so'm bonus oladi.", { silent: true });
             save();
-            // 🤝 Taklif qilgan odamga (inviter) bonus — SERVER (Worker) orqali beriladi.
-            //    ⚠️ Xavfsiz Firebase qoidalarida mijoz BOSHQA foydalanuvchi tuguniga yoza olmaydi,
-            //    shuning uchun avvalgi client-tomon transaction'lar har doim rad etilardi.
-            //    Endi Worker (/referral) admin huquqi bilan refUid ga bonus + bildirishnoma yozadi
-            //    (initData tekshiriladi, takror berilmasligi server tomonida kafolatlanadi).
+
+            // Serverga bog'lanishni qayd etamiz (pul EMAS — faqat ro'yxatga olish)
             try {
                 var _initData = (window.tg && tg.initData) ? tg.initData : '';
                 if (_initData) {
@@ -16056,14 +16208,68 @@ document.addEventListener('click', function (e) {
                     }).catch(function () {});
                 }
             } catch (e) {}
-            toast('✅ ' + fmtSom(REFERRAL_BONUS) + " so'm bonus oldingiz!", 'success');
+
+            toast("✅ Kod qabul qilindi! Birinchi xaridingizdan keyin do'stingiz bonus oladi.", 'success');
             hap('success');
-            confettiBurst();
             evaluateAchievements();
             renderProfile();
-            P.openReferral();
-        }).catch(function () { toast('Xatolik yuz berdi', 'warning'); });
+            if (!silentCode) P.openReferral();
+        }).catch(function () { if (!silentCode) toast('Xatolik yuz berdi', 'warning'); });
     };
+
+    /**
+     * Do'stning BIRINCHI buyurtmasi yetkazilgan va ≥ REFERRAL_MIN_ORDER bo'lsa —
+     * serverdan taklif qilgan odamga bonus berishni so'raymiz.
+     * Server baribir hammasini bazadan qayta tekshiradi (bu yerda faqat "turtki").
+     */
+    function maybeQualifyReferral(orders) {
+        if (!P.state.referredBy) return;          // bizni hech kim taklif qilmagan
+        if (P.state.referralPaid) return;         // allaqachon to'langan
+        if (P._refQualifySent) return;            // shu sessiyada yuborilgan
+        var arr = Array.isArray(orders) ? orders : [];
+        var delivered = arr.filter(function (o) { return o && o.status === 'yetkazildi'; });
+        if (!delivered.length) return;
+        // BIRINCHI yetkazilgan buyurtma (eng eski)
+        delivered.sort(function (a, b) { return (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0); });
+        var first = delivered[0];
+        var amount = cashbackBaseOf(first) || (parseInt(first.total, 10) || 0);
+        if (amount <= REFERRAL_MIN_ORDER) return;  // "oshiq" bo'lishi shart
+        var _initData = (window.tg && tg.initData) ? tg.initData : '';
+        if (!_initData) return;
+        P._refQualifySent = true;
+        fetch(TG_PROXY + '/referral-qualify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: _initData })
+        }).then(function (r) { return r.json().catch(function () { return null; }); })
+          .then(function (j) {
+              if (j && j.ok) {
+                  P.state.referralPaid = true;
+                  save();
+                  pushNotif('🤝', 'Do\'stingiz bonus oldi!',
+                      "Sizni taklif qilgan do'stingizga " + fmtSom(j.bonus || REFERRAL_BONUS) + " so'm qo'shildi. Rahmat!", { silent: true });
+              } else {
+                  P._refQualifySent = false;   // keyingi sync'da yana urinamiz
+              }
+          }).catch(function () { P._refQualifySent = false; });
+    }
+    P.maybeQualifyReferral = maybeQualifyReferral;
+
+    /**
+     * Deep-link: t.me/<bot>?startapp=KOD orqali kirgan bo'lsa kodni avtomat qo'llaymiz.
+     * ⚠️ Ilgari deep-link umuman qo'llab-quvvatlanmasdi — kodni faqat qo'lda yozish
+     *    mumkin edi, shuning uchun referral amalda tarqalmasdi.
+     */
+    function applyStartParamReferral() {
+        try {
+            if (P.state.referredBy) return;
+            var sp = (window.tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param)
+                ? String(tg.initDataUnsafe.start_param).trim().toUpperCase() : '';
+            if (!sp || !/^A1[A-Z0-9]{3,10}$/.test(sp)) return;
+            if (sp === P.state.referralCode) return;
+            P.redeemReferral(sp);
+        } catch (e) {}
+    }
     P.openReferral = function () {
         ensureReferralCode();
         var box = document.getElementById('p2-ref-body');
@@ -16073,24 +16279,37 @@ document.addEventListener('click', function (e) {
                 '<div class="p2-ref-code-box">' +
                 '<div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:700;">Sizning taklif kodingiz</div>' +
                 '<div class="p2-ref-code">' + esc(P.state.referralCode || '...') + '</div>' +
-                '<div style="font-size:12px;color:#30d158;font-weight:700;">Har bir do\'st uchun ' + fmtSom(REFERRAL_BONUS) + " so'm bonus 🎁</div>" +
+                '<div style="font-size:12px;color:#30d158;font-weight:700;">Har bir do\'st uchun ' + fmtSom(REFERRAL_BONUS) + " so'm 🎁</div>" +
+                '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">Do\'stingiz kodni kiritib, birinchi buyurtmasini ' +
+                    fmtSom(REFERRAL_MIN_ORDER) + " so'mdan oshiq qilsa va u YETKAZIB BERILGACH — bonus sizga tushadi.</div>" +
                 '<div style="display:flex;gap:8px;margin-top:14px;">' +
                 '<button onclick="Phase2.copyReferral()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid var(--glass-border);color:var(--text-main,#fff);padding:11px;border-radius:12px;font-weight:700;font-size:13px;cursor:pointer;">📋 Nusxa</button>' +
                 '<button onclick="Phase2.shareReferral()" style="flex:1;background:linear-gradient(135deg,#30d158,#1fa845);border:none;color:#fff;padding:11px;border-radius:12px;font-weight:800;font-size:13px;cursor:pointer;">📤 Ulashish</button>' +
                 '</div></div>' +
                 (P.state.referredBy ?
-                    '<div style="background:rgba(48,209,88,0.10);border:1px solid rgba(48,209,88,0.25);border-radius:14px;padding:13px 15px;font-size:13px;color:#30d158;font-weight:700;margin-bottom:16px;">✓ Siz <b>' + esc(P.state.referredBy) + '</b> kodi orqali kirdingiz</div>'
+                    '<div style="background:rgba(48,209,88,0.10);border:1px solid rgba(48,209,88,0.25);border-radius:14px;padding:13px 15px;font-size:13px;color:#30d158;font-weight:700;margin-bottom:16px;">✓ Siz <b>' + esc(P.state.referredBy) + '</b> kodi orqali kirdingiz' +
+                    (P.state.referralPaid
+                        ? '<div style="font-size:11px;font-weight:600;opacity:.85;margin-top:5px;">Do\'stingiz bonusini oldi 🎉</div>'
+                        : '<div style="font-size:11px;font-weight:600;opacity:.85;margin-top:5px;">Birinchi buyurtmangiz ' +
+                          fmtSom(REFERRAL_MIN_ORDER) + " so'mdan oshib yetkazilgach, do'stingiz bonus oladi</div>") +
+                    '</div>'
                     :
                     '<div style="background:var(--surface-2,rgba(255,255,255,0.04));border:1px solid var(--glass-border);border-radius:14px;padding:15px;margin-bottom:16px;">' +
                     '<div style="font-size:13px;font-weight:700;color:var(--text-main,#fff);margin-bottom:4px;">Do\'stingizning kodi bormi?</div>' +
-                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Kodni kiriting va ' + fmtSom(REFERRAL_BONUS) + " so'm bonus oling</div>" +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Kodni kiriting — do\'stingiz sizning birinchi xaridingizdan keyin bonus oladi</div>' +
                     '<div class="p2-ref-input"><input id="p2-ref-input" class="search-box" placeholder="A1XXXXX" style="flex:1;padding:11px 14px;border-radius:12px;text-transform:uppercase;">' +
                     '<button onclick="Phase2.redeemReferral()" class="btn-checkout" style="width:auto;padding:0 18px;border-radius:12px;font-size:13px;">Tasdiqlash</button></div></div>') +
                 '<div class="p2-sec-title">👥 Taklif qilganlaringiz (' + refs.length + ')</div>' +
                 (refs.length ? refs.map(function (r) {
-                    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--glass-border);">' +
-                        '<div style="font-size:13px;color:var(--text-main,#fff);font-weight:600;">👤 ID: ' + esc(String(r.uid).slice(-6)) + '</div>' +
-                        '<div style="font-size:12px;color:#30d158;font-weight:800;">+' + fmtSom(REFERRAL_BONUS) + '</div></div>';
+                    var paid = (r.paid === true || r.paid === 1);
+                    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--glass-border);">' +
+                        '<div style="min-width:0;"><div style="font-size:13px;color:var(--text-main,#fff);font-weight:600;">👤 ID: ' + esc(String(r.uid).slice(-6)) + '</div>' +
+                        '<div style="font-size:10.5px;color:var(--text-muted);margin-top:2px;">' +
+                            (paid ? 'Xarid qilgan — bonus berildi' : 'Hali ' + fmtSom(REFERRAL_MIN_ORDER) + " so'mlik xarid qilmagan") + '</div></div>' +
+                        (paid
+                            ? '<div style="flex:none;font-size:12px;color:#30d158;font-weight:800;">+' + fmtSom(REFERRAL_BONUS) + '</div>'
+                            : '<div style="flex:none;font-size:11px;color:var(--text-muted);font-weight:700;background:rgba(127,127,127,.14);padding:3px 9px;border-radius:999px;">kutilmoqda</div>') +
+                        '</div>';
                 }).join('') : emptyHTML('🤝', "Hali hech kimni taklif qilmadingiz"));
         }
         if (typeof openModal === 'function') openModal('p2ReferralModal');
@@ -16254,47 +16473,128 @@ document.addEventListener('click', function (e) {
             inner + '</div>';
     }
 
-    // YANGI buyurtmalarni aniqlab cashback + kafolat beradi (idempotent — processedOrders guard).
-    // confirmOrder bir necha marta override qilingani uchun hook ishonchsiz —
-    // shuning uchun Firebase sync orqali kelgan buyurtmalardan ishonchli aniqlaymiz.
-    function processNewOrders(orders) {
+    /** Cashback hisoblanadigan summa: haqiqatda TO'LANGAN pul (cashback ustiga cashback yo'q). */
+    function cashbackBaseOf(o) {
+        if (!o) return 0;
+        // payable — cashback chegirmasidan keyingi summa (yangi buyurtmalarda bor)
+        if (o.payable != null) return parseInt(o.payable, 10) || 0;
+        var t = parseInt(o.total, 10) || 0;
+        var used = parseInt(o.cashbackUsed, 10) || 0;
+        return Math.max(0, t - used);
+    }
+
+    // ============================================================
+    // 🎁 CASHBACK VA KAFOLATNI HISOBLASH — FAQAT YETKAZIB BERILGANDA
+    // ------------------------------------------------------------
+    // ⚠️ ILGARI QANDAY XATO ISHLAGAN: bu funksiya buyurtmaning shunchaki
+    //    MAVJUDLIGI uchun cashback berardi — status umuman tekshirilmasdi.
+    //    Buyurtma 'kutilmoqda' holatida ham pul darhol hisobga tushardi;
+    //    keyin bekor qilinsa ham QAYTARILMASDI. Ya'ni mijoz buyurtma berib,
+    //    keyin bekor qilib, cashbackni o'zida qoldirib ketishi mumkin edi.
+    //
+    // ENDI:
+    //   • cashback FAQAT admin 'yetkazildi' bosgandan keyin qo'shiladi
+    //     (admin status yozadi -> mijozning users/{uid} listeneri ishga tushadi
+    //      -> shu funksiya qayta hisoblaydi -> pul tushadi);
+    //   • buyurtma bekor qilinsa — berilgan cashback QAYTARIB OLINADI va
+    //     buyurtmada ishlatilgan cashback mijozga QAYTARILADI;
+    //   • kafolat ham yetkazilgandan boshlanadi (14 kun qo'lga olgandan);
+    //   • hisoblash bazasi — haqiqatda to'langan summa (payable).
+    // ============================================================
+    function reconcileOrders(orders) {
         if (!Array.isArray(orders) || !orders.length) return false;
         if (!P.state.processedOrders) P.state.processedOrders = {};
         var firstRun = (P._synced !== true);   // birinchi sync = eski buyurtmalar (jim catch-up)
         var changed = false;
         var sessionNew = [];
+        var sessionRefund = 0;
+
         orders.forEach(function (o) {
             if (!o || o.id == null) return;
             var key = String(o.id);
-            if (P.state.processedOrders[key]) return;     // allaqachon berilgan
-            var earned = Math.round((parseInt(o.total) || 0) * CASHBACK_RATE);
-            if (earned > 0) addCashback(earned, 'Buyurtma ' + (o.code || '#' + o.id), 'earn');
-            createWarranties(o);
-            P.state.processedOrders[key] = { t: Date.now(), cb: earned };
-            changed = true;
-            if (firstRun) {
-                if (earned > 0) pushNotif('🎁', 'Cashback', '+' + fmtSom(earned) + " so'm — buyurtma " + (o.code || ''), { silent: true });
-            } else {
-                sessionNew.push({ o: o, earned: earned });
+            var entry = P.state.processedOrders[key];
+            var status = String(o.status || 'kutilmoqda');
+
+            // ---------- 1) BEKOR QILINGAN ----------
+            if (status === 'bekor_qilingan') {
+                if (!entry || entry.rv) return;                  // allaqachon qaytarilgan
+                var back = parseInt(entry.cb, 10) || 0;
+                if (back > 0) {
+                    addCashback(back, 'Bekor qilingan buyurtma ' + (o.code || '#' + o.id), 'spend');
+                    pushNotif('↩️', 'Cashback qaytarib olindi',
+                        'Buyurtma ' + (o.code || '') + ' bekor qilindi — ' + fmtSom(back) + " so'm yechildi.", { silent: true });
+                }
+                // Buyurtmada ISHLATILGAN cashbackni mijozga qaytaramiz
+                var usedBack = parseInt(o.cashbackUsed, 10) || 0;
+                if (usedBack > 0 && !entry.ur) {
+                    addCashback(usedBack, 'Bekor qilingan buyurtma — cashback qaytarildi', 'earn');
+                    sessionRefund += usedBack;
+                    entry.ur = 1;
+                }
+                entry.cb = 0; entry.rv = 1; entry.st = 'bekor';
+                P.state.processedOrders[key] = entry;
+                changed = true;
+                return;
             }
+
+            // ---------- 2) YETKAZILDI -> cashback + kafolat ----------
+            if (status === 'yetkazildi') {
+                if (entry && !entry.rv) return;                  // allaqachon berilgan
+                var earned = Math.round(cashbackBaseOf(o) * CASHBACK_RATE);
+                if (earned > 0) addCashback(earned, 'Buyurtma ' + (o.code || '#' + o.id), 'earn');
+                createWarranties(o);                             // kafolat qo'lga olgandan boshlanadi
+                P.state.processedOrders[key] = { t: Date.now(), cb: earned, st: 'yetkazildi' };
+                changed = true;
+                if (firstRun) {
+                    if (earned > 0) pushNotif('🎁', 'Cashback', '+' + fmtSom(earned) + " so'm — buyurtma " + (o.code || ''), { silent: true });
+                } else {
+                    sessionNew.push({ o: o, earned: earned });
+                }
+                return;
+            }
+
+            // ---------- 3) BOSHQA HOLATLAR (kutilmoqda / qabul / yo'lda) ----------
+            // Ataylab HECH NARSA qilmaymiz va belgi ham qo'ymaymiz — shunda
+            // yetkazilgan paytda yuqoridagi shart ishlaydi va pul o'shanda tushadi.
         });
-        // processedOrders ro'yxatini cheklash (eng so'nggi 200 ta)
+
+        // processedOrders ro'yxatini cheklash — eng ESKI kalitlarni olib tashlaymiz.
+        // ⚠️ Eslatma: ilgari `Object.keys` tartibiga tayanardi; endi vaqt bo'yicha
+        //    saralaymiz, aks holda 200 dan oshganda hali ham kerakli kalit o'chib,
+        //    o'sha buyurtma uchun cashback IKKI MARTA berilishi mumkin edi.
         var keys = Object.keys(P.state.processedOrders);
-        if (keys.length > 200) { keys.slice(0, keys.length - 200).forEach(function (k) { delete P.state.processedOrders[k]; }); }
+        if (keys.length > 400) {
+            keys.sort(function (a, b) {
+                return ((P.state.processedOrders[a] || {}).t || 0) - ((P.state.processedOrders[b] || {}).t || 0);
+            });
+            keys.slice(0, keys.length - 400).forEach(function (k) { delete P.state.processedOrders[k]; });
+        }
+
         if (changed) {
             sessionNew.forEach(function (x) {
-                pushNotif('📦', 'Buyurtma qabul qilindi', 'Buyurtma ' + (x.o.code || '') + ' rasmiylashtirildi. Rahmat!', { silent: true });
-                if (x.earned > 0) pushNotif('🎁', 'Cashback qo\'shildi', '+' + fmtSom(x.earned) + " so'm hisobingizga tushdi.", { silent: true });
+                pushNotif('🏁', 'Buyurtma yetkazildi',
+                    'Buyurtma ' + (x.o.code || '') + ' qo\'lingizga yetdi. Rahmat!', { silent: true });
+                if (x.earned > 0) {
+                    pushNotif('🎁', 'Cashback qo\'shildi',
+                        '+' + fmtSom(x.earned) + " so'm hisobingizga tushdi. Keyingi to'lovda ishlatishingiz mumkin.", { silent: true });
+                }
             });
             save();
             if (sessionNew.length) {
                 var tot = sessionNew.reduce(function (s, x) { return s + x.earned; }, 0);
-                if (tot > 0) { toast('🎁 +' + fmtSom(tot) + " so'm cashback!", 'success'); confettiBurst(); hap('success'); }
+                if (tot > 0) { toast('🎁 +' + fmtSom(tot) + " so'm cashback qo'shildi!", 'success'); confettiBurst(); hap('success'); }
             }
+            if (sessionRefund > 0 && !firstRun) {
+                toast('↩️ ' + fmtSom(sessionRefund) + " so'm cashback qaytarildi", 'success');
+            }
+            // 🔗 Referral: do'stning 1-buyurtmasi yetkazilgan bo'lsa — taklif qilganga bonus
+            try { maybeQualifyReferral(orders); } catch (e) {}
         }
         return changed;
     }
-    P.processNewOrders = processNewOrders;
+    // Eski nom bilan ham chaqirsa ishlashi uchun (tashqi kod buzilmasin)
+    P.processNewOrders = reconcileOrders;
+    P.reconcileOrders = reconcileOrders;
 
     /* ============================================================
        INTEGRATSIYA HOOK'LARI
@@ -16307,7 +16607,9 @@ document.addEventListener('click', function (e) {
         if (Array.isArray(window.myOrders) && !window.myOrders.some(function (o) { return o && o.id === order.id; })) {
             window.myOrders.unshift(order);
         }
-        processNewOrders([order]);
+        // ⚠️ Bu yerda cashback BERILMAYDI — buyurtma hozir 'kutilmoqda' holatida.
+        //    reconcileOrders faqat statusni ko'radi; pul 'yetkazildi' bo'lganda tushadi.
+        reconcileOrders([order]);
         evaluateAchievements();
         renderProfile();
         // 🔐 Firebase yozuvi tugashini kutib qaytaramiz — chaqiruvchi tg.close() oldidan kutishi mumkin
@@ -16326,8 +16628,22 @@ document.addEventListener('click', function (e) {
                 // 🔐 Cashback YO'QOLMASLIGI uchun: lokal va remote qiymatlarning KATTASINI olamiz.
                 // (Telegram ilovani tez yopgani uchun ba'zan remote eskiroq bo'lishi mumkin.)
                 var r = data.phase2;
-                if (typeof r.cashback === 'number') P.state.cashback = Math.max(P.state.cashback || 0, r.cashback);
+                // 💰 LEGERNI BIRLASHTIRISH (faqat MONOTON hisoblagichlar).
+                // ⚠️ ILGARI: `cashback` (balans) Math.max bilan birlashtirilardi. Balans
+                //    esa sarflanganda KAMAYADI — Math.max uni darhol eski (katta) qiymatga
+                //    tiklab qo'yardi. Ya'ni cashbackni sarflash printsipial ishlamasdi.
+                // ENDI: faqat "yig'ilgan" va "sarflangan" birlashtiriladi (ikkalasi ham
+                //    faqat o'sadi -> Math.max to'g'ri), balans esa ulardan hisoblanadi.
                 if (typeof r.cashbackTotal === 'number') P.state.cashbackTotal = Math.max(P.state.cashbackTotal || 0, r.cashbackTotal);
+                if (typeof r.cashbackSpent === 'number') P.state.cashbackSpent = Math.max(P.state.cashbackSpent || 0, r.cashbackSpent);
+                // 🔄 Eski hisoblardan migratsiya: `cashbackSpent` hali yo'q, lekin remote
+                //    `cashback` balansi yig'ilgandan kichik bo'lsa — ayirmasi sarflangan
+                //    deb qabul qilinadi (mijoz pulini yo'qotmaydi).
+                if (typeof r.cashbackSpent !== 'number' && typeof r.cashback === 'number' && typeof r.cashbackTotal === 'number') {
+                    var impliedSpent = Math.max(0, (r.cashbackTotal || 0) - (r.cashback || 0));
+                    P.state.cashbackSpent = Math.max(P.state.cashbackSpent || 0, impliedSpent);
+                }
+                recalcBalance();
                 // cashbackHistory: ikkala manbani birlashtirib, takrorlarni olib tashlaymiz
                 if (r.cashbackHistory) {
                     var remoteHist = toArray(r.cashbackHistory);
@@ -16348,6 +16664,8 @@ document.addEventListener('click', function (e) {
                 if (r.processedOrders) P.state.processedOrders = Object.assign({}, r.processedOrders, P.state.processedOrders || {});
                 if (r.referralCode) P.state.referralCode = r.referralCode;
                 if (r.referredBy) P.state.referredBy = r.referredBy;
+                if (r.referredByUid) P.state.referredByUid = r.referredByUid;
+                if (r.referralPaid === true) P.state.referralPaid = true;
                 if (r.referrals) P.state.referrals = toArray(r.referrals);
                 if (r.notifications) P.state.notifications = toArray(r.notifications);
                 if (r.warranties) P.state.warranties = toArray(r.warranties);
@@ -16358,8 +16676,11 @@ document.addEventListener('click', function (e) {
         }
         applyTheme(P.state.theme);
         ensureReferralCode();
-        // 🎁 YANGI buyurtmalardan cashback + kafolat (ishonchli yo'l)
-        processNewOrders(getOrders());
+        // 🔗 Deep-link orqali kelgan taklif kodini bir marta qo'llaymiz
+        applyStartParamReferral();
+        // 🎁 Buyurtmalarni qayta hisoblash: yetkazilganlarga cashback+kafolat,
+        //    bekor qilinganlardan qaytarib olish (ishonchli yo'l — har sync'da).
+        reconcileOrders(getOrders());
         updateBell(false);
         checkExpiringWarranties();
         // Birinchi sync'da overlay/confetti ko'rsatmaymiz (eski yutuqlar uchun), keyin ko'rsatamiz
@@ -20979,6 +21300,188 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
     })();
 
     if (window._dlog) window._dlog('%c[Qatlam 2026.06] Stories + Mijozlar + VIP yuklandi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+<!-- ============================================================================
+     💰 QATLAM 2026.07 — CASHBACKNI TO'LOVDA ISHLATISH
+     ----------------------------------------------------------------------------
+     To'lov oynasiga "Cashback ishlatish" bloki qo'shiladi. Mijoz yoqsa —
+     to'lanadigan summa darhol kamayadi (barcha ko'rsatkichlar bir vaqtda
+     yangilanadi: asosiy summa, karta summasi, ilova summasi, naqd tasdiqlash).
+
+     Balansdan haqiqiy yechish `confirmOrder` ichida, buyurtma yozilishidan
+     oldin bajariladi (Phase2.spendCashback). Buyurtma bekor qilinsa —
+     Phase2 avtomatik qaytaradi.
+     ============================================================================ -->
+<style id="layer-cashback-pay">
+.cbp-box {
+    position: relative; overflow: hidden;
+    border-radius: 16px; padding: 14px 16px; margin: -8px 0 20px;
+    background: linear-gradient(150deg, rgba(48,209,88,.12), rgba(48,209,88,.03));
+    border: 1px solid rgba(48,209,88,.28);
+    animation: lyRise .4s both;
+}
+.cbp-row { display: flex; align-items: center; gap: 13px; }
+.cbp-ic { flex: none; font-size: 24px; line-height: 1; }
+.cbp-tx { flex: 1; min-width: 0; }
+.cbp-tx b { display: block; font-size: 14px; font-weight: 800; color: var(--text-main); }
+.cbp-tx span { display: block; font-size: 11.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.45; }
+/* iOS uslubidagi tumbler */
+.cbp-sw {
+    flex: none; width: 50px; height: 30px; border-radius: 15px; cursor: pointer;
+    background: rgba(127,127,127,.28); position: relative;
+    transition: background .25s ease; -webkit-tap-highlight-color: transparent;
+}
+.cbp-sw i {
+    position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+    background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    transition: transform .25s cubic-bezier(.3,.9,.3,1);
+}
+.cbp-box.on { background: linear-gradient(150deg, rgba(48,209,88,.2), rgba(48,209,88,.06)); border-color: rgba(48,209,88,.5); }
+.cbp-box.on .cbp-sw { background: #30d158; }
+.cbp-box.on .cbp-sw i { transform: translateX(20px); }
+.cbp-sum {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(48,209,88,.3);
+    font-size: 12.5px; font-weight: 700; color: var(--text-muted);
+}
+.cbp-sum b { font-size: 15px; font-weight: 800; color: #30d158; }
+.cbp-box.is-empty { background: rgba(127,127,127,.07); border-color: var(--glass-border); }
+.cbp-box.is-empty .cbp-ic { opacity: .5; }
+html[data-theme="light"] .cbp-tx b { color: #1b1b1d; }
+</style>
+
+<script>
+(function cashbackAtPayment() {
+    'use strict';
+
+    var S = { on: false, applied: 0 };
+    var $ = function (id) { return document.getElementById(id); };
+    var fmt = function (n) { return (parseInt(n, 10) || 0).toLocaleString('ru-RU').replace(/,/g, ' '); };
+
+    function balance() {
+        try {
+            if (window.Phase2 && window.Phase2.balance) return window.Phase2.balance();
+            if (window.Phase2 && window.Phase2.state) return parseInt(window.Phase2.state.cashback, 10) || 0;
+        } catch (e) {}
+        return 0;
+    }
+    function grossTotal() {
+        try {
+            if (window._recalcCartTotal) return window._recalcCartTotal();
+            return parseInt(window._cartTotal, 10) || 0;
+        } catch (e) { return 0; }
+    }
+
+    /** Ishlatiladigan cashback — balans va buyurtma summasidan oshmaydi. */
+    window._cbGetApplied = function (total) {
+        if (!S.on) return 0;
+        total = parseInt(total, 10);
+        if (!total || total < 0) total = grossTotal();
+        var use = Math.min(balance(), total);
+        S.applied = use > 0 ? use : 0;
+        return S.applied;
+    };
+    window._cbResetApplied = function () { S.on = false; S.applied = 0; };
+
+    /** Barcha summa ko'rsatkichlarini bir vaqtda yangilaymiz. */
+    function repaintAmounts() {
+        var gross = grossTotal();
+        var use = window._cbGetApplied(gross);
+        var payable = Math.max(0, gross - use);
+
+        var main = $('pay-amount-display');
+        if (main) main.textContent = fmt(payable) + " so'm";
+        var c = $('card-pay-amount');
+        if (c) c.textContent = fmt(payable) + " so'm";
+        var a = $('app-pay-amount');
+        if (a) a.textContent = fmt(payable) + " so'm";
+
+        var box = $('cbp-box');
+        if (!box) return;
+        box.classList.toggle('on', S.on && use > 0);
+        var sum = $('cbp-sum');
+        if (sum) {
+            sum.style.display = use > 0 ? 'flex' : 'none';
+            sum.innerHTML = '<span>Tovarlar: ' + fmt(gross) + " so'm &nbsp;·&nbsp; Cashback: −" + fmt(use) + '</span>' +
+                '<b>' + fmt(payable) + " so'm</b>";
+        }
+    }
+    window._cbRepaint = repaintAmounts;
+
+    /** To'lov oynasiga cashback blokini joylaymiz (bir marta yasab, keyin yangilaymiz). */
+    function renderBox() {
+        var anchor = $('pay-total-display');
+        if (!anchor || !anchor.parentNode) return;
+        var bal = balance();
+        var gross = grossTotal();
+
+        var box = $('cbp-box');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'cbp-box';
+            box.className = 'cbp-box';
+            anchor.parentNode.insertBefore(box, anchor.nextSibling);
+        }
+
+        if (bal <= 0) {
+            // Balans bo'sh — blokni ko'rsatamiz, lekin o'chirilgan holatda (mijoz tizimni bilsin)
+            S.on = false; S.applied = 0;
+            box.className = 'cbp-box is-empty';
+            box.innerHTML =
+                '<div class="cbp-row">' +
+                    '<span class="cbp-ic">\uD83C\uDF81</span>' +
+                    '<span class="cbp-tx"><b>Cashback: 0 so\'m</b>' +
+                    '<span>Buyurtma qo\'lingizga yetkazilgach cashback yig\'iladi va keyingi to\'lovda ishlatiladi.</span></span>' +
+                '</div>';
+            repaintAmounts();
+            return;
+        }
+
+        var usable = Math.min(bal, gross);
+        box.className = 'cbp-box' + (S.on ? ' on' : '');
+        box.innerHTML =
+            '<div class="cbp-row" id="cbp-toggle" role="button" tabindex="0">' +
+                '<span class="cbp-ic">\uD83C\uDF81</span>' +
+                '<span class="cbp-tx"><b>Cashback ishlatish</b>' +
+                '<span>Balansingiz: ' + fmt(bal) + " so'm" +
+                    (usable < bal ? ' · bu buyurtmaga ' + fmt(usable) + " so'm" : '') + '</span></span>' +
+                '<span class="cbp-sw"><i></i></span>' +
+            '</div>' +
+            '<div class="cbp-sum" id="cbp-sum" style="display:none;"></div>';
+
+        var t = $('cbp-toggle');
+        if (t) t.onclick = function () {
+            S.on = !S.on;
+            try { if (window._hap) window._hap('selection'); } catch (e) {}
+            repaintAmounts();
+            box.classList.toggle('on', S.on);
+        };
+        repaintAmounts();
+    }
+
+    /** To'lov oynasi ochilganda blokni chizamiz. */
+    function wrapOpen() {
+        if (typeof window.openPaymentModal !== 'function' || window._cbWrappedOpen) return;
+        window._cbWrappedOpen = true;
+        var orig = window.openPaymentModal;
+        window.openPaymentModal = function () {
+            var r = orig.apply(this, arguments);
+            try { setTimeout(renderBox, 20); } catch (e) {}
+            return r;
+        };
+    }
+    wrapOpen();
+    setTimeout(wrapOpen, 1000);
+    setTimeout(wrapOpen, 3000);
+
+    // Savat o'zgarsa — summa qayta hisoblanadi (oyna ochiq bo'lsa)
+    document.addEventListener('click', function () {
+        if (!$('cbp-box')) return;
+        var pm = $('paymentModal');
+        if (pm && pm.style.display === 'flex') setTimeout(repaintAmounts, 60);
+    }, true);
 })();
 </script>
 </body>
