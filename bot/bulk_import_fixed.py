@@ -206,7 +206,8 @@ async def _append_products_safe(session, fb_url, new_products, start_index, max_
     return True
 
 
-async def process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_image=None, products_lock=None):
+async def process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_image=None,
+                                      products_lock=None, admin_ids=None):
     """ai_bulk_requests tugunini doimiy poylab, AI yordamida qoralama mahsulot qo'shadi.
 
     Parametrlar:
@@ -215,7 +216,24 @@ async def process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_image=None
       groq_client    — AsyncGroq mijoz (None bo'lsa regex fallback).
       fetch_image    — nom bo'yicha rasm qaytaradigan async funksiya (ixtiyoriy).
       products_lock  — asyncio.Lock (Excel import bilan ID poyga holatini oldini olish).
+      admin_ids      — ruxsat etilgan admin ID'lari. FAQAT shu ID'lardan kelgan
+                       so'rovlar qayta ishlanadi.
+
+    ⚠️ XAVFSIZLIK (tuzatilgan jiddiy teshik): ilgari bu tsikl `needs_processing:true`
+       bo'lgan HAR QANDAY uid tugunini qayta ishlardi. Firebase qoidalari esa har
+       foydalanuvchiga O'Z tuguniga yozishga ruxsat beradi. Ya'ni oddiy mijoz
+       `ai_bulk_requests/{o'z_id}` ga yozib, bot orqali (bot admin tokeni bilan
+       yozadi!) do'kon katalogiga tovar qo'shib yuborishi mumkin edi.
+       Endi admin bo'lmagan so'rovlar rad etiladi va bayrog'i o'chiriladi.
     """
+    allowed = set()
+    for a in (admin_ids or []):
+        try:
+            allowed.add(str(int(a)))
+        except (TypeError, ValueError):
+            continue
+    if not allowed:
+        log.warning("AI bulk: admin_ids berilmadi — so'rovlar qayta ishlanmaydi (xavfsizlik)")
     # fb_url string bo'lib kelib qolsa (eski chaqiruv), uni funksiyaga aylantiramiz.
     if isinstance(fb_url, str):
         base = fb_url.rstrip("/")
@@ -235,6 +253,20 @@ async def process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_image=None
                 if requests:
                     for uid, data in _node_items(requests):
                         if not isinstance(data, dict) or data.get("needs_processing") is not True:
+                            continue
+                        # 🔐 FAQAT ADMIN. Admin bo'lmasa — bayrog'ini o'chirib, rad etamiz
+                        # (aks holda tsikl har 3 soniyada shu tugunni qayta ko'rardi).
+                        if str(uid) not in allowed:
+                            log.warning(f"AI bulk: RUXSAT YO'Q — so'rov rad etildi (uid={uid})")
+                            try:
+                                await session.patch(fb_url(f"ai_bulk_requests/{uid}"), json={
+                                    "needs_processing": False,
+                                    "status": "error",
+                                    "error": "Ruxsat yo'q — bu amal faqat admin uchun",
+                                    "processed_at": int(time.time() * 1000),
+                                })
+                            except Exception:
+                                pass
                             continue
                         await _process_single(session, fb_url, groq_client, fetch_image, lock, bot, uid, data)
             except aiohttp.ClientError as e:
@@ -262,6 +294,15 @@ async def _process_single(session, fb_url, groq_client, fetch_image, lock, bot, 
     try:
         markup_pct = float(data.get("markup_pct", 25))
     except (TypeError, ValueError):
+        markup_pct = 25.0
+
+    # 🛡 QIYMATLARNI CHEKLASH.
+    # ⚠️ ILGARI hech qanday chegara yo'q edi: markup_pct = -100 bo'lsa narx 0,
+    #    -200 bo'lsa MANFIY narx chiqardi; usd_rate = 0 bo'lsa hamma tovar 0 so'm
+    #    bo'lib katalogga tushardi.
+    if not (100.0 <= usd_rate <= 1000000.0):
+        usd_rate = 12600.0
+    if not (-90.0 <= markup_pct <= 1000.0):
         markup_pct = 25.0
 
     if not raw_text:
