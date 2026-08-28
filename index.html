@@ -6786,39 +6786,56 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     </div>
 
     <div id="ai-bulk-content">
-        <div class="msg-bot-luxury" style="margin-bottom: 20px;">
-            Assalomu alaykum, Usta! Rasm, tekst yoki Excel nusxasini pastga tashlang. Men tovarlarni aqllilik bilan tahlil qilib, Qoralamalar (Drafts) papkasiga taxlab qo'yaman. ⚙️
+        <!-- Qanday ishlashi — 3 qadam, aniq va halol -->
+        <div class="aib-steps">
+            <div class="aib-step"><span>1</span><b>Ro'yxatni tashlang</b><i>Har qatorda: nom — narx ($)</i></div>
+            <div class="aib-step"><span>2</span><b>AI narxlaydi</b><i>Kurs va ustama bo'yicha</i></div>
+            <div class="aib-step"><span>3</span><b>Qoralamalarga tushadi</b><i>Rasm qo'shib e'lon qilasiz</i></div>
         </div>
 
-        <div style="display:flex; gap:10px; margin-bottom:20px;">
-            <div style="flex:1;">
-                <span class="luxury-input-label" style="color: var(--text-muted); margin-top:0;">💵 USD KURSI</span>
-                <input type="number" id="ai-bulk-usd-rate" class="ai-luxury-input" value="12600" style="padding: 12px; margin-top: 5px;">
+        <div class="aib-block">
+            <div class="aib-lbl">Narx hisobi</div>
+            <div style="display:flex; gap:10px;">
+                <label class="aib-field" style="flex:1;">
+                    <span>USD kursi</span>
+                    <input type="number" id="ai-bulk-usd-rate" class="aib-input" value="12600" inputmode="numeric" min="100" max="1000000">
+                </label>
+                <label class="aib-field" style="flex:1;">
+                    <span>Ustama, %</span>
+                    <input type="number" id="ai-bulk-markup" class="aib-input" value="25" inputmode="numeric" min="-90" max="1000">
+                </label>
             </div>
-            <div style="flex:1;">
-                <span class="luxury-input-label" style="color: var(--text-muted); margin-top:0;">📈 USTAMA (%)</span>
-                <input type="number" id="ai-bulk-markup" class="ai-luxury-input" value="25" style="padding: 12px; margin-top: 5px; border-color: rgba(212,175,55,0.4) !important;">
-            </div>
+            <div class="aib-preview" id="aib-preview">10$ tovar → <b>126 000 so'm</b> (25% ustama bilan)</div>
         </div>
 
-        <textarea id="ai-bulk-text" class="ai-luxury-input" rows="6" placeholder="Masalan:&#10;Damas kalotka - 15$&#10;Cobalt amortizator - 45$" style="resize: none; margin-bottom: 20px;"></textarea>
+        <div class="aib-block">
+            <div class="aib-lbl">Tovarlar ro'yxati <em id="aib-count">0 qator</em></div>
+            <textarea id="ai-bulk-text" class="aib-input aib-area" rows="7" placeholder="Damas kalotka - 15$&#10;Cobalt amortizator - 45$&#10;Nexia salnik 12.5$"></textarea>
+            <p class="aib-hint">Har bir tovar — yangi qatorda. Narx <b>$</b> da bo'lsin. Maksimum 200 qator.</p>
+        </div>
 
         <div style="display: flex; gap: 10px;">
-            <button class="btn-checkout" style="flex: 1; background: rgba(255,255,255,0.05) !important; color: white !important; font-size: 14px !important;" onclick="document.getElementById('ai-bulk-text').value = 'Hozircha rasmdan oqish tayyorlanmoqda...';">
+            <!-- ⚠️ ILGARI bu tugma textarea'ni "Hozircha rasmdan oqish tayyorlanmoqda..."
+                 matni bilan ALMASHTIRIB yuborardi — admin yozgan ro'yxat yo'qolardi va
+                 shu matn AI'ga ro'yxat sifatida ketardi. Endi hech narsani buzmaydi,
+                 faqat haqiqiy holatni tushuntiradi. -->
+            <button class="aib-btn aib-btn-ghost" type="button" onclick="window._aiBulkPhotoInfo()">
                 📸 Rasmdan
             </button>
-            <button class="btn-checkout" id="ai-bulk-submit-btn" style="flex: 1.5; font-size: 14px !important;" onclick="sendAiBulk(this)">
+            <button class="aib-btn aib-btn-gold" id="ai-bulk-submit-btn" type="button" onclick="sendAiBulk(this)">
                 🧠 Qayta ishlash
             </button>
         </div>
     </div>
 
-    <div id="ai-neural-loader" style="display: none; flex-direction: column; align-items: center; justify-content: center; margin-top: 30px;">
-        <div class="luxury-typing" style="margin-bottom: 20px; transform: scale(1.5);">
-            <div class="luxury-dot"></div><div class="luxury-dot"></div><div class="luxury-dot"></div>
+    <!-- Jonli holat paneli: yuborish → AI ishlayapti → natija/xato/timeout -->
+    <div id="ai-neural-loader" style="display:none;">
+        <div class="aib-stage">
+            <div class="aib-stage-ic" id="aib-stage-ic"><div class="aib-ring"></div></div>
+            <div class="aib-stage-t" id="aib-stage-t">Yuborilmoqda...</div>
+            <div class="aib-stage-s" id="aib-stage-s">Ro'yxat bazaga yozilmoqda</div>
+            <div class="aib-stage-acts" id="aib-stage-acts"></div>
         </div>
-        <div style="color: #D4AF37; font-weight: 800; font-size: 15px; letter-spacing: 1px;">AI ISHLAYAPTI...</div>
-        <div style="color: gray; font-size: 12px; margin-top: 8px;">Tovarlarni tahlil qilib, bazaga yozmoqda ⏳</div>
     </div>
 </div>
 <div class="modal-standard" id="adminDraftsModal" style="z-index: 3000; display: none;">
@@ -9531,10 +9548,24 @@ async function changeOrderStatus(uid, orderId, newStatus) {
     
                 // 2. Tahrirlash oynasidan -> Tovar yoki Qoralamalarga qaytish
                 if (current === 'editModal') {
-                    if (window.currentDraftFolder) {
+                    // ⚠️ TUZATILDI (tur to'qnashuvi): ilgari bu yerda
+                    //    `window.currentDraftFolder = false` yozilardi. Lekin o'sha
+                    //    o'zgaruvchi BOSHQA maqsadda — ochilgan papka NOMINI (batch_id
+                    //    satri) saqlash uchun ishlatiladi. Natijada qoralamani tahrirlab
+                    //    "orqaga" bosilganda papka nomi `false` ga aylanib,
+                    //    filterAdminDrafts hech narsa topa olmasdi va admin
+                    //    "Bu papkada tovar topilmadi" degan bo'sh ekranni ko'rardi —
+                    //    qoralamalar joyida turgani holda. Endi alohida bayroq bor.
+                    if (window._editCameFromDrafts) {
                         activeModal = 'adminDraftsModal';
                         document.getElementById('adminDraftsModal').style.display = 'flex';
-                        window.currentDraftFolder = false; // bayroqni tozalaymiz
+                        window._editCameFromDrafts = false;   // faqat bayroqni tozalaymiz
+                        // Papka ichidagi ro'yxatni yangilaymiz (tahrir natijasi ko'rinsin)
+                        try {
+                            if (window.currentDraftFolder && typeof filterAdminDrafts === 'function') {
+                                filterAdminDrafts('all');
+                            }
+                        } catch (e) {}
                     } else {
                         activeModal = 'productModal';
                         document.getElementById('productModal').style.display = 'flex';
@@ -11437,7 +11468,7 @@ window.filterAdminDrafts = (filterBrand = null) => {
       let firstCat = (p.categories && p.categories[0]) ? p.categories[0].split('-').slice(0,2).join(' ').toUpperCase().replace(/CHEVY/g, 'CHEVROLET') : '';
         // Dublikat va Partiya dizaynlari
         let conflictBadge = p.has_conflict ? `<div style="color:#ff453a; font-size:10px; font-weight:bold; margin-bottom:4px;">⚠️ DUBLIKAT (Eskisi yashirildi)</div>` : '';
-        let batchInfo = p.batch_id ? `<div style="color:gray; font-size:9px; margin-top:4px;">📁 ${p.batch_id.replace('Partiya_', '')}</div>` : '';
+        let batchInfo = p.batch_id ? `<div style="color:gray; font-size:9px; margin-top:4px;">📁 ${window._prettyBatch(p.batch_id)}</div>` : '';
         
         return `
         <div class="inventory-item" style="display:flex; justify-content:space-between; align-items:center; border: 1px solid ${p.has_conflict ? 'rgba(255,69,58,0.4)' : 'var(--glass-border)'};">
@@ -11458,7 +11489,9 @@ window.filterAdminDrafts = (filterBrand = null) => {
 
 window.editDraft = (id) => {
     document.getElementById('adminDraftsModal').style.display = 'none';
-    window.currentDraftFolder = true; // 🧭 closeEditGoBack qaytishi uchun bayroq
+    // 🧭 Qaytish uchun ALOHIDA bayroq — `currentDraftFolder` papka nomini saqlaydi
+    //    va uni buzib bo'lmaydi (aks holda papka bo'sh ko'rinib qolardi).
+    window._editCameFromDrafts = true;
     // To'g'ridan-to'g'ri editModal'ni ochamiz (productModal'ni o'tkazib yuboramiz)
     // — bu navigatsiyani sodda qiladi va history'da ortiqcha entry qoldirmaydi.
     if (typeof openEditModal === 'function') {
@@ -11692,37 +11725,169 @@ window.generateAiDescription = (type) => {
 
 
 // 🚀 AI OMMAVIY QO'SHISH MOTOR
+// ============================================================================
+// 🧠 AI OMMAVIY — TO'LIQ QAYTA YOZILDI
+// ----------------------------------------------------------------------------
+// ⚠️ ILGARI QANDAY XATOLAR BO'LGAN (hammasi shu yerda tuzatildi):
+//
+//  1. `.catch()` YO'Q edi. Firebase yozuvi rad etilsa (qoidalar, internet yo'q,
+//     auth tayyor emas) `.then()` hech qachon ishlamasdi -> forma yashirin,
+//     loader esa MANGU aylanib turardi. Oyna sahifa qayta yuklanmaguncha o'lik
+//     bo'lib qolardi va HECH QANDAY xabar chiqmasdi.
+//  2. SOXTA progress: loader qattiq `setTimeout(1500)` bilan yopilardi
+//     ("1.5 soniya neyron tarmoqni tomosha qiladi" deb izoh ham bor edi).
+//     Bot o'chiq bo'lsa ham "✅ tahlilga yuborildi" deb yozardi.
+//  3. NATIJA HECH QACHON O'QILMASDI. Bot `status`, `added`, `error` yozardi —
+//     lekin ilovada uni o'qiydigan kod umuman yo'q edi. "Matn bo'sh",
+//     "Hech qanday mahsulot ajratib bo'lmadi" kabi xatolar ko'rinmasdi.
+//  4. TIMEOUT yo'q: bot uxlab qolsa (Render) so'rov abadiy kutib turardi.
+//  5. ADMIN TEKSHIRUVI yo'q edi (server tomonda ham) — xavfsizlik teshigi.
+//  6. `currentUser` tekshirilmasdi -> `ai_bulk_requests/null` ga yozishga urinardi.
+//  7. `btn` parametri ishlatilmasdi -> tugma bloklanmasdi, ikki marta bosilsa
+//     ikki so'rov ketardi.
+//  8. Qiymatlar tekshirilmasdi: `parseFloat(...) || 12600` — 0 kiritilsa
+//     jimgina 12600 ga aylanardi; manfiy ustama manfiy narx berardi.
+//  9. Natijadagi qoralamalar ILOVADA KO'RINMASDI: `products` bir marta
+//     (`once`) o'qilardi, listener yo'q -> ilovani qayta ochmaguncha
+//     "Qoralamalar yo'q" deb turardi.
+// 10. Oyna holati tiklanmasdi: loader ochiq holatda yopib qayta ochsa,
+//     faqat loader ko'rinardi.
+// ============================================================================
+window._aiBulkBusy = false;
+
 window.sendAiBulk = (btn) => {
-    let text = document.getElementById('ai-bulk-text').value.trim();
-    if(!text) { showToast("Iltimos, oldin ro'yxatni yozing!", "warning"); return; }
-    
-    let usdRate = parseFloat(document.getElementById('ai-bulk-usd-rate').value) || 12600;
-    let markup = parseFloat(document.getElementById('ai-bulk-markup').value) || 25;
+    if (window._aiBulkBusy) { showToast("So'rov yuborilmoqda, kuting...", "warning"); return; }
 
-    // Ekranni AI yuklanish rejimiga o'tkazish
-    document.getElementById('ai-bulk-content').style.display = 'none';
-    document.getElementById('ai-neural-loader').style.display = 'flex';
+    // 🔐 1) Faqat admin
+    if (!(window.isAdmin && window.isAdmin())) {
+        showToast("Bu amal faqat admin uchun", "warning");
+        return;
+    }
+    // 2) Foydalanuvchi aniqmi (Firebase qoidalari uid bo'yicha ishlaydi)
+    var uid = window.currentUser;
+    if (!uid) { showToast("Foydalanuvchi aniqlanmadi. Ilovani qayta oching.", "warning"); return; }
 
-    db.ref('ai_bulk_requests/' + currentUser).set({
+    var txtEl = document.getElementById('ai-bulk-text');
+    var text = txtEl ? txtEl.value.trim() : '';
+    if (!text) { showToast("Iltimos, oldin ro'yxatni yozing!", "warning"); return; }
+
+    // 3) Qiymatlarni HAQIQATAN tekshiramiz (jimgina almashtirmaymiz)
+    var rateEl = document.getElementById('ai-bulk-usd-rate');
+    var markEl = document.getElementById('ai-bulk-markup');
+    var usdRate = parseFloat(rateEl ? rateEl.value : '');
+    var markup = parseFloat(markEl ? markEl.value : '');
+    if (!isFinite(usdRate) || usdRate < 100 || usdRate > 1000000) {
+        showToast("USD kursi noto'g'ri (100 – 1 000 000)", "warning");
+        if (rateEl) rateEl.focus();
+        return;
+    }
+    if (!isFinite(markup) || markup < -90 || markup > 1000) {
+        showToast("Ustama noto'g'ri (-90% – 1000%)", "warning");
+        if (markEl) markEl.focus();
+        return;
+    }
+
+    var lineCount = text.split('\n').filter(function (l) { return l.trim(); }).length;
+    if (lineCount > 200) {
+        showToast("Ro'yxat 200 qatordan oshmasin (hozir " + lineCount + " ta)", "warning");
+        return;
+    }
+
+    window._aiBulkBusy = true;
+    if (btn) { btn.disabled = true; btn.dataset.old = btn.innerHTML; btn.innerHTML = 'Yuborilmoqda...'; }
+    window._aiBulkShowStage('sending', { lines: lineCount });
+
+    var reqRef = db.ref('ai_bulk_requests/' + uid);
+    var startedAt = Date.now();
+
+    reqRef.set({
         raw_text: text,
         status: "pending",
-        time: Date.now(),
+        time: startedAt,
         needs_processing: true,
         usd_rate: usdRate,
         markup_pct: markup
-    }).then(() => {
-        // AI ga jo'natilgach, qisqa pauzadan keyin oynani yopamiz
-        setTimeout(() => {
-            showToast("✅ Ro'yxat tahlilga yuborildi!");
-            closeModal();
-            // Formani asl holiga qaytarib qo'yamiz (keyingi safar uchun)
-            setTimeout(() => {
-                document.getElementById('ai-bulk-text').value = '';
-                document.getElementById('ai-bulk-content').style.display = 'block';
-                document.getElementById('ai-neural-loader').style.display = 'none';
-            }, 500);
-        }, 1500); // 1.5 soniya neyron tarmoqni tomosha qiladi
+    }).then(function () {
+        window._aiBulkShowStage('working', { lines: lineCount });
+        // 4) NATIJANI KUTAMIZ (jonli listener) — soxta setTimeout emas
+        window._aiBulkWatch(reqRef, startedAt, btn);
+    }).catch(function (err) {
+        // 5) Endi xato JIMGINA yo'qolmaydi
+        window._aiBulkBusy = false;
+        if (btn) { btn.disabled = false; if (btn.dataset.old) btn.innerHTML = btn.dataset.old; }
+        var msg = (err && err.message) ? err.message : 'Bazaga yozilmadi';
+        window._aiBulkShowStage('error', { error: msg });
+        showToast("❌ Yuborilmadi: " + msg, "warning");
     });
+};
+
+/**
+ * So'rov natijasini kuzatadi: bot `status`ni 'done' yoki 'error' qiladi.
+ * Bot javob bermasa — 90 soniyadan keyin ogohlantiradi (ilgari abadiy kutardi).
+ */
+window._aiBulkWatch = function (reqRef, startedAt, btn) {
+    var done = false;
+    var TIMEOUT_MS = 90000;
+
+    var finish = function () {
+        if (done) return;
+        done = true;
+        try { reqRef.off('value', onVal); } catch (e) {}
+        if (timer) clearTimeout(timer);
+        window._aiBulkBusy = false;
+        if (btn) { btn.disabled = false; if (btn.dataset.old) btn.innerHTML = btn.dataset.old; }
+    };
+
+    var onVal = function (snap) {
+        var v = snap.val();
+        if (!v || done) return;
+        // Eski (oldingi) natijani o'qib yubormaslik uchun vaqtni tekshiramiz
+        if (v.time && v.time < startedAt) return;
+        if (v.status === 'done') {
+            finish();
+            var added = parseInt(v.added, 10) || 0;
+            window._aiBulkShowStage('done', { added: added });
+            if (added > 0) {
+                showToast("✅ " + added + " ta qoralama qo'shildi!", "success");
+                try { if (window._hap) window._hap('success'); } catch (e) {}
+                // 6) Qoralamalar DARHOL ko'rinsin — bazani qayta o'qiymiz
+                if (window._aiBulkReloadProducts) window._aiBulkReloadProducts();
+            } else {
+                showToast("Hech narsa qo'shilmadi", "warning");
+            }
+        } else if (v.status === 'error') {
+            finish();
+            window._aiBulkShowStage('error', { error: v.error || "Noma'lum xato" });
+            showToast("❌ " + (v.error || "Xatolik"), "warning");
+        }
+    };
+
+    reqRef.on('value', onVal);
+
+    var timer = setTimeout(function () {
+        if (done) return;
+        finish();
+        window._aiBulkShowStage('timeout', {});
+    }, TIMEOUT_MS);
+};
+
+/** Qoralamalar darhol ko'rinishi uchun `products`ni qayta o'qiydi. */
+window._aiBulkReloadProducts = function () {
+    try {
+        db.ref('products').once('value').then(function (snap) {
+            if (!snap.exists()) return;
+            var all = [];
+            snap.forEach(function (c) { if (c.val()) all.push(c.val()); });
+            productsDB = all;
+            window.productsDB = all;
+            if (typeof _sortDisplayDB === 'function') {
+                displayDB = _sortDisplayDB(productsDB.filter(function (p) { return !p.is_draft; }).slice().reverse());
+            }
+            if (typeof renderProducts === 'function') renderProducts();
+            // Qoralamalar oynasi ochiq bo'lsa — yangilaymiz
+            if (activeModal === 'adminDraftsModal' && typeof showDraftFolders === 'function') showDraftFolders();
+        }).catch(function () {});
+    } catch (e) {}
 };
 
     // ==========================================
@@ -11765,6 +11930,14 @@ window.executeDeleteAllDrafts = () => {
 // ==========================================
 window.currentDraftFolder = null;
 
+/** Marka filtrini tozalaydi (u yashirib qo'ygan qoralamalarni qaytaradi). */
+window._draftResetFilter = function () {
+    window.currentDraftFilter = 'all';
+    var sel = document.getElementById('draft-brand-filter');
+    if (sel) sel.value = 'all';
+    if (typeof filterAdminDrafts === 'function') filterAdminDrafts('all');
+};
+
 window.openAdminDrafts = () => {
     document.getElementById('adminModal').style.display = 'none';
     let m = document.getElementById('adminDraftsModal');
@@ -11802,7 +11975,7 @@ window.showDraftFolders = () => {
             <div style="position:absolute; top:10px; right:10px; cursor:pointer; background:rgba(255,69,58,0.1); padding:6px; border-radius:5px; font-size:14px; color:var(--accent-red);" onclick="deleteFolder(event, '${bId}')">🗑️</div>
             
             <div style="font-size:40px; margin-bottom:10px; filter: drop-shadow(0 4px 10px rgba(212,175,55,0.4));">📁</div>
-            <h3 style="font-size:12px; margin-bottom:5px; color:var(--luxury-gold); text-align:center;">${bId.replace('Partiya_', 'Partiya ')}</h3>
+            <h3 style="font-size:12px; margin-bottom:5px; color:var(--luxury-gold); text-align:center;">${window._prettyBatch(bId)}</h3>
             <p style="font-size:11px; font-weight:bold; color:var(--accent-green); background:rgba(48,209,88,0.1); padding:3px 8px; border-radius:6px;">${folders[bId]} ta tovar</p>
         </div>
     `).join('');
@@ -11854,7 +12027,7 @@ window.openDraftFolder = (batchId) => {
     document.getElementById('draft-folders-view').style.display = 'none';
     document.getElementById('draft-items-view').style.display = 'block';
     
-    let displayTitle = batchId.replace('Partiya_', '');
+    let displayTitle = window._prettyBatch(batchId);
     if(displayTitle.length > 15) displayTitle = displayTitle.substring(0, 15) + '...';
     document.getElementById('drafts-modal-title').innerHTML = `📁 ${displayTitle}`;
     
@@ -11869,7 +12042,7 @@ window.backToFolders = () => {
 
 window.renameFolder = (e, oldName) => {
     e.stopPropagation();
-    let currentDisplay = oldName.replace('Partiya_', '');
+    let currentDisplay = window._prettyBatch(oldName);
     let newName = prompt("Papkaning yangi nomini kiriting:", currentDisplay);
     if(!newName || newName.trim() === "" || newName === currentDisplay) return;
     
@@ -11898,8 +12071,9 @@ window.filterAdminDrafts = (filterBrand = null) => {
     let c = document.getElementById('admin-drafts-list');
     
     let drafts = productsDB.filter(p => p.is_draft === true && (p.batch_id || "Boshqalar") === window.currentDraftFolder);
-    
-    if (window.currentDraftFilter !== 'all') {
+    let totalInFolder = drafts.length;   // marka filtridan OLDINGI son
+
+    if (window.currentDraftFilter && window.currentDraftFilter !== 'all') {
         drafts = drafts.filter(p => {
             let catsStr = (p.categories || []).join(' ');
             if (window.currentDraftFilter === 'gaz') return catsStr.includes('gazel') || catsStr.includes('volga') || catsStr.includes('sobol') || catsStr.includes('uaz');
@@ -11912,7 +12086,27 @@ window.filterAdminDrafts = (filterBrand = null) => {
     if (q) drafts = drafts.filter(p => p.name.toLowerCase().includes(q));
     
     if (drafts.length === 0) {
-        c.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Bu papkada tovar topilmadi.</p>';
+        // ⚠️ ILGARI har qanday holatda bitta quruq "Bu papkada tovar topilmadi"
+        //    chiqardi. Eng chalg'itadigan holat: AI qo'shgan qoralamalarga marka
+        //    BELGILANMAYDI (bot `categories: ["umumiy"]` yozadi), shuning uchun
+        //    admin marka filtrini tanlasa — hamma AI qoralamasi yashirinardi va
+        //    admin ular "yo'qolgan" deb o'ylardi. Endi sabab aytiladi.
+        if (totalInFolder > 0 && window.currentDraftFilter && window.currentDraftFilter !== 'all') {
+            c.innerHTML = '<div style="text-align:center; padding:26px 18px;">' +
+                '<div style="font-size:38px; opacity:.6; margin-bottom:10px;">🔍</div>' +
+                '<div style="font-size:14px; font-weight:700; color:var(--text-main); margin-bottom:6px;">' +
+                    'Marka filtri ' + totalInFolder + ' ta tovarni yashirdi</div>' +
+                '<div style="font-size:12.5px; color:var(--text-muted); line-height:1.55; margin-bottom:14px;">' +
+                    "AI qo'shgan qoralamalarga marka hali belgilanmagan — " +
+                    "tahrirlashda markani tanlaysiz.</div>" +
+                '<button type="button" onclick="window._draftResetFilter()" ' +
+                    'style="padding:12px 20px; border:none; border-radius:13px; cursor:pointer; font-family:inherit; ' +
+                    'font-size:13.5px; font-weight:800; background:var(--gold-gradient); color:#2a2000;">' +
+                    'Hammasini ko\'rsatish</button></div>';
+            return;
+        }
+        c.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">' +
+            (q ? "Qidiruv bo'yicha topilmadi." : "Bu papkada tovar topilmadi.") + '</p>';
         return;
     }
 
@@ -22035,6 +22229,295 @@ html.lite .sv-loader::after { animation: none !important; }
     })();
 
     if (window._dlog) window._dlog('%c[Qatlam 2026.08] Stories seen + yulduz reyting yuklandi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+<!-- ============================================================================
+     🧠 QATLAM 2026.09 — AI OMMAVIY: LUXURY DIZAYN VA JONLI HOLAT
+     ============================================================================ -->
+<style id="layer-ai-bulk">
+#aiBulkModal { padding: 0; }
+#aiBulkModal .modal-header {
+    padding: calc(20px + var(--safe-top, 0px)) 20px 15px;
+    position: sticky; top: 0; z-index: 5;
+    background: linear-gradient(180deg, rgba(15,15,17,.99), rgba(15,15,17,.92));
+    backdrop-filter: blur(14px);
+}
+html[data-theme="light"] #aiBulkModal .modal-header {
+    background: linear-gradient(180deg, rgba(252,251,248,.99), rgba(252,251,248,.92));
+}
+#ai-bulk-content { padding: 4px 20px 40px; }
+
+/* ——— 3 qadam ——— */
+.aib-steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.aib-step {
+    display: grid; grid-template-columns: 26px 1fr; grid-template-rows: auto auto;
+    gap: 1px 12px; align-items: center;
+    padding: 11px 13px; border-radius: 14px;
+    background: rgba(212,175,55,.055); border: 1px solid rgba(212,175,55,.16);
+    animation: lyRise .42s both;
+}
+.aib-step:nth-child(2) { animation-delay: .06s; }
+.aib-step:nth-child(3) { animation-delay: .12s; }
+.aib-step > span {
+    grid-row: 1 / 3; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--gold-gradient); color: #2a2000;
+    font-size: 12.5px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+}
+.aib-step > b { font-size: 13.5px; font-weight: 700; color: var(--text-main); }
+.aib-step > i { font-style: normal; font-size: 11.5px; color: var(--text-muted); }
+
+/* ——— bloklar ——— */
+.aib-block {
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    border-radius: 18px; padding: 15px; margin-bottom: 14px;
+}
+html:not([data-theme="light"]) .aib-block {
+    background: linear-gradient(158deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), var(--card-bg);
+    box-shadow: 0 8px 22px rgba(0,0,0,.2);
+}
+.aib-lbl {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 12px;
+}
+.aib-lbl em {
+    font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: 0;
+    color: var(--luxury-gold); text-transform: none;
+}
+.aib-field { display: block; }
+.aib-field > span { display: block; font-size: 11.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+.aib-input {
+    width: 100%; box-sizing: border-box; padding: 13px 14px; border-radius: 13px;
+    font-size: 15px; font-family: inherit; font-weight: 700;
+    color: var(--text-main); background: rgba(0,0,0,.3);
+    border: 1px solid rgba(127,127,127,.22); outline: none;
+    transition: border-color .22s ease, box-shadow .22s ease, background .22s ease;
+    -webkit-appearance: none;
+}
+html[data-theme="light"] .aib-input { background: rgba(0,0,0,.035); }
+.aib-input:focus { border-color: var(--luxury-gold); background: rgba(201,168,76,.07); box-shadow: 0 6px 20px rgba(201,168,76,.14); }
+.aib-input.is-bad { border-color: var(--accent-red) !important; box-shadow: 0 6px 18px rgba(255,69,58,.16) !important; }
+.aib-area { resize: none; line-height: 1.6; font-weight: 600; font-size: 14px; }
+.aib-input::placeholder { color: rgba(142,142,147,.7); font-weight: 500; }
+.aib-preview {
+    margin-top: 12px; padding: 10px 12px; border-radius: 11px;
+    background: rgba(48,209,88,.09); border: 1px solid rgba(48,209,88,.22);
+    font-size: 12.5px; font-weight: 600; color: var(--text-muted);
+}
+.aib-preview b { color: #30d158; font-weight: 800; }
+.aib-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 10px 0 0; }
+
+/* ——— tugmalar ——— */
+.aib-btn {
+    flex: 1; padding: 16px 12px; border-radius: 16px; cursor: pointer;
+    font-family: inherit; font-size: 15px; font-weight: 800; border: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform .18s ease, filter .2s ease, opacity .2s ease;
+}
+.aib-btn:active { transform: scale(.97); }
+.aib-btn:disabled { opacity: .55; cursor: default; }
+.aib-btn-gold { flex: 1.6; background: var(--gold-gradient); color: #2a2000; box-shadow: 0 12px 26px rgba(201,168,76,.3); }
+.aib-btn-ghost { background: rgba(127,127,127,.12); color: var(--text-main); border: 1px solid var(--glass-border); }
+
+/* ——— jonli holat paneli ——— */
+#ai-neural-loader { padding: 30px 20px 50px; }
+.aib-stage { text-align: center; animation: lyRise .4s both; }
+.aib-stage-ic {
+    width: 76px; height: 76px; margin: 0 auto 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px; position: relative;
+    background: radial-gradient(circle, rgba(201,168,76,.16), transparent 70%);
+}
+.aib-ring {
+    width: 54px; height: 54px; border-radius: 50%;
+    border: 3px solid rgba(201,168,76,.18); border-top-color: var(--luxury-gold);
+    animation: aibSpin .8s linear infinite;
+}
+@keyframes aibSpin { to { transform: rotate(360deg); } }
+.aib-stage-ic.is-ok   { background: radial-gradient(circle, rgba(48,209,88,.2), transparent 70%); }
+.aib-stage-ic.is-bad  { background: radial-gradient(circle, rgba(255,69,58,.2), transparent 70%); }
+.aib-stage-ic.is-warn { background: radial-gradient(circle, rgba(255,159,10,.2), transparent 70%); }
+.aib-stage-t { font-size: 18px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; letter-spacing: -.2px; }
+.aib-stage-s { font-size: 13.5px; color: var(--text-muted); line-height: 1.6; max-width: 300px; margin: 0 auto; }
+.aib-stage-acts { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+.aib-stage-acts .aib-btn { flex: none; width: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+    .aib-step, .aib-stage { animation: none !important; }
+    .aib-ring { animation: none !important; border-top-color: rgba(201,168,76,.5); }
+}
+</style>
+
+<script>
+(function aiBulkUX() {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var fmt = function (n) { return (Math.round(n) || 0).toLocaleString('ru-RU').replace(/,/g, ' '); };
+
+    /* ---------------- Jonli narx ko'rinishi + qator hisobi ---------------- */
+    function updatePreview() {
+        var rate = parseFloat(($('ai-bulk-usd-rate') || {}).value);
+        var mark = parseFloat(($('ai-bulk-markup') || {}).value);
+        var box = $('aib-preview');
+        var rEl = $('ai-bulk-usd-rate'), mEl = $('ai-bulk-markup');
+        var rBad = !isFinite(rate) || rate < 100 || rate > 1000000;
+        var mBad = !isFinite(mark) || mark < -90 || mark > 1000;
+        if (rEl) rEl.classList.toggle('is-bad', rBad);
+        if (mEl) mEl.classList.toggle('is-bad', mBad);
+        if (!box) return;
+        if (rBad || mBad) {
+            box.style.background = 'rgba(255,69,58,.09)';
+            box.style.borderColor = 'rgba(255,69,58,.25)';
+            box.innerHTML = rBad ? "USD kursi 100 – 1 000 000 orasida bo'lsin"
+                                 : "Ustama -90% – 1000% orasida bo'lsin";
+            return;
+        }
+        box.style.background = 'rgba(48,209,88,.09)';
+        box.style.borderColor = 'rgba(48,209,88,.22)';
+        // Bot bilan AYNI formula: ceil(usd * kurs * (1+ustama/100) / 1000) * 1000
+        var som = Math.ceil((10 * rate * (1 + mark / 100)) / 1000) * 1000;
+        box.innerHTML = "10$ tovar → <b>" + fmt(som) + " so'm</b> (" + mark + "% ustama bilan)";
+    }
+    function updateCount() {
+        var t = $('ai-bulk-text'), c = $('aib-count');
+        if (!t || !c) return;
+        var n = t.value.split('\n').filter(function (l) { return l.trim(); }).length;
+        c.textContent = n + ' qator' + (n > 200 ? ' — 200 dan oshdi!' : '');
+        c.style.color = n > 200 ? 'var(--accent-red)' : 'var(--luxury-gold)';
+    }
+
+    /* ---------------- Holat paneli ---------------- */
+    var STAGES = {
+        sending: { ic: '', cls: '', t: 'Yuborilmoqda...', s: "Ro'yxat bazaga yozilmoqda" },
+        working: { ic: '', cls: '', t: 'AI tahlil qilmoqda', s: "Nom va narxlar ajratilib, qoralamalarga yozilmoqda. Bu 10–60 soniya olishi mumkin." },
+        done:    { ic: '\u2705', cls: 'is-ok', t: 'Tayyor!', s: '' },
+        error:   { ic: '\u26A0\uFE0F', cls: 'is-bad', t: 'Xatolik', s: '' },
+        timeout: { ic: '\u23F0', cls: 'is-warn', t: 'Bot javob bermadi',
+                   s: "Bot uxlab qolgan bo'lishi mumkin (Render bepul rejimi). So'rov saqlandi — bot uyg'onganda o'zi bajaradi. Bir necha daqiqadan keyin Qoralamalarni tekshirib ko'ring." }
+    };
+
+    window._aiBulkShowStage = function (stage, data) {
+        data = data || {};
+        var content = $('ai-bulk-content'), loader = $('ai-neural-loader');
+        if (!content || !loader) return;
+        content.style.display = 'none';
+        loader.style.display = 'block';
+
+        var cfg = STAGES[stage] || STAGES.working;
+        var ic = $('aib-stage-ic'), t = $('aib-stage-t'), s = $('aib-stage-s'), acts = $('aib-stage-acts');
+        if (ic) {
+            ic.className = 'aib-stage-ic ' + (cfg.cls || '');
+            ic.innerHTML = cfg.ic ? cfg.ic : '<div class="aib-ring"></div>';
+        }
+        if (t) t.textContent = cfg.t;
+        if (s) {
+            var msg = cfg.s;
+            if (stage === 'done') {
+                msg = data.added > 0
+                    ? (data.added + " ta tovar Qoralamalar bo'limiga qo'shildi. Endi rasm qo'shib e'lon qilishingiz mumkin.")
+                    : "AI hech qanday tovar ajratib olmadi. Har qatorda nom va $ narxi borligini tekshiring.";
+            } else if (stage === 'error') {
+                msg = data.error || "Noma'lum xato";
+            } else if (stage === 'working' && data.lines) {
+                msg = data.lines + " qator yuborildi. " + cfg.s;
+            }
+            s.textContent = msg;
+        }
+        if (acts) {
+            acts.innerHTML = '';
+            if (stage === 'done' || stage === 'error' || stage === 'timeout') {
+                if (stage === 'done' && data.added > 0) {
+                    acts.innerHTML += '<button type="button" class="aib-btn aib-btn-gold" id="aib-go-drafts">📁 Qoralamalarni ochish</button>';
+                }
+                acts.innerHTML += '<button type="button" class="aib-btn aib-btn-ghost" id="aib-back">← Formaga qaytish</button>';
+                var g = $('aib-go-drafts');
+                if (g) g.onclick = function () {
+                    resetForm(true);
+                    if (typeof window.openAdminDrafts === 'function') window.openAdminDrafts();
+                };
+                var b = $('aib-back');
+                if (b) b.onclick = function () { resetForm(false); };
+            }
+        }
+    };
+
+    /** Formani tiklaydi (holat paneli yopiladi). */
+    function resetForm(clearText) {
+        var content = $('ai-bulk-content'), loader = $('ai-neural-loader');
+        if (loader) loader.style.display = 'none';
+        if (content) content.style.display = 'block';
+        if (clearText) {
+            var t = $('ai-bulk-text');
+            if (t) t.value = '';
+            updateCount();
+        }
+    }
+    window._aiBulkResetForm = resetForm;
+
+    /* ---------------- "Rasmdan" tugmasi — halol tushuntirish ---------------- */
+    window._aiBulkPhotoInfo = function () {
+        try { if (window._hap) window._hap('light'); } catch (e) {}
+        var msg = "Rasmdan ro'yxat o'qish (OCR) hozircha yo'q.\n\n" +
+                  "Buning o'rniga: bitta tovar rasmini BOTGA yuborsangiz, AI uni tanib, " +
+                  "nomi va tavsifini o'zi yozib beradi.\n\n" +
+                  "Ommaviy qo'shish uchun ro'yxatni matn ko'rinishida tashlang.";
+        try {
+            if (window.tg && tg.showAlert) { tg.showAlert(msg); return; }
+        } catch (e) {}
+        if (typeof showToast === 'function') showToast("Rasmdan o'qish hozircha yo'q — ro'yxatni matn bilan tashlang", 'warning');
+    };
+
+    /* ---------------- Oyna ochilganda holatni tiklash ---------------- */
+    // ⚠️ ILGARI: loader ochiq holatda oynani yopib qayta ochsa, faqat loader
+    //    ko'rinardi (forma yashirin qolardi) — oyna "buzilgan" bo'lib tuyulardi.
+    function wrapOpen() {
+        if (typeof window.openModal !== 'function' || window._aibWrapped) return;
+        window._aibWrapped = true;
+        var orig = window.openModal;
+        window.openModal = function (id) {
+            var r = orig.apply(this, arguments);
+            if (id === 'aiBulkModal') {
+                try {
+                    setTimeout(function () {
+                        if (!window._aiBulkBusy) resetForm(false);
+                        updatePreview(); updateCount();
+                    }, 20);
+                } catch (e) {}
+            }
+            return r;
+        };
+    }
+
+    function wire() {
+        var r = $('ai-bulk-usd-rate'), m = $('ai-bulk-markup'), t = $('ai-bulk-text');
+        if (r && !r._aibW) { r._aibW = 1; r.oninput = updatePreview; }
+        if (m && !m._aibW) { m._aibW = 1; m.oninput = updatePreview; }
+        if (t && !t._aibW) { t._aibW = 1; t.oninput = updateCount; }
+        updatePreview(); updateCount();
+    }
+    wire();
+    wrapOpen();
+    setTimeout(function () { wire(); wrapOpen(); }, 1200);
+
+    /* ---------------- Qoralama papkasi nomini chiroyli ko'rsatish ----------------
+     * ⚠️ ILGARI: bot papkani `AI_30_05_2026_14_22` deb nomlardi, ilova esa faqat
+     *    `Partiya_` prefiksini olib tashlardi — natijada adminга xom, o'qishga
+     *    noqulay `AI_30_05_2026_14_22` ko'rinardi.
+     * ---------------------------------------------------------------------------- */
+    window._prettyBatch = function (bId) {
+        var s = String(bId == null ? '' : bId);
+        if (!s) return 'Boshqalar';
+        // AI_DD_MM_YYYY_HH_MM -> "AI · 30.05.2026 14:22"
+        var m = s.match(/^AI[_-](\d{2})[_-](\d{2})[_-](\d{4})[_-](\d{2})[_-](\d{2})$/);
+        if (m) return '🧠 AI · ' + m[1] + '.' + m[2] + '.' + m[3] + ' ' + m[4] + ':' + m[5];
+        if (/^AI[_-]/i.test(s)) return '🧠 AI · ' + s.replace(/^AI[_-]/i, '').replace(/_/g, ' ');
+        if (/^Partiya_/.test(s)) return 'Partiya ' + s.replace('Partiya_', '');
+        return s;
+    };
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.09] AI ommaviy yangilandi', 'color:#C9A84C;font-weight:bold;');
 })();
 </script>
 </body>
