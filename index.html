@@ -6985,7 +6985,10 @@ document.addEventListener('touchmove', function(e) {
             '#admin-chat-messages, #pm-reviews-list, #pm-size-options, #pm-car-options, ' +
             // 🆕 Stories boshqaruvi / composer / mijoz tafsiloti — ichki skrollga ruxsat
             '#admin-stories-list, #story-composer-body, #customer-detail-body, ' +
-            '#cst-list, .st2-rings, .cst-segs'
+            '#cst-list, .st2-rings, .cst-segs, ' +
+            // 🆕 AI ommaviy: kontent va holat paneli ham ichki skroller
+            //    (bularsiz barmoq harakati bloklanib, skroll "sakrardi")
+            '#ai-bulk-content, #ai-neural-loader'
         ) : null;
         // Faqat skroll bo'ladigan joy TOPILMASA (ya'ni orqa fon) to'xtatamiz
         if (!scrollable) {
@@ -13268,7 +13271,8 @@ function initReveal() {
                     <div id="sv-loader" style="position:absolute; z-index:2; display:flex; flex-direction:column; align-items:center;">
                         <div class="sv-spinner"></div>
                     </div>
-                    <video id="stVideo" class="stv-loading" ${poster} playsinline webkit-playsinline preload="auto" autoplay
+                    <video id="stVideo" class="stv-loading" ${poster} playsinline webkit-playsinline
+                           preload="auto" autoplay disablepictureinpicture
                            ${_storySoundMuted ? 'muted' : ''}
                            src="${item.src}"
                            style="width:100%;height:100%;object-fit:contain;background:#000;">
@@ -13332,6 +13336,17 @@ function initReveal() {
                         }
                     } catch (e) {}
                 });
+
+                // ⚡ TEZLIK: `canplay` ni kutmasdan, ILK KADR tayyor bo'lishi
+                //    bilan (loadeddata) blurni olib tashlab, o'ynatishni
+                //    boshlaymiz. Ilgari faqat `canplay` kutilardi — u ancha
+                //    ko'proq bufer to'planishini talab qiladi, shuning uchun
+                //    mijoz qora/xira ekranga bekorga qarab turardi.
+                storyVideoElement.addEventListener('loadeddata', () => {
+                    if (loader) loader.style.display = 'none';
+                    if (storyVideoElement) storyVideoElement.classList.remove('stv-loading');
+                    if (storyVideoElement && storyVideoElement.paused) _safePlay();
+                }, { once: true });
 
                 // Yetarli yuklanganда — loader ketadi, video boshlanadi
                 storyVideoElement.addEventListener('canplay', () => {
@@ -19150,17 +19165,15 @@ html[data-theme="light"] .story-item.st2-add .st2-add-ring {
 
 /* ===========================================================================
    3) STORIES — COMPOSER ("tez story" oynasi)
+   ⚠️ Sarlavha/skroll qoidalari fayl OXIRIDAGI "sheet-layout" qatlamida
+      qayta belgilangan (sticky + backdrop-filter jank berardi).
    =========================================================================== */
-#storyComposerModal { z-index: 3200; padding: 0; }
+#storyComposerModal { z-index: 3200; }
 .st2-hd {
     display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-    padding: calc(18px + var(--safe-top, 0px)) 18px 14px;
+    padding: 16px 18px 14px;
     border-bottom: 1px solid var(--glass-border);
-    position: sticky; top: 0; z-index: 5;
-    background: linear-gradient(180deg, rgba(18,18,18,.98), rgba(18,18,18,.9));
-    backdrop-filter: blur(12px);
 }
-html[data-theme="light"] .st2-hd { background: linear-gradient(180deg, rgba(252,251,248,.98), rgba(252,251,248,.9)); }
 .st2-hd > div { min-width: 0; flex: 1; }
 .st2-hd h2 {
     margin: 0; font-size: 21px; font-weight: 800; color: var(--text-main); letter-spacing: .2px;
@@ -19172,10 +19185,9 @@ html[data-theme="light"] .st2-hd { background: linear-gradient(180deg, rgba(252,
 }
 .st2-hd .close-btn { flex: none; }
 
-/* Skroller — modalning o'zi (.modal-standard overflow-y:auto). Shu sababli
-   yuqoridagi .st2-hd va pastdagi .st2-foot `position:sticky` bilan yopishadi
-   (ichma-ich skroll YO'Q — iOS'da "qotib qolish" muammosi bo'lmaydi). */
-#story-composer-body { padding: 16px 18px 20px; }
+/* Skroll FAQAT shu blokda (fayl oxiridagi sheet-layout qatlami flex:1 va
+   overflow-y:auto beradi). Sarlavha va tugma paneli qimirlamaydi. */
+#story-composer-body { padding: 16px 18px 24px; }
 
 .st2-block {
     background: var(--card-bg); border: 1px solid var(--glass-border);
@@ -19266,12 +19278,14 @@ textarea.st2-input { resize: none; line-height: 1.5; }
 .st2-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 9px 0 0; }
 
 /* — sticky saqlash tugmasi — */
+/* Pastdagi tugma paneli — sticky EMAS, flex ustunning qat'iy elementi
+   (sticky + gradient fon skroll paytida har kadrda qayta bo'yalardi). */
 .st2-foot {
-    position: sticky; bottom: 0; z-index: 6;
     padding: 14px 18px calc(16px + var(--safe-bottom, 0px));
-    background: linear-gradient(180deg, transparent, rgba(18,18,18,.96) 42%);
+    border-top: 1px solid var(--glass-border);
+    background: var(--bg-dark);
 }
-html[data-theme="light"] .st2-foot { background: linear-gradient(180deg, transparent, rgba(252,251,248,.96) 42%); }
+html[data-theme="light"] .st2-foot { background: #F4EEE2; }
 .st2-save {
     width: 100%; padding: 16px; border: none; cursor: pointer;
     border-radius: 17px; font-size: 16px; font-weight: 800; font-family: inherit;
@@ -20446,19 +20460,21 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                         '<b id="st2-pick-img-tx">Rasm</b><i>Galereyadan yuklash</i>' +
                     '</div>' +
                     '<div class="st2-pick" id="st2-pick-vid" role="button" tabindex="0">' +
-                        '<span class="st2-pick-ic">\uD83C\uDFAC</span>' +
-                        '<b>Video</b><i>Havola bilan</i>' +
+                        '<span class="st2-pick-ic" id="st2-pick-vid-ic">\uD83C\uDFAC</span>' +
+                        '<b id="st2-pick-vid-tx">Video</b><i id="st2-pick-vid-sub">Galereyadan &middot; 20 MB gacha</i>' +
                     '</div>' +
                 '</div>' +
                 '<input type="file" id="st2-file" accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp" style="display:none;">' +
+                '<input type="file" id="st2-file-vid" accept="video/mp4,video/quicktime,video/webm,video/*" style="display:none;">' +
                 '<div class="st2-up hidden" id="st2-up"><i id="st2-up-bar"></i><span id="st2-up-tx">0%</span></div>' +
                 '<div class="st2-prev hidden" id="st2-prev"></div>' +
                 '<div id="st2-url-wrap" style="display:none; margin-top:13px;">' +
-                    '<label class="st2-field"><span>Video havolasi (mp4)</span>' +
+                    '<p class="st2-hint" style="margin-top:0;">Video <b>galereyadan</b> yuklanadi \u2014 yuqoridagi \uD83C\uDFAC tugmasini bosing. ' +
+                    'Tayyor havola bo\'lsa, pastga qo\'ying.</p>' +
+                    '<label class="st2-field"><span>Yoki video havolasi (mp4)</span>' +
                     '<input type="text" class="st2-input" id="st2-vid-url" placeholder="https://..." autocomplete="off"></label>' +
                     '<label class="st2-field"><span>Muqova rasmi (ixtiyoriy)</span>' +
                     '<input type="text" class="st2-input" id="st2-vid-poster" placeholder="https://... (birinchi kadr)" autocomplete="off"></label>' +
-                    '<p class="st2-hint">Video FAYLini shu yerdan yuklash mumkin emas — buning uchun bot tokeni kerak, u ataylab ilovada saqlanmaydi. Faylni botga <b>#' + E(C.ring) + '</b> izohi bilan yuborsangiz, u ham shu bo\'limga tushadi.</p>' +
                 '</div>' +
                 '<label class="st2-field" id="st2-img-url-wrap" style="margin-top:13px;"><span>Yoki rasm havolasi</span>' +
                 '<input type="text" class="st2-input" id="st2-img-url" placeholder="https://..." autocomplete="off"></label>' +
@@ -20502,11 +20518,14 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         var box = $('st2-prev');
         if (!box) return;
         if (!url) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+        // Videoda MUQOVA (poster) bo'lsa qo'yamiz — qora ekran o'rniga birinchi
+        // kadr darhol ko'rinadi (kutish hissi yo'qoladi).
+        var posterAttr = (isVideo && C.poster) ? ' poster="' + E(C.poster) + '"' : '';
         box.innerHTML =
             '<span class="st2-prev-badge">' + (isVideo ? 'VIDEO' : 'RASM') + '</span>' +
             '<button type="button" class="st2-prev-clear" id="st2-prev-clear" aria-label="Tozalash">&times;</button>' +
             (isVideo
-                ? '<video src="' + E(url) + '" playsinline muted controls preload="metadata"></video>'
+                ? '<video src="' + E(url) + '"' + posterAttr + ' playsinline muted controls preload="metadata"></video>'
                 : '<img src="' + E(url) + '" alt="" onerror="this.style.opacity=.25;">');
         box.classList.remove('hidden');
         var cl = $('st2-prev-clear');
@@ -20517,6 +20536,8 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             var vu = $('st2-vid-url'); if (vu) vu.value = '';
             var it = $('st2-pick-img-tx'); if (it) it.textContent = 'Rasm';
             var ii = $('st2-pick-img-ic'); if (ii) ii.textContent = '\uD83D\uDDBC';
+            var vp2 = $('st2-vid-poster'); if (vp2) vp2.value = '';
+            setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
             hap('light');
         };
     }
@@ -20557,6 +20578,133 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             });
     }
 
+    /* ==================================================================
+     * 🎬 VIDEONI GALEREYADAN YUKLASH
+     * ------------------------------------------------------------------
+     * ⚠️ ILGARI: mini app'dan storisga video QO'SHIB BO'LMASDI — admin faqat
+     *    tashqi havola yozishi mumkin edi. Sabab: ImgBB video qabul qilmaydi,
+     *    Telegram'ga to'g'ridan yuklash uchun esa bot tokeni kerak (u mijozda
+     *    ataylab saqlanmaydi).
+     *
+     * ENDI: fayl Worker'ning /upload endpoint'iga boradi, Worker uni Telegram'ga
+     *    yuklaydi va MUDDATSIZ `file_id` qaytaradi. /media proxy videoni
+     *    Range (qism-qism) bilan uzatadi -> mijoz kutmaydi, video darhol
+     *    o'ynay boshlaydi. Telegram avtomatik yasagan MUQOVA (thumbnail) ham
+     *    olinadi -> ochilishda qora ekran emas, birinchi kadr ko'rinadi.
+     *
+     * 📏 CHEGARA — 20 MB. Bu bizning tanlovimiz emas: Telegram bot API
+     *    `getFile` bilan faqat 20 MB gacha faylni o'qiy oladi, ya'ni kattasi
+     *    yuklansa ham keyin KO'RSATIB BO'LMAYDI. Shuning uchun chegaradan
+     *    oshgan faylni darhol rad etib, aniq yo'l ko'rsatamiz.
+     * ================================================================== */
+    var VIDEO_MAX = 20 * 1024 * 1024;
+
+    function fmtMB(b) { return (Math.round((b / 1048576) * 10) / 10) + ' MB'; }
+
+    function setVidPickUI(icon, text, sub) {
+        var ic = $('st2-pick-vid-ic'), tx = $('st2-pick-vid-tx'), sb = $('st2-pick-vid-sub');
+        if (ic) ic.textContent = icon;
+        if (tx) tx.textContent = text;
+        if (sb && sub != null) sb.innerHTML = sub;
+    }
+
+    function uploadVideo(file) {
+        if (!file) return;
+        if (!amAdmin()) { toast('Faqat admin', 'warning'); return; }
+
+        // 1) Hajm chegarasi — ochiq va aniq tushuntirish bilan
+        if (file.size > VIDEO_MAX) {
+            showProgress(null);
+            setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
+            var msg = 'Video juda katta: ' + fmtMB(file.size) + ' (chegara 20 MB).\n\n' +
+                'Telegram bundan kattasini o\'ynatib bera olmaydi.\n\n' +
+                'Yechim:\n' +
+                '\u2022 Videoni qisqartiring (15\u201330 soniya odatda 20 MB ichida)\n' +
+                '\u2022 Yoki videoni BOTGA yuboring: Telegram uni o\'zi siqadi. ' +
+                'Izohiga #' + C.ring + ' yozsangiz, aynan shu bo\'limga tushadi.';
+            try {
+                if (window.tg && tg.showAlert) { tg.showAlert(msg); }
+                else { toast('Video 20 MB dan katta (' + fmtMB(file.size) + ')', 'warning'); }
+            } catch (e) { toast('Video 20 MB dan katta', 'warning'); }
+            return;
+        }
+
+        // 2) initData bo'lmasa Worker rad etadi — oldindan aytamiz
+        var initData = '';
+        try { initData = (window.tg && tg.initData) ? tg.initData : ''; } catch (e) {}
+        if (!initData) {
+            toast('Video yuklash faqat Telegram ilovasi ichida ishlaydi', 'warning');
+            return;
+        }
+
+        setVidPickUI('\u23F3', 'Yuklanmoqda...', fmtMB(file.size));
+        showProgress(2, 'Video yuklanmoqda... 0%');
+
+        var fd = new FormData();
+        fd.append('initData', initData);
+        fd.append('file', file, file.name || 'story.mp4');
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', TG_PROXY + '/upload');
+        xhr.timeout = 180000;   // 3 daqiqa — sekin internet uchun
+
+        xhr.upload.onprogress = function (e) {
+            if (!e.lengthComputable) return;
+            var pct = Math.round((e.loaded / e.total) * 100);
+            // 95% da to'xtatamiz: qolgani Telegram qayta ishlashi
+            showProgress(Math.min(95, pct), pct < 100
+                ? 'Yuklanmoqda... ' + pct + '%'
+                : 'Telegram qayta ishlayapti...');
+        };
+
+        xhr.onload = function () {
+            var j = null;
+            try { j = JSON.parse(xhr.responseText); } catch (e) {}
+            if (xhr.status === 200 && j && j.ok && j.url) {
+                C.type = 'video';
+                C.src = j.url;
+                C.poster = j.thumb_url || '';
+                showProgress(null);
+                showPreview(j.url, true);
+                setPickState();
+                var durTx = j.duration ? (j.duration + ' soniya') : fmtMB(j.size || file.size);
+                setVidPickUI('\u2705', 'Video tayyor', durTx);
+                // Havola maydonlarini ham to'ldiramiz (admin ko'rib turishi uchun)
+                var vu = $('st2-vid-url'); if (vu) vu.value = j.url;
+                var vp = $('st2-vid-poster'); if (vp && j.thumb_url) vp.value = j.thumb_url;
+                hap('success');
+                toast('Video yuklandi \u2705', 'success');
+                return;
+            }
+            // Xatoni tushunarli qilib aytamiz
+            showProgress(null);
+            setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
+            var err = (j && j.error) || ('HTTP ' + xhr.status);
+            if (xhr.status === 413 || err === 'juda katta') {
+                toast('Video 20 MB dan katta', 'warning');
+            } else if (xhr.status === 403 || err === 'ruxsat yoq') {
+                toast('Ruxsat yo\'q — faqat admin yuklaydi', 'warning');
+            } else if (xhr.status === 404) {
+                // Worker hali yangilanmagan bo'lsa aynan shu holat
+                toast('Server hali yangilanmagan (Worker deploy kerak). Hozircha havola qo\'ying.', 'warning');
+            } else {
+                toast('Video yuklanmadi: ' + err, 'warning');
+            }
+        };
+        xhr.onerror = function () {
+            showProgress(null);
+            setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
+            toast('Tarmoq xatosi — internetni tekshiring', 'warning');
+        };
+        xhr.ontimeout = function () {
+            showProgress(null);
+            setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
+            toast('Yuklash juda uzoq davom etdi. Kichikroq video tanlang.', 'warning');
+        };
+
+        xhr.send(fd);
+    }
+
     function wireComposer() {
         var file = $('st2-file');
         var pi = $('st2-pick-img'), pv = $('st2-pick-vid');
@@ -20566,12 +20714,18 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             file.value = '';
             uploadPhoto(f);
         };
+        // 🎬 VIDEO — endi GALEREYADAN yuklanadi (ilgari faqat havola yozish mumkin edi)
+        var vfile = $('st2-file-vid');
         if (pv) pv.onclick = function () {
             hap('light');
             C.type = 'video';
             setPickState();
-            var vu = $('st2-vid-url');
-            if (vu) { vu.focus(); }
+            if (vfile) vfile.click();
+        };
+        if (vfile) vfile.onchange = function () {
+            var f = vfile.files && vfile.files[0];
+            vfile.value = '';
+            uploadVideo(f);
         };
 
         var iu = $('st2-img-url');
@@ -22236,16 +22390,9 @@ html.lite .sv-loader::after { animation: none !important; }
      🧠 QATLAM 2026.09 — AI OMMAVIY: LUXURY DIZAYN VA JONLI HOLAT
      ============================================================================ -->
 <style id="layer-ai-bulk">
-#aiBulkModal { padding: 0; }
-#aiBulkModal .modal-header {
-    padding: calc(20px + var(--safe-top, 0px)) 20px 15px;
-    position: sticky; top: 0; z-index: 5;
-    background: linear-gradient(180deg, rgba(15,15,17,.99), rgba(15,15,17,.92));
-    backdrop-filter: blur(14px);
-}
-html[data-theme="light"] #aiBulkModal .modal-header {
-    background: linear-gradient(180deg, rgba(252,251,248,.99), rgba(252,251,248,.92));
-}
+/* ⚠️ Sarlavha/skroll qoidalari fayl OXIRIDAGI "sheet-layout" qatlamida
+      qayta belgilangan (sticky + backdrop-filter jank berardi). */
+#aiBulkModal .modal-header { padding: 16px 20px 14px; }
 #ai-bulk-content { padding: 4px 20px 40px; }
 
 /* ——— 3 qadam ——— */
@@ -22518,6 +22665,136 @@ html[data-theme="light"] .aib-input { background: rgba(0,0,0,.035); }
     };
 
     if (window._dlog) window._dlog('%c[Qatlam 2026.09] AI ommaviy yangilandi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+<!-- ============================================================================
+     🩹 QATLAM 2026.10 — "SHEET" MAKETI: SILLIQ SKROLL VA QOTMAYDIGAN SARLAVHA
+     ----------------------------------------------------------------------------
+     MUAMMO (foydalanuvchi aytgani): storis qo'shish va AI ommaviy oynalarida
+     pastga-tepaga skroll qilganda EKRAN O'YNAB KETARDI, tepadagi qora sarlavha
+     paneli "qotib" turardi va ancha pastga tushib ketgan edi.
+
+     UCH SABAB TOPILDI:
+
+     1️⃣  `--safe-top` IKKI MARTA qo'shilardi.
+         Faylning 3878-qatorida BARCHA modallar uchun global qoida bor:
+             .modal-standard { padding-top: calc(20px + var(--safe-top)) !important; }
+         Men esa sarlavhaga yana `calc(18px + var(--safe-top))` bergan edim.
+         `!important` bo'lgani uchun mening `padding: 0` yozuvim ishlamasdi ->
+         Telegram to'liq ekranida (--safe-top ≈ 56px) tepadan ~94px bo'sh joy
+         qolib, panel "ancha pastga kelib" ketgan ko'rinardi.
+
+     2️⃣  Sarlavha `position: sticky` + `backdrop-filter: blur(12px)` edi.
+         Skroll qiluvchi konteyner ichida yopishqoq element ORTIDAGI blur
+         HAR KADRDA qayta hisoblanadi — mobil GPU uchun eng qimmat effekt.
+         Aynan shu "ekran o'ynashi" (jank) va panelning "qotib turishi"ga sabab.
+         (Fayl muallifi bu muammoni allaqachon bilgan: `body.is-scrolling`
+          qatlamida .bottom-nav va .header uchun blur kamaytirilgan.)
+
+     3️⃣  Yarim shaffof gradient fon (.98/.9 alfa) ostidagi kontentni ham
+         qayta bo'yashga majbur qilardi.
+
+     YECHIM: yopishqoq element UMUMAN YO'Q. Oyna — oddiy flex ustun:
+         [sarlavha: qimirlamaydi]  [tana: FAQAT shu skroll qiladi]  [tugma paneli]
+     Blur olib tashlandi, fon qattiq (solid) rangga o'tdi, `--safe-top` faqat
+     BIR MARTA — oynaning o'zida qo'llanadi.
+     ============================================================================ -->
+<style id="layer-sheet-layout">
+/* ——— 1) Oynaning o'zi skroll QILMAYDI: u faqat flex ustun ——— */
+#storyComposerModal,
+#customerDetailModal,
+#aiBulkModal {
+    /* `!important` SHART: 3878-qatordagi global padding-top qoidasini yengish uchun */
+    padding: 0 !important;
+    padding-top: var(--safe-top, 0px) !important;   /* safe-top FAQAT bir marta */
+    overflow: hidden !important;                    /* skroll ichki blokda */
+    flex-direction: column;
+}
+
+/* ——— 2) Sarlavha: qimirlamaydi, blur YO'Q, fon qattiq ——— */
+.st2-hd,
+#aiBulkModal .modal-header {
+    flex: 0 0 auto !important;
+    position: static !important;            /* sticky OLIB TASHLANDI */
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;       /* jank sababi */
+    background: var(--bg-dark) !important;  /* shaffof gradient o'rniga qattiq rang */
+    margin-bottom: 0 !important;
+}
+html[data-theme="light"] .st2-hd,
+html[data-theme="light"] #aiBulkModal .modal-header { background: #F4EEE2 !important; }
+
+/* ——— 3) Faqat tana skroll qiladi ——— */
+#story-composer-body,
+#customer-detail-body,
+#ai-bulk-content,
+#ai-neural-loader {
+    flex: 1 1 auto;
+    min-height: 0;                          /* flex ichida skroll ishlashi uchun SHART */
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;           /* skroll tashqariga "o'tib ketmaydi" */
+    touch-action: pan-y;                    /* faqat vertikal — diagonal siljish yo'q */
+}
+
+/* ——— 4) Tugma paneli ham qimirlamaydi ——— */
+.st2-foot { flex: 0 0 auto !important; position: static !important; }
+
+/* ——— 5) Sarlavha ustidagi "tortish dastasi" (::before) bu oynalarda kerak emas:
+         u absolute joylashgani uchun sarlavha matni ustiga tushib chalkashtirardi ——— */
+#storyComposerModal::before,
+#customerDetailModal::before,
+#aiBulkModal::before { display: none !important; }
+
+/* ——— 6) Sarlavha o'lchamini jamlash (ilgari juda baland ko'rinardi) ——— */
+.st2-hd h2 { font-size: 19px !important; }
+#aiBulkModal .modal-header h2 { font-size: 19px !important; margin: 0 !important; }
+
+/* ——— 7) Skroll paytida og'ir effektlarni jimlashtirish (qo'shimcha sug'urta) ——— */
+body.is-scrolling #story-composer-body .st2-block,
+body.is-scrolling #ai-bulk-content .aib-block,
+body.is-scrolling #ai-bulk-content .aib-step { box-shadow: none !important; }
+</style>
+
+<script>
+(function sheetScrollFix() {
+    'use strict';
+    /* Ichki skrollerlar hujjat darajasidagi `touchmove` ruxsat ro'yxatiga
+     * (6954-qator) qo'shildi — shuning uchun bu yerda qo'shimcha handler
+     * KERAK EMAS. Ro'yxat: #story-composer-body, #customer-detail-body,
+     * #ai-bulk-content, #ai-neural-loader. */
+    var SCROLLERS = '#story-composer-body, #customer-detail-body, #ai-bulk-content, #ai-neural-loader';
+
+    /* ------------------------------------------------------------------
+     * Oyna har ochilganda skrollni tepaga qaytaramiz. Ilgari oyna
+     * o'zi skroll qilgani uchun eski holat saqlanib qolib, sarlavha
+     * "yarim surilgan" holatda ko'rinardi.
+     * ------------------------------------------------------------------ */
+    function resetScroll(id) {
+        var m = document.getElementById(id);
+        if (m) m.scrollTop = 0;
+        var inner = m ? m.querySelectorAll(SCROLLERS) : [];
+        Array.prototype.forEach.call(inner, function (n) { n.scrollTop = 0; });
+    }
+    window._sheetResetScroll = resetScroll;
+
+    function wrap() {
+        if (typeof window.openModal !== 'function' || window._sheetWrapped) return;
+        window._sheetWrapped = true;
+        var orig = window.openModal;
+        window.openModal = function (id) {
+            var r = orig.apply(this, arguments);
+            if (id === 'aiBulkModal' || id === 'storyComposerModal' || id === 'customerDetailModal') {
+                setTimeout(function () { resetScroll(id); }, 20);
+            }
+            return r;
+        };
+    }
+    wrap();
+    setTimeout(wrap, 1200);
+    setTimeout(wrap, 3000);
 })();
 </script>
 </body>
