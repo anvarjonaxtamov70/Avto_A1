@@ -4964,6 +4964,8 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             #adminModal .ap2-tile:nth-child(4){ animation-delay:.27s; }
             #adminModal .ap2-tile:nth-child(5){ animation-delay:.32s; }
             #adminModal .ap2-tile:nth-child(6){ animation-delay:.37s; }
+            #adminModal .ap2-tile:nth-child(7){ animation-delay:.42s; }
+            #adminModal .ap2-tile:nth-child(8){ animation-delay:.47s; }
         }
 
         /* ============================================================
@@ -6514,6 +6516,14 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <span class="ap2-tile-tx"><b>Qoralamalar</b><i>Rasmsiz tovarlar</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
+        <!-- 📸 STORIES — mini app ichidan storis qo'shish va boshqarish -->
+        <div class="ap2-tile" style="--ac:#ff2d92" onclick="AvtoStories.openAdmin()" role="button" tabindex="0">
+            <span class="ap2-tile-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" stroke-dasharray="4 2.6"/><circle cx="12" cy="12" r="4.2"/></svg>
+            </span>
+            <span class="ap2-tile-tx"><b>Stories</b><i>Qo'shish va boshqarish</i></span>
+            <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </div>
     </div>
 </div>
     
@@ -6955,7 +6965,10 @@ document.addEventListener('touchmove', function(e) {
             '#ai-chat-box, #story-content, .chat-messages, .pm-similar-wrapper, ' +
             '#admin-orders-list, #admin-customers-list, #admin-drafts-list, ' +
             '#admin-inventory-list, #admin-stats-content, #od-chat-messages, ' +
-            '#admin-chat-messages, #pm-reviews-list, #pm-size-options, #pm-car-options'
+            '#admin-chat-messages, #pm-reviews-list, #pm-size-options, #pm-car-options, ' +
+            // 🆕 Stories boshqaruvi / composer / mijoz tafsiloti — ichki skrollga ruxsat
+            '#admin-stories-list, #story-composer-body, #customer-detail-body, ' +
+            '#cst-list, .st2-rings, .cst-segs'
         ) : null;
         // Faqat skroll bo'ladigan joy TOPILMASA (ya'ni orqa fon) to'xtatamiz
         if (!scrollable) {
@@ -7606,24 +7619,23 @@ const Haptics = {
     function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">' + icon('check') + ' Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">' + icon('truck') + ' Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">' + icon('flag') + ' Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">' + icon('cancel') + ' Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">' + icon('clock') + ' Kutilmoqda</span>'; }
     function updateProfileUI() { let dN = myProfile.name || "Mijoz"; var _und = document.getElementById('user-name-display'); if (_und) _und.innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; _updateVipStatus(); }
 
-    // ⭐ QADAM 2: VIP MEMBER yorlig'i faqat haqiqiy mijozlar uchun
-    // Mantiq:
-    //   - 5+ ta yetkazib berilgan buyurtma  YOKI
-    //   - 1,000,000 so'm va undan ortiq sarflagan mijoz -> VIP
-    //   - Aks holda yorliq ko'rinmaydi (eski "hammaga VIP" muammosi tuzatildi)
+    // ⭐ VIP HOLATI — endi to'liq mantiq `window.VIP` modulida (fayl oxiridagi qatlam).
+    // Bu funksiya faqat "ko'prik": buyurtma tarixi o'zgarganda VIP modulini xabardor qiladi.
+    //
+    // ⚠️ ESKI XATO (tuzatildi): ilgari bu yerda `.profile-header` klassi izlanardi,
+    //    lekin profil ekrani inline stil bilan yozilgan — bu klass HECH QAYERDA yo'q.
+    //    Natijada `querySelector` doim `null` qaytarib, VIP yorlig'i HECH QACHON
+    //    ko'rinmasdi. Endi VIP moduli o'z konteynerini (#vip-card-box) o'zi yasaydi.
     function _updateVipStatus() {
         try {
+            // Yangi tizim: daraja (bronze/kumush/oltin/platina) + imtiyozlar + progress
+            if (window.VIP && window.VIP.refresh) { window.VIP.refresh(myOrders); return; }
+            // Zaxira (qatlam hali yuklanmagan bo'lsa): eski klassni ham qo'llab-quvvatlaymiz
             const header = document.querySelector('.profile-header');
-            if (!header) return;
-            if (!Array.isArray(myOrders)) {
-                header.classList.remove('is-vip');
-                return;
-            }
+            if (!header || !Array.isArray(myOrders)) return;
             const delivered = myOrders.filter(o => o && o.status === 'yetkazildi');
-            const orderCount = delivered.length;
             const totalSpent = delivered.reduce((s, o) => s + (parseInt(o.total) || 0), 0);
-            const isVip = orderCount >= 5 || totalSpent >= 1000000;
-            header.classList.toggle('is-vip', isVip);
+            header.classList.toggle('is-vip', delivered.length >= 5 || totalSpent >= 1000000);
         } catch (e) { /* xato bo'lsa indamasdan o'tib ketamiz - boshqa funksiyalar buzilmasin */ }
     }
 
@@ -8690,7 +8702,7 @@ window.clearAppCache = () => {
     if(pWrap && pBar && pMsg) {
         if(t > 0) {
             pWrap.style.display = 'block';
-            let target = 3000000;
+            let target = (window.VIP && window.VIP.freeDeliveryTarget) ? window.VIP.freeDeliveryTarget() : 3000000;
             let percent = (t / target) * 100;
             if(percent >= 100) {
                 pBar.style.width = '100%';
@@ -9520,8 +9532,39 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     return;
                 }
     
+                // 2b. 📸 STORY COMPOSER — qaerdan ochilgan bo'lsa, o'sha yerga qaytadi
+                //     (admin Stories oynasi, yoki to'g'ridan-to'g'ri imo/halqa orqali -> hech qayerga)
+                if (current === 'storyComposerModal') {
+                    var _scFrom = window._storyComposerFrom || null;
+                    window._storyComposerFrom = null;
+                    if (_scFrom && document.getElementById(_scFrom)) {
+                        activeModal = _scFrom;
+                        document.getElementById(_scFrom).style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
+                        window._modalStack = [];
+                        updateBtns();
+                        return;
+                    }
+                    // Imo/halqa orqali ochilgan — butunlay yopamiz
+                    document.body.style.overflow = '';
+                    window._modalStack = [];
+                    activeModal = null;
+                    updateBtns();
+                    return;
+                }
+
+                // 2c. 👤 MIJOZ TAFSILOTI -> Mijozlar ro'yxatiga qaytish
+                if (current === 'customerDetailModal') {
+                    activeModal = 'adminCustomersModal';
+                    document.getElementById('adminCustomersModal').style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = [];
+                    updateBtns();
+                    return;
+                }
+
                 // 3. Maxsus Admin oynalaridan -> Admin Panelga qaytish
-                if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal' || current === 'adminDraftsModal') {
+                if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal' || current === 'adminDraftsModal' || current === 'adminStoriesModal') {
                     activeModal = 'adminModal';
                     document.getElementById('adminModal').style.display = 'flex';
                     document.body.style.overflow = 'hidden';
@@ -10602,9 +10645,9 @@ window.renderAdminOrdersUI = (ordersArr) => {
             </div>
             
             <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
-                <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #fff;">
+                <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #fff; flex-wrap: wrap;">
                     <span style="background: rgba(255,255,255,0.05); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid rgba(255,255,255,0.05);">👤</span>
-                    ${dName}
+                    ${dName}<!-- 👑 VIP daraja belgisi shu bo'sh joyga qo'yiladi (fayl oxiridagi qatlam to'ldiradi) --><span class="cst-vip-slot" data-order-uid="${o.uI || ''}"></span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600;">
                     <span style="background: rgba(0,122,255,0.1); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid rgba(0,122,255,0.2);">📞</span>
@@ -11958,7 +12001,7 @@ window.renderCartItems = () => {
 
     if(pWrap) {
         pWrap.style.display = 'block';
-        let target = 3000000;
+        let target = (window.VIP && window.VIP.freeDeliveryTarget) ? window.VIP.freeDeliveryTarget() : 3000000;
         let percent = Math.min((t / target) * 100, 100);
         let pBar = document.getElementById('cart-progress-bar');
         let pMsg = document.getElementById('cart-progress-msg');
@@ -12098,7 +12141,7 @@ animatePrice('cart-total-sum', t);
 
     if(pWrap) {
         pWrap.style.display = 'block';
-        let target = 3000000;
+        let target = (window.VIP && window.VIP.freeDeliveryTarget) ? window.VIP.freeDeliveryTarget() : 3000000;
         let percent = Math.min((t / target) * 100, 100);
         let pBar = document.getElementById('cart-progress-bar');
         let pMsg = document.getElementById('cart-progress-msg');
@@ -12832,6 +12875,10 @@ function initReveal() {
             if (currentStoryIdx < 0) currentStoryIdx = 0;
 
             const item = currentPlaylist[currentStoryIdx];
+            // 🔗 Tashqi qatlam (caption / "Batafsil" tugmasi) joriy storisni bilishi uchun.
+            //    currentPlaylist lokal o'zgaruvchi bo'lgani sababli faqat shu yerda ochamiz.
+            window._st2CurrentStoryItem = item;
+            window._st2CurrentStoryCat = currentPlaylistId;
             const content = document.getElementById('story-content');
             const progressContainer = document.getElementById('story-progress-container');
 
@@ -18248,8 +18295,1264 @@ html.lite[data-theme="light"] body .story-item {
     border: none !important;
 }
 </style>
-</body>    
-</html> 
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.06 — STORIES QO'YISH + MIJOZLAR + VIP
+     ----------------------------------------------------------------------------
+     Bu ADDITIV qatlam: yuqoridagi hech bir qoidani o'chirmaydi, faqat yangi
+     komponentlar qo'shadi va bir nechta eski funksiyani (mijozlar ro'yxati)
+     window.* orqali ustidan yozadi.
+
+     Uch nomlash makoni:
+       .st2-*   — Stories (composer + admin boshqaruvi + imo paneli)
+       .cst-*   — Mijozlar (Customers) ro'yxati va tafsiloti
+       .vipc-*  — VIP daraja kartasi (profil ichida)
+     ============================================================================ -->
+<style id="layer-stories-customers-vip">
+/* ===========================================================================
+   0) UMUMIY YORDAMCHILAR (uchala bo'lim ham ishlatadi)
+   =========================================================================== */
+@keyframes lyRise   { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: none; } }
+@keyframes lyPop    { 0% { transform: scale(.82); opacity:0; } 60% { transform: scale(1.05); } 100% { transform: scale(1); opacity:1; } }
+@keyframes lySheen  { 0% { transform: translateX(-130%) skewX(-18deg); } 55%,100% { transform: translateX(320%) skewX(-18deg); } }
+@keyframes lyRingSpin { to { transform: rotate(360deg); } }
+@keyframes lyPulse  { 0%,100% { box-shadow: 0 0 0 0 rgba(201,168,76,.45); } 50% { box-shadow: 0 0 0 9px rgba(201,168,76,0); } }
+@keyframes lyDash   { to { stroke-dashoffset: -28; } }
+
+/* ===========================================================================
+   1) STORIES — lentadagi "+" halqasi (faqat admin)
+   =========================================================================== */
+.story-item.st2-add .st2-add-ring {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 1.8px dashed rgba(201,168,76,.75);
+    background: radial-gradient(circle at 50% 42%, rgba(201,168,76,.20), rgba(201,168,76,.04) 70%);
+    color: var(--luxury-gold);
+    transition: transform .18s cubic-bezier(.2,.85,.25,1), border-color .22s ease, background .22s ease;
+}
+.story-item.st2-add:active .st2-add-ring { transform: scale(.9); border-style: solid; }
+.story-item.st2-add .st2-add-ring svg { width: 26px; height: 26px; }
+.story-item.st2-add span { color: var(--luxury-gold) !important; font-weight: 700 !important; }
+@media (prefers-reduced-motion: no-preference) {
+    .story-item.st2-add .st2-add-ring { animation: lyPulse 2.8s ease-in-out infinite; }
+}
+html[data-theme="light"] .story-item.st2-add .st2-add-ring {
+    border-color: rgba(150,114,10,.6);
+    background: radial-gradient(circle at 50% 42%, rgba(150,114,10,.14), rgba(150,114,10,.03) 70%);
+    color: var(--luxury-gold-dark, #96720A);
+}
+
+/* ===========================================================================
+   2) STORIES — "o'ngga tortish" imo paneli (Telegram uslubi)
+   Barmoq o'ngga surilganda chap chetdan kamera paneli sirg'alib chiqadi.
+   =========================================================================== */
+#st2-peek {
+    position: fixed; top: 0; left: 0; height: 100%; width: 132px;
+    z-index: 90000; display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    background: linear-gradient(100deg, rgba(201,168,76,.95), rgba(150,114,10,.72) 62%, rgba(150,114,10,0));
+    color: #241a00;
+    transform: translateX(-100%);
+    opacity: 0;                  /* imo boshlanmaguncha ko'rinmaydi (miltillashning oldini oladi) */
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+#st2-peek.show { display: flex; }
+#st2-peek .st2-peek-ic {
+    width: 62px; height: 62px; border-radius: 50%;
+    background: rgba(255,255,255,.28); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 10px 26px rgba(0,0,0,.22);
+    transition: transform .2s cubic-bezier(.2,.85,.25,1), background .2s ease;
+}
+#st2-peek .st2-peek-ic svg { width: 30px; height: 30px; }
+#st2-peek .st2-peek-tx { font-size: 12.5px; font-weight: 800; letter-spacing: .4px; text-align: center; line-height: 1.35; padding: 0 8px; }
+#st2-peek.armed .st2-peek-ic { transform: scale(1.16); background: rgba(255,255,255,.5); }
+
+/* ===========================================================================
+   3) STORIES — COMPOSER ("tez story" oynasi)
+   =========================================================================== */
+#storyComposerModal { z-index: 3200; padding: 0; }
+.st2-hd {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: calc(18px + var(--safe-top, 0px)) 18px 14px;
+    border-bottom: 1px solid var(--glass-border);
+    position: sticky; top: 0; z-index: 5;
+    background: linear-gradient(180deg, rgba(18,18,18,.98), rgba(18,18,18,.9));
+    backdrop-filter: blur(12px);
+}
+html[data-theme="light"] .st2-hd { background: linear-gradient(180deg, rgba(252,251,248,.98), rgba(252,251,248,.9)); }
+.st2-hd > div { min-width: 0; flex: 1; }
+.st2-hd h2 {
+    margin: 0; font-size: 21px; font-weight: 800; color: var(--text-main); letter-spacing: .2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.st2-hd h2 + span, .st2-hd span {
+    display: block; margin-top: 3px; font-size: 12px; font-weight: 600; color: var(--luxury-gold);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.st2-hd .close-btn { flex: none; }
+
+/* Skroller — modalning o'zi (.modal-standard overflow-y:auto). Shu sababli
+   yuqoridagi .st2-hd va pastdagi .st2-foot `position:sticky` bilan yopishadi
+   (ichma-ich skroll YO'Q — iOS'da "qotib qolish" muammosi bo'lmaydi). */
+#story-composer-body { padding: 16px 18px 20px; }
+
+.st2-block {
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    border-radius: 20px; padding: 16px; margin-bottom: 14px;
+}
+html:not([data-theme="light"]) .st2-block {
+    background: linear-gradient(158deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), var(--card-bg);
+    box-shadow: 0 10px 26px rgba(0,0,0,.2);
+}
+.st2-lbl { font-size: 11.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-muted); margin: 0 0 12px; }
+
+/* — media tanlash (2 ta katta karta) — */
+.st2-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.st2-pick {
+    position: relative; overflow: hidden; cursor: pointer;
+    border-radius: 17px; padding: 15px 12px; min-height: 104px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    background: rgba(127,127,127,.08);
+    border: 1.5px solid var(--glass-border);
+    -webkit-tap-highlight-color: transparent;
+    transition: transform .18s cubic-bezier(.2,.85,.25,1), border-color .22s ease, background .22s ease;
+}
+.st2-pick:active { transform: scale(.955); }
+.st2-pick.on { border-color: var(--luxury-gold); background: rgba(201,168,76,.12); }
+.st2-pick-ic { font-size: 27px; line-height: 1; }
+.st2-pick b { font-size: 14.5px; font-weight: 800; color: var(--text-main); }
+.st2-pick i { font-style: normal; font-size: 11px; color: var(--text-muted); text-align: center; line-height: 1.3; }
+
+/* — yuklash progressi — */
+.st2-up { margin-top: 13px; height: 30px; border-radius: 11px; background: rgba(127,127,127,.14); position: relative; overflow: hidden; }
+.st2-up.hidden { display: none; }
+.st2-up i { position: absolute; inset: 0 auto 0 0; width: 2%; background: var(--gold-gradient); border-radius: 11px; transition: width .25s ease; }
+.st2-up span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 800; color: var(--text-main); text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+
+/* — 9:16 ko'rinish (preview) — */
+.st2-prev { margin-top: 13px; border-radius: 16px; overflow: hidden; background: #000; position: relative; }
+.st2-prev.hidden { display: none; }
+.st2-prev img, .st2-prev video { display: block; width: 100%; max-height: 300px; object-fit: contain; background: #000; }
+.st2-prev-badge {
+    position: absolute; top: 9px; left: 9px; z-index: 2;
+    padding: 4px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .6px;
+    background: rgba(0,0,0,.62); color: #fff; backdrop-filter: blur(6px);
+}
+.st2-prev-clear {
+    position: absolute; top: 8px; right: 8px; z-index: 2;
+    width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(0,0,0,.6); color: #fff; font-size: 16px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px);
+}
+
+/* — bo'lim (kategoriya) tanlagich — */
+.st2-rings { display: flex; gap: 9px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.st2-rings::-webkit-scrollbar { display: none; }
+.st2-ring {
+    flex: 0 0 auto; cursor: pointer; border: 1.5px solid var(--glass-border);
+    background: rgba(127,127,127,.08); border-radius: 15px;
+    padding: 10px 13px; min-width: 78px;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform .16s ease, border-color .2s ease, background .2s ease, color .2s ease;
+}
+.st2-ring:active { transform: scale(.93); }
+.st2-ring span { font-size: 19px; line-height: 1; }
+.st2-ring i { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+.st2-ring.on { border-color: var(--luxury-gold); background: rgba(201,168,76,.16); }
+.st2-ring.on i { color: var(--luxury-gold); }
+.st2-ring.on { animation: lyPop .3s ease; }
+.st2-ring .st2-ring-cnt {
+    font-size: 9.5px; font-weight: 800; color: var(--text-muted);
+    background: rgba(127,127,127,.16); padding: 1px 6px; border-radius: 999px;
+}
+
+/* — matn maydonlari — */
+.st2-field { display: block; margin-bottom: 12px; }
+.st2-field:last-child { margin-bottom: 0; }
+.st2-field > span { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 7px; }
+.st2-input {
+    width: 100%; box-sizing: border-box; padding: 13px 14px; border-radius: 14px;
+    font-size: 14.5px; font-family: inherit; font-weight: 600;
+    color: var(--text-main); background: rgba(0,0,0,.3);
+    border: 1px solid rgba(127,127,127,.22); outline: none;
+    transition: border-color .22s ease, box-shadow .22s ease, background .22s ease;
+}
+html[data-theme="light"] .st2-input { background: rgba(0,0,0,.035); }
+.st2-input:focus { border-color: var(--luxury-gold); background: rgba(201,168,76,.07); box-shadow: 0 6px 20px rgba(201,168,76,.14); }
+.st2-input::placeholder { color: rgba(142,142,147,.75); font-weight: 500; }
+textarea.st2-input { resize: none; line-height: 1.5; }
+.st2-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 9px 0 0; }
+
+/* — sticky saqlash tugmasi — */
+.st2-foot {
+    position: sticky; bottom: 0; z-index: 6;
+    padding: 14px 18px calc(16px + var(--safe-bottom, 0px));
+    background: linear-gradient(180deg, transparent, rgba(18,18,18,.96) 42%);
+}
+html[data-theme="light"] .st2-foot { background: linear-gradient(180deg, transparent, rgba(252,251,248,.96) 42%); }
+.st2-save {
+    width: 100%; padding: 16px; border: none; cursor: pointer;
+    border-radius: 17px; font-size: 16px; font-weight: 800; font-family: inherit;
+    background: var(--gold-gradient); color: #2a2000;
+    box-shadow: 0 12px 28px rgba(201,168,76,.32);
+    position: relative; overflow: hidden;
+    transition: transform .18s ease, filter .2s ease, opacity .2s ease;
+}
+.st2-save:active { transform: translateY(1px) scale(.99); }
+.st2-save:disabled { opacity: .55; cursor: default; box-shadow: none; }
+.st2-save::after {
+    content: ''; position: absolute; top: 0; left: 0; width: 38%; height: 100%; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent);
+    transform: translateX(-130%) skewX(-18deg);
+}
+@media (prefers-reduced-motion: no-preference) { .st2-save:not(:disabled)::after { animation: lySheen 4.2s ease-in-out 1s infinite; } }
+
+/* ===========================================================================
+   4) STORIES — ADMIN BOSHQARUVI (ro'yxat)
+   =========================================================================== */
+#admin-stories-list { padding: 0 2px 24px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+.st2-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 14px; }
+.st2-sum-b {
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 13px 8px; text-align: center;
+    animation: lyRise .45s both;
+}
+.st2-sum-b:nth-child(2) { animation-delay: .06s; }
+.st2-sum-b:nth-child(3) { animation-delay: .12s; }
+.st2-sum-b b { display: block; font-size: 21px; font-weight: 800; color: var(--luxury-gold); line-height: 1.1; }
+.st2-sum-b span { display: block; margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+
+.st2-add-btn {
+    width: 100%; cursor: pointer; border: 1.5px dashed rgba(201,168,76,.55);
+    background: linear-gradient(150deg, rgba(201,168,76,.13), rgba(201,168,76,.03));
+    border-radius: 19px; padding: 17px 14px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 14px; text-align: left;
+    font-family: inherit; -webkit-tap-highlight-color: transparent;
+    transition: transform .18s ease, border-color .22s ease, background .22s ease;
+}
+.st2-add-btn:active { transform: scale(.985); border-style: solid; }
+.st2-add-btn .st2-ab-ic {
+    flex: none; width: 46px; height: 46px; border-radius: 14px;
+    background: var(--gold-gradient); color: #2a2000;
+    display: flex; align-items: center; justify-content: center; font-size: 25px; font-weight: 800;
+    box-shadow: 0 8px 20px rgba(201,168,76,.28);
+}
+.st2-add-btn .st2-ab-tx { min-width: 0; }
+.st2-add-btn .st2-ab-tx b { display: block; font-size: 15.5px; font-weight: 800; color: var(--text-main); }
+.st2-add-btn .st2-ab-tx i { display: block; font-style: normal; font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+.st2-group {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase;
+    color: var(--text-muted); margin: 18px 4px 10px;
+}
+.st2-group b { color: var(--luxury-gold); font-size: 13px; letter-spacing: .4px; text-transform: none; }
+.st2-group em {
+    font-style: normal; font-size: 10.5px; font-weight: 800; color: var(--text-muted);
+    background: rgba(127,127,127,.16); padding: 2px 8px; border-radius: 999px; letter-spacing: 0;
+}
+.st2-group::after { content: ''; flex: 1; height: 1px; background: var(--glass-border); }
+
+.st2-card {
+    display: flex; gap: 13px; align-items: center;
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    border-radius: 18px; padding: 11px; margin-bottom: 10px;
+    animation: lyRise .4s both;
+}
+html:not([data-theme="light"]) .st2-card {
+    background: linear-gradient(160deg, rgba(255,255,255,.045), rgba(255,255,255,.01)), var(--card-bg);
+}
+.st2-thumb {
+    flex: none; width: 56px; height: 74px; border-radius: 12px; overflow: hidden;
+    background: #0a0a0a; position: relative;
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+    cursor: pointer; border: 1px solid var(--glass-border);
+}
+.st2-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.st2-thumb .st2-play {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.35); color: #fff; font-size: 17px; font-style: normal;
+}
+.st2-mid { flex: 1; min-width: 0; }
+.st2-mid > b { display: block; font-size: 14.5px; font-weight: 700; color: var(--text-main); line-height: 1.35;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st2-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.st2-chip {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    background: rgba(127,127,127,.14); padding: 3px 9px; border-radius: 999px;
+}
+.st2-chip.is-vid { color: #ff2d92; background: rgba(255,45,146,.14); }
+.st2-chip.is-new { color: var(--accent-green); background: rgba(48,209,88,.14); }
+.st2-acts { display: flex; flex-direction: column; gap: 7px; flex: none; }
+.st2-mini {
+    width: 38px; height: 38px; border-radius: 12px; cursor: pointer;
+    background: rgba(127,127,127,.12); border: 1px solid var(--glass-border);
+    color: var(--text-muted); font-size: 15px; display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; transition: transform .16s ease, background .2s ease;
+}
+.st2-mini:active { transform: scale(.88); }
+.st2-mini.is-del { border-color: rgba(255,69,58,.32); color: var(--accent-red); }
+
+.st2-empty { text-align: center; padding: 44px 24px; }
+.st2-empty .ic { font-size: 44px; display: block; margin-bottom: 12px; opacity: .8; }
+.st2-empty b { display: block; font-size: 17px; font-weight: 800; color: var(--text-main); margin-bottom: 7px; }
+.st2-empty p { font-size: 13.5px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+
+/* ===========================================================================
+   5) MIJOZLAR (CUSTOMERS) — qayta dizayn
+   Maqsad: mayda yozuvlar kamaysin, aniq va chiroyli, animatsiyali.
+   =========================================================================== */
+.cst-wrap { padding: 0 2px; }
+
+/* — KPI panel (4 ta karta, raqamlar sanab chiqadi) — */
+.cst-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.cst-kpi {
+    position: relative; overflow: hidden;
+    border-radius: 18px; padding: 15px 14px;
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    animation: lyRise .48s both;
+}
+html:not([data-theme="light"]) .cst-kpi {
+    background: linear-gradient(158deg, rgba(255,255,255,.055), rgba(255,255,255,.012)), var(--card-bg);
+    box-shadow: 0 8px 22px rgba(0,0,0,.2);
+}
+.cst-kpi:nth-child(2) { animation-delay: .06s; }
+.cst-kpi:nth-child(3) { animation-delay: .12s; }
+.cst-kpi:nth-child(4) { animation-delay: .18s; }
+.cst-kpi::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%;
+    background: var(--kc, var(--luxury-gold)); opacity: .85;
+}
+.cst-kpi-ic { font-size: 20px; line-height: 1; margin-bottom: 9px; }
+.cst-kpi-n { font-size: 24px; font-weight: 800; color: var(--kc, var(--luxury-gold)); line-height: 1.05; letter-spacing: -.4px; }
+.cst-kpi-l { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-top: 5px; }
+
+/* — asboblar paneli: qidiruv + saralash — */
+.cst-tools { display: flex; gap: 9px; margin-bottom: 12px; }
+.cst-search-wrap { position: relative; flex: 1; min-width: 0; }
+.cst-search {
+    width: 100%; box-sizing: border-box; padding: 14px 40px 14px 42px;
+    border-radius: 15px; font-size: 15px; font-family: inherit; font-weight: 600;
+    color: var(--text-main); background: rgba(127,127,127,.1);
+    border: 1px solid var(--glass-border); outline: none;
+    transition: border-color .22s ease, box-shadow .22s ease, background .22s ease;
+}
+.cst-search:focus { border-color: var(--luxury-gold); background: rgba(201,168,76,.07); box-shadow: 0 6px 20px rgba(201,168,76,.13); }
+.cst-search::placeholder { color: rgba(142,142,147,.8); font-weight: 500; }
+.cst-search-ic { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-muted); pointer-events: none; }
+.cst-search-x {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer; display: none;
+    background: rgba(127,127,127,.25); color: var(--text-main); font-size: 14px; line-height: 1;
+    align-items: center; justify-content: center;
+}
+.cst-search-wrap.has-text .cst-search-x { display: flex; }
+.cst-sort {
+    flex: none; width: 50px; border-radius: 15px; cursor: pointer;
+    background: rgba(127,127,127,.1); border: 1px solid var(--glass-border);
+    color: var(--luxury-gold); display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; transition: transform .16s ease, background .2s ease;
+}
+.cst-sort:active { transform: scale(.92); }
+.cst-sort svg { width: 20px; height: 20px; }
+
+/* — segment chiplari — */
+.cst-segs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.cst-segs::-webkit-scrollbar { display: none; }
+.cst-seg {
+    flex: 0 0 auto; cursor: pointer; font-family: inherit;
+    padding: 10px 15px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    background: rgba(127,127,127,.1); border: 1px solid var(--glass-border); color: var(--text-muted);
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform .16s ease, background .2s ease, color .2s ease, border-color .2s ease;
+}
+.cst-seg:active { transform: scale(.93); }
+.cst-seg em { font-style: normal; font-size: 11px; font-weight: 800; opacity: .75; }
+.cst-seg.on { background: var(--gold-gradient); color: #2a2000; border-color: transparent; box-shadow: 0 6px 16px rgba(201,168,76,.28); }
+.cst-seg.on em { opacity: .8; }
+
+/* — mijoz kartasi — */
+#cst-list { padding-bottom: 26px; }
+.cst-card {
+    position: relative; overflow: hidden; cursor: pointer;
+    border-radius: 20px; padding: 15px; margin-bottom: 12px;
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    -webkit-tap-highlight-color: transparent;
+    animation: lyRise .42s both;
+    transition: transform .18s cubic-bezier(.2,.85,.25,1), border-color .22s ease, box-shadow .22s ease;
+}
+html:not([data-theme="light"]) .cst-card {
+    background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), var(--card-bg);
+    box-shadow: 0 8px 22px rgba(0,0,0,.2);
+}
+.cst-card:active { transform: scale(.985); }
+.cst-card.is-vip { border-color: rgba(201,168,76,.4); }
+.cst-card.is-vip::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px;
+    background: var(--tier-grad, var(--gold-gradient));
+}
+
+.cst-top { display: flex; align-items: center; gap: 13px; }
+.cst-av {
+    position: relative; flex: none; width: 50px; height: 50px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 800; color: #1a1400; text-transform: uppercase;
+    background: var(--tier-grad, linear-gradient(145deg, #6a6a70, #45454a));
+}
+.cst-av-ring { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--tier-1, transparent); opacity: .55; }
+.cst-rank {
+    position: absolute; bottom: -3px; right: -4px;
+    min-width: 20px; height: 20px; padding: 0 4px; border-radius: 999px;
+    background: #0f0f10; border: 1.5px solid var(--tier-1, var(--glass-border));
+    color: var(--tier-1, var(--text-muted));
+    font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+}
+.cst-id { min-width: 0; flex: 1; }
+.cst-name {
+    font-size: 16.5px; font-weight: 800; color: var(--text-main); line-height: 1.25;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0;
+}
+.cst-sub { display: flex; align-items: center; gap: 7px; margin-top: 5px; flex-wrap: wrap; }
+.cst-tier {
+    font-size: 10.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 999px;
+    background: var(--tier-grad, rgba(127,127,127,.16)); color: var(--tier-tx, var(--text-muted));
+}
+.cst-phone { font-size: 13.5px; font-weight: 600; color: var(--text-muted); }
+.cst-money { text-align: right; flex: none; }
+.cst-money b { display: block; font-size: 16px; font-weight: 800; color: var(--luxury-gold); letter-spacing: -.3px; line-height: 1.15; }
+.cst-money span { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 3px; }
+
+/* mini statistika qatori */
+.cst-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.cst-stat { background: rgba(127,127,127,.09); border-radius: 13px; padding: 10px 6px; text-align: center; }
+.cst-stat b { display: block; font-size: 15px; font-weight: 800; color: var(--text-main); line-height: 1.15; }
+.cst-stat span { display: block; font-size: 10.5px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
+
+/* amal tugmalari */
+.cst-acts { display: flex; gap: 8px; margin-top: 13px; }
+.cst-act {
+    flex: 1; cursor: pointer; font-family: inherit;
+    padding: 11px 6px; border-radius: 13px; font-size: 12.5px; font-weight: 700;
+    background: rgba(127,127,127,.1); border: 1px solid var(--glass-border); color: var(--text-main);
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    -webkit-tap-highlight-color: transparent; transition: transform .16s ease, background .2s ease;
+}
+.cst-act:active { transform: scale(.94); }
+.cst-act svg { width: 15px; height: 15px; flex: none; }
+.cst-act.is-tg { color: #38a4e8; border-color: rgba(56,164,232,.3); background: rgba(56,164,232,.1); }
+.cst-act.is-call { color: var(--accent-green); border-color: rgba(48,209,88,.3); background: rgba(48,209,88,.1); }
+.cst-act.is-vip { color: var(--luxury-gold); border-color: rgba(201,168,76,.35); background: rgba(201,168,76,.11); }
+.cst-act.is-vip.on { background: var(--gold-gradient); color: #2a2000; border-color: transparent; }
+
+.cst-more { text-align: center; padding: 16px 0 30px; }
+.cst-more span {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 700; color: var(--luxury-gold); opacity: .8;
+}
+.cst-more i {
+    width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(201,168,76,.3);
+    border-top-color: var(--luxury-gold); display: inline-block;
+}
+@media (prefers-reduced-motion: no-preference) { .cst-more i { animation: lyRingSpin .8s linear infinite; } }
+
+.cst-empty { text-align: center; padding: 50px 26px; }
+.cst-empty .ic { font-size: 46px; display: block; margin-bottom: 13px; opacity: .75; }
+.cst-empty b { display: block; font-size: 17px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; }
+.cst-empty p { font-size: 13.5px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+
+/* ===========================================================================
+   6) MIJOZ TAFSILOTI (detail sheet)
+   =========================================================================== */
+#customerDetailModal { z-index: 3300; padding: 0; }
+#customer-detail-body { padding: 0 18px calc(40px + var(--safe-bottom, 0px)); }
+
+.cdt-hero {
+    position: relative; overflow: hidden;
+    margin: 0 -18px 16px; padding: 26px 18px 20px;
+    background: var(--tier-soft, linear-gradient(160deg, rgba(201,168,76,.13), rgba(0,0,0,.28)));
+    border-bottom: 1px solid var(--glass-border);
+    text-align: center;
+}
+.cdt-av {
+    width: 76px; height: 76px; border-radius: 50%; margin: 0 auto 13px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 800; color: #1a1400; text-transform: uppercase;
+    background: var(--tier-grad, linear-gradient(145deg, #6a6a70, #45454a));
+    box-shadow: 0 10px 26px rgba(0,0,0,.28);
+    animation: lyPop .45s ease both;
+}
+.cdt-name { font-size: 21px; font-weight: 800; color: var(--text-main); margin: 0 0 7px; letter-spacing: -.2px; }
+.cdt-badges { display: flex; justify-content: center; gap: 7px; flex-wrap: wrap; }
+.cdt-badge {
+    font-size: 11px; font-weight: 800; letter-spacing: .5px;
+    padding: 4px 11px; border-radius: 999px;
+    background: rgba(127,127,127,.18); color: var(--text-muted);
+}
+.cdt-badge.is-tier { background: var(--tier-grad, rgba(127,127,127,.18)); color: var(--tier-tx, #fff); text-transform: uppercase; }
+
+.cdt-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 16px; }
+.cdt-kpi { background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 15px; padding: 13px 7px; text-align: center; animation: lyRise .4s both; }
+.cdt-kpi:nth-child(2) { animation-delay: .05s; }
+.cdt-kpi:nth-child(3) { animation-delay: .1s; }
+.cdt-kpi b { display: block; font-size: 17px; font-weight: 800; color: var(--luxury-gold); line-height: 1.1; }
+.cdt-kpi span { display: block; font-size: 10.5px; font-weight: 600; color: var(--text-muted); margin-top: 5px; }
+
+.cdt-sec { margin-bottom: 16px; }
+.cdt-sec-t { font-size: 11.5px; font-weight: 800; letter-spacing: 1.3px; text-transform: uppercase; color: var(--text-muted); margin: 0 2px 10px; }
+.cdt-rows { background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 17px; overflow: hidden; }
+.cdt-row { display: flex; align-items: flex-start; gap: 12px; padding: 14px 15px; border-bottom: 1px solid var(--glass-border); }
+.cdt-row:last-child { border-bottom: none; }
+.cdt-row .k { flex: none; font-size: 13px; font-weight: 600; color: var(--text-muted); min-width: 92px; }
+.cdt-row .v { flex: 1; font-size: 14px; font-weight: 700; color: var(--text-main); text-align: right; word-break: break-word; }
+
+.cdt-ord { display: flex; align-items: center; gap: 11px; padding: 13px 15px; border-bottom: 1px solid var(--glass-border); }
+.cdt-ord:last-child { border-bottom: none; }
+.cdt-ord-c { flex: 1; min-width: 0; }
+.cdt-ord-c b { display: block; font-size: 13.5px; font-weight: 800; color: var(--luxury-gold); }
+.cdt-ord-c span { display: block; font-size: 11.5px; color: var(--text-muted); margin-top: 3px; }
+.cdt-ord-s { flex: none; font-size: 14px; font-weight: 800; color: var(--text-main); }
+
+.cdt-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.cdt-act {
+    cursor: pointer; font-family: inherit; padding: 15px 10px; border-radius: 16px;
+    font-size: 14px; font-weight: 800;
+    background: rgba(127,127,127,.1); border: 1px solid var(--glass-border); color: var(--text-main);
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    -webkit-tap-highlight-color: transparent; transition: transform .16s ease, background .2s ease;
+}
+.cdt-act:active { transform: scale(.96); }
+.cdt-act.wide { grid-column: 1 / -1; }
+.cdt-act.gold { background: var(--gold-gradient); color: #2a2000; border-color: transparent; box-shadow: 0 10px 24px rgba(201,168,76,.26); }
+.cdt-act.tg { color: #38a4e8; border-color: rgba(56,164,232,.3); background: rgba(56,164,232,.1); }
+.cdt-act.green { color: var(--accent-green); border-color: rgba(48,209,88,.3); background: rgba(48,209,88,.1); }
+
+/* ===========================================================================
+   7) VIP DARAJA KARTASI (profil ichida)
+   =========================================================================== */
+#vip-card-box { margin-bottom: 16px; }
+.vipc-card {
+    position: relative; overflow: hidden; cursor: pointer;
+    border-radius: 24px; padding: 20px 18px 18px;
+    background: var(--tier-grad, var(--gold-gradient));
+    color: var(--tier-ink, #2a2000);
+    box-shadow: 0 16px 38px var(--tier-glow, rgba(201,168,76,.3));
+    -webkit-tap-highlight-color: transparent;
+    animation: lyRise .5s both;
+    transition: transform .2s cubic-bezier(.2,.85,.25,1);
+}
+.vipc-card:active { transform: scale(.98); }
+.vipc-card::after {
+    content: ''; position: absolute; top: 0; left: 0; width: 34%; height: 100%; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent);
+    transform: translateX(-130%) skewX(-18deg);
+}
+@media (prefers-reduced-motion: no-preference) { .vipc-card::after { animation: lySheen 6s ease-in-out 1.4s infinite; } }
+.vipc-card::before {
+    content: ''; position: absolute; top: -40px; right: -30px; width: 160px; height: 160px;
+    background: radial-gradient(circle, rgba(255,255,255,.22), transparent 68%); pointer-events: none;
+}
+
+.vipc-top { display: flex; align-items: center; gap: 13px; position: relative; z-index: 2; }
+.vipc-crown {
+    flex: none; width: 46px; height: 46px; border-radius: 14px;
+    background: rgba(0,0,0,.16); display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+.vipc-hd { flex: 1; min-width: 0; }
+.vipc-kicker { font-size: 10.5px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; opacity: .72; }
+.vipc-tier { font-size: 22px; font-weight: 800; letter-spacing: -.3px; line-height: 1.15; margin-top: 2px; }
+.vipc-badge {
+    flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: .6px;
+    padding: 5px 11px; border-radius: 999px; background: rgba(0,0,0,.18);
+}
+
+.vipc-prog { position: relative; z-index: 2; margin-top: 16px; }
+.vipc-prog-t { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 700; margin-bottom: 7px; }
+.vipc-prog-t b { font-size: 13px; font-weight: 800; }
+.vipc-bar { height: 9px; border-radius: 999px; background: rgba(0,0,0,.2); overflow: hidden; }
+.vipc-bar i {
+    display: block; height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,255,255,.95), rgba(255,255,255,.62));
+    box-shadow: 0 0 12px rgba(255,255,255,.5);
+    transition: width 1s cubic-bezier(.25,.9,.3,1);
+}
+.vipc-next { font-size: 11.5px; font-weight: 600; opacity: .82; margin-top: 8px; line-height: 1.45; }
+
+.vipc-perks { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.vipc-perk {
+    background: rgba(0,0,0,.14); border-radius: 13px; padding: 10px 11px;
+    display: flex; align-items: center; gap: 8px;
+}
+.vipc-perk span { font-size: 16px; line-height: 1; flex: none; }
+.vipc-perk b { font-size: 12px; font-weight: 700; line-height: 1.35; }
+.vipc-perk.off { opacity: .42; }
+
+/* — daraja ko'tarilganda tabrik oynasi — */
+#vipc-up {
+    position: fixed; inset: 0; z-index: 99998; display: none;
+    align-items: center; justify-content: center; padding: 28px;
+    background: rgba(0,0,0,.82); backdrop-filter: blur(10px);
+}
+#vipc-up.show { display: flex; }
+.vipc-up-box {
+    width: 100%; max-width: 340px; text-align: center;
+    border-radius: 26px; padding: 32px 24px 26px;
+    background: var(--tier-grad, var(--gold-gradient)); color: var(--tier-ink, #2a2000);
+    box-shadow: 0 24px 60px rgba(0,0,0,.55);
+    animation: lyPop .5s cubic-bezier(.2,.9,.25,1) both;
+    position: relative; overflow: hidden;
+}
+.vipc-up-ic { font-size: 58px; line-height: 1; margin-bottom: 14px; }
+.vipc-up-box h3 { margin: 0 0 8px; font-size: 24px; font-weight: 800; letter-spacing: -.3px; }
+.vipc-up-box p { margin: 0 0 20px; font-size: 14px; font-weight: 600; line-height: 1.55; opacity: .84; }
+.vipc-up-btn {
+    width: 100%; padding: 15px; border: none; cursor: pointer; font-family: inherit;
+    border-radius: 15px; font-size: 15.5px; font-weight: 800;
+    background: rgba(0,0,0,.22); color: inherit;
+}
+.vipc-up-btn:active { transform: scale(.97); }
+
+/* ===========================================================================
+   8) YENGIL (lite) REJIM VA HARAKATNI KAMAYTIRISH
+   =========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    .st2-sum-b, .st2-card, .cst-kpi, .cst-card, .cdt-kpi, .cdt-av, .vipc-card, .vipc-up-box, .st2-ring.on { animation: none !important; }
+    .vipc-bar i { transition: none !important; }
+}
+html.lite .vipc-card::after,
+html.lite .st2-save::after,
+html.lite .story-item.st2-add .st2-add-ring { animation: none !important; }
+html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none !important; }
+</style>
+
+<script>
+/* ============================================================================
+   ✦ QATLAM 2026.06 — JS
+   ----------------------------------------------------------------------------
+   1) MODAL MARKUP — yangi oynalar DOM'ga qo'shiladi
+   2) window.VIP        — 4 pog'onali VIP daraja tizimi
+   3) window.AvtoStories — mini app ichidan story qo'yish + boshqarish
+   4) O'NGGA TORTISH IMOSI — Telegram uslubida story composer'ni ochish
+   5) MIJOZLAR — ro'yxatning to'liq qayta yozilishi
+   ============================================================================ */
+(function () {
+    'use strict';
+
+    /* ------------------------------------------------------------------ *
+     * 0. UMUMIY YORDAMCHILAR
+     * ------------------------------------------------------------------ */
+    var E = function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+        });
+    };
+    var $ = function (id) { return document.getElementById(id); };
+    var hap = function (k) { try { if (window._hap) window._hap(k); } catch (e) {} };
+    var toast = function (m, t) { try { if (window.showToast) window.showToast(m, t); } catch (e) {} };
+    var amAdmin = function () { try { return !!(window.isAdmin && window.isAdmin()); } catch (e) { return false; } };
+
+    /* ⚠️ MUHIM NUANS — GLOBAL O'ZGARUVCHILARGA KIRISH
+       Asosiy skriptdagi `const db`, `const ADMIN_ID`, `let myProfile`, `let activeModal`
+       kabi e'lonlar `window` OBYEKTIGA TUSHMAYDI (top-level let/const global leksik
+       muhitda yashaydi). Shuning uchun `window.db` — `undefined`. Quyidagi
+       yordamchilar avval leksik bog'lanishni sinaydi, keyin zaxira yo'lni oladi. */
+
+    /** Realtime Database — leksik `db`, aks holda firebase singleton'i. */
+    function DB() {
+        try { if (typeof db !== 'undefined' && db) return db; } catch (e) {}
+        try {
+            if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
+                return window.firebase.database();
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    /** Asosiy admin chat_id (bildirishnomalar uchun). */
+    function adminChatId() {
+        try { if (typeof ADMIN_ID !== 'undefined' && ADMIN_ID) return ADMIN_ID; } catch (e) {}
+        try { if (typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS && ADMIN_IDS.length) return ADMIN_IDS[0]; } catch (e) {}
+        return null;
+    }
+
+    /** Joriy foydalanuvchi profili. */
+    function myProfileSafe() {
+        try { if (typeof myProfile !== 'undefined' && myProfile) return myProfile; } catch (e) {}
+        return window.myProfile || null;
+    }
+
+    /** Ochiq oyna identifikatori — `activeModal` leksik o'zgaruvchisining o'zi. */
+    function curModal() {
+        try { if (typeof activeModal !== 'undefined') return activeModal; } catch (e) {}
+        return window.activeModal || null;
+    }
+    var reduceMotion = function () {
+        try {
+            return (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+                || document.documentElement.classList.contains('lite');
+        } catch (e) { return false; }
+    };
+
+    /** 1 250 000 -> "1.25 mln" / 320 000 -> "320 ming" — mayda yozuvni kamaytiradi. */
+    function fmtShort(n) {
+        n = parseInt(n, 10) || 0;
+        if (n >= 1000000) {
+            var m = n / 1000000;
+            return (m >= 10 ? Math.round(m) : (Math.round(m * 10) / 10)) + ' mln';
+        }
+        if (n >= 1000) return Math.round(n / 1000) + ' ming';
+        return String(n);
+    }
+    function fmtSom(n) {
+        n = parseInt(n, 10) || 0;
+        return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    }
+
+    /** Buyurtmalarni massivga aylantiradi (baza array yoki object bo'lishi mumkin). */
+    function ordersArr(o) {
+        if (!o) return [];
+        return Array.isArray(o) ? o.filter(Boolean) : Object.keys(o).map(function (k) { return o[k]; }).filter(Boolean);
+    }
+
+    /** Buyurtma vaqtini millisekundga keltiradi (id = Date.now(), yoki 'dd.mm.yyyy'). */
+    function orderTime(o) {
+        if (!o) return 0;
+        var id = parseInt(o.id, 10);
+        // id — Date.now() bo'lgani uchun 2001-yildan keyingi qiymat = vaqt tamg'asi
+        if (id && id > 1000000000000) return id;
+        if (o.createdAt && parseInt(o.createdAt, 10) > 1000000000000) return parseInt(o.createdAt, 10);
+        if (o.date) {
+            var p = String(o.date).split(/[.\/\-]/);
+            if (p.length === 3) {
+                var d = parseInt(p[0], 10), mo = parseInt(p[1], 10), y = parseInt(p[2], 10);
+                if (y < 100) y += 2000;
+                var t = new Date(y, (mo || 1) - 1, d || 1).getTime();
+                if (!isNaN(t)) return t;
+            }
+        }
+        return 0;
+    }
+
+    /** "3 kun oldin" ko'rinishidagi nisbiy vaqt. */
+    function agoLabel(ms) {
+        ms = parseInt(ms, 10) || 0;
+        if (!ms) return '—';
+        var d = Date.now() - ms;
+        if (d < 0) d = 0;
+        var min = Math.floor(d / 60000);
+        if (min < 1) return 'hozir';
+        if (min < 60) return min + ' daqiqa oldin';
+        var h = Math.floor(min / 60);
+        if (h < 24) return h + ' soat oldin';
+        var day = Math.floor(h / 24);
+        if (day === 1) return 'kecha';
+        if (day < 30) return day + ' kun oldin';
+        var mo = Math.floor(day / 30);
+        if (mo < 12) return mo + ' oy oldin';
+        return Math.floor(mo / 12) + ' yil oldin';
+    }
+
+    /** Raqamni 0'dan berilgan qiymatga sanab chiqaradi (KPI kartalari uchun). */
+    function countUp(el, to, fmt, dur) {
+        if (!el) return;
+        to = parseInt(to, 10) || 0;
+        fmt = fmt || function (v) { return String(v); };
+        if (reduceMotion() || to === 0) { el.textContent = fmt(to); return; }
+        var start = null; dur = dur || 850;
+        function step(ts) {
+            if (start === null) start = ts;
+            var p = Math.min(1, (ts - start) / dur);
+            var e = 1 - Math.pow(1 - p, 3);
+            el.textContent = fmt(Math.round(to * e));
+            if (p < 1) requestAnimationFrame(step);
+            else el.textContent = fmt(to);
+        }
+        requestAnimationFrame(step);
+    }
+
+    /** Kartalarga bosqichma-bosqich (stagger) kirish animatsiyasi. */
+    function stagger(nodes, step, max) {
+        if (reduceMotion()) return;
+        step = step || 45; max = max || 12;
+        Array.prototype.forEach.call(nodes, function (n, i) {
+            n.style.animationDelay = (Math.min(i, max) * step) + 'ms';
+        });
+    }
+
+    /* Admin oynalarini ochishning YAGONA usuli — mavjud ilova qoidasiga mos:
+       ota oyna yashiriladi, yangisi flex bo'ladi, history'ga pushState.
+       (popstate handleri qaytishni o'zi hal qiladi — yuqorida ro'yxatga qo'shildi) */
+    function openSheet(id, fromId) {
+        if (fromId && $(fromId)) $(fromId).style.display = 'none';
+        var m = $(id);
+        if (!m) return false;
+        m.style.display = 'flex';
+        m.scrollTop = 0;
+        document.body.style.overflow = 'hidden';
+        // `activeModal` — leksik global; window nusxasini ham sinxron saqlaymiz
+        window.activeModal = id;
+        try { activeModal = id; } catch (e) {}
+        window.history.pushState({ modal: id }, '');
+        try { if (window.tg && tg.BackButton) tg.BackButton.show(); } catch (e) {}
+        try { if (window.updateBtns) window.updateBtns(); } catch (e) {}
+        return true;
+    }
+
+    /* ================================================================== *
+     * 1. MODAL MARKUP — DOM'ga qo'shamiz
+     * ------------------------------------------------------------------
+     * HTML'ni bitta joyda saqlash uchun markup shu yerda. Uchala oyna
+     * `.modal-standard` qobig'idan foydalanadi — mavjud dizayn tili,
+     * mavjud popstate/BackButton mantig'i o'zgarmaydi.
+     * ================================================================== */
+    var MODALS_HTML =
+        // ---------- Story composer ("tez story") ----------
+        '<div class="modal-standard" id="storyComposerModal">' +
+            '<div class="st2-hd">' +
+                '<div><h2>Yangi story</h2><span>Rasm tanlang — 20 soniyada tayyor</span></div>' +
+                '<button class="close-btn" aria-label="Yopish" onclick="closeModal()">&times;</button>' +
+            '</div>' +
+            '<div id="story-composer-body"></div>' +
+            '<div class="st2-foot">' +
+                '<button class="st2-save" id="st2-save-btn" type="button">Storisni joylash</button>' +
+            '</div>' +
+        '</div>' +
+        // ---------- Stories admin boshqaruvi ----------
+        '<div class="modal-standard" id="adminStoriesModal">' +
+            '<div class="modal-header">' +
+                '<h2 style="color:#ff2d92;">Stories</h2>' +
+                '<button class="close-btn" aria-label="Yopish" style="font-size:24px;" onclick="closeModal()">&larr;</button>' +
+            '</div>' +
+            '<div id="admin-stories-list"></div>' +
+        '</div>' +
+        // ---------- Mijoz tafsiloti ----------
+        '<div class="modal-standard" id="customerDetailModal">' +
+            '<div class="st2-hd">' +
+                '<div><h2 id="cdt-title">Mijoz</h2><span id="cdt-sub">Tafsilotlar</span></div>' +
+                '<button class="close-btn" aria-label="Yopish" onclick="closeModal()">&times;</button>' +
+            '</div>' +
+            '<div id="customer-detail-body"></div>' +
+        '</div>' +
+        // ---------- VIP daraja tabrigi ----------
+        '<div id="vipc-up"><div class="vipc-up-box">' +
+            '<div class="vipc-up-ic" id="vipc-up-ic">&#128081;</div>' +
+            '<h3 id="vipc-up-title">Tabriklaymiz!</h3>' +
+            '<p id="vipc-up-text"></p>' +
+            '<button class="vipc-up-btn" type="button" id="vipc-up-ok">Ajoyib!</button>' +
+        '</div></div>' +
+        // ---------- O'ngga tortish imosi paneli ----------
+        '<div id="st2-peek">' +
+            '<div class="st2-peek-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2l1.1-1.7A1 1 0 0 1 9.6 3.8h4.8a1 1 0 0 1 .8.5L16.3 6h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.2" r="3.4"/></svg></div>' +
+            '<div class="st2-peek-tx">Yangi<br>story</div>' +
+        '</div>';
+
+    function injectModals() {
+        if ($('storyComposerModal')) return;
+        var host = document.createElement('div');
+        host.id = 'layer2026-modals';
+        host.innerHTML = MODALS_HTML;
+        document.body.appendChild(host);
+        var ok = $('vipc-up-ok');
+        if (ok) ok.onclick = function () { var b = $('vipc-up'); if (b) b.classList.remove('show'); };
+        var vb = $('vipc-up');
+        if (vb) vb.onclick = function (e) { if (e.target === vb) vb.classList.remove('show'); };
+    }
+    injectModals();
+
+    /* ================================================================== *
+     * 2. window.VIP — HAQIQIY, POG'ONALI VIP TIZIMI
+     * ------------------------------------------------------------------
+     * ILGARI NIMA BO'LGAN: `_updateVipStatus()` `.profile-header` klassini
+     * izlardi, lekin profil ekrani inline stil bilan yozilgani uchun bu
+     * klass hech qayerda yo'q edi -> funksiya har safar darhol `return`
+     * qilardi. Ya'ni VIP yorlig'i HECH QACHON ko'rinmagan. Bundan tashqari
+     * VIP hech qayerga saqlanmagani uchun admin ham, bot ham uni bilmasdi
+     * va hech qanday imtiyoz bermasdi.
+     *
+     * ENDI:
+     *   • 4 pog'ona (Bronza / Kumush / Oltin / Platina) — xarid va summa bo'yicha
+     *   • profilda jonli karta: daraja, progress, keyingi darajaga qancha qolgani
+     *   • HAQIQIY imtiyozlar: bepul yetkazish chegarasi pasayadi, cashback
+     *     ko'paytiruvchisi, ustuvor buyurtma belgisi
+     *   • `users/{uid}/profile/vip` ga YOZILADI -> admin ro'yxatida ko'rinadi,
+     *     segment bo'yicha filtr ishlaydi, bot ham o'qiy oladi
+     *   • daraja ko'tarilganda tabrik + Telegram xabari (bir marta)
+     *   • admin qo'lda VIP qilib qo'yishi mumkin (`profile.vip.manual`)
+     * ================================================================== */
+    var TIERS = [
+        {
+            id: 'bronze', name: 'Bronza', icon: '\uD83E\uDD49', minSpent: 0, minOrders: 0,
+            grad: 'linear-gradient(145deg,#e0a06a,#b06a2e 48%,#7a3f12)', c1: '#e0a06a',
+            ink: '#2a1400', glow: 'rgba(176,106,46,.3)',
+            soft: 'linear-gradient(160deg,rgba(224,160,106,.16),rgba(0,0,0,.3))',
+            freeDelivery: 3000000, cashbackX: 1, discount: 0
+        },
+        {
+            id: 'silver', name: 'Kumush', icon: '\uD83E\uDD48', minSpent: 500000, minOrders: 2,
+            grad: 'linear-gradient(145deg,#eef2f7,#c3cad5 48%,#8b939f)', c1: '#dfe5ee',
+            ink: '#1d2128', glow: 'rgba(160,170,185,.3)',
+            soft: 'linear-gradient(160deg,rgba(200,208,220,.16),rgba(0,0,0,.3))',
+            freeDelivery: 2500000, cashbackX: 1.5, discount: 2
+        },
+        {
+            id: 'gold', name: 'Oltin', icon: '\uD83E\uDD47', minSpent: 1500000, minOrders: 5,
+            grad: 'linear-gradient(145deg,#F0D060,#C9A84C 45%,#96720A)', c1: '#F0D060',
+            ink: '#2a2000', glow: 'rgba(201,168,76,.34)',
+            soft: 'linear-gradient(160deg,rgba(201,168,76,.18),rgba(0,0,0,.3))',
+            freeDelivery: 2000000, cashbackX: 2, discount: 3
+        },
+        {
+            id: 'platinum', name: 'Platina', icon: '\uD83D\uDC8E', minSpent: 5000000, minOrders: 12,
+            grad: 'linear-gradient(145deg,#d8f0ff,#9fc4e8 42%,#4a6a9c)', c1: '#cfe8ff',
+            ink: '#0c1a2c', glow: 'rgba(90,130,180,.36)',
+            soft: 'linear-gradient(160deg,rgba(159,196,232,.18),rgba(0,0,0,.32))',
+            freeDelivery: 1200000, cashbackX: 3, discount: 5
+        }
+    ];
+    var TIER_BY_ID = {};
+    TIERS.forEach(function (t) { TIER_BY_ID[t.id] = t; });
+
+    var VIP = {
+        TIERS: TIERS,
+        /** Daraja darajasidan yuqorisi VIP hisoblanadi (Oltin va Platina). */
+        VIP_FROM: 2
+    };
+
+    /** Buyurtma tarixidan daraja hisoblaydi. `manual` — admin qo'lda bergan daraja. */
+    VIP.compute = function (orders, manual) {
+        var arr = ordersArr(orders);
+        var delivered = arr.filter(function (o) { return o && o.status === 'yetkazildi'; });
+        var spent = delivered.reduce(function (s, o) { return s + (parseInt(o.total, 10) || 0); }, 0);
+        var count = delivered.length;
+
+        // Daraja: ikkala shartdan (summa YOKI xarid soni) qaysi biri yuqori bo'lsa
+        var idx = 0;
+        for (var i = TIERS.length - 1; i >= 0; i--) {
+            if (spent >= TIERS[i].minSpent || count >= TIERS[i].minOrders) { idx = i; break; }
+        }
+        // Admin qo'lda ko'targan bo'lsa — pasaytirmaymiz
+        if (manual && TIER_BY_ID[manual]) {
+            var mIdx = TIERS.indexOf(TIER_BY_ID[manual]);
+            if (mIdx > idx) idx = mIdx;
+        }
+
+        var tier = TIERS[idx];
+        var next = TIERS[idx + 1] || null;
+        var progress = 100, needSom = 0, needOrd = 0;
+        if (next) {
+            var bySom = next.minSpent > tier.minSpent
+                ? (spent - tier.minSpent) / (next.minSpent - tier.minSpent) : 0;
+            var byOrd = next.minOrders > tier.minOrders
+                ? (count - tier.minOrders) / (next.minOrders - tier.minOrders) : 0;
+            progress = Math.max(0, Math.min(100, Math.round(Math.max(bySom, byOrd) * 100)));
+            needSom = Math.max(0, next.minSpent - spent);
+            needOrd = Math.max(0, next.minOrders - count);
+        }
+        return {
+            tier: tier, tierIdx: idx, next: next, spent: spent, count: count,
+            progress: progress, needSom: needSom, needOrd: needOrd,
+            isVip: idx >= VIP.VIP_FROM, manual: manual || null,
+            allOrders: arr.length
+        };
+    };
+
+    /** Boshqa modullar uchun: joriy foydalanuvchi holati (kesh). */
+    VIP.state = null;
+
+    /** Bepul yetkazish chegarasi — savat progress bar shu qiymatni ishlatadi. */
+    VIP.freeDeliveryTarget = function () {
+        var s = VIP.state;
+        return (s && s.tier) ? s.tier.freeDelivery : 3000000;
+    };
+    /** Cashback ko'paytiruvchisi (Phase2 kelajakda o'qishi uchun ochiq). */
+    VIP.cashbackMultiplier = function () {
+        var s = VIP.state;
+        return (s && s.tier) ? s.tier.cashbackX : 1;
+    };
+    /** Buyurtma xabariga qo'shiladigan ustuvorlik belgisi (admin ko'rishi uchun). */
+    VIP.orderTag = function () {
+        var s = VIP.state;
+        if (!s || !s.isVip) return '';
+        return s.tier.icon + ' ' + s.tier.name.toUpperCase() + ' mijoz';
+    };
+
+    /** CSS o'zgaruvchilarini elementga o'rnatadi (daraja rangi). */
+    function paintTier(el, tier) {
+        if (!el || !tier) return;
+        el.style.setProperty('--tier-grad', tier.grad);
+        el.style.setProperty('--tier-1', tier.c1);
+        el.style.setProperty('--tier-ink', tier.ink);
+        el.style.setProperty('--tier-tx', tier.ink);
+        el.style.setProperty('--tier-glow', tier.glow);
+        el.style.setProperty('--tier-soft', tier.soft);
+    }
+    VIP.paintTier = paintTier;
+
+    /** Profil ekranidagi VIP karta konteynerini topadi/yaratadi. */
+    function vipBox() {
+        var box = $('vip-card-box');
+        if (box) return box;
+        var stats = $('pf-stats-box');
+        if (!stats || !stats.parentNode) return null;
+        box = document.createElement('div');
+        box.id = 'vip-card-box';
+        // Statistika kartalaridan YUQORIDA — profil ochilganda birinchi ko'zga tushadi
+        stats.parentNode.insertBefore(box, stats);
+        return box;
+    }
+
+    function perkHTML(icon, text, on) {
+        return '<div class="vipc-perk' + (on ? '' : ' off') + '"><span>' + icon + '</span><b>' + text + '</b></div>';
+    }
+
+    /** Profil VIP kartasini chizadi. */
+    VIP.render = function () {
+        var s = VIP.state;
+        if (!s) return;
+        var box = vipBox();
+        if (!box) return;
+        var t = s.tier, n = s.next;
+
+        var nextTx;
+        if (!n) {
+            nextTx = 'Siz eng yuqori darajadasiz. Rahmat, ishonchingiz uchun!';
+        } else if (s.needSom > 0 && s.needOrd > 0) {
+            nextTx = '<b>' + n.name + '</b> darajasiga yana ' + fmtSom(s.needSom) + " so'm xarid yoki " + s.needOrd + ' ta buyurtma qoldi';
+        } else if (s.needSom > 0) {
+            nextTx = '<b>' + n.name + '</b> darajasiga yana ' + fmtSom(s.needSom) + " so'm qoldi";
+        } else {
+            nextTx = '<b>' + n.name + '</b> darajasiga yana ' + s.needOrd + ' ta buyurtma qoldi';
+        }
+
+        box.innerHTML =
+            '<div class="vipc-card" id="vipc-card" role="button" tabindex="0">' +
+                '<div class="vipc-top">' +
+                    '<div class="vipc-crown">' + t.icon + '</div>' +
+                    '<div class="vipc-hd">' +
+                        '<div class="vipc-kicker">Mijoz darajasi</div>' +
+                        '<div class="vipc-tier">' + E(t.name) + (s.isVip ? ' &middot; VIP' : '') + '</div>' +
+                    '</div>' +
+                    '<div class="vipc-badge">' + fmtShort(s.spent) + " so'm</div>" +
+                '</div>' +
+                '<div class="vipc-prog">' +
+                    '<div class="vipc-prog-t"><span>' + E(t.name) + '</span><b>' + (n ? n.name : 'Maksimal') + '</b></div>' +
+                    '<div class="vipc-bar"><i id="vipc-bar-fill"></i></div>' +
+                    '<div class="vipc-next">' + nextTx + '</div>' +
+                '</div>' +
+                '<div class="vipc-perks">' +
+                    perkHTML('\uD83D\uDE9A', 'Bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan", true) +
+                    perkHTML('\uD83C\uDF81', 'Cashback &times;' + t.cashbackX, t.cashbackX > 1) +
+                    perkHTML('\uD83C\uDFF7', t.discount > 0 ? ('Shaxsiy chegirma ' + t.discount + '%') : 'Chegirma: Kumushdan', t.discount > 0) +
+                    perkHTML('\u26A1', s.isVip ? 'Ustuvor xizmat' : 'Ustuvor xizmat: Oltindan', s.isVip) +
+                '</div>' +
+            '</div>';
+
+        var card = $('vipc-card');
+        paintTier(card, t);
+        if (card) {
+            card.onclick = function () { hap('light'); VIP.showDetails(); };
+        }
+        // Progress barni animatsiya bilan to'ldiramiz
+        var fill = $('vipc-bar-fill');
+        if (fill) {
+            if (reduceMotion()) fill.style.width = s.progress + '%';
+            else requestAnimationFrame(function () {
+                requestAnimationFrame(function () { fill.style.width = s.progress + '%'; });
+            });
+        }
+
+        // Avatardagi VIP halqasi — ILGARI O'LIK ELEMENT edi, endi ishlaydi
+        var ring = $('pf-vip-ring');
+        if (ring) {
+            ring.style.display = s.isVip ? 'block' : 'none';
+            ring.style.borderColor = t.c1;
+        }
+        // "A'zo bo'lgan sana" — ilgari hech qachon to'ldirilmagan
+        var since = $('pf-member-since');
+        if (since) {
+            var sinceMs = VIP.sinceMs || 0;
+            since.textContent = sinceMs
+                ? (t.icon + ' ' + t.name + " a'zo &middot; " + new Date(sinceMs).toLocaleDateString('uz-UZ')).replace('&middot;', '·')
+                : (t.icon + ' ' + t.name + ' daraja');
+            since.style.color = t.c1;
+        }
+    };
+
+    /**
+     * Darajalar jadvali — kartani bosganda KARTA OSTIDA ochiladi/yopiladi.
+     *
+     * ⚠️ NEGA modal yoki `tg.showAlert` EMAS: `showAlert` uzun matnni kesib
+     * tashlaydi (va ba'zi mijozlarda umuman ko'rinmaydi), `prompt`/`alert` esa
+     * Telegram WebView'da bloklanishi mumkin. Ichki panel har joyda ishlaydi
+     * va history/BackButton mantig'iga ham tegmaydi.
+     */
+    VIP.showDetails = function () {
+        var s = VIP.state;
+        if (!s) return;
+        var box = $('vip-card-box');
+        if (!box) return;
+        var panel = $('vipc-ladder');
+        if (panel) {                      // ochiq edi -> yopamiz
+            // `parentNode` bo'lmasligi mumkin (VIP.render() konteynerni qayta chizsa
+            // element hujjatdan uzilib qoladi) — shuning uchun himoyalangan o'chirish
+            if (panel.parentNode) panel.parentNode.removeChild(panel);
+            else if (panel.remove) panel.remove();
+            return;
+        }
+        panel = document.createElement('div');
+        panel.id = 'vipc-ladder';
+        panel.style.cssText = 'margin-top:10px; border-radius:18px; overflow:hidden; ' +
+            'background:var(--card-bg); border:1px solid var(--glass-border); animation:lyRise .35s both;';
+
+        var rows = TIERS.map(function (t, i) {
+            var done = i < s.tierIdx, now = i === s.tierIdx;
+            var mark = done ? '\u2713' : (now ? '\u25B6' : '\u00B7');
+            return '<div style="display:flex; gap:12px; align-items:flex-start; padding:14px 15px;' +
+                (i ? ' border-top:1px solid var(--glass-border);' : '') +
+                (now ? ' background:rgba(201,168,76,.09);' : '') + '">' +
+                '<span style="flex:none; width:22px; text-align:center; font-size:14px; font-weight:800; color:' +
+                    (now ? t.c1 : 'var(--text-muted)') + ';">' + mark + '</span>' +
+                '<div style="flex:1; min-width:0;">' +
+                    '<div style="font-size:14.5px; font-weight:800; color:' + (now ? t.c1 : 'var(--text-main)') + ';">' +
+                        t.icon + ' ' + E(t.name) + (now ? " — sizdagi daraja" : '') + '</div>' +
+                    '<div style="font-size:12px; color:var(--text-muted); margin-top:4px; line-height:1.5;">' +
+                        'Shart: ' + fmtShort(t.minSpent) + " so'm yoki " + t.minOrders + ' ta xarid<br>' +
+                        'Bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan &middot; cashback &times;" + t.cashbackX +
+                        (t.discount ? " &middot; chegirma " + t.discount + '%' : '') +
+                    '</div>' +
+                '</div></div>';
+        }).join('');
+
+        panel.innerHTML = rows +
+            '<div style="padding:14px 15px; border-top:1px solid var(--glass-border); ' +
+            'font-size:12.5px; font-weight:700; color:var(--luxury-gold); text-align:center;">' +
+            'Sizda: ' + fmtSom(s.spent) + " so'm &middot; " + s.count + ' ta yetkazilgan buyurtma</div>';
+        box.appendChild(panel);
+    };
+
+    /* --- Firebase'ga saqlash: admin va bot VIP'ni ko'rishi uchun --- */
+    function persist(s) {
+        try {
+            if (!window.currentUser || !DB()) return;
+            var payload = {
+                tier: s.tier.id,
+                tierName: s.tier.name,
+                level: s.tierIdx,
+                isVip: s.isVip,
+                spent: s.spent,
+                orders: s.count,
+                updatedAt: Date.now()
+            };
+            if (VIP.sinceMs) payload.since = VIP.sinceMs;
+            DB().ref('users/' + window.currentUser + '/profile/vip').update(payload).catch(function () {});
+        } catch (e) {}
+    }
+
+    /** Daraja ko'tarilganda: tabrik oynasi + konfetti + Telegram xabari (bir marta). */
+    function celebrate(s) {
+        var KEY = 'avto_vip_tier_seen';
+        var prev = null;
+        try { prev = localStorage.getItem(KEY); } catch (e) {}
+        var curIdx = String(s.tierIdx);
+        if (prev === null) { try { localStorage.setItem(KEY, curIdx); } catch (e) {} return; }
+        if (parseInt(prev, 10) >= s.tierIdx) return;   // pasaymadi/o'zgarmadi
+        try { localStorage.setItem(KEY, curIdx); } catch (e) {}
+
+        var t = s.tier;
+        var box = $('vipc-up');
+        if (box) {
+            paintTier(box.querySelector('.vipc-up-box'), t);
+            var ic = $('vipc-up-ic'); if (ic) ic.textContent = t.icon;
+            var ti = $('vipc-up-title'); if (ti) ti.textContent = t.name + ' darajasi!';
+            var tx = $('vipc-up-text');
+            if (tx) {
+                tx.innerHTML = 'Siz <b>' + E(t.name) + '</b> mijoz bo\'ldingiz.<br>' +
+                    'Bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan, cashback &times;" + t.cashbackX +
+                    (t.discount ? ', shaxsiy chegirma ' + t.discount + '%' : '') + '.';
+            }
+            box.classList.add('show');
+        }
+        hap('success');
+        try { if (window.Phase2 && window.Phase2.confettiBurst) window.Phase2.confettiBurst(); } catch (e) {}
+
+        // Telegram tabrigi — mijozning o'z chatiga
+        try {
+            if (window.tgProxySend && window.currentUser) {
+                window.tgProxySend({
+                    chat_id: window.currentUser,
+                    parse_mode: 'HTML',
+                    text: t.icon + ' <b>Tabriklaymiz!</b>\n\nSiz Avto A1 do\'konida <b>' + t.name +
+                        '</b> darajasiga ko\'tarildingiz.\n\n' +
+                        '\u2022 Bepul yetkazish: ' + fmtSom(t.freeDelivery) + " so'mdan\n" +
+                        '\u2022 Cashback: \u00D7' + t.cashbackX + '\n' +
+                        (t.discount ? '\u2022 Shaxsiy chegirma: ' + t.discount + '%\n' : '') +
+                        '\nIshonchingiz uchun rahmat!'
+                });
+            }
+        } catch (e) {}
+    }
+
+    /**
+     * Asosiy kirish nuqtasi — `_updateVipStatus()` shu funksiyani chaqiradi.
+     * Buyurtmalar har o'zgarganda (Firebase listener) ishlaydi.
+     */
+    VIP.refresh = function (orders) {
+        try {
+            var manual = null;
+            try {
+                var p = myProfileSafe();
+                if (p && p.vip && p.vip.manual) manual = p.vip.manual;
+            } catch (e) {}
+
+            var s = VIP.compute(orders, manual);
+            VIP.state = s;
+
+            // "A'zo bo'lgan" sana — eng birinchi buyurtma vaqti
+            var times = ordersArr(orders).map(orderTime).filter(function (t) { return t > 0; });
+            VIP.sinceMs = times.length ? Math.min.apply(null, times) : 0;
+            try {
+                var _mp = myProfileSafe(); var pv = _mp && _mp.vip;
+                if (pv && pv.since && (!VIP.sinceMs || pv.since < VIP.sinceMs)) VIP.sinceMs = pv.since;
+            } catch (e) {}
+
+            VIP.render();
+            persist(s);
+            celebrate(s);
+        } catch (e) { if (window._dwarn) window._dwarn('[VIP] refresh xato:', e); }
+    };
+
+    /** Admin uchun: mijozning darajasini qo'lda o'rnatish/olib tashlash. */
+    VIP.setManual = function (uid, tierId) {
+        if (!DB()) return Promise.reject(new Error('DB yo\'q'));
+        var ref = DB().ref('users/' + uid + '/profile/vip');
+        if (!tierId) return ref.update({ manual: null, updatedAt: Date.now() });
+        var t = TIER_BY_ID[tierId];
+        if (!t) return Promise.reject(new Error('Noma\'lum daraja'));
+        return ref.update({
+            manual: tierId, tier: tierId, tierName: t.name,
+            level: TIERS.indexOf(t), isVip: TIERS.indexOf(t) >= VIP.VIP_FROM,
+            updatedAt: Date.now()
+        });
+    };
+
+    window.VIP = VIP;
+    // Profil ekrani ochilganda kartani qayta chizamiz (Phase2 hub'dan oldin turadi)
+    try {
+        var _origShowProfile = window.showProfile;
+        if (typeof _origShowProfile === 'function' && !window._vipWrappedShowProfile) {
+            window._vipWrappedShowProfile = true;
+            window.showProfile = function () {
+                var r = _origShowProfile.apply(this, arguments);
+                try { if (VIP.state) VIP.render(); else VIP.refresh(window.myOrders || []); } catch (e) {}
+                return r;
+            };
+        }
+    } catch (e) {}
 
 
 
@@ -18257,3 +19560,1426 @@ html.lite[data-theme="light"] body .story-item {
 
 
 
+
+
+    /* ================================================================== *
+     * 3. window.AvtoStories — MINI APP ICHIDAN STORY QO'YISH
+     * ------------------------------------------------------------------
+     * ILGARI NIMA BO'LGAN: story qo'yishning YAKKA yo'li Telegram boti edi —
+     * admin rasm/videoni `#bugun` kabi caption bilan botga yuborishi kerak
+     * edi (bot.py: handle_stories). Mini app ichida na qo'shish, na o'chirish,
+     * na ro'yxatni ko'rish imkoni bor edi (faqat story ochilganda paydo
+     * bo'ladigan bitta "O'chirish" tugmasi bor edi).
+     *
+     * ENDI: mini app ichidan to'g'ridan-to'g'ri `stories/{kategoriya}/{id}` ga
+     * yoziladi — bot bilan BIR XIL sxema, shuning uchun ikkalasi ham
+     * bir-birini to'liq tushunadi:
+     *     { id, type:'image'|'video', src, poster, timestamp, caption?, link?, source? }
+     *
+     * MEDIA:
+     *   • Rasm — ImgBB'ga yuklanadi (tovar rasmlari bilan bir xil yo'l),
+     *     link doimiy, hech qachon eskirmaydi.
+     *   • Video — brauzerdan Telegram'ga yuklash uchun bot tokeni kerak
+     *     (u mijozda YO'Q, ataylab). Shuning uchun video HAVOLA bilan
+     *     qo'shiladi; fayl bo'lsa bot orqali yuborish qulayroq va composer
+     *     buni ochiq yozib turadi.
+     * ================================================================== */
+    var STORY_RINGS = [
+        { key: 'aksiyalar', title: 'Aksiyalar',  icon: '\uD83D\uDD25' },
+        { key: 'bugun',     title: 'Bugun',      icon: '\u26A1' },
+        { key: 'mijozlar',  title: 'Mijozlar',   icon: '\uD83D\uDC65' },
+        { key: 'dostavka',  title: 'Yetkazish',  icon: '\uD83D\uDE9A' },
+        { key: 'kafolat',   title: 'Kafolat',    icon: '\uD83D\uDEE1' },
+        { key: 'lokatsiya', title: 'Manzil',     icon: '\uD83D\uDCCD' },
+        { key: 'tolov',     title: "To'lov",     icon: '\uD83D\uDCB3' },
+        { key: 'aloqa',     title: 'Aloqa',      icon: '\uD83D\uDCDE' }
+    ];
+    var RING_BY_KEY = {};
+    STORY_RINGS.forEach(function (r) { RING_BY_KEY[r.key] = r; });
+
+    // Composer holati
+    var C = { ring: 'bugun', type: '', src: '', poster: '', busy: false };
+    // Admin ro'yxati holati
+    var A = { rows: [], byCat: {}, total: 0 };
+
+    var AvtoStories = {};
+    AvtoStories.RINGS = STORY_RINGS;
+
+    /* ---------------- 3.1 STORIES BAZASINI O'QISH ---------------- */
+    function loadStories() {
+        return new Promise(function (resolve, reject) {
+            if (!DB()) return reject(new Error('Baza ulanmagan'));
+            DB().ref('stories').once('value').then(function (snap) {
+                var byCat = {}, rows = [], total = 0;
+                if (snap.exists()) {
+                    var data = snap.val();
+                    Object.keys(data).forEach(function (cat) {
+                        var items = data[cat];
+                        if (!items || typeof items !== 'object') return;
+                        var list = Object.keys(items).map(function (k) {
+                            var it = items[k] || {};
+                            return {
+                                key: k,
+                                cat: cat,
+                                id: it.id != null ? it.id : k,
+                                type: it.type === 'video' ? 'video' : 'image',
+                                src: it.src || '',
+                                poster: it.poster || '',
+                                caption: it.caption || '',
+                                link: it.link || '',
+                                source: it.source || 'bot',
+                                timestamp: parseInt(it.timestamp, 10) || 0
+                            };
+                        }).sort(function (a, b) { return b.timestamp - a.timestamp; });
+                        byCat[cat] = list;
+                        rows = rows.concat(list);
+                        total += list.length;
+                    });
+                }
+                rows.sort(function (a, b) { return b.timestamp - a.timestamp; });
+                A.byCat = byCat; A.rows = rows; A.total = total;
+                resolve();
+            }).catch(reject);
+        });
+    }
+
+    /* ---------------- 3.2 COMPOSER ("tez story") ---------------- */
+
+    function ringPickerHTML() {
+        return STORY_RINGS.map(function (r) {
+            var cnt = (A.byCat[r.key] || []).length;
+            return '<button type="button" class="st2-ring' + (C.ring === r.key ? ' on' : '') +
+                '" data-ring="' + r.key + '">' +
+                '<span>' + r.icon + '</span><i>' + E(r.title) + '</i>' +
+                (cnt ? '<em class="st2-ring-cnt">' + cnt + '</em>' : '') +
+                '</button>';
+        }).join('');
+    }
+
+    function composerHTML() {
+        return '' +
+            // --- MEDIA ---
+            '<div class="st2-block">' +
+                '<p class="st2-lbl">1 &middot; Rasm yoki video</p>' +
+                '<div class="st2-picks">' +
+                    '<div class="st2-pick" id="st2-pick-img" role="button" tabindex="0">' +
+                        '<span class="st2-pick-ic" id="st2-pick-img-ic">\uD83D\uDDBC</span>' +
+                        '<b id="st2-pick-img-tx">Rasm</b><i>Galereyadan yuklash</i>' +
+                    '</div>' +
+                    '<div class="st2-pick" id="st2-pick-vid" role="button" tabindex="0">' +
+                        '<span class="st2-pick-ic">\uD83C\uDFAC</span>' +
+                        '<b>Video</b><i>Havola bilan</i>' +
+                    '</div>' +
+                '</div>' +
+                '<input type="file" id="st2-file" accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp" style="display:none;">' +
+                '<div class="st2-up hidden" id="st2-up"><i id="st2-up-bar"></i><span id="st2-up-tx">0%</span></div>' +
+                '<div class="st2-prev hidden" id="st2-prev"></div>' +
+                '<div id="st2-url-wrap" style="display:none; margin-top:13px;">' +
+                    '<label class="st2-field"><span>Video havolasi (mp4)</span>' +
+                    '<input type="text" class="st2-input" id="st2-vid-url" placeholder="https://..." autocomplete="off"></label>' +
+                    '<label class="st2-field"><span>Muqova rasmi (ixtiyoriy)</span>' +
+                    '<input type="text" class="st2-input" id="st2-vid-poster" placeholder="https://... (birinchi kadr)" autocomplete="off"></label>' +
+                    '<p class="st2-hint">Video FAYLini shu yerdan yuklash mumkin emas — buning uchun bot tokeni kerak, u ataylab ilovada saqlanmaydi. Faylni botga <b>#' + E(C.ring) + '</b> izohi bilan yuborsangiz, u ham shu bo\'limga tushadi.</p>' +
+                '</div>' +
+                '<label class="st2-field" id="st2-img-url-wrap" style="margin-top:13px;"><span>Yoki rasm havolasi</span>' +
+                '<input type="text" class="st2-input" id="st2-img-url" placeholder="https://..." autocomplete="off"></label>' +
+            '</div>' +
+            // --- BO'LIM ---
+            '<div class="st2-block">' +
+                '<p class="st2-lbl">2 &middot; Qaysi bo\'limga</p>' +
+                '<div class="st2-rings" id="st2-rings">' + ringPickerHTML() + '</div>' +
+            '</div>' +
+            // --- MATN ---
+            '<div class="st2-block">' +
+                '<p class="st2-lbl">3 &middot; Matn (ixtiyoriy)</p>' +
+                '<label class="st2-field"><span>Story ustidagi yozuv</span>' +
+                '<textarea class="st2-input" id="st2-caption" rows="2" maxlength="160" placeholder="Masalan: Kalotkalarga 20% chegirma \u2014 faqat bugun"></textarea></label>' +
+                '<label class="st2-field"><span>Havola (ixtiyoriy)</span>' +
+                '<input type="text" class="st2-input" id="st2-link" placeholder="Tovar kodi yoki https://..." autocomplete="off"></label>' +
+                '<p class="st2-hint">Havola qo\'ysangiz, story ostida <b>Batafsil</b> tugmasi chiqadi.</p>' +
+            '</div>';
+    }
+
+    function setPickState() {
+        var pi = $('st2-pick-img'), pv = $('st2-pick-vid');
+        if (pi) pi.classList.toggle('on', C.type === 'image');
+        if (pv) pv.classList.toggle('on', C.type === 'video');
+        var uw = $('st2-url-wrap');
+        if (uw) uw.style.display = (C.type === 'video') ? 'block' : 'none';
+        var iw = $('st2-img-url-wrap');
+        if (iw) iw.style.display = (C.type === 'video') ? 'none' : 'block';
+    }
+
+    function showProgress(pct, label) {
+        var box = $('st2-up'), bar = $('st2-up-bar'), tx = $('st2-up-tx');
+        if (!box) return;
+        if (pct === null) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        if (bar) bar.style.width = Math.max(2, Math.min(100, pct)) + '%';
+        if (tx) tx.textContent = label || (pct + '%');
+    }
+
+    function showPreview(url, isVideo) {
+        var box = $('st2-prev');
+        if (!box) return;
+        if (!url) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+        box.innerHTML =
+            '<span class="st2-prev-badge">' + (isVideo ? 'VIDEO' : 'RASM') + '</span>' +
+            '<button type="button" class="st2-prev-clear" id="st2-prev-clear" aria-label="Tozalash">&times;</button>' +
+            (isVideo
+                ? '<video src="' + E(url) + '" playsinline muted controls preload="metadata"></video>'
+                : '<img src="' + E(url) + '" alt="" onerror="this.style.opacity=.25;">');
+        box.classList.remove('hidden');
+        var cl = $('st2-prev-clear');
+        if (cl) cl.onclick = function () {
+            C.src = ''; C.poster = ''; C.type = '';
+            showPreview('', false); setPickState();
+            var iu = $('st2-img-url'); if (iu) iu.value = '';
+            var vu = $('st2-vid-url'); if (vu) vu.value = '';
+            var it = $('st2-pick-img-tx'); if (it) it.textContent = 'Rasm';
+            var ii = $('st2-pick-img-ic'); if (ii) ii.textContent = '\uD83D\uDDBC';
+            hap('light');
+        };
+    }
+
+    /** Rasmni ImgBB'ga yuklaydi — mavjud `uploadFileWithProgress` orqali. */
+    function uploadPhoto(file) {
+        if (!file) return;
+        if (typeof window.uploadFileWithProgress !== 'function') {
+            toast('Rasm yuklash moduli topilmadi', 'warning');
+            return;
+        }
+        var MAX = 20 * 1024 * 1024;
+        if (file.size > MAX) {
+            toast('Rasm juda katta (' + Math.round(file.size / 1048576) + ' MB). 20 MB gacha bo\'lsin.', 'warning');
+            return;
+        }
+        var tx = $('st2-pick-img-tx'), ic = $('st2-pick-img-ic');
+        if (tx) tx.textContent = 'Yuklanmoqda...';
+        if (ic) ic.textContent = '\u23F3';
+        showProgress(4, 'Rasm yuklanmoqda...');
+        window.uploadFileWithProgress(file, function (p) { showProgress(p); })
+            .then(function (url) {
+                C.type = 'image'; C.src = url; C.poster = '';
+                showProgress(null);
+                showPreview(url, false);
+                setPickState();
+                if (tx) tx.textContent = 'Rasm tayyor';
+                if (ic) ic.textContent = '\u2705';
+                var iu = $('st2-img-url'); if (iu) iu.value = url;
+                hap('success');
+                toast('Rasm yuklandi', 'success');
+            })
+            .catch(function (err) {
+                showProgress(null);
+                if (tx) tx.textContent = 'Rasm';
+                if (ic) ic.textContent = '\uD83D\uDDBC';
+                toast('Rasm yuklanmadi: ' + ((err && err.message) || 'xatolik'), 'warning');
+            });
+    }
+
+    function wireComposer() {
+        var file = $('st2-file');
+        var pi = $('st2-pick-img'), pv = $('st2-pick-vid');
+        if (pi) pi.onclick = function () { hap('light'); if (file) file.click(); };
+        if (file) file.onchange = function () {
+            var f = file.files && file.files[0];
+            file.value = '';
+            uploadPhoto(f);
+        };
+        if (pv) pv.onclick = function () {
+            hap('light');
+            C.type = 'video';
+            setPickState();
+            var vu = $('st2-vid-url');
+            if (vu) { vu.focus(); }
+        };
+
+        var iu = $('st2-img-url');
+        if (iu) iu.oninput = function () {
+            var v = (iu.value || '').trim();
+            if (/^https?:\/\//i.test(v)) { C.type = 'image'; C.src = v; showPreview(v, false); setPickState(); }
+            else if (!v) { showPreview('', false); }
+        };
+        var vu2 = $('st2-vid-url');
+        if (vu2) vu2.oninput = function () {
+            var v = (vu2.value || '').trim();
+            if (/^https?:\/\//i.test(v)) { C.type = 'video'; C.src = v; showPreview(v, true); setPickState(); }
+            else if (!v) { showPreview('', false); }
+        };
+        var vp = $('st2-vid-poster');
+        if (vp) vp.oninput = function () { C.poster = (vp.value || '').trim(); };
+
+        var rings = $('st2-rings');
+        if (rings) {
+            rings.onclick = function (e) {
+                var b = e.target.closest ? e.target.closest('.st2-ring') : null;
+                if (!b) return;
+                C.ring = b.getAttribute('data-ring');
+                hap('selection');
+                rings.innerHTML = ringPickerHTML();
+            };
+        }
+
+        var save = $('st2-save-btn');
+        if (save) save.onclick = saveStory;
+        setPickState();
+    }
+
+    /** Storisni Firebase'ga yozadi (bot bilan bir xil sxema). */
+    function saveStory() {
+        if (C.busy) return;
+        if (!amAdmin()) { toast('Bu amal faqat admin uchun', 'warning'); return; }
+        if (!C.src) { toast('Avval rasm yuklang yoki video havolasini kiriting', 'warning'); return; }
+        if (!/^https?:\/\//i.test(C.src)) { toast("Havola https:// bilan boshlanishi kerak", 'warning'); return; }
+        if (!RING_BY_KEY[C.ring]) { toast("Bo'limni tanlang", 'warning'); return; }
+        if (!DB()) { toast('Baza ulanmagan', 'warning'); return; }
+
+        var capEl = $('st2-caption'), lnEl = $('st2-link');
+        var caption = capEl ? (capEl.value || '').trim() : '';
+        var link = lnEl ? (lnEl.value || '').trim() : '';
+
+        var btn = $('st2-save-btn');
+        C.busy = true;
+        if (btn) { btn.disabled = true; btn.textContent = 'Joylanmoqda...'; }
+
+        var now = Date.now();
+        // ID: bot `message_id` ishlatadi; biz to'qnashmaslik uchun 'ma' prefiksi + vaqt
+        var id = 'ma' + now;
+        var rec = {
+            id: id,
+            type: C.type === 'video' ? 'video' : 'image',
+            src: C.src,
+            poster: C.poster || '',
+            timestamp: now,
+            source: 'miniapp'
+        };
+        if (caption) rec.caption = caption;
+        if (link) rec.link = link;
+
+        DB().ref('stories/' + C.ring + '/' + id).set(rec).then(function () {
+            hap('success');
+            toast('Story joylandi! Bosh sahifada ko\'rinadi.', 'success');
+            // Keyingi story uchun formani tozalaymiz (bo'lim tanlovi saqlanadi)
+            C.src = ''; C.poster = ''; C.type = '';
+            // Adminga xabar (boshqa adminlar ham bilishi uchun)
+            try {
+                if (window.tgProxySend && adminChatId()) {
+                    window.tgProxySend({
+                        chat_id: adminChatId(),
+                        parse_mode: 'HTML',
+                        text: '\uD83D\uDCF8 <b>Mini app orqali yangi story</b>\n\n' +
+                            'Bo\'lim: <b>#' + E(C.ring) + '</b>\nTuri: ' + rec.type +
+                            (caption ? '\nMatn: ' + E(caption) : '')
+                    });
+                }
+            } catch (e) {}
+            // Bazani qayta o'qib, kelgan joyimizga qaytamiz.
+            // Agar boshqaruv oynasidan kelgan bo'lsak — ro'yxat yangilangan holda ko'rinadi.
+            var cameFrom = window._storyComposerFrom;
+            loadStories().catch(function () {}).then(function () {
+                window.history.back();
+                if (cameFrom === 'adminStoriesModal') {
+                    setTimeout(function () {
+                        if (curModal() === 'adminStoriesModal') renderStoriesAdmin();
+                    }, 120);
+                }
+            });
+        }).catch(function (err) {
+            toast('Saqlanmadi: ' + ((err && err.message) || 'ruxsat yo\'q'), 'warning');
+        }).then(function () {
+            C.busy = false;
+            if (btn) { btn.disabled = false; btn.textContent = 'Storisni joylash'; }
+        });
+    }
+
+    /**
+     * Composer'ni ochadi.
+     * @param {string} [ring]  boshlang'ich bo'lim
+     * @param {string} [from]  qaysi oynadan ochildi (qaytish uchun)
+     */
+    AvtoStories.openComposer = function (ring, from) {
+        if (!amAdmin()) { toast('Story qo\'yish faqat admin uchun', 'warning'); return; }
+        if (ring && RING_BY_KEY[ring]) C.ring = ring;
+        C.src = ''; C.poster = ''; C.type = ''; C.busy = false;
+        window._storyComposerFrom = from || null;
+
+        var body = $('story-composer-body');
+        if (!body) return;
+        body.innerHTML = composerHTML();
+        openSheet('storyComposerModal', from || null);
+        wireComposer();
+        showProgress(null);
+        showPreview('', false);
+        // Bo'limlardagi mavjud storis sonini ko'rsatish uchun bazani fonda o'qiymiz
+        loadStories().then(function () {
+            var r = $('st2-rings');
+            if (r && curModal() === 'storyComposerModal') r.innerHTML = ringPickerHTML();
+        }).catch(function () {});
+    };
+
+    /* ---------------- 3.3 ADMIN BOSHQARUVI ---------------- */
+
+    function storyCardHTML(s) {
+        var isNew = (Date.now() - s.timestamp) < 86400000 * 2;   // 2 kundan yangi
+        var thumb = s.type === 'video' ? (s.poster || '') : s.src;
+        return '<div class="st2-card" data-cat="' + E(s.cat) + '" data-key="' + E(s.key) + '">' +
+            '<div class="st2-thumb" data-open="1">' +
+                (thumb ? '<img src="' + E(thumb) + '" alt="" loading="lazy" onerror="this.style.display=\'none\';">' : '\uD83C\uDFAC') +
+                (s.type === 'video' ? '<i class="st2-play">\u25B6</i>' : '') +
+            '</div>' +
+            '<div class="st2-mid">' +
+                '<b>' + E(s.caption || (RING_BY_KEY[s.cat] ? RING_BY_KEY[s.cat].title : s.cat) + ' storisi') + '</b>' +
+                '<div class="st2-meta">' +
+                    '<span class="st2-chip' + (s.type === 'video' ? ' is-vid' : '') + '">' +
+                        (s.type === 'video' ? '\uD83C\uDFAC Video' : '\uD83D\uDDBC Rasm') + '</span>' +
+                    '<span class="st2-chip">' + E(agoLabel(s.timestamp)) + '</span>' +
+                    (isNew ? '<span class="st2-chip is-new">Yangi</span>' : '') +
+                    (s.source === 'miniapp' ? '<span class="st2-chip">Ilovadan</span>' : '<span class="st2-chip">Botdan</span>') +
+                '</div>' +
+            '</div>' +
+            '<div class="st2-acts">' +
+                '<button type="button" class="st2-mini" data-open="1" aria-label="Ko\'rish">\uD83D\uDC41</button>' +
+                '<button type="button" class="st2-mini is-del" data-del="1" aria-label="O\'chirish">\uD83D\uDDD1</button>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderStoriesAdmin() {
+        var box = $('admin-stories-list');
+        if (!box) return;
+
+        var cats = STORY_RINGS.filter(function (r) { return (A.byCat[r.key] || []).length > 0; });
+        var newest = A.rows.length ? A.rows[0].timestamp : 0;
+
+        var head =
+            '<div class="st2-sum">' +
+                '<div class="st2-sum-b"><b id="st2-k1">0</b><span>storis</span></div>' +
+                '<div class="st2-sum-b"><b id="st2-k2">0</b><span>bo\'lim faol</span></div>' +
+                '<div class="st2-sum-b"><b style="font-size:13px; line-height:1.5;">' + E(newest ? agoLabel(newest) : '—') + '</b><span>oxirgisi</span></div>' +
+            '</div>' +
+            '<button type="button" class="st2-add-btn" id="st2-new-btn">' +
+                '<span class="st2-ab-ic">+</span>' +
+                '<span class="st2-ab-tx"><b>Yangi story qo\'shish</b><i>Rasm tanlang, bo\'limni belgilang — tayyor</i></span>' +
+            '</button>';
+
+        var groups = cats.map(function (r) {
+            var items = A.byCat[r.key] || [];
+            return '<div class="st2-group">' + r.icon + ' <b>' + E(r.title) + '</b><em>' + items.length + '</em></div>' +
+                items.map(storyCardHTML).join('');
+        }).join('');
+
+        if (!groups) {
+            groups = '<div class="st2-empty"><span class="ic">\uD83D\uDCF8</span>' +
+                '<b>Hali storis yo\'q</b>' +
+                '<p>Birinchi storisni qo\'shsangiz, u bosh sahifadagi halqalarda darhol paydo bo\'ladi. ' +
+                'Mijozlar uni Instagram kabi ko\'radi.</p></div>';
+        }
+
+        box.innerHTML = head + groups;
+
+        countUp($('st2-k1'), A.total, function (v) { return String(v); });
+        countUp($('st2-k2'), cats.length, function (v) { return String(v); });
+        stagger(box.querySelectorAll('.st2-card'), 40, 14);
+
+        var nb = $('st2-new-btn');
+        if (nb) nb.onclick = function () { hap('medium'); AvtoStories.openComposer(null, 'adminStoriesModal'); };
+
+        // Kartalardagi amallar
+        box.onclick = function (e) {
+            var card = e.target.closest ? e.target.closest('.st2-card') : null;
+            if (!card) return;
+            var cat = card.getAttribute('data-cat');
+            var key = card.getAttribute('data-key');
+            if (e.target.closest('[data-del]')) { deleteStory(cat, key, card); return; }
+            if (e.target.closest('[data-open]')) { previewStory(cat, key); return; }
+        };
+    }
+
+    /** Storisni ko'rish — mavjud story viewer'ni ishga soladi. */
+    function previewStory(cat, key) {
+        hap('light');
+        try {
+            // Boshqaruv oynasini yopmasdan viewer'ni ochamiz (viewer eng ustida)
+            if (typeof window.startStories === 'function') {
+                var cap = RING_BY_KEY[cat] ? RING_BY_KEY[cat].title : cat;
+                window.startStories(cat, cap);
+                return;
+            }
+        } catch (e) {}
+        var s = (A.byCat[cat] || []).filter(function (x) { return x.key === key; })[0];
+        if (s && s.src) window.open(s.src, '_blank');
+    }
+
+    function deleteStory(cat, key, cardEl) {
+        if (!amAdmin()) { toast('Faqat admin', 'warning'); return; }
+        var doDelete = function () {
+            DB().ref('stories/' + cat + '/' + key).remove().then(function () {
+                hap('success');
+                toast('Storis o\'chirildi', 'success');
+                A.byCat[cat] = (A.byCat[cat] || []).filter(function (x) { return x.key !== key; });
+                A.rows = A.rows.filter(function (x) { return !(x.cat === cat && x.key === key); });
+                A.total = Math.max(0, A.total - 1);
+                if (cardEl && cardEl.parentNode) {
+                    cardEl.style.transition = 'opacity .22s ease, transform .22s ease';
+                    cardEl.style.opacity = '0';
+                    cardEl.style.transform = 'translateX(-24px)';
+                    setTimeout(renderStoriesAdmin, 230);
+                } else { renderStoriesAdmin(); }
+            }).catch(function (err) {
+                toast('O\'chirilmadi: ' + ((err && err.message) || 'ruxsat yo\'q'), 'warning');
+            });
+        };
+        var q = 'Ushbu storisni butunlay o\'chirasizmi?';
+        try {
+            if (window.tg && tg.showConfirm) { tg.showConfirm(q, function (ok) { if (ok) doDelete(); }); return; }
+        } catch (e) {}
+        if (confirm(q)) doDelete();
+    }
+
+    AvtoStories.openAdmin = function () {
+        if (!amAdmin()) { toast('Bu bo\'lim faqat admin uchun', 'warning'); return; }
+        var box = $('admin-stories-list');
+        if (box) box.innerHTML = (window._skel ? window._skel(5, 78) : '<p style="text-align:center;">Yuklanmoqda...</p>');
+        openSheet('adminStoriesModal', 'adminModal');
+        loadStories().then(renderStoriesAdmin).catch(function (err) {
+            if (box) {
+                box.innerHTML = '<div class="st2-empty"><span class="ic">\u26A0\uFE0F</span><b>O\'qib bo\'lmadi</b>' +
+                    '<p>' + E((err && err.message) || 'Bazaga ulanish xatosi') + '</p></div>';
+            }
+        });
+    };
+
+    window.AvtoStories = AvtoStories;
+
+    /* ================================================================== *
+     * 4. O'NGGA TORTISH IMOSI + LENTADAGI "+" HALQASI
+     * ------------------------------------------------------------------
+     * Telegram'da chat ro'yxatini o'ngga tortsa kamera ochiladi. Shu xatti-
+     * harakatni takrorlaymiz: bosh ekranda barmoqni o'ngga tortsang, chap
+     * chetdan panel sirg'alib chiqadi va qo'yib yuborsang composer ochiladi.
+     *
+     * ⚠️ TO'QNASHUVLARDAN QOCHISH (fayldagi mavjud imolar bilan):
+     *   • `cardSwipeInit` — `.luxury-card` ustida o'ngga tortish = sevimliga
+     *     qo'shish. Shuning uchun karta ustidan boshlangan imoni O'TKAZIB
+     *     YUBORAMIZ.
+     *   • `swipeInit` — `.cart-row` ustida chapga tortish = o'chirish.
+     *   • `.stories-container`, `.slider-container`, `.pm-slider` — gorizontal
+     *     skroll qiladi, ularga ham tegmaymiz.
+     *   • iOS/Telegram'ning o'z "chetdan tortib orqaga qaytish" imosi —
+     *     shuning uchun imo ekran chetidan (x < 26px) boshlansa ishlamaydi.
+     *   • Barcha listenerlar `passive:true` — skroll BUZILMAYDI.
+     * ================================================================== */
+    (function swipeRightToCompose() {
+        var SKIP = '.luxury-card, .cart-row, .stories-container, .slider-container, ' +
+                   '.pm-slider, .st2-rings, .cst-segs, .quick-chips, input, textarea, ' +
+                   'select, button, a, .nav-item, .modal-standard, #story-viewer, [data-noswipe]';
+        var EDGE = 26;      // ekran chetidan boshlangan imo — tizimga qoldiramiz
+        var LOCK = 12;      // yo'nalishni aniqlash chegarasi
+        var ARM = 88;       // shu masofadan keyin qo'yib yuborsa — ochiladi
+        var MAX = 132;      // panel eng ko'p shuncha suriladi
+
+        var sx = 0, sy = 0, dx = 0, dir = null, live = false, peek = null;
+
+        function ready() {
+            // Faqat admin, faqat oyna yopiq holatda, faqat kontent ekranida
+            if (!amAdmin()) return false;
+            if (curModal()) return false;
+            try { if (typeof searchActive !== 'undefined' && searchActive) return false; } catch (e) {}
+            var sv = $('story-viewer');
+            if (sv && sv.style.display && sv.style.display !== 'none') return false;
+            return true;
+        }
+
+        function panel() {
+            if (!peek) peek = $('st2-peek');
+            return peek;
+        }
+
+        function reset(open) {
+            var p = panel();
+            if (p) {
+                p.style.transition = 'transform .24s cubic-bezier(.25,.9,.3,1), opacity .24s ease';
+                p.style.transform = 'translateX(-100%)';
+                p.style.opacity = '0';
+                p.classList.remove('armed');
+                setTimeout(function () {
+                    if (!live) { p.classList.remove('show'); p.style.transition = ''; }
+                }, 260);
+            }
+            live = false; dx = 0; dir = null;
+            if (open) {
+                hap('medium');
+                setTimeout(function () { AvtoStories.openComposer(null, null); }, 60);
+            }
+        }
+
+        document.addEventListener('touchstart', function (e) {
+            live = false; dir = null; dx = 0;
+            if (!e.touches || e.touches.length !== 1) return;
+            if (!ready()) return;
+            var t = e.touches[0];
+            if (t.clientX < EDGE) return;                       // tizim imosi zonasi
+            if (e.target.closest && e.target.closest(SKIP)) return;
+            sx = t.clientX; sy = t.clientY;
+            live = true;
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function (e) {
+            if (!live || !e.touches || e.touches.length !== 1) return;
+            var mx = e.touches[0].clientX - sx;
+            var my = e.touches[0].clientY - sy;
+            if (dir === null && (Math.abs(mx) > LOCK || Math.abs(my) > LOCK)) {
+                // ANIQ gorizontal VA ANIQ o'ngga bo'lishi shart
+                dir = (mx > 0 && Math.abs(mx) > Math.abs(my) * 1.5) ? 'right' : 'no';
+                if (dir === 'no') { live = false; return; }
+                var p0 = panel();
+                if (p0) { p0.classList.add('show'); p0.style.transition = 'none'; }
+            }
+            if (dir !== 'right') return;
+            dx = Math.max(0, Math.min(MAX, mx));
+            var p = panel();
+            if (!p) return;
+            var shift = -100 + (dx / MAX) * 100;
+            p.style.transform = 'translateX(' + shift + '%)';
+            p.style.opacity = String(Math.min(1, dx / 60));
+            p.classList.toggle('armed', dx >= ARM);
+        }, { passive: true });
+
+        document.addEventListener('touchend', function () {
+            if (!live) return;
+            var open = (dir === 'right' && dx >= ARM);
+            reset(open);
+        }, { passive: true });
+
+        document.addEventListener('touchcancel', function () { if (live) reset(false); }, { passive: true });
+    })();
+
+    /* ------------------------------------------------------------------ *
+     * 4.2 STORIES LENTASIDAGI "+" HALQASI (doim ko'rinadigan kirish nuqtasi)
+     * ------------------------------------------------------------------
+     * Imo — tez, lekin ko'rinmaydi. Shuning uchun Instagram/Telegram kabi
+     * lentaning boshiga admin uchun "+" halqasi qo'shamiz.
+     *
+     * ⚠️ NUANS: mavjud `_refreshStoryRings()` funksiyasi biror halqada storis
+     * bo'lmasa BUTUN lentani (`#stories-list`) yashiradi. Bu holda admin "+"
+     * tugmasini ko'rmasdi. Shuning uchun konteynerni kuzatamiz va admin
+     * bo'lganda uni majburan ko'rsatamiz.
+     * ------------------------------------------------------------------ */
+    (function addStoryRing() {
+        function build() {
+            if (!amAdmin()) return;
+            var list = $('stories-list');
+            if (!list || $('st2-add-item')) return;
+            var el = document.createElement('div');
+            el.className = 'story-item st2-add';
+            el.id = 'st2-add-item';
+            el.setAttribute('role', 'button');
+            el.setAttribute('tabindex', '0');
+            el.innerHTML =
+                '<div class="st2-add-ring">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+                '</div><span>Story</span>';
+            el.onclick = function () { hap('medium'); AvtoStories.openComposer(null, null); };
+            list.insertBefore(el, list.firstChild);
+
+            // Lenta yashirilib qolmasin (admin uchun "+" doim kerak)
+            var force = function () {
+                if (!amAdmin()) return;
+                if (list.style.display === 'none') list.style.display = '';
+            };
+            force();
+            try {
+                new MutationObserver(force).observe(list, { attributes: true, attributeFilter: ['style'] });
+            } catch (e) {
+                setInterval(force, 2500);
+            }
+        }
+        // Admin holati auth tugagach aniqlanadi — bir necha marta urinamiz
+        build();
+        setTimeout(build, 900);
+        setTimeout(build, 2600);
+        setTimeout(build, 6000);
+    })();
+
+    /* ------------------------------------------------------------------ *
+     * 4.3 STORY VIEWER'da matn (caption) va "Batafsil" tugmasi
+     * ------------------------------------------------------------------
+     * Composer `caption` va `link` maydonlarini yozadi. Mavjud viewer ularni
+     * bilmaydi, shuning uchun `playCurrentStory`'ni o'rab (wrap) qo'shimcha
+     * qatlam chizamiz — asl funksiya mantiqiga tegmaymiz.
+     * ------------------------------------------------------------------ */
+    (function storyCaptionLayer() {
+        function ensureNodes() {
+            var viewer = $('story-viewer');
+            if (!viewer) return null;
+            var cap = $('st2-story-cap');
+            if (!cap) {
+                cap = document.createElement('div');
+                cap.id = 'st2-story-cap';
+                cap.style.cssText = 'position:absolute; left:0; right:0; bottom:96px; z-index:55; ' +
+                    'padding:0 20px; box-sizing:border-box; display:none; pointer-events:none;';
+                cap.innerHTML =
+                    '<div id="st2-story-cap-tx" style="background:rgba(0,0,0,.55); backdrop-filter:blur(8px); ' +
+                    'color:#fff; font-size:15px; font-weight:700; line-height:1.45; padding:12px 15px; ' +
+                    'border-radius:15px; margin-bottom:10px; box-shadow:0 8px 24px rgba(0,0,0,.35);"></div>' +
+                    '<button type="button" id="st2-story-link" style="display:none; pointer-events:auto; ' +
+                    'width:100%; padding:14px; border:none; border-radius:15px; font-family:inherit; ' +
+                    'font-size:15px; font-weight:800; cursor:pointer; background:#fff; color:#111;">Batafsil</button>';
+                viewer.appendChild(cap);
+            }
+            return cap;
+        }
+
+        function paint() {
+            var cap = ensureNodes();
+            if (!cap) return;
+            // `playCurrentStory` ichida ochilgan joriy storis (lokal o'zgaruvchi ko'prigi)
+            var item = window._st2CurrentStoryItem || null;
+            if (!item) { cap.style.display = 'none'; return; }
+            var tx = $('st2-story-cap-tx'), lk = $('st2-story-link');
+            var hasCap = !!(item.caption && String(item.caption).trim());
+            var hasLink = !!(item.link && String(item.link).trim());
+            if (!hasCap && !hasLink) { cap.style.display = 'none'; return; }
+            cap.style.display = 'block';
+            if (tx) {
+                tx.style.display = hasCap ? 'block' : 'none';
+                tx.textContent = hasCap ? String(item.caption) : '';
+            }
+            if (lk) {
+                lk.style.display = hasLink ? 'block' : 'none';
+                lk.onclick = function (e) {
+                    e.stopPropagation();
+                    var v = String(item.link).trim();
+                    hap('medium');
+                    if (/^https?:\/\//i.test(v)) {
+                        try { if (window.tg && tg.openLink) { tg.openLink(v); return; } } catch (e2) {}
+                        window.open(v, '_blank');
+                    } else {
+                        // Tovar kodi/ID — mahsulot oynasini ochamiz
+                        try {
+                            if (window.closeStoryViewer) window.closeStoryViewer();
+                            var db2 = window.productsDB || [];
+                            var p = db2.filter(function (x) {
+                                return x && (String(x.id) === v || String(x.code || '').toLowerCase() === v.toLowerCase());
+                            })[0];
+                            if (p && window.openProduct) window.openProduct(p.id);
+                            else toast('Tovar topilmadi: ' + v, 'warning');
+                        } catch (e3) {}
+                    }
+                };
+            }
+        }
+
+        function wrap() {
+            if (typeof window.playCurrentStory !== 'function' || window._st2CapWrapped) return;
+            window._st2CapWrapped = true;
+            var orig = window.playCurrentStory;
+            window.playCurrentStory = function () {
+                var r = orig.apply(this, arguments);
+                try { setTimeout(paint, 30); } catch (e) {}
+                return r;
+            };
+            var origClose = window.closeStoryViewer;
+            if (typeof origClose === 'function') {
+                window.closeStoryViewer = function () {
+                    var cap = $('st2-story-cap');
+                    if (cap) cap.style.display = 'none';
+                    return origClose.apply(this, arguments);
+                };
+            }
+        }
+        wrap();
+        setTimeout(wrap, 1200);
+    })();
+
+    /* ================================================================== *
+     * 5. MIJOZLAR — TO'LIQ QAYTA YOZILDI
+     * ------------------------------------------------------------------
+     * ILGARI NIMA BO'LGAN:
+     *   • bitta tekis ro'yxat: ism (15px), ID (11px), telefon (13px),
+     *     manzil (11px) — hammasi mayda va zich, o'qish qiyin;
+     *   • qidiruvdan boshqa hech qanday filtr/saralash yo'q;
+     *   • avatar, daraja belgisi, oxirgi xarid sanasi yo'q;
+     *   • hech qanday amal yo'q (qo'ng'iroq, Telegram, tafsilot) — faqat
+     *     buyurtmalar ro'yxatiga o'tish;
+     *   • `${c.name}` to'g'ridan innerHTML'ga qo'yilardi — XSS xavfi;
+     *   • statistika yo'q, VIP mijozni ajratib ko'rsatolmasdi.
+     *
+     * ENDI:
+     *   • 4 ta KPI kartasi (raqamlar sanab chiqadi)
+     *   • 6 ta segment: Hammasi / VIP / Faol / Yangi / Uxlagan / Xaridsiz
+     *   • 3 xil saralash: summa, buyurtma soni, oxirgi xarid
+     *   • yirik, aniq kartalar: avatar, daraja rangi, o'rin (#1 #2 #3),
+     *     3 ta mini statistika, 4 ta amal tugmasi
+     *   • bosqichma-bosqich (stagger) kirish animatsiyasi
+     *   • butun matn `E()` bilan xavfsizlanadi
+     *   • mijoz tafsiloti alohida oynada
+     * ================================================================== */
+
+    var CS = {
+        all: [],            // barcha mijozlar
+        view: [],           // filtrlangan + saralangan
+        seg: 'all',
+        sort: 'spent',      // spent | orders | recent
+        q: '',
+        limit: 20,
+        loaded: false,
+        animate: true      // kirish animatsiyasini FAQAT kerakli paytda yoqamiz
+    };
+
+    var SORTS = [
+        { id: 'spent',  label: 'Eng ko\'p sarflagan' },
+        { id: 'orders', label: 'Eng ko\'p buyurtma' },
+        { id: 'recent', label: 'Oxirgi xaridi yangi' },
+        { id: 'name',   label: 'Ism bo\'yicha (A-Z)' }
+    ];
+
+    var SEGS = [
+        { id: 'all',      icon: '\uD83D\uDC65', label: 'Hammasi' },
+        { id: 'vip',      icon: '\uD83D\uDC51', label: 'VIP' },
+        { id: 'active',   icon: '\uD83D\uDD25', label: 'Faol' },
+        { id: 'new',      icon: '\uD83C\uDD95', label: 'Yangi' },
+        { id: 'sleeping', icon: '\uD83D\uDCA4', label: 'Uxlagan' },
+        { id: 'noorder',  icon: '\uD83D\uDC64', label: 'Xaridsiz' }
+    ];
+
+    var DAY = 86400000;
+
+    /** Firebase `users` snapshot'idan mijozlar ro'yxatini yasaydi. */
+    function buildCustomers(snap) {
+        var out = [];
+        if (!snap || !snap.exists()) return out;
+        var us = snap.val();
+        Object.keys(us).forEach(function (uid) {
+            var u = us[uid] || {};
+            var p = u.profile || {};
+            var arr = ordersArr(u.orders);
+            var delivered = arr.filter(function (o) { return o && o.status === 'yetkazildi'; });
+            var spent = delivered.reduce(function (s, o) { return s + (parseInt(o.total, 10) || 0); }, 0);
+            var pending = arr.filter(function (o) {
+                return o && o.status !== 'yetkazildi' && o.status !== 'bekor_qilingan';
+            }).length;
+            var times = arr.map(orderTime).filter(function (t) { return t > 0; });
+            var last = times.length ? Math.max.apply(null, times) : 0;
+            var first = times.length ? Math.min.apply(null, times) : 0;
+
+            var manual = (p.vip && p.vip.manual) ? p.vip.manual : null;
+            var v = VIP.compute(u.orders, manual);
+
+            out.push({
+                uid: String(uid),
+                name: p.name || p.firstName || 'Nomsiz mijoz',
+                phone: p.phone || '',
+                address: p.address || '',
+                username: (p.username && p.username !== "Yo'q") ? String(p.username).replace(/^@/, '') : '',
+                orders: arr.length,
+                delivered: delivered.length,
+                pending: pending,
+                spent: spent,
+                avg: delivered.length ? Math.round(spent / delivered.length) : 0,
+                last: last,
+                first: first,
+                tier: v.tier,
+                tierIdx: v.tierIdx,
+                isVip: v.isVip,
+                manual: manual,
+                cartCount: u.cart ? Object.keys(u.cart).length : 0,
+                wishCount: Array.isArray(u.wishlist) ? u.wishlist.length : (u.wishlist ? Object.keys(u.wishlist).length : 0),
+                cashback: (u.phase2 && parseInt(u.phase2.cashback, 10)) || 0,
+                car: (u.my_car && (u.my_car.model || u.my_car.name)) || '',
+                ordersRaw: arr
+            });
+        });
+        return out;
+    }
+
+    function segMatch(c, seg) {
+        var now = Date.now();
+        switch (seg) {
+            case 'vip':      return c.isVip;
+            case 'active':   return c.last > 0 && (now - c.last) <= 30 * DAY;
+            case 'new':      return c.first > 0 && (now - c.first) <= 14 * DAY;
+            case 'sleeping': return c.orders > 0 && c.last > 0 && (now - c.last) > 60 * DAY;
+            case 'noorder':  return c.orders === 0;
+            default:         return true;
+        }
+    }
+
+    function applyFilters() {
+        var q = CS.q.toLowerCase().trim();
+        CS.view = CS.all.filter(function (c) {
+            if (!segMatch(c, CS.seg)) return false;
+            if (!q) return true;
+            return c.name.toLowerCase().indexOf(q) !== -1
+                || c.uid.toLowerCase().indexOf(q) !== -1
+                || (c.phone || '').toLowerCase().indexOf(q) !== -1
+                || (c.username || '').toLowerCase().indexOf(q) !== -1;
+        });
+        var s = CS.sort;
+        CS.view.sort(function (a, b) {
+            if (s === 'orders') return b.orders - a.orders || b.spent - a.spent;
+            if (s === 'recent') return b.last - a.last || b.spent - a.spent;
+            if (s === 'name')   return a.name.localeCompare(b.name, 'uz');
+            return b.spent - a.spent || b.orders - a.orders;
+        });
+        CS.limit = 20;
+    }
+
+    /* ---------------- 5.1 KPI + asboblar ---------------- */
+
+    function kpisHTML() {
+        var now = Date.now();
+        var total = CS.all.length;
+        var vip = CS.all.filter(function (c) { return c.isVip; }).length;
+        var active = CS.all.filter(function (c) { return c.last > 0 && (now - c.last) <= 30 * DAY; }).length;
+        var revenue = CS.all.reduce(function (s, c) { return s + c.spent; }, 0);
+        return '<div class="cst-kpis">' +
+            '<div class="cst-kpi" style="--kc:#0a84ff"><div class="cst-kpi-ic">\uD83D\uDC65</div>' +
+                '<div class="cst-kpi-n" id="cst-k-total">0</div><div class="cst-kpi-l">Jami mijoz</div></div>' +
+            '<div class="cst-kpi" style="--kc:#C9A84C"><div class="cst-kpi-ic">\uD83D\uDC51</div>' +
+                '<div class="cst-kpi-n" id="cst-k-vip">0</div><div class="cst-kpi-l">VIP daraja</div></div>' +
+            '<div class="cst-kpi" style="--kc:#30d158"><div class="cst-kpi-ic">\uD83D\uDD25</div>' +
+                '<div class="cst-kpi-n" id="cst-k-active">0</div><div class="cst-kpi-l">30 kunda faol</div></div>' +
+            '<div class="cst-kpi" style="--kc:#ff9f0a"><div class="cst-kpi-ic">\uD83D\uDCB0</div>' +
+                '<div class="cst-kpi-n" id="cst-k-rev">0</div><div class="cst-kpi-l">Jami tushum</div></div>' +
+            '</div>' +
+            '<span id="cst-kpi-data" data-total="' + total + '" data-vip="' + vip +
+                '" data-active="' + active + '" data-rev="' + revenue + '" style="display:none;"></span>';
+    }
+
+    function toolsHTML() {
+        var sortLabel = (SORTS.filter(function (s) { return s.id === CS.sort; })[0] || SORTS[0]).label;
+        return '<div class="cst-tools">' +
+            '<div class="cst-search-wrap' + (CS.q ? ' has-text' : '') + '" id="cst-search-wrap">' +
+                '<svg class="cst-search-ic" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19z"/></svg>' +
+                '<input type="text" class="cst-search" id="cst-q" placeholder="Ism, telefon yoki ID..." ' +
+                    'value="' + E(CS.q) + '" autocomplete="off" inputmode="search">' +
+                '<button type="button" class="cst-search-x" id="cst-q-x" aria-label="Tozalash">&times;</button>' +
+            '</div>' +
+            '<button type="button" class="cst-sort" id="cst-sort-btn" aria-label="' + E(sortLabel) + '" title="' + E(sortLabel) + '">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<line x1="4" y1="7" x2="16" y2="7"/><line x1="4" y1="12" x2="13" y2="12"/><line x1="4" y1="17" x2="10" y2="17"/>' +
+                '<polyline points="17 14 20 17 17 20"/><line x1="20" y1="17" x2="20" y2="8"/></svg>' +
+            '</button>' +
+        '</div>';
+    }
+
+    function segsHTML() {
+        return '<div class="cst-segs" id="cst-segs">' + SEGS.map(function (s) {
+            var n = CS.all.filter(function (c) { return segMatch(c, s.id); }).length;
+            return '<button type="button" class="cst-seg' + (CS.seg === s.id ? ' on' : '') + '" data-seg="' + s.id + '">' +
+                s.icon + ' ' + E(s.label) + '<em>' + n + '</em></button>';
+        }).join('') + '</div>';
+    }
+
+    /* ---------------- 5.2 Mijoz kartasi ---------------- */
+
+    function rankBadge(i) {
+        if (i === 0) return '\uD83E\uDD47';
+        if (i === 1) return '\uD83E\uDD48';
+        if (i === 2) return '\uD83E\uDD49';
+        return '#' + (i + 1);
+    }
+
+    function customerCardHTML(c, idx) {
+        var initial = E((c.name || '?').trim().charAt(0).toUpperCase() || '?');
+        var t = c.tier;
+        var lastTx = c.last ? agoLabel(c.last) : 'xarid yo\'q';
+        return '<div class="cst-card' + (c.isVip ? ' is-vip' : '') + '" data-uid="' + E(c.uid) + '" ' +
+                'style="--tier-grad:' + t.grad + '; --tier-1:' + t.c1 + '; --tier-tx:' + t.ink + ';">' +
+            '<div class="cst-top">' +
+                '<div class="cst-av">' + initial +
+                    '<span class="cst-av-ring"></span>' +
+                    '<span class="cst-rank">' + rankBadge(idx) + '</span>' +
+                '</div>' +
+                '<div class="cst-id">' +
+                    '<h4 class="cst-name">' + E(c.name) + '</h4>' +
+                    '<div class="cst-sub">' +
+                        '<span class="cst-tier">' + t.icon + ' ' + E(t.name) + '</span>' +
+                        '<span class="cst-phone">' + E(c.phone || 'telefon yo\'q') + '</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="cst-money"><b>' + fmtShort(c.spent) + "</b><span>so'm</span></div>" +
+            '</div>' +
+            '<div class="cst-stats">' +
+                '<div class="cst-stat"><b>' + c.orders + '</b><span>buyurtma</span></div>' +
+                '<div class="cst-stat"><b>' + (c.avg ? fmtShort(c.avg) : '0') + '</b><span>o\'rtacha</span></div>' +
+                '<div class="cst-stat"><b style="font-size:12.5px; line-height:1.4;">' + E(lastTx) + '</b><span>oxirgi xarid</span></div>' +
+            '</div>' +
+            '<div class="cst-acts">' +
+                '<button type="button" class="cst-act" data-act="orders">' +
+                    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1 0-2 .9-2 2v3c0 .7.4 1.3 1 1.7V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.6-.4 1-1 1-1.7V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>' +
+                    'Buyurtma</button>' +
+                (c.username || c.uid
+                    ? '<button type="button" class="cst-act is-tg" data-act="tg">' +
+                        '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.8 15.6l-.2 3.6c.4 0 .6-.2.8-.4l2-1.9 4.1 3c.8.4 1.3.2 1.5-.7l2.7-12.6c.2-1.1-.4-1.5-1.1-1.2L3.4 10.1c-1.1.4-1 1-.2 1.3l4.2 1.3 9.7-6.1c.5-.3.9-.1.5.2z"/></svg>' +
+                        'Yozish</button>'
+                    : '') +
+                (c.phone
+                    ? '<button type="button" class="cst-act is-call" data-act="call">' +
+                        '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.5 0 1 .4 1 1V20c0 .6-.5 1-1 1-9.4 0-17-7.6-17-17 0-.6.5-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.6.1.3 0 .7-.2 1z"/></svg>' +
+                        'Qo\'ng\'iroq</button>'
+                    : '') +
+                '<button type="button" class="cst-act is-vip' + (c.manual ? ' on' : '') + '" data-act="vip" aria-label="VIP">' +
+                    '\uD83D\uDC51</button>' +
+            '</div>' +
+        '</div>';
+    }
+
+    /* ---------------- 5.3 Ro'yxatni chizish ---------------- */
+
+    function renderList() {
+        var box = $('cst-list');
+        if (!box) return;
+        if (!CS.view.length) {
+            var msg = CS.q
+                ? '"' + E(CS.q) + '" bo\'yicha mijoz topilmadi. Boshqa ism yoki telefon raqami bilan urinib ko\'ring.'
+                : 'Bu segmentda mijoz yo\'q. Boshqa segmentni tanlab ko\'ring.';
+            box.innerHTML = '<div class="cst-empty"><span class="ic">\uD83D\uDD0D</span><b>Natija yo\'q</b><p>' + msg + '</p></div>';
+            return;
+        }
+        var visible = CS.view.slice(0, CS.limit);
+        var html = visible.map(function (c, i) { return customerCardHTML(c, i); }).join('');
+        if (CS.limit < CS.view.length) {
+            html += '<div class="cst-more"><span><i></i>Yana ' +
+                (CS.view.length - CS.limit) + ' ta mijoz &middot; pastga suring</span></div>';
+        }
+        box.innerHTML = html;
+        // Animatsiya faqat segment/saralash/ochilishda — qidiruvda har harf bosilganda
+        // kartalar qayta "sakrasa" ko'z charchaydi.
+        if (CS.animate) { stagger(box.querySelectorAll('.cst-card'), 42, 12); CS.animate = false; }
+        else {
+            Array.prototype.forEach.call(box.querySelectorAll('.cst-card'), function (n) {
+                n.style.animation = 'none';
+            });
+        }
+    }
+
+    function renderShell() {
+        var box = $('admin-customers-list');
+        if (!box) return;
+        box.innerHTML = '<div class="cst-wrap">' + kpisHTML() + toolsHTML() + segsHTML() +
+            '<div id="cst-list"></div></div>';
+
+        // KPI raqamlarini sanab chiqaramiz
+        var d = $('cst-kpi-data');
+        if (d) {
+            countUp($('cst-k-total'),  d.getAttribute('data-total'),  function (v) { return String(v); });
+            countUp($('cst-k-vip'),    d.getAttribute('data-vip'),    function (v) { return String(v); });
+            countUp($('cst-k-active'), d.getAttribute('data-active'), function (v) { return String(v); });
+            countUp($('cst-k-rev'),    d.getAttribute('data-rev'),    fmtShort, 1100);
+        }
+
+        // Qidiruv
+        var q = $('cst-q'), wrap = $('cst-search-wrap'), qx = $('cst-q-x');
+        if (q) {
+            q.oninput = function () {
+                CS.q = q.value || '';
+                if (wrap) wrap.classList.toggle('has-text', CS.q.length > 0);
+                applyFilters();
+                renderList();
+            };
+        }
+        if (qx) qx.onclick = function () {
+            CS.q = '';
+            if (q) { q.value = ''; q.focus(); }
+            if (wrap) wrap.classList.remove('has-text');
+            applyFilters(); renderList(); hap('light');
+        };
+
+        // Segmentlar
+        var segs = $('cst-segs');
+        if (segs) segs.onclick = function (e) {
+            var b = e.target.closest ? e.target.closest('.cst-seg') : null;
+            if (!b) return;
+            CS.seg = b.getAttribute('data-seg');
+            CS.animate = true;
+            hap('selection');
+            segs.querySelectorAll('.cst-seg').forEach(function (x) {
+                x.classList.toggle('on', x.getAttribute('data-seg') === CS.seg);
+            });
+            applyFilters(); renderList();
+            var m = $('adminCustomersModal'); if (m) m.scrollTop = Math.min(m.scrollTop, 220);
+        };
+
+        // Saralash — aylanma (har bosishda keyingi tartib)
+        var sb = $('cst-sort-btn');
+        if (sb) sb.onclick = function () {
+            var ids = SORTS.map(function (s) { return s.id; });
+            var i = ids.indexOf(CS.sort);
+            var next = SORTS[(i + 1) % SORTS.length];
+            CS.sort = next.id;
+            CS.animate = true;
+            hap('selection');
+            sb.setAttribute('title', next.label);
+            sb.setAttribute('aria-label', next.label);
+            toast(next.label, 'info');
+            applyFilters(); renderList();
+        };
+
+        // Karta amallari
+        var list = $('cst-list');
+        if (list) list.onclick = function (e) {
+            var card = e.target.closest ? e.target.closest('.cst-card') : null;
+            if (!card) return;
+            var uid = card.getAttribute('data-uid');
+            var c = CS.all.filter(function (x) { return x.uid === uid; })[0];
+            if (!c) return;
+            var actBtn = e.target.closest('[data-act]');
+            if (!actBtn) { hap('light'); openCustomerDetail(c); return; }
+            var act = actBtn.getAttribute('data-act');
+            e.stopPropagation();
+            if (act === 'orders') { hap('light'); goCustomerOrders(c); }
+            else if (act === 'tg') { hap('light'); openTelegram(c); }
+            else if (act === 'call') { hap('light'); callCustomer(c); }
+            else if (act === 'vip') { toggleManualVip(c, actBtn); }
+        };
+
+        CS.animate = true;
+        renderList();
+    }
+
+    /* ---------------- 5.4 Amallar ---------------- */
+
+    function openTelegram(c) {
+        var url = c.username ? ('https://t.me/' + c.username) : ('tg://user?id=' + c.uid);
+        try {
+            if (c.username && window.tg && tg.openTelegramLink) { tg.openTelegramLink(url); return; }
+            if (window.tg && tg.openLink && c.username) { tg.openLink(url); return; }
+        } catch (e) {}
+        try { window.open(url, '_blank'); } catch (e) { toast('Ochib bo\'lmadi', 'warning'); }
+    }
+
+    function callCustomer(c) {
+        if (!c.phone) { toast('Telefon raqami yo\'q', 'warning'); return; }
+        var tel = 'tel:' + String(c.phone).replace(/[^0-9+]/g, '');
+        try { window.location.href = tel; } catch (e) { toast(c.phone, 'info'); }
+    }
+
+    function goCustomerOrders(c) {
+        if (typeof window.openCustomerSpecificOrders === 'function') {
+            window.openCustomerSpecificOrders(c.uid, c.name);
+        } else {
+            toast('Buyurtmalar oynasi topilmadi', 'warning');
+        }
+    }
+
+    /** Adminning qo'lda VIP belgilashi — darajalar aylanma tartibda o'zgaradi. */
+    function toggleManualVip(c, btn) {
+        if (!amAdmin()) { toast('Faqat admin', 'warning'); return; }
+        // aylanma: yo'q -> oltin -> platina -> yo'q
+        var next = !c.manual ? 'gold' : (c.manual === 'gold' ? 'platinum' : null);
+        VIP.setManual(c.uid, next).then(function () {
+            c.manual = next;
+            // Darajani qayta hisoblaymiz (haqiqiy buyurtmalar + qo'lda berilgan)
+            var recomputed = VIP.compute(c.ordersRaw, next);
+            c.tier = recomputed.tier; c.tierIdx = recomputed.tierIdx; c.isVip = recomputed.isVip;
+            hap('success');
+            toast(next
+                ? ('\uD83D\uDC51 ' + c.name + ' \u2192 ' + c.tier.name + ' (qo\'lda)')
+                : (c.name + ' \u2014 qo\'lda daraja olib tashlandi'), 'success');
+            if (btn) btn.classList.toggle('on', !!next);
+            try { if (window._invalidateUsersCache) window._invalidateUsersCache(); } catch (e) {}
+            applyFilters(); renderList();
+        }).catch(function (err) {
+            toast('Saqlanmadi: ' + ((err && err.message) || 'ruxsat yo\'q'), 'warning');
+        });
+    }
+
+    /* ---------------- 5.5 Mijoz tafsiloti ---------------- */
+
+    function statusLabel(s) {
+        if (s === 'yetkazildi') return 'Yetkazildi';
+        if (s === 'yolda') return "Yo'lda";
+        if (s === 'qabul') return 'Qabul qilindi';
+        if (s === 'bekor_qilingan') return 'Bekor qilingan';
+        return 'Kutilmoqda';
+    }
+
+    function openCustomerDetail(c) {
+        var t = c.tier;
+        var ttl = $('cdt-title'), sub = $('cdt-sub');
+        if (ttl) ttl.textContent = c.name;
+        if (sub) sub.textContent = t.icon + ' ' + t.name + (c.isVip ? ' · VIP mijoz' : ' daraja');
+
+        var recent = c.ordersRaw.slice().sort(function (a, b) { return orderTime(b) - orderTime(a); }).slice(0, 6);
+        var v = VIP.compute(c.ordersRaw, c.manual);
+
+        var nextTx = v.next
+            ? (v.next.icon + ' ' + v.next.name + ' darajasiga ' +
+               (v.needSom > 0 ? fmtSom(v.needSom) + " so'm" : v.needOrd + ' ta buyurtma') + ' qoldi')
+            : 'Eng yuqori daraja';
+
+        var body = $('customer-detail-body');
+        if (!body) return;
+        body.innerHTML =
+            // --- HERO ---
+            '<div class="cdt-hero" id="cdt-hero">' +
+                '<div class="cdt-av" id="cdt-av">' + E((c.name || '?').charAt(0).toUpperCase()) + '</div>' +
+                '<h3 class="cdt-name">' + E(c.name) + '</h3>' +
+                '<div class="cdt-badges">' +
+                    '<span class="cdt-badge is-tier" id="cdt-tier-badge">' + t.icon + ' ' + E(t.name) + '</span>' +
+                    (c.manual ? '<span class="cdt-badge">Qo\'lda belgilangan</span>' : '') +
+                    (c.pending ? '<span class="cdt-badge">' + c.pending + ' ta faol buyurtma</span>' : '') +
+                '</div>' +
+            '</div>' +
+            // --- KPI ---
+            '<div class="cdt-kpis">' +
+                '<div class="cdt-kpi"><b>' + c.orders + '</b><span>buyurtma</span></div>' +
+                '<div class="cdt-kpi"><b>' + fmtShort(c.spent) + '</b><span>sarflagan</span></div>' +
+                '<div class="cdt-kpi"><b>' + fmtShort(c.avg) + '</b><span>o\'rtacha</span></div>' +
+            '</div>' +
+            // --- DARAJA ---
+            '<div class="cdt-sec">' +
+                '<p class="cdt-sec-t">Daraja</p>' +
+                '<div class="cdt-rows">' +
+                    '<div class="cdt-row"><span class="k">Hozirgi</span><span class="v">' + t.icon + ' ' + E(t.name) + '</span></div>' +
+                    '<div class="cdt-row"><span class="k">Keyingi</span><span class="v">' + E(nextTx) + '</span></div>' +
+                    '<div class="cdt-row"><span class="k">Imtiyozlar</span><span class="v">Bepul yetkazish ' +
+                        fmtShort(t.freeDelivery) + " so'mdan &middot; cashback &times;" + t.cashbackX +
+                        (t.discount ? ' &middot; chegirma ' + t.discount + '%' : '') + '</span></div>' +
+                '</div>' +
+            '</div>' +
+            // --- ALOQA ---
+            '<div class="cdt-sec">' +
+                '<p class="cdt-sec-t">Aloqa va ma\'lumot</p>' +
+                '<div class="cdt-rows">' +
+                    '<div class="cdt-row"><span class="k">Telefon</span><span class="v">' + E(c.phone || '—') + '</span></div>' +
+                    '<div class="cdt-row"><span class="k">Telegram</span><span class="v">' + (c.username ? '@' + E(c.username) : '—') + '</span></div>' +
+                    '<div class="cdt-row"><span class="k">ID</span><span class="v">' + E(c.uid) + '</span></div>' +
+                    '<div class="cdt-row"><span class="k">Manzil</span><span class="v">' + E(c.address || '—') + '</span></div>' +
+                    (c.car ? '<div class="cdt-row"><span class="k">Mashinasi</span><span class="v">' + E(c.car) + '</span></div>' : '') +
+                    '<div class="cdt-row"><span class="k">Ro\'yxatdan</span><span class="v">' +
+                        (c.first ? E(new Date(c.first).toLocaleDateString('uz-UZ')) : '—') + '</span></div>' +
+                    '<div class="cdt-row"><span class="k">Oxirgi xarid</span><span class="v">' + E(c.last ? agoLabel(c.last) : '—') + '</span></div>' +
+                '</div>' +
+            '</div>' +
+            // --- FAOLLIK ---
+            '<div class="cdt-sec">' +
+                '<p class="cdt-sec-t">Hozirgi faollik</p>' +
+                '<div class="cdt-rows">' +
+                    '<div class="cdt-row"><span class="k">Savatda</span><span class="v">' + c.cartCount + ' ta tovar</span></div>' +
+                    '<div class="cdt-row"><span class="k">Saqlangan</span><span class="v">' + c.wishCount + ' ta</span></div>' +
+                    '<div class="cdt-row"><span class="k">Cashback</span><span class="v">' + fmtSom(c.cashback) + " so'm</span></div>" +
+                '</div>' +
+            '</div>' +
+            // --- OXIRGI BUYURTMALAR ---
+            '<div class="cdt-sec">' +
+                '<p class="cdt-sec-t">Oxirgi buyurtmalar</p>' +
+                '<div class="cdt-rows">' +
+                    (recent.length ? recent.map(function (o) {
+                        return '<div class="cdt-ord"><div class="cdt-ord-c">' +
+                            '<b>#' + E(o.code || o.id || '') + '</b>' +
+                            '<span>' + E(o.date || agoLabel(orderTime(o))) + ' &middot; ' + E(statusLabel(o.status)) + '</span>' +
+                            '</div><div class="cdt-ord-s">' + fmtShort(o.total) + '</div></div>';
+                    }).join('') : '<div class="cdt-row"><span class="v" style="text-align:left; font-weight:600; color:var(--text-muted);">Hali buyurtma yo\'q</span></div>') +
+                '</div>' +
+            '</div>' +
+            // --- AMALLAR ---
+            '<div class="cdt-acts">' +
+                '<button type="button" class="cdt-act gold wide" id="cdt-a-orders">\uD83D\uDCE6 Buyurtmalarini ko\'rish</button>' +
+                (c.username || c.uid ? '<button type="button" class="cdt-act tg" id="cdt-a-tg">\u2708 Telegram</button>' : '') +
+                (c.phone ? '<button type="button" class="cdt-act green" id="cdt-a-call">\uD83D\uDCDE Qo\'ng\'iroq</button>' : '') +
+                '<button type="button" class="cdt-act wide" id="cdt-a-msg">\uD83D\uDCAC Botdan xabar yuborish</button>' +
+                '<button type="button" class="cdt-act wide" id="cdt-a-vip">\uD83D\uDC51 ' +
+                    (c.manual ? 'Qo\'lda darajani olib tashlash' : 'Qo\'lda VIP (Oltin) qilish') + '</button>' +
+            '</div>' +
+            // Xabar yozish maydoni shu yerda ochiladi (prompt o'rniga)
+            '<div id="cdt-msg-box" data-open="0"></div>';
+
+        paintTier($('cdt-hero'), t);
+        paintTier($('cdt-av'), t);
+        paintTier($('cdt-tier-badge'), t);
+
+        var b;
+        if ((b = $('cdt-a-orders'))) b.onclick = function () { hap('light'); goCustomerOrders(c); };
+        if ((b = $('cdt-a-tg')))     b.onclick = function () { hap('light'); openTelegram(c); };
+        if ((b = $('cdt-a-call')))   b.onclick = function () { hap('light'); callCustomer(c); };
+        if ((b = $('cdt-a-msg')))    b.onclick = function () { sendDirectMessage(c); };
+        if ((b = $('cdt-a-vip')))    b.onclick = function () {
+            toggleManualVip(c, null);
+            setTimeout(function () { openCustomerDetail(c); }, 350);
+        };
+
+        // ⚠️ Oyna ALLAQACHON ochiq bo'lsa (masalan VIP darajasi o'zgargandan keyin
+        //    qayta chizilayotganda) yana pushState QILMAYMIZ — aks holda "orqaga"
+        //    tugmasini ikki marta bosish kerak bo'lib qolardi.
+        if (curModal() !== 'customerDetailModal') {
+            openSheet('customerDetailModal', 'adminCustomersModal');
+        } else {
+            var m = $('customerDetailModal');
+            if (m) m.scrollTop = 0;
+        }
+    }
+
+    /**
+     * Bot orqali shu mijozga to'g'ridan-to'g'ri xabar yuborish.
+     *
+     * ⚠️ `prompt()` ISHLATILMAYDI: Telegram WebView'da u ko'pincha bloklanadi
+     * va hech narsa bo'lmaydi (admin xabar yuborilmaganini ham bilmaydi).
+     * Shuning uchun tafsilot oynasi ichida haqiqiy matn maydoni ochiladi.
+     */
+    function sendDirectMessage(c) {
+        var host = $('cdt-msg-box');
+        if (!host) return;
+        if (host.getAttribute('data-open') === '1') {   // ochiq edi -> yopamiz
+            host.setAttribute('data-open', '0');
+            host.innerHTML = '';
+            return;
+        }
+        host.setAttribute('data-open', '1');
+        host.innerHTML =
+            '<div style="margin-top:10px; background:var(--card-bg); border:1px solid var(--glass-border); ' +
+                'border-radius:17px; padding:15px; animation:lyRise .3s both;">' +
+                '<label class="st2-field"><span>Xabar matni — ' + E(c.name) + '</span>' +
+                '<textarea class="st2-input" id="cdt-msg-tx" rows="3" maxlength="900" ' +
+                    'placeholder="Assalomu alaykum! Buyurtmangiz tayyor..."></textarea></label>' +
+                '<button type="button" class="cdt-act gold" id="cdt-msg-send" style="width:100%;">' +
+                    '\u2708 Yuborish</button>' +
+            '</div>';
+        var ta = $('cdt-msg-tx'), btn = $('cdt-msg-send');
+        if (ta) ta.focus();
+        if (!btn) return;
+        btn.onclick = function () {
+            var text = ta ? (ta.value || '').trim() : '';
+            if (text.length < 2) { toast('Xabar matnini yozing', 'warning'); return; }
+            if (!window.tgProxySend) { toast('Xabar yuborish moduli topilmadi', 'warning'); return; }
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+            window.tgProxySend({
+                chat_id: c.uid,
+                parse_mode: 'HTML',
+                text: '\uD83D\uDCAC <b>Avto A1</b>\n\n' + E(text)
+            }).then(function (r) {
+                // Worker javobi 200 bo'lmasa ham fetch reject qilmaydi — holatni tekshiramiz
+                if (r && r.ok === false) throw new Error('rad etildi');
+                hap('success');
+                toast('Xabar yuborildi', 'success');
+                host.setAttribute('data-open', '0');
+                host.innerHTML = '';
+            }).catch(function () {
+                toast('Yuborilmadi — mijoz botni bloklagan bo\'lishi mumkin', 'warning');
+                btn.disabled = false;
+                btn.textContent = '\u2708 Yuborish';
+            });
+        };
+    }
+
+    /* ---------------- 5.6 Ochish + eski funksiyalarni ustidan yozish ---------------- */
+
+    function openCustomers() {
+        if (!amAdmin()) { toast('Bu bo\'lim faqat admin uchun', 'warning'); return; }
+        var box = $('admin-customers-list');
+        if (box) box.innerHTML = (window._skel ? window._skel(6, 96) : '<p style="text-align:center;">Yuklanmoqda...</p>');
+        // Eski (mayda) qidiruv qatorini yashiramiz — yangi panel o'z inputini yasaydi
+        var oldInput = $('customer-search-input');
+        if (oldInput && oldInput.parentNode) oldInput.parentNode.style.display = 'none';
+
+        openSheet('adminCustomersModal', 'adminModal');
+
+        var snapP = window._getUsersSnap
+            ? window._getUsersSnap()
+            : DB().ref('users').once('value');
+
+        snapP.then(function (snap) {
+            CS.all = buildCustomers(snap);
+            CS.loaded = true;
+            applyFilters();
+            renderShell();
+        }).catch(function (err) {
+            if (box) {
+                box.innerHTML = '<div class="cst-empty"><span class="ic">\u26A0\uFE0F</span><b>O\'qib bo\'lmadi</b><p>' +
+                    E((err && err.message) || 'Bazaga ulanish xatosi') + '</p></div>';
+            }
+        });
+    }
+
+    // Eski nomlarni saqlab qolamiz (admin paneldagi onclick o'zgarmaydi)
+    window.openAdminCustomers = openCustomers;
+    window.renderCustomersList = function () { applyFilters(); renderList(); };
+    window.searchCustomers = function () {
+        var el = $('customer-search-input') || $('cst-q');
+        CS.q = el ? (el.value || '') : '';
+        applyFilters(); renderList();
+    };
+
+    // Pastga skroll qilinganda yana yuklash (eski listener `lastCustomersRef` ni
+    // tekshirgani uchun ishlamaydi — shuning uchun o'zimiz qo'shamiz)
+    (function infinite() {
+        var m = $('adminCustomersModal');
+        if (!m) return;
+        m.addEventListener('scroll', function () {
+            if (curModal() !== 'adminCustomersModal') return;
+            if (m.scrollTop + m.clientHeight < m.scrollHeight - 90) return;
+            if (CS.limit >= CS.view.length) return;
+            CS.limit += 20;
+            renderList();
+        }, { passive: true });
+    })();
+
+    /* ------------------------------------------------------------------ *
+     * 6. ADMIN BUYURTMALARIDA VIP BELGISI
+     * Admin buyurtmalar ro'yxatida VIP mijozni darhol ajratib ko'rsatish —
+     * `renderAdminOrdersUI` chizgandan keyin nozik belgi qo'shamiz.
+     * ------------------------------------------------------------------ */
+    (function vipTagOnOrders() {
+        function wrap() {
+            if (typeof window.renderAdminOrdersUI !== 'function' || window._vipOrdersWrapped) return;
+            window._vipOrdersWrapped = true;
+            var orig = window.renderAdminOrdersUI;
+            window.renderAdminOrdersUI = function () {
+                var r = orig.apply(this, arguments);
+                try { setTimeout(markVips, 40); } catch (e) {}
+                return r;
+            };
+        }
+        /** Buyurtma kartasidagi `.cst-vip-slot` bo'sh joyini daraja belgisi bilan to'ldiradi. */
+        function markVips(retry) {
+            var slots = document.querySelectorAll('.cst-vip-slot[data-order-uid]');
+            if (!slots.length) return;
+            // Mijozlar bazasi hali o'qilmagan bo'lsa — fonda bir marta o'qib, keyin belgilaymiz.
+            // ⚠️ `retry` bayrog'i SHART: aks holda baza xato bersa markVips <-> primeCustomers
+            //    bir-birini cheksiz chaqirib, brauzerni qotirib qo'yardi.
+            if (!CS.loaded) {
+                if (retry) return;
+                primeCustomers().then(function () { markVips(true); });
+                return;
+            }
+            var vipMap = {};
+            CS.all.forEach(function (c) { if (c.isVip) vipMap[c.uid] = c.tier; });
+            Array.prototype.forEach.call(slots, function (n) {
+                if (n.getAttribute('data-filled') === '1') return;
+                var t = vipMap[n.getAttribute('data-order-uid')];
+                if (!t) return;
+                n.setAttribute('data-filled', '1');
+                n.className = 'cst-vip-slot cst-tier';
+                n.style.cssText = '--tier-grad:' + t.grad + '; --tier-tx:' + t.ink + ';';
+                n.textContent = t.icon + ' ' + t.name;
+            });
+        }
+
+        /** Mijozlar bazasini bir marta fonda o'qiydi (VIP belgilari uchun). */
+        var priming = null;
+        function primeCustomers() {
+            if (CS.loaded) return Promise.resolve();
+            if (priming) return priming;
+            var p = window._getUsersSnap ? window._getUsersSnap()
+                  : (DB() ? DB().ref('users').once('value') : Promise.reject(new Error('no db')));
+            priming = p.then(function (snap) {
+                CS.all = buildCustomers(snap);
+                CS.loaded = true;
+                applyFilters();
+            }).catch(function () {}).then(function () { priming = null; });
+            return priming;
+        }
+
+        wrap();
+        setTimeout(wrap, 1500);
+    })();
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.06] Stories + Mijozlar + VIP yuklandi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+</body>
+</html>
