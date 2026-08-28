@@ -7805,9 +7805,12 @@ function showToast(m, t = 'success') {
                             meta.className = 'card-meta';
                             h4.insertAdjacentElement('afterend', meta);
                         }
-                        var span = document.createElement('span');
-                        span.className = 'card-rating';
-                        span.innerHTML = icon('star') + ' ' + info.avg + (info.count ? ' <i>(' + info.count + ')</i>' : '');
+                        // ⭐ AYNAN cardHTML bilan bir xil markup (yagona manba)
+                        var wrap = document.createElement('span');
+                        wrap.innerHTML = window._starsHTML
+                            ? window._starsHTML(info.avg, info.count)
+                            : ('<span class="card-rating">' + icon('star') + ' ' + info.avg + '</span>');
+                        var span = wrap.firstElementChild || wrap;
                         meta.insertBefore(span, meta.firstChild);
                     });
                 } catch (e) { _dwarn('[ratings] DOM xato:', e); }
@@ -8183,13 +8186,17 @@ function cardHTML(p) {
             + `<span class="cf-old">${Number(p.oldPrice).toLocaleString()} so'm</span>`
             + `</div>`;
     }
+    // ⭐ REYTING — 5 yulduzli, kasrli to'ldirish bilan (Yandex Taxi uslubi).
+    //    Markup YAGONA joyda yasaladi: window._starsHTML (fayl oxiridagi qatlam).
+    //    Shu sababli kartada va reytinglar keyin yuklanganda ham AYNAN bir xil
+    //    ko'rinadi (ilgari ikki joyda alohida yozilgani uchun farq qilardi).
     let _ratingHTML = '';
     let _rInfo = (window.productRatings && window.productRatings[p.id]) ? window.productRatings[p.id] : null;
     let _rv = _rInfo ? _rInfo.avg : parseFloat(p.rating);
     let _rc = _rInfo ? _rInfo.count : p.ratingCount;
     if (_rv && _rv > 0) {
-        let _rr = Math.round(_rv * 10) / 10;
-        _ratingHTML = `<span class="card-rating">${icon('star')} ${_rr}${_rc ? ` <i>(${_rc})</i>` : ''}</span>`;
+        _ratingHTML = window._starsHTML ? window._starsHTML(_rv, _rc)
+            : `<span class="card-rating">${icon('star')} ${Math.round(_rv * 10) / 10}</span>`;
     }
     let _stockHTML = '';
     if (st > 0 && st <= 5) _stockHTML = `<span class="card-stock-low">${icon('box')} ${st} ta qoldi</span>`;
@@ -10971,7 +10978,13 @@ window.loadProductReviews = (productId) => {
 
     db.ref('reviews/' + productId).once('value', (snap) => {
         let reviews = []; if (snap.exists()) { let data = snap.val(); reviews = Object.values(data).filter(r => r && r.rating); }
-        if (reviews.length > 0) { let avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length; avgEl.innerText = '★ ' + avg.toFixed(1) + ' (' + reviews.length + ' baho)'; } else { avgEl.innerText = ''; }
+        if (reviews.length > 0) {
+            let avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length;
+            // ⭐ Kartochkalardagi bilan bir xil 5 yulduzli ko'rinish (kattaroq o'lchamda)
+            avgEl.innerHTML = window._starsHTML
+                ? window._starsHTML(avg, reviews.length, 'big')
+                : ('★ ' + avg.toFixed(1) + ' (' + reviews.length + ' baho)');
+        } else { avgEl.innerHTML = ''; }
         if (reviews.length === 0) {
             // QADAM 7: chiroyli, jonli, taklifkor empty state — eski oddiy
             // 'Hali izoh yo'q' yozuvi mijozga 'tovar zerikkan' hissini berardi
@@ -12567,6 +12580,10 @@ function initReveal() {
         let STORIES_DB = {};
 
         // Mijoz ko'rgan storislarni eslab qolish (qaytib kelganda kulrang turadi)
+        // ⚠️ ESKIRGAN (deprecated): kategoriya bo'yicha bitta timestamp.
+        //    Endi har bir storis alohida belgilanadi (avto_seen_story_items).
+        //    Bu yozuv faqat BIR MARTALIK migratsiya uchun o'qiladi
+        //    (window._applyOldSeenMigration) — yangi kod unga yozmaydi.
         let _seenStories = {};
         try { _seenStories = JSON.parse(localStorage.getItem('avto_seen_stories')) || {}; } catch(e) {}
 
@@ -12575,13 +12592,22 @@ function initReveal() {
         //  - Storis bor + ko'rilmagan -> 'new' (tilla aylanadi)
         //  - Storis bor + ko'rilgan    -> 'seen' (kulrang, aylanmaydi)
         //  - Storis yo'q              -> 'empty' (kulrang, aylanmaydi, ishlatib bo'lmaydi)
+        // ⚠️ ILGARI "KO'RILGAN" MANTIG'I NOTO'G'RI EDI:
+        //    faqat KATEGORIYA bo'yicha bitta timestamp saqlanardi
+        //    (avto_seen_stories = {bugun: 171234...}). Halqani bosish bilanoq
+        //    BUTUN kategoriya "ko'rilgan" bo'lib qolardi — mijoz 8 ta storisdan
+        //    faqat 1-sini ko'rib chiqib ketsa ham halqa kulrangga aylanardi va
+        //    qolgan 7 tasi "yangi" ekani BILINMASDI.
+        //    Endi HAR BIR storis alohida belgilanadi va halqa SEGMENTLARGA
+        //    bo'linadi (Instagram kabi): ko'rilmaganlari tilla, ko'rilganlari xira.
         function _refreshStoryRings() {
             const rings = document.querySelectorAll('.story-ring[data-story]');
             let visibleCount = 0;
             rings.forEach(ring => {
                 const cat = ring.getAttribute('data-story');
                 const items = STORIES_DB[cat];
-                ring.classList.remove('new', 'seen', 'empty');
+                ring.classList.remove('new', 'seen', 'empty', 'segmented');
+                ring.style.removeProperty('--ring-grad');
                 // Halqaning ota-elementi (.story-item) — uni to'liq yashirish/ko'rsatish uchun
                 const itemEl = ring.closest('.story-item');
                 if (!items || items.length === 0) {
@@ -12596,13 +12622,36 @@ function initReveal() {
                 // Storis bor -> ko'rsatamiz
                 if (itemEl) itemEl.style.display = '';
                 visibleCount++;
-                // Eng yangi storis timestamp'ini olamiz
-                const latestTs = items.reduce((m, it) => Math.max(m, it.timestamp || 0), 0);
-                const seenTs = _seenStories[cat] || 0;
-                if (latestTs > seenTs) {
-                    ring.classList.add('new');     // yangisi bor -> aylanadi
+
+                // 👁 Har bir storis ko'rilganmi — alohida hisoblaymiz
+                const unseenFlags = items.map(it => {
+                    try { return window._isStorySeen ? !window._isStorySeen(cat, it) : true; }
+                    catch (e) { return true; }
+                });
+                const unseenCount = unseenFlags.filter(Boolean).length;
+
+                // Ko'rilmaganlar sonini kichik badge bilan ko'rsatamiz
+                if (itemEl) {
+                    let badge = itemEl.querySelector('.story-unseen-badge');
+                    if (unseenCount > 0 && items.length > 1) {
+                        if (!badge) {
+                            badge = document.createElement('span');
+                            badge.className = 'story-unseen-badge';
+                            (ring.parentNode || itemEl).appendChild(badge);
+                        }
+                        badge.textContent = String(unseenCount);
+                        badge.style.display = '';
+                    } else if (badge) { badge.style.display = 'none'; }
+                }
+
+                if (unseenCount === 0) {
+                    ring.classList.add('seen');            // hammasini ko'rgan -> xira
+                } else if (unseenCount === items.length) {
+                    ring.classList.add('new');             // hech biri ko'rilmagan -> aylanuvchi tilla
                 } else {
-                    ring.classList.add('seen');    // hammasini ko'rgan
+                    // Qismi ko'rilgan -> SEGMENTLI halqa (qaysi biri qolganini ko'rsatadi)
+                    ring.classList.add('segmented');
+                    ring.style.setProperty('--ring-grad', _segmentGradient(unseenFlags));
                 }
             });
             // Agar BIRORTA storis yo'q bo'lsa, butun storis qatori yashirinadi
@@ -12611,6 +12660,30 @@ function initReveal() {
             if (container) {
                 container.style.display = visibleCount === 0 ? 'none' : '';
             }
+        }
+        // Tashqi qatlam (storis yopilganda halqalarni yangilash) uchun ochamiz
+        window._refreshStoryRingsPublic = _refreshStoryRings;
+
+        /**
+         * Segmentli halqa uchun conic-gradient yasaydi.
+         * Har storis bitta yoy; orasida kichik bo'shliq. Ko'rilmagan — tilla,
+         * ko'rilgan — xira. Aylanish YO'Q (segmentlar joyida turishi kerak).
+         */
+        function _segmentGradient(unseenFlags) {
+            const n = unseenFlags.length;
+            const gap = n > 1 ? Math.min(6, 90 / n) : 0;   // daraja
+            const seg = 360 / n;
+            const GOLD = '#F0D060', GOLD2 = '#C9A84C', DIM = 'rgba(255,255,255,0.16)';
+            let stops = [];
+            for (let i = 0; i < n; i++) {
+                const a1 = i * seg + gap / 2;
+                const a2 = (i + 1) * seg - gap / 2;
+                const col = unseenFlags[i] ? (i % 2 ? GOLD2 : GOLD) : DIM;
+                if (gap > 0) stops.push('transparent ' + (i * seg) + 'deg ' + a1 + 'deg');
+                stops.push(col + ' ' + a1 + 'deg ' + a2 + 'deg');
+                if (gap > 0) stops.push('transparent ' + a2 + 'deg ' + ((i + 1) * seg) + 'deg');
+            }
+            return 'conic-gradient(from -90deg, ' + stops.join(', ') + ')';
         }
 
         // Dastur ishga tushganda storislarni Firebase'dan avtomat o'qiydi
@@ -12624,6 +12697,9 @@ function initReveal() {
                         STORIES_DB[cat] = Object.values(data[cat]).sort((a,b) => a.timestamp - b.timestamp);
                     }
                 }
+                // Eski (kategoriya bo'yicha) "ko'rilgan" belgilarini bir marta ko'chiramiz —
+                // shunda yangilanishdan keyin hamma storis "yangi" bo'lib chiqmaydi
+                try { if (window._applyOldSeenMigration) window._applyOldSeenMigration(STORIES_DB); } catch (e) {}
                 // Halqalarni yangilash (Firebase javobiga qarab avtomat)
                 _refreshStoryRings();
             });
@@ -12666,6 +12742,23 @@ function initReveal() {
             kafolat:'i-shield', lokatsiya:'i-pin', tolov:'i-card', aloqa:'i-phone'
         };
         window.STORY_ICONS = STORY_ICONS;
+
+        // ⏰ WATCHDOG — video/rasm javob bermasa storis abadiy qotib qolmasin
+        let _storyWatchdogTimer = null;
+        function _clearStoryWatchdog() {
+            if (_storyWatchdogTimer) { clearTimeout(_storyWatchdogTimer); _storyWatchdogTimer = null; }
+        }
+        function _armStoryWatchdog(ms, fn) {
+            _clearStoryWatchdog();
+            const gen = _storyGen;
+            _storyWatchdogTimer = setTimeout(() => {
+                _storyWatchdogTimer = null;
+                if (gen !== _storyGen) return;            // allaqachon boshqa storisga o'tilgan
+                const viewer = document.getElementById('story-viewer');
+                if (!viewer || viewer.style.display === 'none') return;
+                try { fn(); } catch (e) {}
+            }, ms);
+        }
 
         // Preload va sound holatini saqlash
         let _preloadVideo = null;
@@ -12895,6 +12988,16 @@ function initReveal() {
             viewer.style.transform = '';
             viewer.style.opacity = '';
             document.body.style.overflow = 'hidden';
+            // ✨ OCHILISH ANIMATSIYASI.
+            //    ⚠️ ILGARI: `instaZoom` animatsiyasi to'g'ridan #story-viewer
+            //    ELEMENTIGA bog'langan edi — u sahifa yuklanganda, oyna hali
+            //    display:none holatida BIR MARTA o'ynab tugardi. Ya'ni haqiqiy
+            //    ochilish animatsiyasi UMUMAN yo'q edi (oyna shartta paydo bo'lardi).
+            //    Endi klass qo'shiladi va reflow majburlanadi — har ochilishda o'ynaydi.
+            viewer.classList.remove('sv-opening');
+            void viewer.offsetWidth;
+            viewer.classList.add('sv-opening');
+            setTimeout(() => { try { viewer.classList.remove('sv-opening'); } catch (e) {} }, 460);
 
             // Admin uchun o'chirish tugmasi
             let delBtn = document.getElementById('admin-story-delete-btn');
@@ -12934,8 +13037,17 @@ function initReveal() {
                     <div class="story-progress-fill" style="width: ${i < currentStoryIdx ? '100%' : '0%'}"></div>
                 </div>
             `).join('');
-            const currentFill = progressContainer.children[currentStoryIdx].querySelector('.story-progress-fill');
-            cancelAnimationFrame(storyProgressAnimation);
+            // ⚠️ ILGARI: children[currentStoryIdx] mavjudligi tekshirilmasdi.
+            //    currentPlaylist Firebase yangilanishi bilan eskirsa (yoki admin
+            //    storisni o'chirsa) bu qator XATO tashlab, playCurrentStory
+            //    o'rtada uzilardi — natijada body overflow:hidden qolib, oyna
+            //    oldingi kadrda MUZLAB qolardi (orqa sahifa ham qulflangan).
+            const _fillHost = progressContainer.children[currentStoryIdx];
+            const currentFill = _fillHost ? _fillHost.querySelector('.story-progress-fill') : null;
+            _killProgress();                 // eski tsikllarni o'chiramiz
+            _clearStoryWatchdog();           // eski kutish taymerini o'chiramiz
+            // 👁 Ko'rilgan deb belgilaymiz (har bir storis alohida)
+            try { if (window._markStorySeen) window._markStorySeen(currentPlaylistId, item); } catch (e) {}
 
             // Eski videoni xavfsiz to'xtatamiz (xotira oqishini oldini olamiz)
             if (storyVideoElement) {
@@ -13004,6 +13116,18 @@ function initReveal() {
                 // Yuklanish boshlanmaguncha buffering bar ko'rinadi
                 if (bufferBar) bufferBar.classList.add('show');
 
+                // ⏰ WATCHDOG — eng muhim qotishga qarshi himoya.
+                //    ⚠️ ILGARI: agar 'loadedmetadata' HECH QACHON kelmasa (o'lik
+                //    havola, CDN javob bermayapti, Telegram WebView range-so'rovni
+                //    bloklagan, internet uzilgan) — progress umuman boshlanmasdi,
+                //    'ended' ham, 'error' ham kelmasdi. Ekranda spinner ABADIY
+                //    aylanib turardi va chiqishning yagona yo'li ✕ edi.
+                //    Endi 11 soniyada javob bo'lmasa — o'zi keyingisiga o'tadi.
+                _armStoryWatchdog(11000, () => {
+                    showToast("Video yuklanmadi — keyingisiga o'tdik", 'warning');
+                    nextStory();
+                });
+
                 // Progress event — yuklanish foizini yangilaymiz
                 storyVideoElement.addEventListener('progress', () => {
                     try {
@@ -13026,7 +13150,10 @@ function initReveal() {
                 }, { once: true });
 
                 storyVideoElement.addEventListener('loadedmetadata', () => {
-                    animateStoryProgress(currentFill, storyVideoElement.duration * 1000);
+                    _clearStoryWatchdog();               // javob keldi — kutish taymeri kerak emas
+                    const _d = storyVideoElement.duration;
+                    const _ms = (isFinite(_d) && _d > 0) ? _d * 1000 : 15000;  // duration NaN/Infinity bo'lsa zaxira
+                    animateStoryProgress(currentFill, _ms, true);   // ✅ progress video vaqtidan olinadi
                     // Yana bir kafolat: ba'zan canplay'dan oldin loadedmetadata keladi
                     if (storyVideoElement.paused) _safePlay();
                 }, { once: true });
@@ -13049,22 +13176,58 @@ function initReveal() {
 
                 storyVideoElement.addEventListener('ended', () => { nextStory(); });
 
-                // Xato bo'lsa — keyingi storisga o'tamiz (qotib qolmasin)
+                // Xato bo'lsa — keyingi storisga o'tamiz (qotib qolmasin).
+                // ⚠️ ILGARI: bu handler faqat kutib turardi — progress tsiklini
+                //    to'xtatmasdi, spinnerni yashirmasdi, blurni olib tashlamasdi.
+                //    Natijada 600ms davomida xira, aylanuvchi "o'lik" ekran turardi.
                 storyVideoElement.addEventListener('error', () => {
+                    _clearStoryWatchdog();
+                    _killProgress();
+                    if (loader) loader.style.display = 'none';
+                    if (bufferBar) bufferBar.classList.remove('show');
+                    try { if (storyVideoElement) storyVideoElement.classList.remove('stv-loading'); } catch (e) {}
                     showToast("Video yuklanmadi", "warning");
-                    setTimeout(() => nextStory(), 600);
+                    setTimeout(() => nextStory(), 450);
                 });
 
             // ============================================================
             // RASM STORIS
             // ============================================================
             } else {
+                // ⚠️ ILGARI: progress rasm yuklanishini KUTMASDAN darhol boshlanardi.
+                //    Rasm ochilmasa (onerror faqat opacity'ni pasaytirardi) mijoz
+                //    5 soniya BO'SH ekranga qarab turardi. Endi rasm tayyor bo'lgach
+                //    boshlanadi, yuklanayotganda esa chiroyli skeleton ko'rinadi.
                 content.innerHTML = `
-                    <img src="${item.src}" style="width:100%;height:100%;object-fit:contain;background:#000;"
-                         onerror="this.style.opacity=0.3;">
+                    <div id="sv-loader" class="sv-loader" style="position:absolute; z-index:2; display:flex; flex-direction:column; align-items:center; gap:14px;">
+                        <div class="sv-spinner"></div>
+                    </div>
+                    <img id="stImg" class="stv-loading" src="${item.src}" style="width:100%;height:100%;object-fit:contain;background:#000;">
                     <div class="sv-pause-indicator" id="sv-pause-indicator">⏸</div>
                 `;
-                animateStoryProgress(currentFill, 5000);
+                const _img = document.getElementById('stImg');
+                const _imgLoader = document.getElementById('sv-loader');
+                const _startImg = () => {
+                    _clearStoryWatchdog();
+                    if (_imgLoader) _imgLoader.style.display = 'none';
+                    if (_img) _img.classList.remove('stv-loading');
+                    animateStoryProgress(currentFill, 5000, false);
+                };
+                if (_img && _img.complete && _img.naturalWidth > 0) {
+                    _startImg();                     // kesh — darhol
+                } else if (_img) {
+                    _img.onload = _startImg;
+                    _img.onerror = () => {
+                        _clearStoryWatchdog();
+                        if (_imgLoader) _imgLoader.style.display = 'none';
+                        showToast("Rasm yuklanmadi", "warning");
+                        setTimeout(() => nextStory(), 450);
+                    };
+                    // Rasm ham cheksiz kutib qolmasin
+                    _armStoryWatchdog(9000, _startImg);
+                } else {
+                    _startImg();
+                }
             }
 
             // ⏸ BOSIB TURGANDA PAUZA + ⏯ pause indikatorini ko'rsatamiz
@@ -13127,7 +13290,9 @@ function initReveal() {
             const btn = document.createElement('div');
             btn.id = 'sv-sound-btn';
             btn.className = 'sv-sound-btn';
-            btn.innerText = '🔇';
+            // ⚠️ ILGARI: har doim '🔇' yozilardi, holat esa OVOZLI (_storySoundMuted=false).
+            //    Ya'ni ovoz yoniq bo'lsa ham tugma "ovoz o'chirilgan" deb ko'rsatardi.
+            btn.innerText = _storySoundMuted ? '🔇' : '🔊';
             btn.onclick = (e) => {
                 e.stopPropagation();
                 _storySoundMuted = !_storySoundMuted;
@@ -13199,12 +13364,9 @@ function initReveal() {
             for (let i = currentIdx + 1; i < STORY_CATEGORIES_ORDER.length; i++) {
                 const nextCat = STORY_CATEGORIES_ORDER[i];
                 if (STORIES_DB[nextCat] && STORIES_DB[nextCat].length > 0) {
-                    // Yangi kategoriyani ko'rilgan deb belgilaymiz (UI uchun)
-                    const ringEl = document.querySelector(`.story-item[onclick*="'${nextCat}'"] .story-ring`);
-                    if (ringEl && ringEl.classList.contains('new')) {
-                        ringEl.classList.remove('new');
-                        ringEl.classList.add('seen');
-                    }
+                    // ⚠️ ILGARI: keyingi kategoriya halqasi shu yerda darhol
+                    //    "ko'rilgan" qilib bo'yalardi — hali bitta storisi ham
+                    //    ko'rilmasdan. Endi belgilash faqat haqiqatda ko'rganda.
                     startStories(nextCat, STORY_CAPTIONS[nextCat] || nextCat);
                     return;
                 }
@@ -13214,13 +13376,26 @@ function initReveal() {
         }
 
         // ⏭ KEYINGI VA ⏮ OLDINGI
+        // ⚠️ ILGARI: nextStory() to'rt xil joydan chaqirilardi ('ended', 'error'
+        //    + 600ms, progress tsikli, o'ng tap zonasi) va hech qanday himoya
+        //    yo'q edi — natijada currentStoryIdx BIRDAN IKKITA oshib ketishi,
+        //    yoki xato bilan tugash ustma-ust tushib storis tashlab ketilishi
+        //    mumkin edi. Endi qisqa "advancing" qulfi bor.
         window.nextStory = (e) => {
             if (e) e.stopPropagation();
+            if (_advancing) return;
+            _advancing = true;
+            setTimeout(() => { _advancing = false; }, 180);
+            _killProgress();
             currentStoryIdx++;
             playCurrentStory();
         };
         window.prevStory = (e) => {
             if (e) e.stopPropagation();
+            if (_advancing) return;
+            _advancing = true;
+            setTimeout(() => { _advancing = false; }, 180);
+            _killProgress();
             currentStoryIdx--;
             playCurrentStory();
         };
@@ -13228,12 +13403,14 @@ function initReveal() {
         window.closeStoryViewer = () => {
             const viewer = document.getElementById('story-viewer');
             viewer.style.display = 'none';
-            viewer.classList.remove('closing-down', 'swiping');
+            viewer.classList.remove('closing-down', 'swiping', 'sv-opening');
             viewer.style.transform = '';
             viewer.style.opacity = '';
             document.getElementById('story-content').innerHTML = '';
             document.body.style.overflow = '';
-            cancelAnimationFrame(storyProgressAnimation);
+            _killProgress();
+            _clearStoryWatchdog();
+            _advancing = false;
             if (storyVideoElement) {
                 try {
                     storyVideoElement.pause();
@@ -13242,55 +13419,141 @@ function initReveal() {
                 } catch (e) {}
                 storyVideoElement = null;
             }
+            // ⚠️ ILGARI: yashirin preload <video> body'ga qo'shilib, HECH QACHON
+            //    olib tashlanmasdi — faqat src tozalanardi. Element sessiya davomida
+            //    to'planib, sekin internetda ko'rinadigan video bilan tarmoq uchun
+            //    raqobatlashib, uni "ochlikda" qoldirardi (aynan qotishga sabab).
             if (_preloadVideo) {
-                try { _preloadVideo.removeAttribute('src'); _preloadVideo.load(); } catch (e) {}
+                try {
+                    _preloadVideo.removeAttribute('src');
+                    _preloadVideo.load();
+                    if (_preloadVideo.parentNode) _preloadVideo.parentNode.removeChild(_preloadVideo);
+                } catch (e) {}
+                _preloadVideo = null;
             }
+            try { if (window._refreshStoryRingsPublic) window._refreshStoryRingsPublic(); } catch (e) {}
         };
 
-        // ⏱ PROGRESS BAR ANIMATSIYASI VA PAUZA MANTIG'I
+        // ============================================================
+        // ⏱ PROGRESS BAR — QAYTA YOZILDI (QOTISHLARNING ASOSIY SABABI)
+        // ------------------------------------------------------------
+        // ⚠️ ILGARI QANDAY QOTIB QOLARDI:
+        //  1) VIDEO uchun "o'lik tugash": percent >= 100 bo'lganda kod chiziqni
+        //     100% qilib qo'yib, requestAnimationFrame'ni QAYTA NAVBATGA
+        //     QO'YMASDAN va nextStory() ni CHAQIRMASDAN chiqib ketardi.
+        //     Keyingi storisga o'tish FAQAT video 'ended' hodisasiga bog'liq edi.
+        //     'ended' kelmasa (fayl chala, oxirgi sekundda stall, duration = NaN/
+        //     Infinity) — ekran to'la chiziq bilan MUZLAB qolardi.
+        //  2) Vaqt DEVOR SOATI (Date.now) bo'yicha sanalardi. Video bufferlanayotganda
+        //     ham chiziq yugurib ketardi: video to'xtab turadi, chiziq esa tugaydi ->
+        //     "tugagan chiziq + muzlagan kadr". 'waiting' hodisasi isStoryPaused
+        //     ni umuman o'rnatmasdi.
+        //  3) storyProgressAnimation YAGONA global handle edi. Ikki tsikl birdan
+        //     tirik bo'lsa (kechikkan loadedmetadata, kategoriya almashuvi) faqat
+        //     oxirgisi bekor qilinardi; "yetim" tsikl esa o'chirilgan elementga
+        //     yozib, nextStory() ni chaqirib turardi -> sakrash/miltillash.
+        //
+        // ENDI:
+        //  • VIDEO progressi video.currentTime dan olinadi -> bufferlanish
+        //    avtomatik hisobga olinadi, desinxron YO'Q;
+        //  • video tugaganda ham nextStory() chaqiriladi (ended'ga tayanmaydi);
+        //  • har bir storis uchun "avlod" (generation) tokeni — eski tsikllar
+        //    o'zini darhol to'xtatadi;
+        //  • rasm uchun ham xuddi shu tsikl, lekin devor soati bo'yicha.
+        // ============================================================
         let storyDuration = 0;
         let storyPassedTime = 0;
+        let _storyGen = 0;          // har yangi storis -> +1 (eski tsikllarni o'chiradi)
+        let _advancing = false;     // ikki marta o'tib ketishdan himoya
 
-        function animateStoryProgress(fill, ms) {
+        /** Joriy storis tsiklini bekor qiladi. */
+        function _killProgress() {
+            _storyGen++;
+            try { cancelAnimationFrame(storyProgressAnimation); } catch (e) {}
+        }
+
+        /**
+         * @param fill      progress chizig'i elementi
+         * @param ms        davomiylik (rasm uchun; video uchun zaxira qiymat)
+         * @param useVideo  true bo'lsa progress video.currentTime dan olinadi
+         */
+        function animateStoryProgress(fill, ms, useVideo) {
+            const gen = ++_storyGen;          // shu tsiklning avlodi
             storyDuration = ms;
             storyPassedTime = 0;
             isStoryPaused = false;
             let lastTime = Date.now();
 
             function step() {
+                if (gen !== _storyGen) return;            // eskirgan tsikl — o'zini to'xtatadi
+                const vid = storyVideoElement;
+
                 if (isStoryPaused) {
-                    lastTime = Date.now(); // Pauza bo'lsa vaqtni ushlab turamiz
+                    lastTime = Date.now();
                     storyProgressAnimation = requestAnimationFrame(step);
                     return;
                 }
-                
-                let now = Date.now();
-                storyPassedTime += (now - lastTime);
-                lastTime = now;
 
-                let percent = (storyPassedTime / storyDuration) * 100;
-                
-                if (percent >= 100) {
-                    fill.style.width = '100%';
-                    if (!storyVideoElement) {
-                        nextStory(); // Rasm bo'lsa vaqti tugashi bilan keyingisiga o'tadi
-                    }
+                let percent;
+                if (useVideo && vid) {
+                    // 🎬 Haqiqiy o'ynash vaqti — bufferlanish o'zi hisobga olinadi
+                    const dur = (isFinite(vid.duration) && vid.duration > 0) ? vid.duration : (ms / 1000);
+                    percent = dur > 0 ? (vid.currentTime / dur) * 100 : 0;
                 } else {
-                    fill.style.width = percent + '%';
-                    storyProgressAnimation = requestAnimationFrame(step);
+                    const now = Date.now();
+                    storyPassedTime += (now - lastTime);
+                    lastTime = now;
+                    percent = storyDuration > 0 ? (storyPassedTime / storyDuration) * 100 : 100;
                 }
+
+                if (!isFinite(percent) || percent < 0) percent = 0;
+
+                if (percent >= 100) {
+                    if (fill) fill.style.width = '100%';
+                    // ⚠️ Nozik holat: agar shu lahzada boshqa o'tish jarayonda bo'lsa
+                    //    (_advancing qulfi), nextStory() hech narsa qilmaydi. Tsiklni
+                    //    to'xtatib qo'ysak — yana qotish. Shuning uchun keyingi kadrda
+                    //    qayta urinamiz (o'tish muvaffaqiyatli bo'lsa gen o'zgarib,
+                    //    bu tsikl yuqoridagi tekshiruvda o'zini to'xtatadi).
+                    if (_advancing) {
+                        storyProgressAnimation = requestAnimationFrame(step);
+                        return;
+                    }
+                    nextStory();                          // ✅ video uchun ham o'tadi (ilgari muzlab qolardi)
+                    return;
+                }
+                if (fill) fill.style.width = percent + '%';
+                storyProgressAnimation = requestAnimationFrame(step);
             }
             storyProgressAnimation = requestAnimationFrame(step);
         }
 
         function pauseStory() {
             isStoryPaused = true;
-            if(storyVideoElement) storyVideoElement.pause();
+            if(storyVideoElement) { try { storyVideoElement.pause(); } catch (e) {} }
         }
         
         function resumeStory() {
             isStoryPaused = false;
-            if(storyVideoElement) storyVideoElement.play();
+            // ⚠️ ILGARI: play() qaytargan Promise ushlanmasdi -> brauzer davom
+            //    etishni bloklasa "unhandled rejection" va video pauzada qolib,
+            //    progress chizig'i esa yugurib ketardi (muzlagan kadr effekti).
+            if (storyVideoElement) {
+                try {
+                    const pr = storyVideoElement.play();
+                    if (pr && typeof pr.catch === 'function') {
+                        pr.catch(() => {
+                            try {
+                                storyVideoElement.muted = true;
+                                _storySoundMuted = true;
+                                const sb = document.getElementById('sv-sound-btn');
+                                if (sb) sb.innerText = '🔇';
+                                storyVideoElement.play().catch(() => {});
+                            } catch (e) {}
+                        });
+                    }
+                } catch (e) {}
+            }
         }
 
         // 🗑 FAQAT ADMIN UCHUN: STORISNI O'CHIRISH
@@ -13347,24 +13610,22 @@ function initVipCardGlow() {
 // Endi: localStorage'ga timestamp saqlanadi -> mijoz qaytib kelganda
 // halqa kulrang (seen) bo'lib qoladi (admin yangi storis qo'shsa - yana 'new').
 // Agar storis yo'q (empty) yoki allaqachon ko'rilgan (seen) bo'lsa - tegmaydi.
+// 👁 Storis halqasi bosilganda chaqiriladi (HTML onclick'dan).
+//
+// ⚠️ ILGARI BU FUNKSIYA XATO ISHLARDI: u `_seenStories[cat] = Date.now()`
+//    yozib, BUTUN kategoriyani "ko'rilgan" deb belgilardi. Ya'ni mijoz
+//    halqani bosishi bilanoq — hatto birinchi storisni ham ko'rib
+//    bo'lmasdan yopib qo'ysa ham — o'sha bo'limdagi HAMMA storis
+//    "ko'rilgan" bo'lib qolardi va halqa kulrangga aylanardi.
+//
+// ENDI: har bir storis ALOHIDA, uni haqiqatda ko'rgandagina belgilanadi
+//    (playCurrentStory ichida). Bu funksiya faqat darhol vizual javob beradi
+//    (bosilganda aylanish to'xtaydi), hech narsani "ko'rilgan" qilmaydi.
 function markAsSeen(element) {
     let ring = element.querySelector('.story-ring');
     if (!ring) return;
     if (ring.classList.contains('empty')) return;     // storis yo'q -> tegmaymiz
-    const cat = ring.getAttribute('data-story');
-    if (!cat) return;
-    // Vizual: yangi -> ko'rilgan (aylanish to'xtaydi)
-    if (ring.classList.contains('new')) {
-        ring.classList.remove('new');
-        ring.classList.add('seen');
-    }
-    // Eslab qolish: hozirgi vaqt seenTs sifatida saqlanadi
-    try {
-        if (typeof _seenStories !== 'undefined') {
-            _seenStories[cat] = Date.now();
-            localStorage.setItem('avto_seen_stories', JSON.stringify(_seenStories));
-        }
-    } catch (e) {}
+    // Ataylab HECH NARSA saqlanmaydi — haqiqiy belgilash storisni ko'rganda bo'ladi.
 }
 
 // ============================================================
@@ -14888,7 +15149,10 @@ window.openDeliveryModal = () => {
                 <div style="font-size:11px;font-weight:800;color:var(--luxury-gold);letter-spacing:1px;margin-bottom:10px;">📍 MANZILNI TANLANG</div>
                 <div id="dlv-addresses"></div>
                 <button onclick="openMapPicker()" style="width:100%;padding:14px;border-radius:14px;background:rgba(0,122,255,0.1);border:1px solid rgba(0,122,255,0.35);color:#0a84ff;font-weight:800;cursor:pointer;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;">🗺 Xaritadan belgilash</button>
-                <div style="margin-top:14px;padding:11px 13px;border-radius:12px;background:rgba(255,159,10,0.08);border:1px solid rgba(255,159,10,0.25);font-size:12px;color:#ffb340;line-height:1.5;">ℹ️ Kuryer <b>faqat Samarqand shahar ichida</b> ishlaydi. Shahar tashqarisida bo'lsangiz, yuqoridan 📦 <b>BTS Pochta</b>ni tanlang.</div>
+                <!-- 🗑 Sariq ogohlantirish oynachasi OLIB TASHLANDI (talab bo'yicha).
+                     Ma'lumot baribir yo'qolmadi: kuryer kartochkasining tagida
+                     "Faqat Samarqand shahar ichida · 1–2 kun" yozuvi turadi va
+                     pastdagi tasdiqlash tumbleri ham shu haqda eslatadi. -->
                 <label id="dlv-smq-card" onclick="toggleSmqConfirm()" style="display:flex;align-items:center;gap:14px;margin-top:14px;cursor:pointer;padding:16px;border-radius:16px;background:rgba(255,255,255,0.03);border:1.5px solid var(--glass-border);transition:all .25s ease;">
                     <input type="checkbox" id="dlv-smq-confirm" style="display:none;">
                     <div id="dlv-smq-toggle" style="width:44px;height:26px;border-radius:13px;background:rgba(255,255,255,0.12);position:relative;flex-shrink:0;transition:background .25s ease;">
@@ -21482,6 +21746,295 @@ html[data-theme="light"] .cbp-tx b { color: #1b1b1d; }
         var pm = $('paymentModal');
         if (pm && pm.style.display === 'flex') setTimeout(repaintAmounts, 60);
     }, true);
+})();
+</script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.08 — STORIES (ko'rilgan + animatsiya) va YULDUZ REYTING
+     ============================================================================ -->
+<style id="layer-stories-rating">
+/* ===========================================================================
+   1) ⭐ 5 YULDUZLI REYTING — Yandex Taxi uslubi (nozik, xushbichim)
+   Texnika: ostida xira 5 yulduz, ustida tilla 5 yulduz `width: %` bilan
+   kesilgan -> kasrli baho (4.3 -> 86%) aniq ko'rinadi. Bitta element,
+   animatsiya yo'q (skroll silliqligi buzilmaydi).
+   =========================================================================== */
+.cr-stars {
+    position: relative; display: inline-block; flex: none;
+    font-size: 11px; line-height: 1; letter-spacing: 1.2px;
+    font-family: -apple-system, "Segoe UI Symbol", sans-serif;
+    white-space: nowrap; vertical-align: -1px;
+    -webkit-user-select: none; user-select: none;
+}
+.cr-stars i {                       /* xira asos (5 ta) */
+    font-style: normal; color: rgba(255,255,255,.20);
+}
+.cr-stars b {                       /* tilla to'ldirilgan qism */
+    position: absolute; inset: 0 auto 0 0; overflow: hidden;
+    font-weight: 400; color: var(--luxury-gold, #C9A84C);
+    white-space: nowrap; letter-spacing: inherit;
+}
+.card-rating .cr-val { font-size: 11.5px; font-weight: 800; letter-spacing: 0; }
+.card-rating .cr-cnt { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--text-muted, #8a8a8a); }
+/* Reyting yo'q tovarlarda joy band qilmaydi */
+.card-rating { gap: 4px !important; }
+
+/* Kattaroq variant — tovar oynasidagi o'rtacha baho */
+.cr-stars.cr-big { font-size: 15px; letter-spacing: 2px; vertical-align: -2px; }
+#pm-avg-rating { display: inline-flex; align-items: center; gap: 6px; }
+#pm-avg-rating .cr-val { font-size: 14px; font-weight: 800; }
+#pm-avg-rating .cr-cnt { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+
+html[data-theme="light"] .cr-stars i { color: rgba(0,0,0,.16); }
+html[data-theme="light"] .cr-stars b { color: var(--luxury-gold-dark, #7A5E12); }
+
+/* ===========================================================================
+   2) 👁 SEGMENTLI HALQA — qaysi storis ko'rilmaganini ko'rsatadi
+   =========================================================================== */
+.story-ring.segmented {
+    position: relative; border: none !important; background: transparent;
+    padding: 2.5px !important; box-shadow: none !important;
+    animation: none !important; overflow: visible;
+}
+.story-ring.segmented::before {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; padding: 2.5px;
+    background: var(--ring-grad, conic-gradient(#C9A84C, #C9A84C));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none;
+    filter: drop-shadow(0 0 5px rgba(212,175,55,.35));
+}
+/* Ko'rilmaganlar soni — nozik tilla nishoncha */
+.story-item { position: relative; }
+.story-unseen-badge {
+    position: absolute; top: -2px; right: 0; z-index: 3;
+    min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box;
+    border-radius: 999px; background: var(--gold-gradient, #C9A84C); color: #2a2000;
+    font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
+    border: 2px solid var(--bg-dark, #121212);
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+html[data-theme="light"] .story-unseen-badge { border-color: #FCFBF8; }
+
+/* ===========================================================================
+   3) ✨ STORIS OYNASI — OCHILISH / YOPILISH / YUKLANISH ANIMATSIYALARI
+   ⚠️ Eski `instaZoom` to'g'ridan #story-viewer elementiga bog'langan edi va
+      sahifa yuklanganda (oyna display:none holatida) bir marta o'ynab tugardi —
+      ya'ni ochilish animatsiyasi AMALDA YO'Q edi. Endi klass bilan boshqariladi.
+   =========================================================================== */
+#story-viewer { animation: none !important; }   /* eski o'lik animatsiyani bekor qilamiz */
+
+@keyframes svOpen {
+    0%   { opacity: 0; transform: scale(.88) translateY(18px); }
+    60%  { opacity: 1; }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+#story-viewer.sv-opening { animation: svOpen .42s cubic-bezier(.2,.9,.25,1) both !important; }
+
+/* Kontent silliq paydo bo'ladi (har storis almashganda) */
+@keyframes svContentIn { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+#story-content > img, #story-content > video {
+    animation: svContentIn .35s ease both;
+}
+
+/* 🌫 Yuklanish holati — chiroyli, "tirik" ko'rinish */
+#stVideo.stv-loading, #stImg.stv-loading { filter: blur(14px) saturate(1.1); opacity: .75; transform: scale(1.04); }
+#stVideo, #stImg { transition: filter .45s ease, opacity .45s ease, transform .45s ease; }
+
+.sv-loader { pointer-events: none; }
+/* Spinner atrofida yumshoq tilla nafas — kutish zerikarli bo'lmasin */
+.sv-loader::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 130px; height: 130px;
+    transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(201,168,76,.16), transparent 68%);
+    animation: svGlowPulse 1.8s ease-in-out infinite;
+}
+@keyframes svGlowPulse {
+    0%, 100% { opacity: .35; transform: translate(-50%, -50%) scale(.85); }
+    50%      { opacity: .9;  transform: translate(-50%, -50%) scale(1.1); }
+}
+
+/* Progress chizig'i — silliqroq */
+.story-progress-fill {
+    transition: width .12s linear;
+    box-shadow: 0 0 6px rgba(255,255,255,.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #story-viewer.sv-opening,
+    #story-content > img, #story-content > video { animation: none !important; }
+    .sv-loader::after { animation: none !important; }
+    #stVideo, #stImg { transition: none !important; }
+}
+html.lite .sv-loader::after { animation: none !important; }
+</style>
+
+<script>
+(function storiesSeenAndRating() {
+    'use strict';
+
+    /* ================================================================== *
+     * 1. ⭐ YULDUZ REYTING — YAGONA MANBA
+     * ------------------------------------------------------------------
+     * `cardHTML` ham, reytinglar keyin yuklanganda DOM'ga qo'shadigan kod
+     * ham AYNAN shu funksiyani chaqiradi. Ilgari markup ikki joyda alohida
+     * yozilgani uchun ular bir-biridan farq qilib qolgan edi.
+     * ================================================================== */
+    var FULL = '\u2605\u2605\u2605\u2605\u2605';   // ★★★★★
+
+    window._starsHTML = function (avg, count, size) {
+        var v = parseFloat(avg) || 0;
+        if (v <= 0) return '';
+        if (v > 5) v = 5;
+        var pct = (v / 5) * 100;
+        var rounded = Math.round(v * 10) / 10;
+        // Butun son bo'lsa ".0" ko'rsatmaymiz (4.0 -> 4) — toza ko'rinish
+        var label = (rounded % 1 === 0) ? String(rounded) : rounded.toFixed(1);
+        var cls = 'cr-stars' + (size === 'big' ? ' cr-big' : '');
+        return '<span class="card-rating" aria-label="Reyting ' + label + ' / 5">' +
+            '<span class="' + cls + '" role="img">' +
+                '<i>' + FULL + '</i>' +
+                '<b style="width:' + pct.toFixed(1) + '%">' + FULL + '</b>' +
+            '</span>' +
+            '<span class="cr-val">' + label + '</span>' +
+            (count ? '<i class="cr-cnt">(' + (parseInt(count, 10) || 0) + ')</i>' : '') +
+        '</span>';
+    };
+
+    /* ================================================================== *
+     * 2. 👁 HAR BIR STORIS ALOHIDA "KO'RILGAN"
+     * ------------------------------------------------------------------
+     * Ilgari faqat kategoriya bo'yicha timestamp saqlanardi, shuning uchun
+     * halqani bosish bilanoq butun bo'lim "ko'rilgan" bo'lardi. Endi har bir
+     * storis o'z kaliti bilan belgilanadi va halqa segmentlarga bo'linadi.
+     * ================================================================== */
+    var SEEN_KEY = 'avto_seen_story_items';
+    var MAX_SEEN = 600;                 // xotira cheklovi (eng eskilari tashlanadi)
+    var _seen = null;
+
+    function loadSeen() {
+        if (_seen) return _seen;
+        try { _seen = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}') || {}; }
+        catch (e) { _seen = {}; }
+        return _seen;
+    }
+    function saveSeen() {
+        try {
+            var m = loadSeen();
+            var keys = Object.keys(m);
+            if (keys.length > MAX_SEEN) {
+                // eng eski (kichik timestamp) yozuvlarni tashlaymiz
+                keys.sort(function (a, b) { return (m[a] || 0) - (m[b] || 0); });
+                keys.slice(0, keys.length - MAX_SEEN).forEach(function (k) { delete m[k]; });
+            }
+            localStorage.setItem(SEEN_KEY, JSON.stringify(m));
+        } catch (e) {}
+    }
+
+    /** Storisning BARQAROR kaliti (id -> src -> kategoriya:timestamp). */
+    function storyKey(cat, item) {
+        if (!item) return String(cat || '-');
+        return String(item.id || item.story_id || item.src || ((cat || '-') + ':' + (item.timestamp || '')));
+    }
+    window._storyKey = storyKey;
+
+    window._isStorySeen = function (cat, item) {
+        return !!loadSeen()[storyKey(cat, item)];
+    };
+    window._markStorySeen = function (cat, item) {
+        if (!item) return;
+        var k = storyKey(cat, item);
+        var m = loadSeen();
+        if (m[k]) return;               // allaqachon belgilangan
+        m[k] = Date.now();
+        saveSeen();
+        // Halqalarni darhol yangilaymiz (badge va segmentlar jonli o'zgaradi)
+        try { if (window._refreshStoryRingsPublic) window._refreshStoryRingsPublic(); } catch (e) {}
+    };
+
+    /* ------------------------------------------------------------------ *
+     * 3. ESKI (KATEGORIYA BO'YICHA) BELGILARNI KO'CHIRISH
+     * Eski foydalanuvchida `avto_seen_stories` bor. U bo'yicha o'sha
+     * vaqtdan OLDIN qo'shilgan storislarni ko'rilgan deb qabul qilamiz —
+     * shunda yangilanishdan keyin hamma storis "yangi" bo'lib chiqmaydi.
+     * ------------------------------------------------------------------ */
+    (function migrateOldSeen() {
+        try {
+            if (localStorage.getItem('avto_seen_story_migrated') === '1') return;
+            var old = JSON.parse(localStorage.getItem('avto_seen_stories') || '{}') || {};
+            if (!Object.keys(old).length) {
+                localStorage.setItem('avto_seen_story_migrated', '1');
+                return;
+            }
+            window._oldSeenCats = old;   // STORIES_DB kelganda qo'llanadi
+        } catch (e) {}
+    })();
+
+    window._applyOldSeenMigration = function (storiesDb) {
+        try {
+            var old = window._oldSeenCats;
+            if (!old || !storiesDb) return;
+            var m = loadSeen();
+            Object.keys(storiesDb).forEach(function (cat) {
+                var ts = old[cat] || 0;
+                if (!ts) return;
+                (storiesDb[cat] || []).forEach(function (it) {
+                    if ((it.timestamp || 0) <= ts) {
+                        var k = storyKey(cat, it);
+                        if (!m[k]) m[k] = ts;
+                    }
+                });
+            });
+            saveSeen();
+            window._oldSeenCats = null;
+            localStorage.setItem('avto_seen_story_migrated', '1');
+            if (window._refreshStoryRingsPublic) window._refreshStoryRingsPublic();
+        } catch (e) {}
+    };
+
+    /* ================================================================== *
+     * 4. YOPILISH ANIMATSIYASI (tap/✕ bilan yopilganda ham)
+     * Ilgari faqat pastga surib yopishda animatsiya bor edi; ✕ yoki
+     * "Batafsil" bilan yopilganda oyna shartta yo'qolardi.
+     * ================================================================== */
+    (function smoothClose() {
+        function wrap() {
+            if (typeof window.closeStoryViewer !== 'function' || window._svCloseWrapped) return;
+            window._svCloseWrapped = true;
+            var orig = window.closeStoryViewer;
+            window.closeStoryViewer = function () {
+                var viewer = document.getElementById('story-viewer');
+                // Pastga surib yopish allaqachon o'z animatsiyasini o'ynatgan bo'lsa —
+                // yoki oyna yopiq bo'lsa — to'g'ridan asl funksiyani chaqiramiz
+                if (!viewer || viewer.style.display === 'none' ||
+                    viewer.classList.contains('closing-down') || viewer._svClosing) {
+                    return orig.apply(this, arguments);
+                }
+                var rm = false;
+                try {
+                    rm = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+                        || document.documentElement.classList.contains('lite');
+                } catch (e) {}
+                if (rm) return orig.apply(this, arguments);
+
+                viewer._svClosing = true;
+                viewer.style.transition = 'transform .22s ease, opacity .22s ease';
+                viewer.style.transform = 'scale(.9)';
+                viewer.style.opacity = '0';
+                var self = this, args = arguments;
+                setTimeout(function () {
+                    viewer.style.transition = '';
+                    viewer._svClosing = false;
+                    orig.apply(self, args);
+                }, 210);
+            };
+        }
+        wrap();
+        setTimeout(wrap, 1200);
+        setTimeout(wrap, 3000);
+    })();
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.08] Stories seen + yulduz reyting yuklandi', 'color:#C9A84C;font-weight:bold;');
 })();
 </script>
 </body>
