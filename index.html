@@ -5939,7 +5939,9 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-user"></use></svg>Ma'lumot</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
     <span class="luxury-input-label">ISMINGIZ</span><input type="text" id="user-edit-name" class="search-box" style="margin-bottom: 15px;">
     <span class="luxury-input-label">RAQAMINGIZ</span><input type="tel" id="user-edit-phone" placeholder="+998 90 123 45 67" class="search-box" style="margin-bottom: 15px;">
-    <span class="luxury-input-label">YETKAZIB BERISH MANZILI (Ixtiyoriy)</span><input type="text" id="user-edit-address" placeholder="Viloyat, shahar, ko'cha..." class="search-box" style="margin-bottom: 25px;">
+    <span class="luxury-input-label">DOIMIY MANZIL (yetkazib berish uchun)</span><input type="text" id="user-edit-address" placeholder="Viloyat, shahar, ko'cha..." class="search-box" style="margin-bottom: 15px;">
+    <span class="luxury-input-label">MENING MASHINAM</span><select id="user-edit-car" class="search-box pf-car-select" style="margin-bottom: 8px;"><option value="">-- Tanlang --</option></select>
+    <p class="pf-car-hint">Mashinangizni belgilasangiz, kerakli qismni tezroq topamiz.</p>
     <button class="btn-checkout" onclick="saveProfile()">Saqlash</button>
 </div>
 
@@ -7568,6 +7570,35 @@ const Haptics = {
                 wishlist = data.wishlist || [];
                 window.myOrders = myOrders; window.wishlist = wishlist; // Phase2 doim yangi ma'lumot o'qishi uchun
                 if(data.profile) { myProfile = data.profile; updateProfileUI(); }
+
+                // 🚗📍 MASHINA VA MANZILLARNI SERVERDAN TIKLASH
+                // ⚠️ ILGARI: `my_car` va `addresses` faqat localStorage'dan
+                //    o'qilardi (localStorage-first). Firebase'ga yozilsa ham,
+                //    QAYTA O'QILMASDI. Natijada mijoz boshqa telefondan kirsa
+                //    yoki ilova keshini tozalasa — saqlangan mashinasi va
+                //    manzillari "Belgilanmagan" bo'lib ko'rinardi (aslida
+                //    bazada turardi).
+                // ENDI: lokal BO'SH bo'lsagina serverdan tiklaymiz. Shunday
+                //    qilib "yangi telefon" holati tuzatiladi, lekin lokal
+                //    o'zgarishlar eski server javobi bilan BOSILMAYDI.
+                try {
+                    if (typeof data.my_car === 'string' && data.my_car &&
+                        !localStorage.getItem('avto_my_car')) {
+                        localStorage.setItem('avto_my_car', data.my_car);
+                        if (typeof window.renderMyCar === 'function') window.renderMyCar();
+                    }
+                    var _lsAddr = localStorage.getItem('avto_addresses');
+                    if (data.addresses && (!_lsAddr || _lsAddr === '[]')) {
+                        var _remoteAddr = Array.isArray(data.addresses)
+                            ? data.addresses
+                            : Object.values(data.addresses);
+                        if (_remoteAddr.length) {
+                            localStorage.setItem('avto_addresses', JSON.stringify(_remoteAddr));
+                            if (typeof window.renderAddresses === 'function') window.renderAddresses();
+                        }
+                    }
+                } catch(e) { _dwarn('[profil] mashina/manzil tiklash xatosi:', e); }
+
                 _updateVipStatus(); // ⭐ VIP holatini buyurtma tarixi bo'yicha yangilash
                 try { if (window.Phase2) window.Phase2.sync(data, window.currentUser, window.productsDB || productsDB); } catch(e){ _dwarn('[Phase2] sync xato:', e); }
                 
@@ -7740,7 +7771,41 @@ function toggleWishlist(e, id) {
         c.innerHTML = items.map(x => cardHTML(x)).join('');
     }
     function saveLocalOrders() { if (currentUser) db.ref('users/' + currentUser + '/orders').set(myOrders); }
-    function saveProfile() { let nN = document.getElementById('user-edit-name').value.trim(); let nP = document.getElementById('user-edit-phone').value.trim(); let nA = document.getElementById('user-edit-address') ? document.getElementById('user-edit-address').value.trim() : ""; if(!nN || !nP) { showToast("Ism va raqamni kiritish shart!", "warning"); return; } myProfile.name = nN; myProfile.phone = nP; myProfile.address = nA; updateProfileUI(); if (currentUser) { db.ref('users/' + currentUser + '/profile').set(myProfile).then(() => { showToast("Saqlandi!"); closeModal(); }); } else { showToast("Saqlandi!"); closeModal(); } }
+    function saveProfile() {
+        let nN = document.getElementById('user-edit-name').value.trim();
+        let nP = document.getElementById('user-edit-phone').value.trim();
+        let nA = document.getElementById('user-edit-address') ? document.getElementById('user-edit-address').value.trim() : "";
+        // 🚗 Mashina ham SHU OYNADAN o'zgartiriladi (ilgari alohida oynada edi)
+        let carEl = document.getElementById('user-edit-car');
+        let nC = carEl ? String(carEl.value || '').trim() : null;
+
+        if(!nN || !nP) { showToast("Ism va raqamni kiritish shart!", "warning"); return; }
+
+        myProfile.name = nN; myProfile.phone = nP; myProfile.address = nA;
+        updateProfileUI();
+
+        // 🚗 Mashinani saqlaymiz (localStorage + Firebase), keyin kartochkani yangilaymiz
+        if (nC !== null) {
+            try {
+                localStorage.setItem('avto_my_car', nC);
+                if (currentUser) db.ref('users/' + currentUser + '/my_car').set(nC);
+                if (typeof window.renderMyCar === 'function') window.renderMyCar();
+            } catch(e) {}
+        }
+
+        if (currentUser) {
+            // ⚠️ ILGARI `.set(myProfile)` ishlatilardi — bu BUTUN `profile` tugunini
+            //    xotiradagi obyekt bilan qayta yozardi. `myProfile` boshlang'ich
+            //    holatda faqat {name, phone, address} bo'lgani uchun (7448-qator),
+            //    agar Firebase listeneri hali javob bermagan bo'lsa, saqlash
+            //    `uid`, `username`, `firstName`, `lastName`, `lang`, `vip` kabi
+            //    maydonlarni O'CHIRIB yuborardi (ular 7554-qatorda yozilgan).
+            //    Endi `.update()` — faqat uchta maydonni yangilaydi, qolganiga tegmaydi.
+            db.ref('users/' + currentUser + '/profile').update({ name: nN, phone: nP, address: nA })
+                .then(() => { showToast("Saqlandi!"); closeModal(); })
+                .catch(() => { showToast("Saqlanmadi — internetni tekshiring", "warning"); });
+        } else { showToast("Saqlandi!"); closeModal(); }
+    }
     // 🪟 DYNAMIC ISLAND (XABARNOMA) FUNKSIYASI
 function showToast(m, t = 'success') { 
     const c = document.getElementById('toast-container'); 
@@ -15257,46 +15322,20 @@ if (typeof window.updateProfileUI === 'function' && !window._origUpdProfUI) {
 // 🚗 SHAXSIY KABINET — YANGI FUNKSIYALAR
 // ============================================================
 
-// MENING MASHINAM — mashina modelini tanlash va saqlash
-window.openMyCarModal = () => {
-    let m = document.getElementById('myCarModal');
-    if (!m) {
-        m = document.createElement('div');
-        m.id = 'myCarModal';
-        m.className = 'modal-standard';
-        const brands = {gaz:['Gazel Biznes','Gazel Next','Gazel Eski','Volga 2401','Volga 2410','Volga 3110','Volga 31105','Sobol'],chevy:['Damas','Cobalt','Gentra','Lacetti','Malibu','Tracker','Nexia 3','Spark','Onix','Captiva','Labo','Matiz','Epica'],daewoo:['Nexia 1','Nexia 2','Matiz','Tico'],uaz:['Patriot','Hunter']};
-        let optHtml = '<option value="">-- Tanlang --</option>';
-        for (let b in brands) { let lbl = b==='gaz'?'GAZ':b==='chevy'?'Chevrolet':b==='daewoo'?'Daewoo':'UAZ'; brands[b].forEach(mod => { optHtml += `<option value="${b}-${mod}">${lbl} ${mod}</option>`; }); }
-        m.innerHTML = `<div class="modal-header"><h2 style="color:var(--luxury-gold);"><svg class="uic" aria-hidden="true"><use href="#i-car"></use></svg>Mening mashinam</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div><div style="padding:20px;"><p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Mashina modelingizni belgilang — biz sizga faqat shu mashinaga mos tovarlarni ko'rsatamiz.</p><select id="my-car-select" class="admin-input" style="padding:16px;font-size:15px;margin-bottom:16px;">${optHtml}</select><button onclick="saveMyCarChoice()" style="width:100%;padding:16px;background:var(--gold-gradient);color:#000;border:none;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">✅ Saqlash</button></div>`;
-        document.body.appendChild(m);
-    }
-    let saved = localStorage.getItem('avto_my_car') || '';
-    let sel = document.getElementById('my-car-select');
-    if (sel) sel.value = saved;
-    if (typeof openModal === 'function') openModal('myCarModal');
-    else { m.style.display='flex'; window.activeModal='myCarModal'; }
-};
-window.saveMyCarChoice = () => {
-    let sel = document.getElementById('my-car-select');
-    let val = sel ? sel.value : '';
-    localStorage.setItem('avto_my_car', val);
-    if (window.currentUser) db.ref('users/'+window.currentUser+'/my_car').set(val);
-    renderMyCar();
-    showToast(val ? '✅ Mashina saqlandi!' : 'Mashina o\'chirildi', 'success');
-    closeModal();
-};
-window.renderMyCar = () => {
-    let el = document.getElementById('pf-my-car-info');
-    if (!el) return;
-    let val = localStorage.getItem('avto_my_car') || '';
-    if (val) {
-        let parts = val.split('-'); let brand = parts[0]; let model = parts.slice(1).join(' ');
-        let brandName = brand==='gaz'?'GAZ':brand==='chevy'?'Chevrolet':brand==='daewoo'?'Daewoo':'UAZ';
-        el.innerHTML = `<span style="color:var(--luxury-gold);font-weight:800;">${brandName} ${model}</span>`;
-    } else {
-        el.innerHTML = '<span style="color:var(--text-muted);">Belgilanmagan — tanlash uchun bosing</span>';
-    }
-};
+// MENING MASHINAM — bu blok fayl OXIRIDAGI "QATLAM 2026.13" ga ko'chirildi.
+// ------------------------------------------------------------------
+// Nega ko'chirildi:
+//   1) mashinalar ro'yxati shu yerda QATTIQ yozilgan edi, endi u yagona
+//      manbada — `window.MY_CAR_BRANDS` (ikki joyda takrorlanmaydi);
+//   2) mashinani endi «Ma'lumot» oynasidan ham o'zgartirish mumkin,
+//      shuning uchun saqlash mantig'i bitta funksiyaga (`saveMyCar`) yig'ildi;
+//   3) eski matn "faqat shu mashinaga mos tovarlarni ko'rsatamiz" deb
+//      va'da berardi, lekin bunday FILTR KODDA UMUMAN YO'Q edi — yolg'on
+//      va'da olib tashlandi;
+//   4) eski `renderMyCar` nomni `split('-')` bilan ajratib bo'sh joy bilan
+//      qo'shardi — modelda chiziqcha bo'lsa nom buzilardi.
+// Funksiyalar (openMyCarModal / saveMyCarChoice / renderMyCar) o'sha
+// nomlar bilan qatlamda qayta belgilangan — tashqi chaqiruvlar buzilmaydi.
 
 // MANZILLAR — bir nechta manzil saqlash
 window.getAddresses = () => { try { return JSON.parse(localStorage.getItem('avto_addresses') || '[]'); } catch(e) { return []; } };
@@ -21670,7 +21709,20 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                 cartCount: u.cart ? Object.keys(u.cart).length : 0,
                 wishCount: Array.isArray(u.wishlist) ? u.wishlist.length : (u.wishlist ? Object.keys(u.wishlist).length : 0),
                 cashback: (u.phase2 && parseInt(u.phase2.cashback, 10)) || 0,
-                car: (u.my_car && (u.my_car.model || u.my_car.name)) || '',
+                // 🚗 ⚠️ ILGARI XATO: bu yerda `u.my_car.model || u.my_car.name`
+                //    yozilgan, ya'ni OBYEKT kutilardi. Ilova esa `my_car` ni
+                //    MATN sifatida saqlaydi ("chevy-Nexia 3"). Natijada admin
+                //    panelidagi "Mashinasi" ustuni DOIM bo'sh chiqardi.
+                //    Endi ikkala format ham tushuniladi va o'qiladigan nomga
+                //    aylantiriladi ("Chevrolet Nexia 3").
+                car: (function () {
+                    var mc = u.my_car;
+                    if (!mc) return '';
+                    if (typeof mc === 'string') {
+                        return (typeof window.myCarLabel === 'function') ? window.myCarLabel(mc) : mc;
+                    }
+                    return mc.model || mc.name || '';
+                })(),
                 ordersRaw: arr
             });
         });
@@ -23664,6 +23716,218 @@ html.lite body #ordl.show .ordl-box {
     })();
 
     if (window._dlog) window._dlog('%c[Qatlam 2026.12] To\'lov yuklovchisi yuklandi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.13 — PROFIL: MASHINA VA DOIMIY MANZIL BIR OYNADA
+     ----------------------------------------------------------------------------
+     Nima o'zgardi:
+       1) «Ma'lumot» oynasiga MASHINA tanlagichi qo'shildi. Ilgari mashinani
+          faqat alohida «Mening mashinam» oynasidan o'zgartirish mumkin edi.
+          Manzil ham shu oynada — yorliq aniqlashtirildi (DOIMIY MANZIL).
+       2) Mashina ro'yxati YAGONA MANBADA (`window.MY_CAR_BRANDS`). Ilgari
+          ro'yxat `openMyCarModal` ichida qattiq yozilgan edi va uni ikkinchi
+          joyda takrorlash kerak bo'lardi.
+       3) `myCarLabel()` — "chevy-Nexia 3" ni "Chevrolet Nexia 3" ga aylantiradi.
+          Admin panelidagi «Mashinasi» ustuni shu orqali tuzatildi (ilgari u
+          OBYEKT kutardi, ilova esa MATN yozardi — ustun doim bo'sh edi).
+     ============================================================================ -->
+<style id="layer-profile-car">
+/* Tanlagich `.search-box` bilan bir xil ko'rinishda bo'lsin (o'z o'qi bilan) */
+select.pf-car-select {
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    cursor: pointer;
+    padding-right: 40px !important;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 16px 16px;
+    text-overflow: ellipsis;
+}
+select.pf-car-select option { color: #111; }
+html[data-theme="light"] select.pf-car-select option { color: #111; }
+.pf-car-hint {
+    margin: 0 0 22px; padding: 0 2px;
+    font-size: 11.5px; line-height: 1.5; font-weight: 600;
+    color: var(--text-muted, #8a8a8a);
+}
+</style>
+
+<script>
+(function profileCarAndAddress() {
+    'use strict';
+
+    var LS_CAR = 'avto_my_car';
+
+    /* ------------------------------------------------------------------ *
+     * 1) MASHINALAR RO'YXATI — YAGONA MANBA
+     * ------------------------------------------------------------------ */
+    window.MY_CAR_BRANDS = {
+        gaz:    { label: 'GAZ',       models: ['Gazel Biznes', 'Gazel Next', 'Gazel Eski', 'Volga 2401', 'Volga 2410', 'Volga 3110', 'Volga 31105', 'Sobol'] },
+        chevy:  { label: 'Chevrolet', models: ['Damas', 'Cobalt', 'Gentra', 'Lacetti', 'Malibu', 'Tracker', 'Nexia 3', 'Spark', 'Onix', 'Captiva', 'Labo', 'Matiz', 'Epica'] },
+        daewoo: { label: 'Daewoo',    models: ['Nexia 1', 'Nexia 2', 'Matiz', 'Tico'] },
+        uaz:    { label: 'UAZ',       models: ['Patriot', 'Hunter'] }
+    };
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c];
+        });
+    }
+
+    function getCar() {
+        try { return localStorage.getItem(LS_CAR) || ''; } catch (e) { return ''; }
+    }
+
+    /** Firebase havolasi — `db` top-level `const`, shuning uchun zaxira ham bor. */
+    function dbRef(path) {
+        try { if (typeof db !== 'undefined' && db && db.ref) return db.ref(path); } catch (e) {}
+        try { if (window.firebase && firebase.database) return firebase.database().ref(path); } catch (e) {}
+        return null;
+    }
+
+    /** `<option>` lar (markalar bo'yicha guruhlangan). */
+    window.myCarOptionsHTML = function (selected) {
+        var sel = String(selected || '');
+        var h = '<option value=""' + (sel ? '' : ' selected') + '>-- Tanlang --</option>';
+        Object.keys(window.MY_CAR_BRANDS).forEach(function (key) {
+            var br = window.MY_CAR_BRANDS[key];
+            h += '<optgroup label="' + esc(br.label) + '">';
+            br.models.forEach(function (m) {
+                var v = key + '-' + m;
+                h += '<option value="' + esc(v) + '"' + (v === sel ? ' selected' : '') + '>' +
+                     esc(br.label + ' ' + m) + '</option>';
+            });
+            h += '</optgroup>';
+        });
+        return h;
+    };
+
+    /**
+     * "chevy-Nexia 3" -> "Chevrolet Nexia 3".
+     * ⚠️ Eski kod `val.split('-')` qilib qolganini bo'sh joy bilan qo'shardi —
+     *    modelda chiziqcha bo'lsa nom buzilardi. Endi FAQAT birinchi
+     *    chiziqcha bo'yicha ajratamiz.
+     */
+    window.myCarLabel = function (val) {
+        var v = String(val || '').trim();
+        if (!v) return '';
+        var i = v.indexOf('-');
+        if (i < 0) return v;
+        var key = v.slice(0, i);
+        var model = v.slice(i + 1);
+        var br = window.MY_CAR_BRANDS[key];
+        return ((br ? br.label : key) + ' ' + model).trim();
+    };
+
+    /* ------------------------------------------------------------------ *
+     * 2) «MA'LUMOT» OYNASIDAGI TANLAGICH
+     * ------------------------------------------------------------------ */
+    window._pfSyncCarSelect = function () {
+        var sel = document.getElementById('user-edit-car');
+        if (!sel) return;
+        var cur = getCar();
+        sel.innerHTML = window.myCarOptionsHTML(cur);
+        sel.value = cur;
+    };
+
+    /* ------------------------------------------------------------------ *
+     * 3) MASHINANI SAQLASH — yagona yo'l
+     * ------------------------------------------------------------------ */
+    function saveCar(val) {
+        val = String(val == null ? '' : val).trim();
+        try { localStorage.setItem(LS_CAR, val); } catch (e) {}
+        if (window.currentUser) {
+            var r = dbRef('users/' + window.currentUser + '/my_car');
+            if (r) { try { r.set(val); } catch (e) {} }
+        }
+        if (typeof window.renderMyCar === 'function') window.renderMyCar();
+        return val;
+    }
+    window.saveMyCar = saveCar;
+
+    /* ------------------------------------------------------------------ *
+     * 4) PROFIL KARTOCHKASI VA ALOHIDA OYNA (yagona manbadan)
+     * ------------------------------------------------------------------ */
+    window.renderMyCar = function () {
+        var val = getCar();
+        var el = document.getElementById('pf-my-car-info');
+        if (el) {
+            el.innerHTML = val
+                ? '<span style="color:var(--luxury-gold);font-weight:800;">' + esc(window.myCarLabel(val)) + '</span>'
+                : '<span style="color:var(--text-muted);">Belgilanmagan \u2014 tanlash uchun bosing</span>';
+        }
+        try { window._pfSyncCarSelect(); } catch (e) {}
+    };
+
+    window.openMyCarModal = function () {
+        var m = document.getElementById('myCarModal');
+        var cur = getCar();
+        if (!m) {
+            m = document.createElement('div');
+            m.id = 'myCarModal';
+            m.className = 'modal-standard';
+            m.innerHTML =
+                '<div class="modal-header"><h2 style="color:var(--luxury-gold);">' +
+                    '<svg class="uic" aria-hidden="true"><use href="#i-car"></use></svg>Mening mashinam</h2>' +
+                    '<button class="close-btn" aria-label="Yopish" onclick="closeModal()">\u00D7</button></div>' +
+                '<div style="padding:20px;">' +
+                    // ⚠️ Eski matn "faqat shu mashinaga mos tovarlarni ko'rsatamiz"
+                    //    deb yozilgan edi — bunday filtr KODDA YO'Q, ya'ni yolg'on
+                    //    va'da edi. Endi haqiqatni yozamiz: ma'lumot admin ko'radi.
+                    '<p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;line-height:1.5;">' +
+                    'Mashinangizni belgilab qo\'ysangiz, buyurtma berganda admin sizga ' +
+                    'aynan mos qismni tanlashda yordam beradi.</p>' +
+                    '<select id="my-car-select" class="admin-input pf-car-select" ' +
+                        'style="padding:16px;font-size:15px;margin-bottom:16px;width:100%;box-sizing:border-box;"></select>' +
+                    '<button onclick="saveMyCarChoice()" style="width:100%;padding:16px;' +
+                        'background:var(--gold-gradient);color:#000;border:none;border-radius:14px;' +
+                        'font-weight:800;font-size:14px;cursor:pointer;">\u2705 Saqlash</button>' +
+                '</div>';
+            document.body.appendChild(m);
+        }
+        var sel = document.getElementById('my-car-select');
+        if (sel) { sel.innerHTML = window.myCarOptionsHTML(cur); sel.value = cur; }
+        if (typeof window.openModal === 'function') window.openModal('myCarModal');
+        else { m.style.display = 'flex'; window.activeModal = 'myCarModal'; }
+    };
+
+    window.saveMyCarChoice = function () {
+        var sel = document.getElementById('my-car-select');
+        var val = saveCar(sel ? sel.value : '');
+        if (typeof showToast === 'function') {
+            showToast(val ? '\u2705 Mashina saqlandi!' : "Mashina o'chirildi", 'success');
+        }
+        if (typeof window._hap === 'function') window._hap('success');
+        if (typeof closeModal === 'function') closeModal();
+    };
+
+    /* ------------------------------------------------------------------ *
+     * 5) «Ma'lumot» oynasi ochilganda tanlagichni to'ldiramiz
+     * ------------------------------------------------------------------ */
+    (function hookOpenModal() {
+        function wrap() {
+            if (typeof window.openModal !== 'function' || window._pfCarWrapped) return;
+            window._pfCarWrapped = true;
+            var orig = window.openModal;
+            window.openModal = function (id) {
+                var r = orig.apply(this, arguments);
+                if (id === 'profileEditModal') {
+                    try { window._pfSyncCarSelect(); } catch (e) {}
+                }
+                return r;
+            };
+        }
+        wrap();
+        setTimeout(wrap, 1200);
+        setTimeout(wrap, 3000);
+    })();
+
+    // Dastlabki holat (profil ekrani allaqachon ochiq bo'lsa ham to'g'ri chizilsin)
+    setTimeout(function () { try { window.renderMyCar(); } catch (e) {} }, 800);
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.13] Profil: mashina + doimiy manzil', 'color:#C9A84C;font-weight:bold;');
 })();
 </script>
 </body>
