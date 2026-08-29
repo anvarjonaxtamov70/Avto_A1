@@ -10,6 +10,11 @@
 //                   (inviter) bonusni SERVER (admin huquqi) bilan yozadi.
 //                   Mijoz xavfsiz qoidalarda boshqa user tuguniga yoza
 //                   olmagani uchun shu endpoint kerak. Idempotent.
+//  4) "/stock-commit" — Ombor zaxirasini SERVERDA kamaytiradi: mahsulot
+//                   `id` bo'yicha topiladi (indeks bo'yicha emas), `stock >= qty`
+//                   tekshiriladi va atomik `increment` bilan yoziladi.
+//                   Bu oversell (yo'q tovarni sotish) va "noto'g'ri tovar
+//                   stoki kamaydi" muammolarini yopadi.
 //
 //  Secret'lar (Worker > Settings > Variables):
 //     BOT_TOKEN, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
@@ -641,6 +646,131 @@ export default {
       }
     }
 
+    // ---------- /stock-commit : zaxirani SERVERDA band qilish ----------
+    // MUAMMO (ilgari):
+    //   Stok faqat mijoz brauzerida kamayardi. Mijoz sahifani ertalab ochib
+    //   qo'ygan bo'lsa, `productsDB` massivi ERTALABGI holatda qolardi va
+    //   stok tekshiruvi ham, yozuv MANZILI ham o'sha eski massiv INDEKSIga
+    //   asoslanardi. Natijada:
+    //     • admin mahsulot o'chirsa/qo'shsa — indekslar surilib, BOSHQA
+    //       mahsulotning stoki kamayardi (noto'g'ri tovar "sotildi");
+    //     • omborda 1 dona qolgan tovarni bir vaqtda 5 kishi sotib olardi
+    //       (oversell) — hech qanday server tekshiruvi yo'q edi.
+    //
+    // YECHIM:
+    //   Zaxira faqat SHU YERDA — serverda — kamayadi:
+    //     1) initData HMAC bilan tekshiriladi (soxta so'rov o'tmaydi);
+    //     2) `products` SERVERDA o'qiladi va mahsulot `id` bo'yicha topiladi
+    //        (indeks emas — surilish muammosi tugadi);
+    //     3) `stock >= qty` tekshiriladi; yetmasa 409 va TOVAR NOMI qaytadi;
+    //     4) kamaytirish atomik `{".sv":{"increment":-qty}}` bilan bajariladi.
+    //   op="release" — buyurtma yuborishda xatolik bo'lsa zaxirani QAYTARADI.
+    if (path === "/stock-commit") {
+      try {
+        const body = await request.json();
+        const initData = body && typeof body.initData === "string" ? body.initData : "";
+        if (!initData) return json({ ok: false, stockCommit: true, error: "initData yoq" }, 400);
+        const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
+        if (!verified.ok) return json({ ok: false, stockCommit: true, error: verified.error }, 401);
+
+        const op = body.op === "release" ? "release" : "commit";
+        const items = Array.isArray(body.items) ? body.items : [];
+        if (!items.length) return json({ ok: false, stockCommit: true, error: "items yoq" }, 400);
+        if (items.length > 60) return json({ ok: false, stockCommit: true, error: "items juda ko'p" }, 400);
+
+        const dbUrl = (env.FIREBASE_DB_URL || DEFAULT_DB_URL).replace(/\/$/, "");
+        const accessToken = await getAccessToken(env);
+
+        const raw = await rtdbGet(dbUrl, "products", accessToken);
+        const entries = toEntries(raw);
+        if (!entries.length) {
+          return json({ ok: false, stockCommit: true, error: "products bo'sh" }, 503);
+        }
+
+        const updates = {};
+        const touched = [];
+        const shortages = [];
+
+        for (const it of items) {
+          const qty = parseInt(it && it.qty, 10) || 0;
+          if (qty <= 0) continue;
+          const wantId = String((it && it.id) != null ? it.id : "");
+          if (!wantId) continue;
+
+          const hit = entries.find((e) => String(e.val.id) === wantId);
+          if (!hit) {
+            if (op === "commit") {
+              shortages.push({ id: wantId, name: String((it && it.name) || wantId), available: 0, requested: qty });
+            }
+            continue;
+          }
+          const p = hit.val;
+          const pName = String(p.name || (it && it.name) || wantId);
+          const wantSize = it && it.size != null ? String(it.size) : "";
+
+          // Razmerli mahsulot: aynan tanlangan razmerning stoki
+          let sizeKey = null;
+          if (wantSize && wantSize !== "Universal" && p.sizes) {
+            const sizeEntries = toEntries(p.sizes);
+            const sHit = sizeEntries.find((e) => String(e.val.size) === wantSize);
+            if (sHit) sizeKey = sHit.key;
+          }
+
+          if (sizeKey !== null) {
+            const sizeEntries = toEntries(p.sizes);
+            const sHit = sizeEntries.find((e) => e.key === sizeKey);
+            const have = parseInt(sHit && sHit.val && sHit.val.stock, 10) || 0;
+            if (op === "commit" && have < qty) {
+              shortages.push({ id: wantId, name: pName, size: wantSize, available: have, requested: qty });
+              continue;
+            }
+            const delta = op === "release" ? qty : -qty;
+            updates[hit.key + "/sizes/" + sizeKey + "/stock"] = { ".sv": { increment: delta } };
+            // Ota `stock` — razmerlar yig'indisi; u ham nisbiy o'zgaradi
+            if (p.stock != null) updates[hit.key + "/stock"] = { ".sv": { increment: delta } };
+            touched.push(hit.key + "/sizes/" + sizeKey + "/stock");
+            if (p.stock != null) touched.push(hit.key + "/stock");
+          } else {
+            const have = parseInt(p.stock, 10);
+            if (op === "commit" && Number.isFinite(have) && have < qty) {
+              shortages.push({ id: wantId, name: pName, available: have, requested: qty });
+              continue;
+            }
+            const delta = op === "release" ? qty : -qty;
+            updates[hit.key + "/stock"] = { ".sv": { increment: delta } };
+            touched.push(hit.key + "/stock");
+          }
+        }
+
+        if (op === "commit" && shortages.length) {
+          // HECH NARSA yozilmadi — buyurtma butunlay rad etiladi.
+          return json({ ok: false, stockCommit: true, error: "stock", shortages }, 409);
+        }
+        if (!Object.keys(updates).length) {
+          return json({ ok: true, stockCommit: true, applied: 0, note: "o'zgarish yo'q" });
+        }
+
+        const wr = await rtdbPatch(dbUrl, "products", updates, accessToken);
+        if (!wr.ok) {
+          return json({ ok: false, stockCommit: true, error: "yozish xatosi " + wr.status }, 502);
+        }
+
+        // Poyga (race) qoldig'i: increment natijasi manfiy bo'lib qolsa 0 ga tekislaymiz.
+        const fixes = {};
+        for (const t of touched) {
+          const v = await rtdbGet(dbUrl, "products/" + t, accessToken);
+          if (typeof v === "number" && v < 0) fixes[t] = 0;
+        }
+        if (Object.keys(fixes).length) {
+          await rtdbPatch(dbUrl, "products", fixes, accessToken);
+        }
+
+        return json({ ok: true, stockCommit: true, op, applied: Object.keys(updates).length });
+      } catch (e) {
+        return json({ ok: false, stockCommit: true, error: String(e) }, 500);
+      }
+    }
+
     // ---------- / : sendMessage proxy (himoyalangan) ----------
     try {
       const body = await request.json();
@@ -839,6 +969,26 @@ async function getAccessToken(env) {
 }
 
 // ===================== RTDB REST yordamchilari =====================
+// RTDB ketma-ket raqamli kalitlarni MASSIV, "teshikli" bo'lsa OBYEKT qilib
+// qaytaradi. Ikki shaklni bitta {key, val} ro'yxatiga keltiramiz — shunda
+// yozish manzili (`products/<key>/stock`) har ikki holatda ham to'g'ri bo'ladi.
+function toEntries(raw) {
+  const out = [];
+  if (!raw) return out;
+  if (Array.isArray(raw)) {
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] && typeof raw[i] === "object") out.push({ key: String(i), val: raw[i] });
+    }
+    return out;
+  }
+  if (typeof raw === "object") {
+    for (const k of Object.keys(raw)) {
+      if (raw[k] && typeof raw[k] === "object") out.push({ key: k, val: raw[k] });
+    }
+  }
+  return out;
+}
+
 async function rtdbGet(dbUrl, path, token) {
   const r = await fetch(`${dbUrl}/${path}.json?access_token=${token}`);
   if (!r.ok) return null;

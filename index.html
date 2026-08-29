@@ -7203,6 +7203,8 @@ document.addEventListener('touchmove', function(e) {
     const ADMIN_ID = ADMIN_IDS[0];
     // 🔒 Token endi koddan olib tashlandi! Xabarlar maxfiy proxy (Cloudflare Worker) orqali yuboriladi.
     const TG_PROXY = "https://avtoa1bot.anvaraxtamov70.workers.dev";
+    // Fayl oxiridagi qatlamlar (`/stock-commit`) ham shu manzildan foydalanadi.
+    window.TG_PROXY = TG_PROXY;
     const IMGBB_API_KEY = "956de2d2a33ae1bcc56d5ada6fd8788d";
     const firebaseConfig = {
         apiKey: "AIzaSyCqK0E5hNpSHl6h-V-3WeVteWZnt7gXyOM",
@@ -7231,28 +7233,88 @@ document.addEventListener('touchmove', function(e) {
         return fetch(TG_PROXY, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
     }
     window.tgProxySend = tgProxySend;
-    // 📦 Stokni XAVFSIZ kamaytirish — butun 'products' massivini qayta yozish (.set) o'rniga
-    //    faqat sotilgan mahsulot/razmer stokiga ATOMIK transaction qo'llaymiz. Bu:
-    //      • boshqa adminlar qo'shgan mahsulotlarni o'chirib yuborilishining oldini oladi,
-    //      • bir vaqtdagi ikki buyurtmaning bir-birini ezib yozishini kamaytiradi.
-    //    changes: [{ idx, qty, sizeIdx? , fallback }]
+    // 📦 Stokni XAVFSIZ kamaytirish — ZAXIRA (fallback) yo'li.
+    //    ASOSIY yo'l endi serverda: Worker `/stock-commit` (izohni fayl oxiridagi
+    //    "QATLAM 2026.16" qatlamida o'qing). Bu funksiya faqat Worker yangilanmagan
+    //    yoki internet uzilgan holatda ishlaydi.
+    //
+    //    Bu yerda TUZATILGAN ikki jiddiy xato:
+    //      1) MANZIL INDEKS bo'yicha edi (`products/{idx}/stock`). Admin mahsulot
+    //         o'chirsa/qo'shsa indekslar suriladi va BOSHQA tovarning stoki
+    //         kamayardi. Endi manzil har safar mahsulot `id`si bo'yicha QAYTA
+    //         topiladi.
+    //      2) `fallback` — sahifa yuklanganda o'qilgan ESKI stok qiymati edi.
+    //         Transaction ichida `cur` bo'lmasa u qiymat qayta tiklanardi, ya'ni
+    //         boshqalar sotgan tovarlar "omborga qaytardi". Endi ishlatilmaydi.
+    //    changes: [{ id, size?, qty, idx?, sizeIdx?, name? }]
     function _decrementStock(changes){
-        if (!Array.isArray(changes)) return;
-        changes.forEach(function(ch){
-            try {
-                if (ch.idx == null || ch.idx < 0) return;
-                var path = (ch.sizeIdx != null && ch.sizeIdx >= 0)
-                    ? 'products/' + ch.idx + '/sizes/' + ch.sizeIdx + '/stock'
-                    : 'products/' + ch.idx + '/stock';
-                db.ref(path).transaction(function(cur){
-                    var base = (typeof cur === 'number') ? cur : (parseInt(ch.fallback) || 0);
-                    var nv = base - (parseInt(ch.qty) || 0);
-                    return nv < 0 ? 0 : nv;
+        if (!Array.isArray(changes) || !changes.length) return Promise.resolve(false);
+        // Manzilni ANIQLASH uchun `products` tugunini bir marta yangi holatda o'qiymiz.
+        var fresh = null;
+        return db.ref('products').once('value')
+            .then(function(snap){ fresh = snap.val(); })
+            .catch(function(e){ _dwarn('[stock] products o\'qilmadi, indeksga qaytamiz:', e); })
+            .then(function(){
+                var jobs = changes.map(function(ch){
+                    try {
+                        var loc = _resolveStockPath(fresh, ch);
+                        if (!loc) return Promise.resolve(false);
+                        return db.ref(loc).transaction(function(cur){
+                            // `cur` yo'q bo'lsa — bu tugunni o'zimiz yaratmaymiz:
+                            // eski (yuklanish vaqtidagi) qiymatni tiklash sotilgan
+                            // tovarni "qaytarib" qo'yardi.
+                            if (typeof cur !== 'number') return cur;
+                            var nv = cur - (parseInt(ch.qty) || 0);
+                            return nv < 0 ? 0 : nv;
+                        }).then(function(res){
+                            return !!(res && res.committed);
+                        }).catch(function(e){
+                            _dwarn('[stock] transaction rad etildi:', loc, e);
+                            return false;
+                        });
+                    } catch(e){ _dwarn('[stock] update xato:', e); return Promise.resolve(false); }
                 });
-            } catch(e){ _dwarn('[stock] update xato:', e); }
-        });
+                return Promise.all(jobs).then(function(r){
+                    return r.some(function(x){ return x === true; });
+                });
+            });
+    }
+    // Mahsulot `id`si bo'yicha DB dagi haqiqiy yozish manzilini topadi.
+    // `fresh` o'qilmagan bo'lsa — oxirgi chora sifatida eski indeksga qaytadi.
+    function _resolveStockPath(fresh, ch){
+        var key = null, node = null;
+        if (fresh) {
+            var keys = Array.isArray(fresh)
+                ? fresh.map(function(_, i){ return String(i); })
+                : Object.keys(fresh);
+            for (var i = 0; i < keys.length; i++) {
+                var v = fresh[keys[i]];
+                if (v && String(v.id) === String(ch.id)) { key = keys[i]; node = v; break; }
+            }
+        }
+        if (key === null) {
+            if (ch.idx == null || ch.idx < 0) return null;
+            key = String(ch.idx);
+            return (ch.sizeIdx != null && ch.sizeIdx >= 0)
+                ? 'products/' + key + '/sizes/' + ch.sizeIdx + '/stock'
+                : 'products/' + key + '/stock';
+        }
+        var wantSize = (ch.size != null) ? String(ch.size) : '';
+        if (wantSize && wantSize !== 'Universal' && node && node.sizes) {
+            var sKeys = Array.isArray(node.sizes)
+                ? node.sizes.map(function(_, i){ return String(i); })
+                : Object.keys(node.sizes);
+            for (var j = 0; j < sKeys.length; j++) {
+                var s = node.sizes[sKeys[j]];
+                if (s && String(s.size) === wantSize) {
+                    return 'products/' + key + '/sizes/' + sKeys[j] + '/stock';
+                }
+            }
+        }
+        return 'products/' + key + '/stock';
     }
     window._decrementStock = _decrementStock;
+    window._resolveStockPath = _resolveStockPath;
 
     // =====================================
     // 🎨 IKONKA TIZIMI (emoji o'rniga bitta SVG to'plami)
@@ -10569,14 +10631,16 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                     if (sIdx !== -1) {
                         let _orig = (parseInt(p.sizes[sIdx].stock) || 0);
                         p.sizes[sIdx].stock = (_orig - qty) < 0 ? 0 : (_orig - qty);
-                        stockChanges.push({ idx: pIdx, sizeIdx: sIdx, qty: qty, fallback: _orig });
+                        // `id` + `size` — SERVER stokni indeks emas, AYNAN shu tovar
+                        // bo'yicha topishi uchun. `fallback` faqat mahalliy tiklash uchun.
+                        stockChanges.push({ id: p.id, name: p.name, size: carOpt, idx: pIdx, sizeIdx: sIdx, qty: qty, fallback: _orig });
                         if (p.sizes[sIdx].stock <= 3) lowStockAlerts += `\n⚠️ <b>${escTg(p.name)} (${escTg(carOpt)})</b>: ${p.sizes[sIdx].stock} ta qoldi!`;
                     }
                     p.stock = p.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0);
                 } else {
                     let _orig = (parseInt(p.stock) || 10);
                     p.stock = (_orig - qty) < 0 ? 0 : (_orig - qty);
-                    stockChanges.push({ idx: pIdx, qty: qty, fallback: _orig });
+                    stockChanges.push({ id: p.id, name: p.name, idx: pIdx, qty: qty, fallback: _orig });
                     if (p.stock <= 3) lowStockAlerts += `\n⚠️ <b>${escTg(p.name)}</b>: ${p.stock} ta qoldi!`;
                 }
             } 
@@ -10609,11 +10673,49 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             if (_vipTag) adminText += `\n\n${escTg(_vipTag)}`;
         } catch (e) {}
 
+        // ============================================================
+        // 🛡 ZAXIRANI SERVERDA BAND QILISH — buyurtma yuborilishidan OLDIN
+        // ------------------------------------------------------------
+        // Ilgari stok faqat mijoz brauzerida kamayardi va tekshiruv ham
+        // brauzerdagi ESKI massivga qarardi. Shu sababli omborda 1 dona
+        // qolgan tovarni bir vaqtda bir necha kishi sotib olishi mumkin edi
+        // (oversell), keyin admin mijozga "yo'q ekan" deb tushuntirardi.
+        // Endi zaxira SERVERDA tekshiriladi va atomik band qilinadi.
+        // Yetmasa — buyurtma umuman yuborilmaydi va tovar NOMI aytiladi.
+        // ============================================================
+        var _stock = { mode: 'skip' };
+        try {
+            if (window._stockCommit) _stock = await window._stockCommit(stockChanges);
+        } catch (e) { _stock = { mode: 'fallback' }; }
+
+        if (_stock && _stock.shortage) {
+            // Serverda HECH NARSA yozilmadi -> mahalliy stokni ham tiklaymiz.
+            try { if (window._revertLocalStock) window._revertLocalStock(stockChanges); } catch (e) {}
+            if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(false);
+            if (loadingOverlay) loadingOverlay.classList.remove('active');
+            var _shortMsg = (_stock.shortages || []).map(function (s) {
+                return '• ' + s.name + (s.size ? ' (' + s.size + ')' : '') +
+                       ' — omborda ' + (parseInt(s.available, 10) || 0) + ' ta';
+            }).join('\n');
+            try { showToast("Omborda yetarli emas!", "warning"); } catch (e) {}
+            try {
+                var _alertTxt = "Kechirasiz, bu tovarlar omborda yetarli emas:\n\n" + _shortMsg +
+                                "\n\nSavatdagi sonni kamaytirib, qayta urinib ko'ring.";
+                if (typeof tg !== 'undefined' && tg.showAlert) tg.showAlert(_alertTxt);
+                else alert(_alertTxt);
+            } catch (e) {}
+            // Bu buyurtma EMAS — 15 soniyalik kutish jazosi qo'llanmasin.
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'stock', shortages: _stock.shortages || [] };
+        }
+
         // 1. ADMINGA XABAR YUBORISH
         const res = await tgProxySend({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" });
         
         if (res.ok) {
-            _decrementStock(stockChanges);
+            // Zaxira SERVERDA allaqachon kamaytirilgan bo'lsa — qayta kamaytirmaymiz
+            // (aks holda ikki barobar yechilardi).
+            if (!_stock || _stock.mode !== 'server') _decrementStock(stockChanges);
             
             // Zaxira ogohlantirishi (Admin uchun)
             if (lowStockAlerts) {
@@ -10707,7 +10809,16 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                 ]),
                 new Promise(function(r){ setTimeout(r, 6000); })
             ]).then(_doClose);
+            // ✅ Chaqiruvchiga MUVAFFAQIYAT signali. Faqat shu holatda yashil
+            //    "pticha" + konfetti ko'rsatiladi (pastdagi wrapper shuni tekshiradi).
+            return { ok: true, code: newOrderCode };
         } else {
+            // Xabar ketmadi -> buyurtma YO'Q. Serverda band qilingan zaxirani
+            // QAYTARAMIZ, aks holda tovar sotilmagan holda "yo'q" bo'lib qolardi.
+            if (_stock && _stock.mode === 'server') {
+                try { window._stockCommit(stockChanges, 'release'); } catch (e) {}
+            }
+            try { if (window._revertLocalStock) window._revertLocalStock(stockChanges); } catch (e) {}
             throw new Error("API xatosi");
         }
     } catch (err) { 
@@ -10715,6 +10826,7 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
         if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(false);
         if(loadingOverlay) loadingOverlay.classList.remove('active'); 
         showToast("Xatolik! Internetni tekshiring.", "warning"); 
+        return { ok: false, reason: 'error' };
     }
 };
 
@@ -15413,7 +15525,14 @@ if (typeof window.confirmOrder === 'function' && !window._origConfirmOrder_v2) {
     window._origConfirmOrder_v2 = window.confirmOrder;
     window.confirmOrder = async function() {
         const r = await window._origConfirmOrder_v2.apply(this, arguments);
-        try { _showSuccessCheck(); _fireConfetti(40); _hap('success'); } catch (e) {}
+        // ⚠️ TUZATILDI: ilgari bu yerda pticha + konfetti SHARTSIZ ko'rsatilardi.
+        //    Ya'ni internet uzilganda, 15 soniya spam himoyasi ishlaganda yoki
+        //    omborda tovar yetmaganda ham mijoz yashil "muvaffaqiyat" belgisini
+        //    ko'rardi va buyurtma o'tgan deb o'ylardi. Endi faqat HAQIQIY
+        //    muvaffaqiyatda ({ok:true}) tabriklanadi.
+        try {
+            if (r && r.ok === true) { _showSuccessCheck(); _fireConfetti(40); _hap('success'); }
+        } catch (e) {}
         return r;
     };
 }
@@ -24360,5 +24479,158 @@ html body #story-content > video {
     /* Spinnerlar (A bo'limi) ATAYLAB qoldirilgan — izohga qara. */
 }
 </style>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.16 — OMBOR ZAXIRASI: SERVERDA BAND QILISH (oversell'ga qarshi)
+     ----------------------------------------------------------------------------
+     MUAMMO (ilgari):
+       1) OVERSELL. Zaxira tekshiruvi va kamaytirilishi FAQAT mijoz brauzerida
+          bo'lardi. Brauzerdagi `productsDB` — sahifa ochilgan paytdagi nusxa.
+          Mijoz ilovani ertalab ochib qo'ygan bo'lsa, kunduzi omborda tovar
+          tugagan bo'lsa ham u "1 ta bor" deb ko'rardi va buyurtma bera olardi.
+          Bir vaqtning o'zida 5 kishi oxirgi 1 donani sotib olishi mumkin edi.
+       2) NOTO'G'RI TOVAR STOKI KAMAYARDI. Yozish manzili massiv INDEKSi edi
+          (`products/12/stock`). Admin mahsulot o'chirsa yoki qo'shsa, indekslar
+          suriladi — natijada butunlay boshqa tovarning stoki kamayardi.
+       3) YASHIL "PTICHA" YOLG'ON GAPIRARDI. Buyurtma yuborilmasa ham (internet
+          yo'q, spam himoyasi) mijoz muvaffaqiyat animatsiyasini ko'rardi.
+
+     YECHIM:
+       Zaxira Worker `/stock-commit` da — SERVERDA — tekshiriladi va atomik
+       `increment` bilan band qilinadi. Mahsulot `id` bo'yicha topiladi.
+       Yetmasa buyurtma UMUMAN yuborilmaydi va mijozga TOVAR NOMI aytiladi.
+
+       Worker hali yangilanmagan bo'lsa (yoki internet uzilgan) — ilova
+       ishlashdan TO'XTAMAYDI: eski mijoz tomonidagi tranzaksiyaga qaytadi
+       (u ham endi `id` bo'yicha manzillanadi). Buni javobdagi
+       `stockCommit: true` belgisi orqali aniqlaymiz — Worker'ning eski
+       versiyasi noma'lum manzilga sendMessage proxy sifatida javob beradi
+       va bu belgi bo'lmaydi.
+     ============================================================================ -->
+<script>
+(function stockServerGuard() {
+    'use strict';
+
+    function proxyBase() {
+        var u = window.TG_PROXY || '';
+        try { if (!u && typeof TG_PROXY !== 'undefined') u = TG_PROXY; } catch (e) {}
+        return String(u).replace(/\/+$/, '');
+    }
+
+    function initData() {
+        try { if (typeof tg !== 'undefined' && tg && tg.initData) return tg.initData; } catch (e) {}
+        return '';
+    }
+
+    /** stockChanges -> serverga yuboriladigan minimal ro'yxat */
+    function toItems(changes) {
+        if (!Array.isArray(changes)) return [];
+        return changes.map(function (ch) {
+            return {
+                id: (ch && ch.id != null) ? ch.id : null,
+                name: (ch && ch.name) ? String(ch.name) : '',
+                size: (ch && ch.size != null) ? String(ch.size) : '',
+                qty: parseInt(ch && ch.qty, 10) || 0
+            };
+        }).filter(function (it) { return it.id != null && it.qty > 0; });
+    }
+
+    /**
+     * Zaxirani serverda band qiladi (yoki qaytaradi).
+     * @param {Array} changes  stockChanges ro'yxati
+     * @param {string} [op]    'commit' (default) yoki 'release'
+     * @returns {Promise<Object>}
+     *   { mode:'server' }                          — server bajardi
+     *   { mode:'fallback' }                        — server yo'q/xato: mijoz yo'liga o'tiladi
+     *   { mode:'skip' }                            — kamaytirish kerak emas
+     *   { shortage:true, shortages:[...] }         — omborda yetarli emas, buyurtma RAD etiladi
+     */
+    window._stockCommit = function (changes, op) {
+        var items = toItems(changes);
+        if (!items.length) return Promise.resolve({ mode: 'skip' });
+
+        var base = proxyBase();
+        var id = initData();
+        // initData yo'q (brauzer/APK) yoki manzil yo'q -> serverga bora olmaymiz.
+        if (!base || !id) return Promise.resolve({ mode: 'fallback' });
+
+        // Tarmoq osilib qolmasin: 8 soniyadan keyin mijoz yo'liga o'tamiz.
+        var timer = null;
+        var guard = new Promise(function (resolve) {
+            timer = setTimeout(function () { resolve({ mode: 'fallback', timeout: true }); }, 8000);
+        });
+
+        var call = fetch(base + '/stock-commit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: id, op: (op === 'release' ? 'release' : 'commit'), items: items })
+        }).then(function (r) {
+            return r.json().then(function (d) { return { status: r.status, data: d }; })
+                            .catch(function () { return { status: r.status, data: null }; });
+        }).then(function (out) {
+            var d = out.data;
+            // Worker'ning ESKI versiyasi bu manzilni bilmaydi va sendMessage
+            // proxy sifatida javob beradi -> `stockCommit` belgisi bo'lmaydi.
+            if (!d || d.stockCommit !== true) return { mode: 'fallback', legacy: true };
+            if (d.ok === true) return { mode: 'server' };
+            if (d.error === 'stock' && Array.isArray(d.shortages) && d.shortages.length) {
+                return { shortage: true, shortages: d.shortages };
+            }
+            // Serverning boshqa xatosi (token, baza) — savdo to'xtamasin.
+            if (window._dwarn) window._dwarn('[stock] server xatosi, mijoz yo\'liga o\'tildi:', d.error);
+            return { mode: 'fallback', serverError: d.error || ('http ' + out.status) };
+        }).catch(function (e) {
+            if (window._dwarn) window._dwarn('[stock] /stock-commit ishlamadi:', e);
+            return { mode: 'fallback' };
+        });
+
+        return Promise.race([call, guard]).then(function (r) {
+            if (timer) clearTimeout(timer);
+            return r;
+        });
+    };
+
+    /**
+     * Buyurtma RAD etilganda mahalliy `productsDB` stokini tiklaydi.
+     * (Buyurtma yaratish tsikli stokni ekranda darhol kamaytirib qo'yadi —
+     *  rad etilganda mijoz noto'g'ri sonni ko'rib qolmasligi kerak.)
+     */
+    window._revertLocalStock = function (changes) {
+        if (!Array.isArray(changes) || !changes.length) return false;
+        var list = window.productsDB;
+        if (!Array.isArray(list)) return false;
+        var changed = false;
+        changes.forEach(function (ch) {
+            if (!ch || ch.fallback == null) return;
+            var p = null;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i] && String(list[i].id) === String(ch.id)) { p = list[i]; break; }
+            }
+            if (!p) return;
+            var orig = parseInt(ch.fallback, 10) || 0;
+            var wantSize = (ch.size != null) ? String(ch.size) : '';
+            if (wantSize && wantSize !== 'Universal' && Array.isArray(p.sizes)) {
+                for (var j = 0; j < p.sizes.length; j++) {
+                    if (p.sizes[j] && String(p.sizes[j].size) === wantSize) {
+                        p.sizes[j].stock = orig; changed = true; break;
+                    }
+                }
+                p.stock = p.sizes.reduce(function (acc, s) { return acc + (parseInt(s && s.stock, 10) || 0); }, 0);
+            } else {
+                p.stock = orig; changed = true;
+            }
+        });
+        if (changed) {
+            try { if (typeof renderProducts === 'function') renderProducts(); } catch (e) {}
+            try { if (typeof renderCartItems === 'function') renderCartItems(); } catch (e) {}
+        }
+        return changed;
+    };
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.16] Ombor zaxirasi serverda band qilinadi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
 </body>
 </html>
+
