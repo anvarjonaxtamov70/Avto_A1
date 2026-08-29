@@ -27,18 +27,31 @@
         var lite = false;
         var reasons = [];
 
-        // 1) RAM: 4 GB yoki kamroq => zaif
-        if (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 4) {
-          lite = true; reasons.push('ram<=4');
+        // 1) RAM: 2 GB yoki kamroq => zaif
+        //    ⚠️ ILGARI CHEGARA `<= 4` EDI — BU JIDDIY XATO BO'LGAN:
+        //    brauzer `deviceMemory` ni MAXFIYLIK uchun 2 ning darajasiga
+        //    yumaloqlaydi va 8 da to'xtatadi. Ya'ni 4 GB, 5 GB va 6 GB
+        //    telefonlar HAMMASI `4` deb qaytaradi. Natijada o'rta va hatto
+        //    yaxshi telefonlarning KATTA QISMI doimiy "lite" rejimda qolib,
+        //    ilovadagi 77 animatsiyadan 8 tasi ishlagan — spinnerlar esa
+        //    birinchi kadrda muzlab, BUZILGAN ko'rinishga sabab bo'lgan.
+        //    Endi chegara haqiqatan zaif qurilmalarga qaratilgan; asosiy
+        //    himoya esa pastdagi FPS QOROVULI (ishlab turganda o'lchaydi).
+        if (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 2) {
+          lite = true; reasons.push('ram<=2');
         }
-        // 2) Protsessor yadrolari: 4 yoki kamroq => zaif
-        if (typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4) {
-          lite = true; reasons.push('cpu<=4');
+        // 2) Protsessor yadrolari: 3 yoki kamroq => zaif
+        //    (4 yadro bugun o'rta darajali telefonlarda ham bor — chegara pasaytirildi)
+        if (typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 3) {
+          lite = true; reasons.push('cpu<=3');
         }
-        // 3) Foydalanuvchi "harakatni kamaytirish"ni yoqgan
-        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-          lite = true; reasons.push('reduced-motion');
-        }
+        // 3) "Harakatni kamaytirish" ENDI lite'ni YOQMAYDI.
+        //    Sabab: bu TEZLIK sozlamasi emas, ACCESSIBILITY tanlovi. Ilovada
+        //    `@media (prefers-reduced-motion: reduce)` qoidalari allaqachon bor
+        //    va ular animatsiyani to'g'ri o'chiradi. Lite esa qo'shimcha
+        //    ravishda shisha blur, soya va rasm effektlarini ham olib tashlaydi —
+        //    bular harakat EMAS, ya'ni bunday foydalanuvchini ilovaning
+        //    ko'rinishidan bekorga mahrum qilardi. Zaiflikni FPS qorovuli aniqlaydi.
         // 4) Trafik tejash / sekin tarmoq
         var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
         if (conn) {
@@ -66,6 +79,13 @@
         // Boot-lite'ni olib tashlovchi funksiya (faqat zaif bo'lmagan telefonlarda).
         window.__endBootLite = function(){
           try {
+            // ⚠️ POYGA TUZATILDI: FPS qorovuli ishlab turganda `lite` ni
+            //    QAYTA qo'shishi mumkin (kadr tezligi past bo'lsa). Ilgari bu
+            //    funksiya `__perfLite` ni TEKSHIRMASDAN klassni olib tashlardi,
+            //    shuning uchun qorovulning qarori kutib turgan taymer bilan
+            //    jimgina bekor qilinardi. Endi zaiflik aniqlangan bo'lsa —
+            //    lite JOYIDA QOLADI.
+            if (window.__perfLite) { window.__bootLiteOnly = false; return; }
             if (window.__bootLiteOnly) {
               document.documentElement.classList.remove('lite');
               window.__bootLiteOnly = false;
@@ -18878,11 +18898,20 @@ html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border
   }
 
   /* ——— 2) DOIMIY (infinite) BEZAK ANIMATSIYALARINI TO'XTATISH ———
-     Loyiha o'zida prefers-reduced-motion uchun aynan shu isbotlangan
-     usulni qo'llaydi: animatsiya bir marta, deyarli oniy ravishda tugab
-     OXIRGI (ko'rinadigan) holatda to'xtaydi -> kontent yashirilmaydi,
-     lekin har kadrdagi qayta-bo'yash (repaint) yo'qoladi -> qizish/qotish
-     to'xtaydi. Shimmer, glow, ken-burns, float kabilar endi CPU yemaydi. */
+     Shimmer, glow, ken-burns, float kabi CHEKSIZ bezaklar har kadrda
+     qayta-bo'yash talab qiladi -> telefon qiziydi. Ular shu qoida bilan
+     to'xtatiladi va bu TO'G'RI qaror.
+
+     ⚠️ LEKIN bu qoida `*` bo'lgani uchun FOYDALI animatsiyalarni ham
+        o'ldirardi: yuklanish spinnerlari (aylanmay MUZLAB qolardi —
+        buzilgan ikonka ko'rinardi), oyna ochilishi, ✓ pticha, toast,
+        konfetti, savat javobi, storis halqasi. Ya'ni 77 animatsiyadan
+        faqat 8 tasi ishlardi.
+
+     ENDI: qoida joyida qoladi (issiqlikdan himoya buzilmaydi), lekin fayl
+        OXIRIDA "essential-motion" RUXSAT RO'YXATI bor — u faqat arzon
+        (transform/opacity) va FOYDALI harakatlarni qaytaradi.
+        Qidirish uchun: <style id="layer-essential-motion"> */
   html.lite body *,
   html.lite body *::before,
   html.lite body *::after {
@@ -23930,5 +23959,233 @@ html[data-theme="light"] select.pf-car-select option { color: #111; }
     if (window._dlog) window._dlog('%c[Qatlam 2026.13] Profil: mashina + doimiy manzil', 'color:#C9A84C;font-weight:bold;');
 })();
 </script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.14 — "ESSENTIAL MOTION" RUXSAT RO'YXATI
+     ----------------------------------------------------------------------------
+     MUAMMO:
+       Yuqorida (perf-tier-lite qatlamida) shunday qoida bor:
+
+           html.lite body *, ::before, ::after {
+               animation-duration: 0.001s !important;
+               animation-iteration-count: 1 !important;
+           }
+
+       U cheksiz bezaklarni (shimmer, glow, ken-burns, float) to'xtatish
+       uchun yozilgan — bu TO'G'RI qaror, ular telefonni qizdiradi.
+
+       LEKIN `*` bo'lgani uchun u FOYDALI harakatlarni ham o'ldirardi:
+         • yuklanish spinnerlari — aylanmay BIRINCHI KADRDA MUZLAB qolardi,
+           ya'ni ekranda buzilgan ikonka ko'rinardi (eng yomon holat);
+         • oyna ochilishi, ✓ pticha, toast, konfetti, savat javobi,
+           yurakcha, admin kartalari — hammasi shartta paydo bo'lardi.
+
+       Natijada ilovadagi 77 animatsiyadan atigi 8 tasi ishlardi.
+
+     YECHIM:
+       O'ldirgich qoidasi JOYIDA QOLADI (issiqlikdan himoya buzilmaydi),
+       bu qatlam esa faqat ARZON (transform/opacity) va FOYDALI
+       harakatlarni nomma-nom qaytaradi.
+
+     SPECIFICITY MANTIQI (nega ishlaydi):
+       O'ldirgich: `html.lite body *`  -> (0 id, 1 klass, 2 element)
+       Bizniki:    `html body .sv-spinner` -> (0, 1, 2) — TENG,
+       lekin bu qatlam faylda KEYIN turadi -> kaskadda g'olib chiqadi.
+       ID li selektorlar (`#loading-text`) esa aniq yengadi.
+
+     ♿ HARAKATNI KAMAYTIRISH:
+       • spinnerlar QOLADI — yuklanish holati muhim ma'lumot, muzlagan
+         ikonka esa "ilova qotdi" degan xato taassurot beradi;
+       • bezak va bir martalik effektlar esa O'CHADI (D bo'limi).
+     ============================================================================ -->
+<style id="layer-essential-motion">
+
+/* ═══════════════════════════════════════════════════════════
+   A) SPINNERLAR — HAR DOIM aylanadi (lite ham, reduced-motion ham)
+   ═══════════════════════════════════════════════════════════ */
+html body .sv-spinner,
+html body .aib-ring,
+html body .cst-more i,
+html body #map-locate-btn.locating svg,
+html body .scroll-loader::before {
+    animation-duration: 0.95s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+/* Shesternya kattaroq — sekinroq aylanadi (ko'zga yoqimli) */
+html body #loading-text::before {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+/* Soatcha bir tsiklda 1800° buriladi — o'z tezligini saqlaydi */
+html body .hourglass::after {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+/* Yuklanish YOZUVLARI — faqat opacity (compositor, deyarli tekin) */
+html body .order-loading-text,
+html body #loading-text::after {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B) SKELETON — "yuklanmoqda" signali ARZON usulda qaytariladi
+   -----------------------------------------------------------
+   Asl shimmer `background-position` ni harakatlantiradi — bu HAR
+   KADRDA butun gradientni qayta bo'yaydi, ya'ni haqiqatan qimmat.
+   Shuning uchun uni tiklamaymiz; o'rniga faqat `opacity` bilan
+   yumshoq "nafas" beramiz — GPU uchun deyarli tekin, lekin
+   foydalanuvchi kontent yuklanayotganini KO'RADI (ilgari o'lik
+   kulrang blok turardi).
+   ═══════════════════════════════════════════════════════════ */
+@keyframes emSoftPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.52; } }
+
+html.lite body .skeleton,
+html.lite body .sk-bone {
+    animation: emSoftPulse 1.3s ease-in-out infinite !important;
+    animation-duration: 1.3s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    background-position: 0 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   C) BIR MARTALIK JAVOBLAR — lite'da tiklanadi
+   -----------------------------------------------------------
+   Bularning hammasi transform/opacity ustida ishlaydi va BIR marta
+   o'ynab tugaydi — ya'ni davomiy yuk BERMAYDI. Aynan shular
+   ilovaga "tirik" hissini beradi.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Oyna pastdan chiqishi */
+html body .modal-standard,
+html body #productModal {
+    animation-duration: 0.5s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Toast — IKKI animatsiya (chiqish + yig'ilish), shuning uchun
+   qiymatlar vergul bilan ikkitalab beriladi. Ilgari ikkalasi ham
+   0.001s bo'lib, xabar chiqishi bilanoq yo'qolardi. */
+html body .toast {
+    animation-duration: 0.5s, 0.4s !important;
+    animation-delay: 0s, 2.6s !important;
+    animation-iteration-count: 1, 1 !important;
+}
+
+/* ✓ Muvaffaqiyat ptichasi (halqa chiqadi -> belgi chiziladi) */
+html body .css-check-circle {
+    animation-duration: 0.45s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+html body .css-check-circle svg path {
+    animation-duration: 0.4s !important;
+    animation-delay: 0.18s !important;
+    animation-iteration-count: 1 !important;
+}
+
+/* Konfetti — JS har bo'lakka tasodifiy davomiylik/kechikish beradi,
+   lekin `!important` qoidasi inline stilni ham yengadi. Shuning uchun
+   tarqoq tushish hissini `nth-child` bilan qaytaramiz. */
+html body .confetti-piece {
+    animation-duration: 2.6s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+html body .confetti-piece:nth-child(3n)   { animation-delay: 0.18s !important; }
+html body .confetti-piece:nth-child(3n+1) { animation-delay: 0.36s !important; }
+html body .confetti-piece:nth-child(4n)   { animation-duration: 3.1s !important; }
+
+/* Yurakcha (saqlanganlar) */
+html body .btn-wishlist.burst {
+    animation-duration: 0.5s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+html body .heart-particle {
+    animation-duration: 0.7s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Pastdagi menyu javobi + savat silkinishi */
+html body .nav-item.tab-pulse svg,
+html body .nav-item#nav-cart.shaking svg {
+    animation-duration: 0.45s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Tovar kartalari va taqqoslash paneli */
+html body .items-grid > .luxury-card,
+html body #compare-bar.show {
+    animation-duration: 0.35s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Admin paneli kartalari */
+html body #adminModal .ap2-hero-card,
+html body #adminModal .ap2-tile {
+    animation-duration: 0.45s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Storis kontenti silliq paydo bo'lishi */
+html body #story-content > img,
+html body #story-content > video {
+    animation-duration: 0.35s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   D) ♿ HARAKATNI KAMAYTIRISH — bezaklar o'chadi, spinner qoladi
+   ═══════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+    html body .modal-standard,
+    html body #productModal,
+    html body .css-check-circle,
+    html body .confetti-piece,
+    html body .btn-wishlist.burst,
+    html body .heart-particle,
+    html body .nav-item.tab-pulse svg,
+    html body .nav-item#nav-cart.shaking svg,
+    html body .items-grid > .luxury-card,
+    html body #compare-bar.show,
+    html body #adminModal .ap2-hero-card,
+    html body #adminModal .ap2-tile,
+    html body #story-content > img,
+    html body #story-content > video,
+    html.lite body .skeleton,
+    html.lite body .sk-bone {
+        animation: none !important;
+    }
+    /* Pticha CHIZILGAN holatda ko'rinsin (yarim chizilgan qolmasin) */
+    html body .css-check-circle svg path {
+        animation: none !important;
+        stroke-dashoffset: 0 !important;
+    }
+    /* Toast harakatsiz chiqadi, lekin YO'QOLISHI kerak —
+       shuning uchun yig'ilish animatsiyasi qoldiriladi. */
+    html body .toast {
+        animation-duration: 0.01s, 0.4s !important;
+        animation-delay: 0s, 2.6s !important;
+        animation-iteration-count: 1, 1 !important;
+    }
+    /* Spinnerlar (A bo'limi) ATAYLAB qoldirilgan — izohga qara. */
+}
+</style>
 </body>
 </html>
