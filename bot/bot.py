@@ -462,6 +462,9 @@ TEXTS = {
         "fallback_reply": ("Xabaringizni oldim, lekin bu turdagi xabarni tushunolmadim 🙏\n\n"
                            "Zapchast nomini <b>yozing</b> yoki <b>rasmini</b> yuboring — "
                            "darrov topib beraman. Katalog uchun /start bosing."),
+        "edited_reply": ("Xabaringizni tahrirlaganingizni ko'rdim 👀\n\n"
+                         "Tahrirlangan matnni to'liq o'qiy olmayman — iltimos, savolingizni "
+                         "<b>yangi xabar</b> qilib yuboring, darrov javob beraman."),
     },
     "ru": {
         "welcome_new": "Здравствуйте! Добро пожаловать в магазин Avto_A1!",
@@ -556,6 +559,9 @@ TEXTS = {
         "fallback_reply": ("Сообщение получил, но такой тип сообщения я не понял 🙏\n\n"
                            "<b>Напишите</b> название запчасти или пришлите <b>фото</b> — "
                            "сразу найду. Для каталога нажмите /start."),
+        "edited_reply": ("Вижу, что вы отредактировали сообщение 👀\n\n"
+                         "Отредактированный текст я прочитать не могу — пожалуйста, отправьте "
+                         "вопрос <b>новым сообщением</b>, сразу отвечу."),
     },
 }
 
@@ -1955,6 +1961,21 @@ async def handle_webapp_data(message: types.Message):
 @dp.message((F.photo | F.video) & F.caption.startswith("#"))
 async def handle_stories(message: types.Message, bot: Bot):
     if message.from_user.id not in ADMIN_IDS:
+        # 🔇 QOLGAN JIMLIK TESHIGI TUZATILDI.
+        # Bu handler "rasm/video + '#' bilan boshlanadigan izoh" ni ushlaydi.
+        # Mijoz ham shunday yozishi juda ehtimol ("#gazel kerak", "#kalotka").
+        # Ilgari bu yerda quruq `return` bor edi — handler xabarni "yeb"
+        # qo'yardi va bot BUTUNLAY jim qolardi (pastdagi rasm tahlili
+        # handleriga ham yetib bormasdi).
+        # Endi: rasm bo'lsa — odatdagi AI rasm tahliliga yuboramiz,
+        #       video bo'lsa — media javobini beramiz.
+        if message.photo:
+            await handle_photo_redirect(message)
+            return
+        lang = await get_user_lang(message.from_user.id)
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+        await message.reply(t(lang, "media_reply"), parse_mode="HTML", reply_markup=kb)
         return
 
     category = message.caption.strip().lstrip("#").strip().lower()
@@ -2608,6 +2629,19 @@ async def handle_video_other(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
     await message.reply(t(lang, "media_reply"), parse_mode="HTML", reply_markup=kb)
+
+
+@dp.edited_message()
+async def handle_edited_message(message: types.Message):
+    """🔇 QOLGAN JIMLIK TESHIGI TUZATILDI: TAHRIRLANGAN xabar.
+
+    Telegram tahrirlangan xabarni ALOHIDA turdagi yangilanish sifatida
+    yuboradi (`edited_message`). Botda unga handler yo'q edi — ya'ni mijoz
+    xatosini tuzatib xabarini tahrirlasa, bot HECH QANDAY javob bermasdi.
+    Mijoz esa "yozdim, javob yo'q" deb o'ylardi.
+    """
+    lang = await get_user_lang(message.from_user.id)
+    await message.reply(t(lang, "edited_reply"), parse_mode="HTML")
 
 
 @dp.message()

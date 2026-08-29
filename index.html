@@ -8043,26 +8043,46 @@ function showToast(m, t = 'success') {
     // ⚡ TEZKOR BIRINCHI CHIZISH — oxirgi katalog telefon xotirasidan.
     //    Firebase javobi kelmasidan OLDIN mijoz allaqachon tovarlarni ko'radi.
     //    Javob kelgach pastdagi `once` hammasini yangi ma'lumot bilan qayta chizadi.
+    //
+    //    ⚠️ TUZATILDI (2 ta xato):
+    //      1) Bu blok `renderProducts()` ni DARHOL chaqirardi. Lekin
+    //         `renderProducts` pastda e'lon qilinadigan `limitCount`
+    //         o'zgaruvchisiga tayanadi ("let limitCount = 12" — bu qatordan
+    //         PASTDA). JavaScript'da o'zgaruvchini e'londan OLDIN ishlatib
+    //         bo'lmaydi, shuning uchun chaqiruv xato tashlardi va kesh
+    //         JIMGINA chizilmasdan o'tib ketardi — ya'ni butun tezlashtirish
+    //         AMALDA ISHLAMASDI. Endi skript to'liq yuklanib bo'lgach
+    //         (`setTimeout(…, 0)`) chaqiriladi — o'sha paytda hamma
+    //         o'zgaruvchi tayyor bo'ladi.
+    //      2) Nazariy poyga: agar Firebase javobi keshdan OLDIN kelib qolsa,
+    //         kesh YANGI ma'lumot ustiga eski holatni yozib qo'yardi. Endi
+    //         `_catalogFresh` bayrog'i buni butunlay imkonsiz qiladi.
     (function _paintCatalogFromCache() {
-        try {
-            if (!window._catalogCache) return;
-            var cached = window._catalogCache.read();
-            if (!cached || !cached.length) return;
-            productsDB = cached;
-            window.productsDB = productsDB;
-            displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
-            var lt = document.getElementById('loading-text');
-            if (lt) lt.style.display = 'none';
-            var ca = document.getElementById('content-area');
-            if (ca) ca.classList.remove('hidden');
-            renderProducts();
-            updateCartBadge();
-            window._catalogPaintedFromCache = true;
-            if (window._dlog) window._dlog('[kesh] katalog xotiradan chizildi:', cached.length);
-        } catch (e) { if (window._dwarn) window._dwarn('[kesh] chizib bo\'lmadi:', e); }
+        setTimeout(function () {
+            try {
+                if (window._catalogFresh) return;        // Firebase allaqachon javob berdi
+                if (!window._catalogCache) return;
+                var cached = window._catalogCache.read();
+                if (!cached || !cached.length) return;
+                productsDB = cached;
+                window.productsDB = productsDB;
+                displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
+                var lt = document.getElementById('loading-text');
+                if (lt) lt.style.display = 'none';
+                var ca = document.getElementById('content-area');
+                if (ca) ca.classList.remove('hidden');
+                renderProducts();
+                updateCartBadge();
+                window._catalogPaintedFromCache = true;
+                if (window._dlog) window._dlog('[kesh] katalog xotiradan chizildi:', cached.length);
+            } catch (e) { if (window._dwarn) window._dwarn('[kesh] chizib bo\'lmadi:', e); }
+        }, 0);
     })();
 
     db.ref('products').once('value', (snap) => {
+        // 🛡 Yangi ma'lumot keldi — kesh chizishi endi KERAK EMAS va
+        //    ruxsat ETILMAYDI (aks holda eski holat ustiga yozib qo'yardi).
+        window._catalogFresh = true;
         document.getElementById('loading-text').style.display = 'none';
         document.getElementById('content-area').classList.remove('hidden');
 
@@ -9777,6 +9797,27 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         updateBtns();
     }
     function closeModal() { if(activeModal) window.history.back(); }
+
+    // 🎬 MODALNI QAYTA KO'RSATISH — yopilish animatsiyasini BEKOR QILIB.
+    // ------------------------------------------------------------------
+    // ⚠️ NIMA UCHUN KERAK (haqiqiy xato tuzatildi):
+    //    "Orqaga" bosilganda pastdagi `popstate` avval joriy oynani yopadi
+    //    (0.2 soniyalik chiqish animatsiyasi bilan), keyin esa ba'zi
+    //    hollarda AYNI O'SHA oynani qaytadan ko'rsatadi. Eng aniq misol:
+    //    to'lov oynasida "Karta" tafsilotidan orqaga qaytish — kod
+    //    `paymentModal` ni qayta ko'rsatadi.
+    //    Natijada oyna `display:flex` bo'ladi-yu, chiqish animatsiyasi uni
+    //    shaffof qilib turadi va 0.2 soniyadan keyin butunlay yashiradi —
+    //    ya'ni mijoz "orqaga" bosganda TO'LOV OYNASI YO'QOLIB QOLARDI.
+    //    Bu yordamchi qayta ko'rsatishdan OLDIN yopilishni bekor qiladi.
+    function _reshowModal(id) {
+        var el = (typeof id === 'string') ? document.getElementById(id) : id;
+        if (!el) return null;
+        try { if (window._modalCancelClose) window._modalCancelClose(el); } catch (e) {}
+        el.style.display = 'flex';
+        return el;
+    }
+    window._reshowModal = _reshowModal;
     function goHome() { if(activeModal) closeModal(); if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); } updateNav('nav-home'); }
 
         // 🧭 MUKAMMAL NAVIGATSIYA VA OYNALARNI YOPISH XARITASI (Qotishlarga qarshi)
@@ -9840,7 +9881,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     // ⚡ Listenerni uzamiz (xotira oqishi bo'lmasligi uchun)
                     if (window._adminChatRef) { try { window._adminChatRef.off('value'); window._adminChatRef = null; } catch(e){} }
                     activeModal = 'adminOrdersModal';
-                    document.getElementById('adminOrdersModal').style.display = 'flex';
+                    _reshowModal('adminOrdersModal');
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
                     updateBtns();
@@ -9864,7 +9905,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                         if (_cd) _cd.classList.add('hidden');
                         if (_ad) _ad.classList.add('hidden');
                         document.getElementById('payment-options').classList.remove('hidden');
-                        document.getElementById('paymentModal').style.display = 'flex';
+                        _reshowModal('paymentModal');
                         activeModal = 'paymentModal';
                         document.body.style.overflow = 'hidden';
                         window.history.pushState({ modal: 'paymentModal' }, "");
@@ -9886,7 +9927,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     //    qoralamalar joyida turgani holda. Endi alohida bayroq bor.
                     if (window._editCameFromDrafts) {
                         activeModal = 'adminDraftsModal';
-                        document.getElementById('adminDraftsModal').style.display = 'flex';
+                        _reshowModal('adminDraftsModal');
                         window._editCameFromDrafts = false;   // faqat bayroqni tozalaymiz
                         // Papka ichidagi ro'yxatni yangilaymiz (tahrir natijasi ko'rinsin)
                         try {
@@ -9896,7 +9937,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                         } catch (e) {}
                     } else {
                         activeModal = 'productModal';
-                        document.getElementById('productModal').style.display = 'flex';
+                        _reshowModal('productModal');
                     }
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza
@@ -9911,7 +9952,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     window._storyComposerFrom = null;
                     if (_scFrom && document.getElementById(_scFrom)) {
                         activeModal = _scFrom;
-                        document.getElementById(_scFrom).style.display = 'flex';
+                        _reshowModal(_scFrom);
                         document.body.style.overflow = 'hidden';
                         window._modalStack = [];
                         updateBtns();
@@ -9928,7 +9969,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 // 2c. 👤 MIJOZ TAFSILOTI -> Mijozlar ro'yxatiga qaytish
                 if (current === 'customerDetailModal') {
                     activeModal = 'adminCustomersModal';
-                    document.getElementById('adminCustomersModal').style.display = 'flex';
+                    _reshowModal('adminCustomersModal');
                     document.body.style.overflow = 'hidden';
                     window._modalStack = [];
                     updateBtns();
@@ -9938,7 +9979,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 // 3. Maxsus Admin oynalaridan -> Admin Panelga qaytish
                 if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal' || current === 'adminDraftsModal' || current === 'adminStoriesModal') {
                     activeModal = 'adminModal';
-                    document.getElementById('adminModal').style.display = 'flex';
+                    _reshowModal('adminModal');
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza
                     updateBtns();
@@ -9950,7 +9991,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 // 4. Qo'shish oynalaridan -> Admin Panelga qaytish (Faqatgina o'ziga qaytamiz)
                 if (current === 'addProductModal' || current === 'aiBulkModal') {
                     activeModal = 'adminModal';
-                    document.getElementById('adminModal').style.display = 'flex';
+                    _reshowModal('adminModal');
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
                     updateBtns();
@@ -9963,8 +10004,9 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 if (window._modalStack && window._modalStack.length > 0) {
                     const prevId = window._modalStack.pop();
                     activeModal = prevId;
-                    const prevEl = document.getElementById(prevId);
-                    if (prevEl) prevEl.style.display = 'flex';
+                    // `_reshowModal` — yopilish animatsiyasini bekor qilib ko'rsatadi
+                    // (yuqoridagi izohga qara). Bu yerda ham izchil ishlatamiz.
+                    const prevEl = _reshowModal(prevId);
                     if (prevId === 'cartModal') renderCartItems();
                     document.body.style.overflow = 'hidden';
                     updateBtns();
