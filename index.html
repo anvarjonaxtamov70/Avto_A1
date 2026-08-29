@@ -132,6 +132,53 @@
       } catch (e) {}
     })();
     </script>
+    <!-- ============================================================
+         ⚡ KATALOG KESHI — "BO'SH EKRAN KUTISH" MUAMMOSI
+         ────────────────────────────────────────────────────────────
+         Ilgari ilova har ochilganda mijoz Firebase javob berguncha
+         faqat 4 ta kulrang skeleton ko'rib turardi. Sekin internetda
+         bu 1-3 soniya. Bu eng yomon moment: mijoz hali hech narsa
+         ko'rmagan va chiqib ketishi mumkin.
+
+         Endi oxirgi muvaffaqiyatli katalog telefon xotirasida
+         (localStorage) saqlanadi va ilova ochilishi bilanoq DARHOL
+         chiziladi. Firebase javobi kelgach hammasi yangilanadi.
+
+         ⚠️ To'g'rilik xavfi yo'q: kesh faqat KO'RINISH uchun. Narx va
+            zaxira baribir serverdan keladi, buyurtma esa serverda
+            (Worker /stock-commit) qayta tekshiriladi.
+         ============================================================ -->
+    <script>
+    window._catalogCache = (function () {
+        var KEY = 'avto_catalog_v1';
+        var MAX_AGE = 24 * 3600 * 1000;   // 1 kundan eski keshni ishlatmaymiz
+        var MAX_BYTES = 900 * 1024;       // localStorage limitini to'ldirib qo'ymaymiz
+        return {
+            /** Saqlangan katalogni qaytaradi (yo'q/eskirgan/buzilgan bo'lsa null). */
+            read: function () {
+                try {
+                    var raw = localStorage.getItem(KEY);
+                    if (!raw) return null;
+                    var box = JSON.parse(raw);
+                    if (!box || !Array.isArray(box.items) || !box.items.length) return null;
+                    if (!box.at || (Date.now() - box.at) > MAX_AGE) return null;
+                    return box.items;
+                } catch (e) { return null; }
+            },
+            /** Katalogni saqlaydi (joy yetmasa jimgina o'tib ketadi). */
+            write: function (items) {
+                try {
+                    if (!Array.isArray(items) || !items.length) return false;
+                    var s = JSON.stringify({ at: Date.now(), items: items });
+                    if (s.length > MAX_BYTES) return false;
+                    localStorage.setItem(KEY, s);
+                    return true;
+                } catch (e) { return false; }
+            },
+            clear: function () { try { localStorage.removeItem(KEY); } catch (e) {} }
+        };
+    })();
+    </script>
     <!-- #24: yuklanish skeleton (shimmer) + #23 a11y fokus uslublari -->
     <style>
         .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.12) 37%, rgba(255,255,255,0.05) 63%); background-size: 400% 100%; animation: skelShimmer 1.4s ease infinite; border-radius: 14px; }
@@ -153,7 +200,17 @@
          (eski elementlar uchun fallback). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- ⚡ SHRIFTLAR ENDI CHIZISHNI TO'XTATMAYDI.
+         Ilgari bu `<link rel="stylesheet">` oddiy holatda edi — brauzer Google
+         serveridan javob kelmaguncha EKRANDA HECH NARSA ko'rsatmaydi. Sekin
+         internetda (3G, qishloq) bu 0.5-1.5 soniya QOP-QORONG'I ekran degani.
+         `media="print"` bilan brauzer uni "hozir kerak emas" deb hisoblaydi va
+         chizishni kutmaydi; yuklanib bo'lgach `onload` uni darhol yoqadi.
+         `display=swap` allaqachon bor — matn avval tizim shrifti bilan chiqadi,
+         keyin jimgina almashadi. Ya'ni mijoz do'konni DARROV ko'radi. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap">
+    <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap"></noscript>
     <!-- 🌟 PHASE 2: Dark/Light + Bonus + Achievement + Analitika + Referral + Bildirishnoma + Kafolat -->
     <!-- 🌟 PHASE 2 STYLES (inlined for single-file deploy) -->
     <style>
@@ -7983,6 +8040,28 @@ function showToast(m, t = 'success') {
             if (ca) ca.classList.remove('hidden');
         } catch (e) {}
     })();
+    // ⚡ TEZKOR BIRINCHI CHIZISH — oxirgi katalog telefon xotirasidan.
+    //    Firebase javobi kelmasidan OLDIN mijoz allaqachon tovarlarni ko'radi.
+    //    Javob kelgach pastdagi `once` hammasini yangi ma'lumot bilan qayta chizadi.
+    (function _paintCatalogFromCache() {
+        try {
+            if (!window._catalogCache) return;
+            var cached = window._catalogCache.read();
+            if (!cached || !cached.length) return;
+            productsDB = cached;
+            window.productsDB = productsDB;
+            displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
+            var lt = document.getElementById('loading-text');
+            if (lt) lt.style.display = 'none';
+            var ca = document.getElementById('content-area');
+            if (ca) ca.classList.remove('hidden');
+            renderProducts();
+            updateCartBadge();
+            window._catalogPaintedFromCache = true;
+            if (window._dlog) window._dlog('[kesh] katalog xotiradan chizildi:', cached.length);
+        } catch (e) { if (window._dwarn) window._dwarn('[kesh] chizib bo\'lmadi:', e); }
+    })();
+
     db.ref('products').once('value', (snap) => {
         document.getElementById('loading-text').style.display = 'none';
         document.getElementById('content-area').classList.remove('hidden');
@@ -7990,6 +8069,8 @@ function showToast(m, t = 'success') {
         if (snap.exists()) {
             let allData = [];
             snap.forEach(child => { if(child.val()) allData.push(child.val()); });
+            // Keyingi ochilishda darhol ko'rinishi uchun saqlab qo'yamiz
+            try { if (window._catalogCache) window._catalogCache.write(allData); } catch (e) {}
             // ⚠️ productsDB — BAZADAGI tartibda (teskari QILMAYMIZ!).
             //    Aks holda .set(productsDB) tartibni har safar teskari yozib,
             //    keyingi ochilishда buzilardi (oscillation). Faqat displayDB teskari.
@@ -10754,7 +10835,26 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             }); 
             // Keyingi buyurtma uchun tanlovni tozalaymiz
             try { if (window._cbResetApplied) window._cbResetApplied(); } catch (e) {}
-            
+
+            // 🗂 MARKAZIY `orders` ARXIVIGA YOZAMIZ.
+            //    Nima uchun kerak: admin buyurtma holatini o'zgartirganda kod
+            //    `orders/<uid>_<kod>/status` ga yozadi va bot mijozga xabar
+            //    yuborishda o'sha yozuvdan JAMI SUMMANI o'qiydi. Lekin JONLI
+            //    kod bu yozuvni HECH QACHON yaratmagan edi (yaratuvchi kod
+            //    `confirmOrder` ning O'LIK nusxasida qolib ketgan). Natijada:
+            //      • mijozga boradigan "qabul qilindi / yo'lda" xabarlarida
+            //        summa ko'rinmasdi;
+            //      • bazada faqat `{status:...}` dan iborat "yarim" yozuvlar
+            //        paydo bo'lardi.
+            //    Endi buyurtma to'liq yoziladi. Xato bo'lsa buyurtma buzilmaydi.
+            try {
+                if (window._mirrorOrderToCentral) {
+                    window._mirrorOrderToCentral(myOrders[0], {
+                        uid: currentUser, name: profName, phone: profPhone, address: fetchedAddress
+                    });
+                }
+            } catch (e) { _dwarn('[orders] markaziy arxivga yozilmadi:', e); }
+
             saveLocalOrders(); 
             cart = {}; 
             saveLocalCart();
@@ -25094,6 +25194,228 @@ html body .flying-img.mo-fly {
     };
 
     if (window._dlog) window._dlog('%c[Qatlam 2026.17] Harakat paketi: yopilish + jank tuzatildi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.18 — OFFLINE, XATO USHLASH VA TAKROR OCHILISH TEZLIGI
+     ----------------------------------------------------------------------------
+     UCH muammo hal qilinadi.
+
+     1) INTERNET UZILSA — MIJOZ SABABNI BILMAYDI.
+        Ilgari aloqa yo'qolganda tugmalar bosilardi, lekin hech narsa
+        bo'lmasdi: na xabar, na belgi. Mijoz "ilova buzuq" deb o'ylardi.
+        Endi ekran tepasida tinch, aniq lavha chiqadi va aloqa tiklanganda
+        o'zi yo'qoladi (yashil "aloqa tiklandi" xabari bilan).
+
+     2) BIROR JOYDA XATO CHIQSA — ILOVA JIMGINA "O'LARDI".
+        JavaScript'da bitta ushlanmagan xato butun blokni to'xtatadi.
+        Ilgari bu faqat konsolda qolardi (mijoz konsolni ko'rmaydi) —
+        u esa qotib qolgan ekranga qarab turardi. Endi:
+          • xato USHLANADI va tushunarli xabar ko'rsatiladi;
+          • oxirgi 10 xato `window._lastErrors` da turadi (diagnostika);
+          • xabarlar 30 soniyada bir martadan ko'p chiqmaydi (spam yo'q).
+
+     3) HAR OCHILISHDA HAMMASI QAYTADAN YUKLANARDI.
+        Firebase kutubxonalari (3 fayl) va Google shriftlari har safar
+        tarmoqdan tortilardi. Service Worker ularni telefon xotirasida
+        saqlaydi — takror ochilish sezilarli tez bo'ladi va offline'da
+        ilova umuman ochiladi.
+
+        ⚠️ HTML ATAYLAB keshlanmaydi (faqat offline zaxira sifatida). Sabab:
+           do'kon egasi kunda bir necha marta deploy qiladi; keshlangan HTML
+           mijozga ESKI ilovani ko'rsatib qo'yardi. Batafsil izoh `sw.js` da.
+
+        🛟 O'CHIRISH: `localStorage.avto_nosw = '1'` -> qayta ochilganda
+           Service Worker o'chadi va keshlar tozalanadi.
+     ============================================================================ -->
+<style id="layer-offline-2026">
+#net-banner {
+    position: fixed;
+    left: 12px; right: 12px;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    z-index: 99998;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 13px; font-weight: 700;
+    background: rgba(28, 28, 30, 0.96);
+    color: #fff;
+    border: 1px solid rgba(255, 159, 10, 0.45);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    /* `transform`/`opacity` — GPU uchun tekin (QATLAM 2026.17 tamoyili) */
+    opacity: 0;
+    transform: translate3d(0, -140%, 0);
+    transition: opacity var(--dur-base, 0.28s) var(--ease-out, ease),
+                transform var(--dur-base, 0.28s) var(--ease-out, ease);
+    pointer-events: none;
+}
+#net-banner.show { opacity: 1; transform: translate3d(0, 0, 0); }
+#net-banner.online { border-color: rgba(48, 209, 88, 0.5); }
+#net-banner .nb-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ff9f0a; flex-shrink: 0;
+}
+#net-banner.online .nb-dot { background: #30d158; }
+@media (prefers-reduced-motion: reduce) {
+    #net-banner { transition: none !important; }
+}
+</style>
+
+<script>
+(function offlineAndErrors() {
+    'use strict';
+
+    // ───────────────────────────────────────────────────────────
+    // 1) TARMOQ HOLATI LAVHASI
+    // ───────────────────────────────────────────────────────────
+    var banner = null;
+    var hideT = null;
+
+    function ensureBanner() {
+        if (banner && banner.parentNode) return banner;
+        banner = document.getElementById('net-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'net-banner';
+            banner.innerHTML = '<span class="nb-dot"></span><span class="nb-text"></span>';
+            document.body.appendChild(banner);
+        }
+        return banner;
+    }
+
+    /**
+     * @param {string} text  ko'rsatiladigan matn
+     * @param {boolean} good yashil (aloqa bor) yoki sariq (aloqa yo'q)
+     * @param {number} [autoHide] shu millisekunddan keyin o'zi yashiriladi
+     */
+    function showBanner(text, good, autoHide) {
+        try {
+            var b = ensureBanner();
+            b.querySelector('.nb-text').textContent = text;
+            if (good) b.classList.add('online'); else b.classList.remove('online');
+            b.classList.add('show');
+            if (hideT) { clearTimeout(hideT); hideT = null; }
+            if (autoHide) hideT = setTimeout(hideBanner, autoHide);
+        } catch (e) {}
+    }
+    function hideBanner() {
+        try { if (banner) banner.classList.remove('show'); } catch (e) {}
+    }
+
+    window._netBanner = { show: showBanner, hide: hideBanner };
+
+    function onOffline() {
+        showBanner("Internet aloqasi yo'q — ma'lumot yangilanmayapti", false);
+    }
+    function onOnline() {
+        showBanner('Aloqa tiklandi', true, 2600);
+    }
+
+    try {
+        window.addEventListener('offline', onOffline);
+        window.addEventListener('online', onOnline);
+        // Ilova offline holatda ochilgan bo'lsa — darhol aytamiz
+        if (navigator && navigator.onLine === false) setTimeout(onOffline, 400);
+    } catch (e) {}
+
+    // ───────────────────────────────────────────────────────────
+    // 2) GLOBAL XATO USHLAGICH
+    //    Ilova "jimgina o'lib qolmasin". Foydalanuvchiga eng ko'pi
+    //    30 soniyada bir marta xabar beriladi.
+    // ───────────────────────────────────────────────────────────
+    window._lastErrors = window._lastErrors || [];
+    var lastToastAt = 0;
+    var TOAST_GAP = 30000;
+
+    function record(kind, msg, extra) {
+        try {
+            window._lastErrors.push({
+                kind: kind,
+                msg: String(msg || '').slice(0, 300),
+                where: String((extra && extra.where) || '').slice(0, 200),
+                at: new Date().toISOString()
+            });
+            if (window._lastErrors.length > 10) window._lastErrors.shift();
+            if (window._dwarn) window._dwarn('[xato/' + kind + ']', msg, extra || '');
+        } catch (e) {}
+    }
+
+    function maybeToast() {
+        try {
+            // Aloqa yo'q bo'lsa — tarmoq lavhasi allaqachon tushuntirib turadi
+            if (navigator && navigator.onLine === false) return;
+            var now = Date.now();
+            if (now - lastToastAt < TOAST_GAP) return;
+            lastToastAt = now;
+            if (typeof window.showToast === 'function') {
+                window.showToast('Nimadir ishlamadi — qayta urinib ko\'ring', 'warning');
+            }
+        } catch (e) {}
+    }
+
+    try {
+        window.addEventListener('error', function (e) {
+            // Rasm/skript YUKLANMASA — bu boshqa hodisa (`e.target` bor).
+            // Rasmlar uchun allaqachon alohida fallback bor, takrorlamaymiz.
+            if (e && e.target && e.target !== window && e.target.tagName) return;
+            record('error', (e && e.message) || 'noma\'lum xato', {
+                where: e ? ((e.filename || '') + ':' + (e.lineno || 0)) : ''
+            });
+            maybeToast();
+        });
+
+        window.addEventListener('unhandledrejection', function (e) {
+            var r = e && e.reason;
+            var msg = (r && (r.message || r.code)) || String(r || 'promise rad etildi');
+            record('promise', msg, {});
+            maybeToast();
+        });
+    } catch (e) {}
+
+    // ───────────────────────────────────────────────────────────
+    // 3) SERVICE WORKER
+    // ───────────────────────────────────────────────────────────
+    (function registerSW() {
+        try {
+            if (!('serviceWorker' in navigator)) return;
+            if (location.protocol !== 'https:') return;   // lokal fayl/HTTP — kerak emas
+
+            var off = false;
+            try { off = localStorage.getItem('avto_nosw') === '1'; } catch (e) {}
+
+            if (off) {
+                // 🛟 O'chirish kaliti: ro'yxatdan chiqaramiz va keshlarni tozalaymiz
+                navigator.serviceWorker.getRegistrations().then(function (rs) {
+                    rs.forEach(function (r) { r.unregister(); });
+                }).catch(function () {});
+                try {
+                    if (window.caches && caches.keys) {
+                        caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
+                    }
+                } catch (e) {}
+                if (window._dlog) window._dlog('[sw] o\'chirildi (avto_nosw=1)');
+                return;
+            }
+
+            // Ro'yxatga olishni sahifa yuklangandan KEYIN qilamiz —
+            // birinchi chizishga xalaqit bermasin.
+            var go = function () {
+                navigator.serviceWorker.register('sw.js')
+                    .then(function (reg) {
+                        if (window._dlog) window._dlog('[sw] yoqildi, scope:', reg.scope);
+                    })
+                    .catch(function (err) {
+                        // Ishlamasa ilova AVVALGIDEK ishlashda davom etadi
+                        if (window._dwarn) window._dwarn('[sw] yoqilmadi:', err);
+                    });
+            };
+            if (document.readyState === 'complete') setTimeout(go, 1200);
+            else window.addEventListener('load', function () { setTimeout(go, 1200); });
+        } catch (e) {}
+    })();
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.18] Offline + xato ushlash + kesh', 'color:#C9A84C;font-weight:bold;');
 })();
 </script>
 </body>
