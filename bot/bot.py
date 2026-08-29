@@ -2624,60 +2624,29 @@ async def handle_anything_else(message: types.Message, state: FSMContext):
 
 
 # =====================================================================
-# YANGI BUYURTMALARNI POYLASH
+# 🗑 O'CHIRILDI: "YANGI BUYURTMALARNI POYLASH" (process_new_orders)
+# ---------------------------------------------------------------------
+# Bu vazifa markaziy `orders` tugunini HAR 5 SONIYADA so'rab turardi —
+# sutkada ~17 000 bekorchi Firebase so'rovi.
+#
+# Nima uchun bekorchi:
+#   • Mini app buyurtma haqida adminga TO'G'RIDAN-TO'G'RI (Worker proxy
+#     orqali) darhol xabar beradi — ya'ni bu poller ikkinchi, KECHIKKAN
+#     (5 soniyagacha) nusxa edi;
+#   • u kutgan maydon nomlari (`total_price`, `customer_name`) mini app
+#     yozadigan nomlarga (`total`, `customerName`) MOS KELMASDI;
+#   • `notified_admin: true` bayrog'i tufayli mini app yozgan buyurtmalarni
+#     baribir o'tkazib yuborardi.
+#
+# Bundan tashqari ZARARI ham bor edi: admin buyurtma holatini o'zgartirsa,
+# kod `orders/<uid>_<kod>/status` ga yozadi va bazada faqat `{status:...}`
+# dan iborat "yarim" yozuv paydo bo'lardi. Poller uni YANGI buyurtma deb
+# o'ylab, adminga bo'sh maydonlar bilan soxta "YANGI BUYURTMA! Noma'lum,
+# 0 so'm" xabarini yuborardi.
+#
+# (Mini app endi buyurtmani markaziy `orders` ga TO'LIQ yozadi — shu bilan
+#  mijozga boradigan holat xabarlarida jami summa ham ko'rinadi.)
 # =====================================================================
-async def process_new_orders(bot: Bot):
-    async with aiohttp.ClientSession() as session:
-        while True:
-            try:
-                # #2: butun 'orders' tugunini emas, faqat eng so'nggi buyurtmalarni
-                # o'qiymiz (createdAt indekslangan). Shunda buyurtmalar soni o'ssa ham
-                # har so'rovda yuklama CHEKLANGAN bo'ladi (cheksiz o'smaydi).
-                params = {"orderBy": '"createdAt"', "limitToLast": 100}
-                async with session.get(fb_url("orders", params)) as resp:
-                    if resp.status == 200:
-                        orders = await resp.json()
-                        if orders:
-                            for order_id, order_data in fb_items(orders):
-                                if not isinstance(order_data, dict):
-                                    continue
-                                if order_data.get("notified_admin"):
-                                    continue
-                                customer_name = order_data.get("customer_name", "Noma'lum")
-                                phone = order_data.get("phone", "Noma'lum")
-                                address = order_data.get("address", "Noma'lum")
-                                total = order_data.get("total_price", 0)
-                                items = order_data.get("items", [])
-                                platforma = "Telegram" if order_data.get("is_telegram") else "APK / Web"
-
-                                text = (
-                                    f"<b>YANGI BUYURTMA! ({platforma})</b>\n\n"
-                                    f"Ism: <b>{esc(customer_name)}</b>\n"
-                                    f"Tel: <code>{esc(phone)}</code>\n"
-                                    f"Manzil: {esc(address)}\n\n<b>Tovarlar:</b>\n"
-                                )
-                                for item in items:
-                                    text += f"- {esc(item.get('name'))} x {esc(item.get('quantity', 1))} dona\n"
-                                text += f"\n<b>Umumiy: {total:,.0f} so'm</b>\nID: #{esc(order_id)}"
-
-                                # #5: AVVAL flagni o'rnatamiz, KEYIN xabar yuboramiz.
-                                # PATCH muvaffaqiyatsiz bo'lsa — xabar yuborilmaydi va
-                                # keyingi tsiklda qayta uriniladi (takror yuborish yo'q).
-                                async with session.patch(fb_url(f"orders/{order_id}"),
-                                                         json={"notified_admin": True}) as pr:
-                                    if pr.status != 200:
-                                        continue
-                                try:
-                                    await bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="HTML")
-                                except Exception as e:
-                                    # Xabar uzilsa flagni qaytaramiz — keyingi tsiklda qayta urinadi
-                                    logging.error(f"Admin xabar xatosi, flag qaytarilmoqda: {e}")
-                                    await session.patch(fb_url(f"orders/{order_id}"),
-                                                        json={"notified_admin": False})
-            except Exception as e:
-                logging.error(f"Buyurtma tekshirish xatosi: {e}")
-            await asyncio.sleep(5)
-
 
 async def fetch_yandex_image(query):
     # bulk_import_fixed shu funksiyani kutadi — saqlab qolamiz (rasm qidiruv o'chirilgan)
@@ -2932,7 +2901,7 @@ async def main():
     asyncio.create_task(process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_yandex_image,
                                                     products_lock, ADMIN_IDS))
     asyncio.create_task(process_ai_admin_tasks(bot))
-    asyncio.create_task(process_new_orders(bot))
+    # (process_new_orders O'CHIRILDI — yuqoridagi izohga qara)
 
     # #6: avval webhookni va kutilayotgan yangilanishlarni tozalaymiz — bu
     # "409 Conflict" (webhook + getUpdates yoki eski navbat) sababini yo'qotadi.
