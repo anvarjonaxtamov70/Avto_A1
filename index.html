@@ -7736,7 +7736,26 @@ const Haptics = {
         } catch (e) { /* xato bo'lsa indamasdan o'tib ketamiz - boshqa funksiyalar buzilmasin */ }
     }
 
-    function saveLocalCart() { localStorage.setItem('avto_cart', JSON.stringify(cart)); if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
+    // ⚠️ ILGARI: har bir "+"/"-" bosilganda Firebase'ga darhol yozilardi.
+    //    Mijoz sonni 5 marta o'zgartirsa — 5 ta tarmoq yozuvi. Bu (a) trafik
+    //    va batareyani yeydi, (b) to'qnashuv oynasini kengaytiradi.
+    //    Endi localStorage DARHOL yoziladi (ilova tez javob beradi), Firebase'ga
+    //    esa 400ms jimlikdan keyin BIR MARTA yoziladi. Ilova yopilishi mumkin
+    //    bo'lgan payt (buyurtma berish) uchun `_flushCart()` bor.
+    var _cartFlushTimer = null;
+    function _flushCart() {
+        if (_cartFlushTimer) { clearTimeout(_cartFlushTimer); _cartFlushTimer = null; }
+        if (!currentUser) return Promise.resolve();
+        try { return db.ref('users/' + currentUser + '/cart').set(cart); }
+        catch (e) { return Promise.resolve(); }
+    }
+    window._flushCart = _flushCart;
+    function saveLocalCart() {
+        try { localStorage.setItem('avto_cart', JSON.stringify(cart)); } catch (e) {}
+        if (!currentUser) return;
+        if (_cartFlushTimer) clearTimeout(_cartFlushTimer);
+        _cartFlushTimer = setTimeout(function () { _cartFlushTimer = null; _flushCart(); }, 400);
+    }
     function saveLocalWishlist() { if (currentUser) db.ref('users/' + currentUser + '/wishlist').set(wishlist); }
 
     // ❤️ SAQLANGANLAR (WISHLIST) YANGLANGAN FUNKSIYASI
@@ -7790,7 +7809,35 @@ function toggleWishlist(e, id) {
         let items = wishlist.map(id => productsDB.find(x => x.id === id)).filter(x => x);
         c.innerHTML = items.map(x => cardHTML(x)).join('');
     }
-    function saveLocalOrders() { if (currentUser) db.ref('users/' + currentUser + '/orders').set(myOrders); }
+    // ⚠️ ILGARI: `.set(myOrders)` butun massivni xotiradagi nusxa bilan qayta
+    //    yozardi. Agar admin ayni paytda holatni o'zgartirgan yoki chatga javob
+    //    yozgan bo'lsa — mijozning yozuvi ularni O'CHIRIB yuborardi (va aksincha).
+    //    Endi ATOMIK tranzaksiya: lokal buyurtmalar `id` bo'yicha birlashtiriladi,
+    //    serverda bor-u lokalda YO'Q buyurtmalar esa SAQLANADI.
+    function saveLocalOrders() {
+        if (!currentUser) return Promise.resolve(null);
+        var local = Array.isArray(myOrders) ? myOrders.filter(Boolean) : [];
+        return window._ordersTxn(currentUser, function (remote) {
+            var byId = {}, noId = [];
+            // Avval server nusxasi (begona o'zgarishlar shu yerda)
+            remote.forEach(function (o) {
+                if (!o) return;
+                if (o.id != null) byId[String(o.id)] = o; else noId.push(o);
+            });
+            // So'ng lokal nusxa — bir xil id bo'lsa lokal ustun (mijoz o'z
+            // buyurtmasini hozir o'zgartirgan). Bu avvalgi xatti-harakat bilan
+            // BIR XIL, lekin serverdagi BEGONA buyurtmalar endi o'chmaydi.
+            local.forEach(function (o) {
+                if (!o) return;
+                if (o.id != null) byId[String(o.id)] = o; else noId.push(o);
+            });
+            var merged = Object.keys(byId).map(function (k) { return byId[k]; });
+            merged.sort(function (a, b) {
+                return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);   // yangi -> eski
+            });
+            return merged.concat(noId);
+        });
+    }
     function saveProfile() {
         let nN = document.getElementById('user-edit-name').value.trim();
         let nP = document.getElementById('user-edit-phone').value.trim();
@@ -9306,38 +9353,40 @@ window.openAdminChat = (uid, orderId) => {
         let text = input.value.trim();
         if(!text) return;
 
-        db.ref('users/' + currentAdminChatUid + '/orders').once('value', snapshot => {
-            if(snapshot.exists()) {
-                let orders = snapshot.val();
-                let idx = orders.findIndex(x => x.id === currentAdminChatOrderId);
-                
-                if(idx !== -1) {
-                    if(!orders[idx].messages) orders[idx].messages = [];
-                    
-                    let now = new Date();
-                    let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-                    
-                    orders[idx].messages.push({
-                        sender: 'admin',
-                        text: text,
-                        time: timeString
-                    });
+        // ⚠️ ILGARI MA'LUMOT YO'QOLARDI: kod butun buyurtmalar massivini
+        //    `once()` bilan o'qib, xabarni qo'shib, `.set(orders)` bilan
+        //    HAMMASINI qayta yozardi. O'qish va yozish orasida mijoz yangi
+        //    buyurtma bergan bo'lsa — u JIMGINA O'CHIB KETARDI.
+        //    Endi ATOMIK tranzaksiya: buyurtma `id` bo'yicha topiladi va
+        //    faqat uning `messages` ro'yxatiga qo'shiladi. To'qnashuv bo'lsa
+        //    Firebase o'zi qayta uriniadi -> hech narsa yo'qolmaydi.
+        let now = new Date();
+        let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+        let _sentCode = null;
 
-                    // Bazaga saqlash
-                    db.ref('users/' + currentAdminChatUid + '/orders').set(orders).then(() => {
-                        input.value = '';
-                        renderAdminChatMessages();
-                        
-                        // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
-                        let orderCode = orders[idx].code || currentAdminChatOrderId;
-                        tgProxySend({ 
-                            chat_id: currentAdminChatUid, 
-                            text: `📩 <b>#${escTg(orderCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`, 
-                            parse_mode: "HTML" 
-                        });
-                    });
-                }
+        window._ordersTxn(currentAdminChatUid, function (arr) {
+            let i = arr.findIndex(x => x && x.id === currentAdminChatOrderId);
+            if (i < 0) return;                       // buyurtma topilmadi -> bekor
+            if (!arr[i].messages) arr[i].messages = [];
+            arr[i].messages.push({ sender: 'admin', text: text, time: timeString });
+            _sentCode = arr[i].code || currentAdminChatOrderId;
+            return arr;
+        }).then(function (res) {
+            if (!res || !res.committed) {
+                showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning");
+                return;
             }
+            input.value = '';
+            renderAdminChatMessages();
+
+            // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
+            tgProxySend({
+                chat_id: currentAdminChatUid,
+                text: `📩 <b>#${escTg(_sentCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`,
+                parse_mode: "HTML"
+            });
+        }).catch(function () {
+            showToast("Xabar saqlanmadi — internetni tekshiring", "warning");
         });
     }
     
@@ -9471,23 +9520,36 @@ window.openAdminChat = (uid, orderId) => {
 }
     
 async function changeOrderStatus(uid, orderId, newStatus) {
-        db.ref('users/' + uid + '/orders').once('value', async snapshot => {
-            if(snapshot.exists()) {
-                let userOrders = snapshot.val();
-                let idx = userOrders.findIndex(o => o.id === orderId);
-                
-                if(idx !== -1) {
-                    let oldStatus = userOrders[idx].status;
-                    // BAZADAN QISQA KODNI OLISH (Agar yo'q bo'lsa, ID ni oladi)
-                    let displayCode = userOrders[idx].code || orderId; 
-                    
-                    userOrders[idx].status = newStatus;
-                    
-                    db.ref('users/' + uid + '/orders').set(userOrders).then(async () => {
+        // ⚠️ ILGARI MIJOZNING BUYURTMASI JIMGINA O'CHIB KETARDI:
+        //    kod butun buyurtmalar massivini `once()` bilan o'qib, holatni
+        //    o'zgartirib, `.set(userOrders)` bilan HAMMASINI qayta yozardi.
+        //    O'qish va yozish orasida (tarmoq kechikishi — yuz millisekund)
+        //    mijoz yangi buyurtma bergan bo'lsa, admin yozuvi uni O'CHIRARDI.
+        //    Mijozga esa Telegram'da "qabul qilindi" xabari allaqachon ketgan
+        //    va savati tozalangan bo'lardi — buyurtmani tiklash IMKONSIZ.
+        //
+        //    Endi ATOMIK tranzaksiya: buyurtma `id` bo'yicha topiladi, faqat
+        //    uning holati o'zgaradi. To'qnashuv bo'lsa Firebase o'zi qayta
+        //    uriniadi (yangi ma'lumot bilan) -> hech narsa yo'qolmaydi.
+        let oldStatus = null, displayCode = orderId, _ord = null;
+
+        window._ordersTxn(uid, function (arr) {
+            let i = arr.findIndex(o => o && o.id === orderId);
+            if (i < 0) return;                        // buyurtma topilmadi -> bekor
+            oldStatus = arr[i].status;
+            displayCode = arr[i].code || orderId;
+            arr[i].status = newStatus;
+            _ord = arr[i];
+            return arr;
+        }).then(async (res) => {
+                        if (!res || !res.committed) {
+                            showToast("Holat saqlanmadi — qayta urinib ko'ring", "warning");
+                            return;
+                        }
                         showToast("Holat o'zgartirildi!");
                         // #5/#6: markaziy 'orders' holatini ham yangilaymiz + admin keshini bekor qilamiz
                         window._invalidateUsersCache();
-                        try { db.ref('orders/' + window._centralOrderKey(uid, userOrders[idx]) + '/status').set(newStatus).catch(function(){}); } catch(e){}
+                        try { db.ref('orders/' + window._centralOrderKey(uid, _ord) + '/status').set(newStatus).catch(function(){}); } catch(e){}
                         let hTitle = document.querySelector('#adminOrdersModal .modal-header h2').innerText;
                         if(hTitle === '📦 Buyurtmalar') {
                             openAdminOrders(); 
@@ -9501,8 +9563,8 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                             let mijozMsg = "";
 
                             // 🧾 Buyurtma tarkibi + jami summa (mijoz xabarini boyitadi)
-                            let _sum = window._orderItemsSummary(userOrders[idx].items || {});
-                            let _ordTotal = userOrders[idx].total || _sum.total;
+                            let _sum = window._orderItemsSummary((_ord && _ord.items) || {});
+                            let _ordTotal = (_ord && _ord.total) || _sum.total;
                             let _detail = _sum.lines
                                 ? ("\n\n🛒 Buyurtma tarkibi:" + _sum.lines + "\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm")
                                 : (_ordTotal ? ("\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm") : "");
@@ -9536,9 +9598,8 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                                 showToast("Xato: SMS jo'natilmadi!", "warning");
                             }
                         }
-                    });
-                }
-            }
+        }).catch(function () {
+            showToast("Holat saqlanmadi — internetni tekshiring", "warning");
         });
     }
     function openModal(id) {
@@ -10588,7 +10649,11 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             
             saveLocalOrders(); 
             cart = {}; 
-            saveLocalCart(); 
+            saveLocalCart();
+            // Savatni DARHOL serverga yozamiz: buyurtmadan keyin ilova
+            // `tg.close()` bilan yopiladi, kechiktirilgan yozuv yetib
+            // bormasligi mumkin -> mijoz qaytganda savat to'la ko'rinardi.
+            try { if (window._flushCart) window._flushCart(); } catch (e) {}
             updateCartBadge();
             window.myOrders = myOrders;
             
@@ -11677,9 +11742,26 @@ window.processDraftDeletion = (id, hasConflict) => {
         }
     }
     
-    db.ref('products').set(productsDB).then(() => {
+    // ⚠️ ILGARI: `db.ref('products').set(productsDB)` — butun katalogni
+    //    XOTIRADAGI (eskirgan bo'lishi mumkin) nusxa bilan qayta yozardi.
+    //    `productsDB` sahifa ochilganda BIR MARTA o'qiladi va `products` ga
+    //    listener YO'Q. Ya'ni sahifa ochilgandan keyin bot yoki boshqa admin
+    //    qo'shgan HAR QANDAY tovar shu yozuvda JIMGINA O'CHIB KETARDI.
+    //    Endi `_rewriteProductsSafely` ishlatiladi: u avval ENG SO'NGGI
+    //    holatni o'qiydi, o'zgartirishni o'shanga qo'llaydi.
+    window._rewriteProductsSafely(function (fresh) {
+        var byId = {};
+        productsDB.forEach(function (p) { if (p && p.id != null) byId[String(p.id)] = p; });
+        // Serverdagi ro'yxatni asos qilamiz; lokalda o'zgargan tovarlarni
+        // ustiga qo'yamiz; lokalda BUTUNLAY yo'q (o'chirilgan) tovarni tashlaymiz.
+        return fresh
+            .filter(function (p) { return p && p.id != null && byId[String(p.id)]; })
+            .map(function (p) { return byId[String(p.id)]; });
+    }).then(function () {
         showToast(hasConflict ? "O'chirildi va eskisi tiklandi!" : "Qoralama o'chirildi!");
         filterAdminDrafts(); // Oynani yangilab qoyish
+    }).catch(function () {
+        showToast("Saqlashda xato — qayta urinib ko'ring", "warning");
     });
 };
 
@@ -14161,9 +14243,34 @@ window.updateLivePreview = (prefix) => {
 };
 
 // ---------- 6) DB YOZISH (faqat o'zgargan tovar) va XAVFSIZ ID ----------
+// ⚠️ ILGARI XATO: tovar MASSIV INDEKSI bo'yicha yozilardi
+//    (`products/{idx}`). `_rewriteProductsSafely` esa massivni `filter()`
+//    qiladi — bitta tovar o'chirilsa, undan KEYINGI barcha indekslar suriladi.
+//    Natijada tahrirlash oynasi o'chirishdan OLDIN ochilgan bo'lsa, saqlash
+//    tahrirlangan tovarni BOSHQA tovar ustiga yozib yuborardi.
+//    Endi yozishdan oldin o'sha indeksdagi tovar AYNAN shu `id` ga tegishli
+//    ekani tekshiriladi; mos kelmasa — `id` bo'yicha to'g'ri joy topiladi.
 window.saveProductAt = (idx) => {
     if (idx < 0 || idx >= productsDB.length) return Promise.reject(new Error("Noto'g'ri indeks"));
-    return db.ref('products/' + idx).set(productsDB[idx]);
+    var prod = productsDB[idx];
+    var pid = prod && prod.id;
+    if (pid == null) return db.ref('products/' + idx).set(prod);   // id yo'q — eski yo'l
+
+    return db.ref('products/' + idx).transaction(function (cur) {
+        // Bu joyda boshqa tovar turgan bo'lsa — YOZMAYMIZ (bekor qilamiz)
+        if (cur && cur.id != null && String(cur.id) !== String(pid)) return;
+        return prod;
+    }).then(function (res) {
+        if (res && res.committed) return res;
+        // Indeks siljigan — id bo'yicha haqiqiy joyni topamiz
+        return db.ref('products').once('value').then(function (snap) {
+            var fresh = [];
+            if (snap.exists()) snap.forEach(function (c) { if (c.val()) fresh.push(c.val()); });
+            var real = fresh.findIndex(function (p) { return p && String(p.id) === String(pid); });
+            if (real < 0) throw new Error('Tovar bazada topilmadi');
+            return db.ref('products/' + real).set(prod);
+        });
+    });
 };
 // =====================================================================
 // 🔥 FLASH SALE — yordamchilar, normalizer (muddat tugashi) va countdown ticker
@@ -23957,6 +24064,72 @@ html[data-theme="light"] select.pf-car-select option { color: #111; }
     setTimeout(function () { try { window.renderMyCar(); } catch (e) {} }, 800);
 
     if (window._dlog) window._dlog('%c[Qatlam 2026.13] Profil: mashina + doimiy manzil', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.15 — BUYURTMALARGA ATOMIK YOZISH (ma'lumot yo'qolmasligi)
+     ----------------------------------------------------------------------------
+     `users/{uid}/orders` tuguniga UCH XIL yozuvchi murojaat qiladi:
+       1) mijozning o'zi   — yangi buyurtma, chat xabari
+       2) admin            — holat o'zgartirish
+       3) admin            — chatga javob
+     Ilgari uchalasi ham `.once()` bilan BUTUN massivni o'qib, o'zgartirib,
+     `.set()` bilan hammasini qayta yozardi. O'qish va yozish orasidagi
+     yuz millisekundda boshqa tomon yozgan bo'lsa — u JIMGINA O'CHIB KETARDI.
+     Eng og'ir holat: mijoz buyurtma beradi, admin o'sha payt holatni
+     o'zgartiradi -> yangi buyurtma yo'qoladi, lekin mijozga Telegram'da
+     "qabul qilindi" xabari allaqachon ketgan va savati tozalangan.
+
+     Bu qatlam yagona ATOMIK yordamchini beradi. Firebase tranzaksiyasi
+     to'qnashuvni o'zi aniqlaydi va yangi ma'lumot bilan QAYTA uriniadi.
+     ============================================================================ -->
+<script>
+(function ordersAtomicWrites() {
+    'use strict';
+
+    /**
+     * Firebase `orders` tugunini massivga aylantiradi.
+     * RTDB ketma-ket raqamli kalitlarni massiv, "teshikli" bo'lsa obyekt
+     * qilib qaytaradi — shuning uchun ikki shaklni ham qo'llab-quvvatlaymiz.
+     */
+    window._toOrdersArray = function (v) {
+        if (!v) return [];
+        if (Array.isArray(v)) return v.filter(Boolean);
+        if (typeof v === 'object') {
+            return Object.keys(v).map(function (k) { return v[k]; }).filter(Boolean);
+        }
+        return [];
+    };
+
+    function ordersRef(uid) {
+        try { if (typeof db !== 'undefined' && db && db.ref) return db.ref('users/' + uid + '/orders'); } catch (e) {}
+        try { if (window.firebase && firebase.database) return firebase.database().ref('users/' + uid + '/orders'); } catch (e) {}
+        return null;
+    }
+
+    /**
+     * Buyurtmalar ro'yxatini ATOMIK o'zgartiradi.
+     * @param {string|number} uid
+     * @param {function(Array): (Array|undefined)} mutate
+     *        Massivni o'zgartirib QAYTARADI. `undefined` qaytarsa — bekor
+     *        qilinadi (masalan buyurtma topilmadi) va hech narsa yozilmaydi.
+     * @returns {Promise<{committed:boolean}|null>}
+     */
+    window._ordersTxn = function (uid, mutate) {
+        if (!uid || typeof mutate !== 'function') return Promise.resolve(null);
+        var ref = ordersRef(uid);
+        if (!ref) return Promise.resolve(null);
+        return ref.transaction(function (cur) {
+            var arr = window._toOrdersArray(cur);
+            var out;
+            try { out = mutate(arr); } catch (e) { return undefined; }
+            if (out === undefined || out === null) return undefined;   // bekor
+            return out;
+        });
+    };
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.15] Buyurtmalarga atomik yozish', 'color:#C9A84C;font-weight:bold;');
 })();
 </script>
 
