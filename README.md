@@ -27,6 +27,7 @@ Avto ehtiyot qismlari uchun **Telegram Mini App** (Web App) katalogi. Butun ilov
 ```
 Avto_A1/
 ├─ index.html              # Butun ilova (HTML + CSS + JS inline)
+├─ sw.js                   # Service Worker (offline + takror ochilish tezligi)
 ├─ cloudflare-worker.js    # Telegram sendMessage proxy (token shu yerda maxfiy)
 ├─ banners/                # Slider banerlari (SVG)
 │  ├─ banner1.svg
@@ -39,6 +40,34 @@ Avto_A1/
       ├─ deploy.yml         # main'ga push'da Pages'ga auto-deploy
       └─ pr-check.yml       # har PR'da validate.js ishga tushadi
 ```
+
+## Offline va kesh (Service Worker)
+
+`sw.js` ikki ish qiladi:
+
+1. **Offline.** Internet uzilsa ilova oq ekran bo'lib qolmaydi — oxirgi ishlagan
+   sahifa xotiradan ochiladi. Ekran tepasida "Internet aloqasi yo'q" lavhasi
+   chiqadi va aloqa tiklanganda o'zi yo'qoladi.
+2. **Takror ochilish tezligi.** Firebase kutubxonalari (3 fayl) va Google
+   shriftlari telefon xotirasida saqlanadi.
+
+> ⚠️ **HTML ATAYLAB keshlanmaydi** (faqat offline zaxira sifatida). Sabab: har
+> deploy'dan keyin mijoz **darhol** yangi ilovani ko'rishi kerak. Firebase
+> ma'lumotlari (narx, zaxira) ham keshlanmaydi — ular doim jonli.
+
+**Muammo bo'lsa — o'chirish kaliti.** Telegram'dagi ilovada emas, brauzerda
+(`https://anvarjonaxtamov70.github.io/Avto_A1/`) konsolni ochib:
+
+```js
+localStorage.avto_nosw = '1'
+```
+
+so'ng sahifani qayta yuklang — Service Worker o'chadi va barcha keshlar
+tozalanadi. Qaytarish uchun `localStorage.removeItem('avto_nosw')`.
+
+Katalog ham telefon xotirasida saqlanadi (`avto_catalog_v1`, 1 kun) — ilova
+ochilishi bilan tovarlar **darhol** ko'rinadi, Firebase javobi kelgach
+yangilanadi.
 
 ## Xavfsizlik — Telegram token
 

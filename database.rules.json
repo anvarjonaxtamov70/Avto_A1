@@ -9,29 +9,100 @@
     },
 
     "users": {
-      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".read": true,
+      ".write": true,
+
       "$uid": {
-        ".read": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
-        ".write": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+        "profile": {
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 80"
+          },
+          "phone": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "address": {
+            ".validate": "newData.isString() && newData.val().length <= 400"
+          },
+          "lang": {
+            ".validate": "newData.isString() && newData.val().length <= 8"
+          }
+        },
+
+        "orders": {
+          "$orderIdx": {
+            "total": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000000"
+            },
+            "payable": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && (!newData.parent().child('total').isNumber() || newData.val() <= newData.parent().child('total').val())"
+            },
+            "cashbackUsed": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && (!newData.parent().child('total').isNumber() || newData.val() <= newData.parent().child('total').val())"
+            },
+            "status": {
+              ".validate": "newData.isString() && newData.val().matches(/^(kutilmoqda|qabul|yolda|yetkazildi|bekor_qilingan)$/)"
+            }
+          }
+        },
+
+        "phase2": {
+          "cashbackTotal": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && ((!data.exists() && newData.val() <= 1000000) || (data.exists() && newData.val() >= data.val() && newData.val() <= data.val() + 1000000))"
+          },
+          "cashbackSpent": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && ((!data.exists() && newData.val() <= 1000000) || (data.exists() && newData.val() >= data.val() && newData.val() <= data.val() + 1000000))"
+          },
+          "cashbackRefunded": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && ((!data.exists() && newData.val() <= 1000000) || (data.exists() && newData.val() >= data.val() && newData.val() <= data.val() + 1000000))"
+          },
+          "cashback": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000"
+          },
+          "referralPaid": {
+            ".validate": "newData.isBoolean()"
+          }
+        }
+      }
+    },
+
+    "orders": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".write": "newData.exists()",
+      ".indexOn": ["createdAt", "status", "uid"],
+
+      "$orderKey": {
+        "total": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000000"
+        },
+        "status": {
+          ".validate": "newData.isString() && newData.val().matches(/^(kutilmoqda|qabul|yolda|yetkazildi|bekor_qilingan)$/)"
+        },
+        "phone": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        }
       }
     },
 
     "products": {
       ".read": true,
-      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
-    },
+      ".write": "newData.exists()",
 
-    "orders": {
-      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
-      ".indexOn": ["createdAt", "status", "uid"],
-      "$orderId": {
-        ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || (!data.exists() && newData.child('uid').val() === auth.uid) || (data.exists() && data.child('uid').val() === auth.uid))"
+      "$productIdx": {
+        "price": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000000"
+        },
+        "stock": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        }
       }
     },
 
     "stories": {
       ".read": true,
-      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+      ".write": "newData.exists()"
     },
 
     "bts_branches": {
@@ -46,17 +117,28 @@
 
     "reviews": {
       ".read": true,
+      ".write": "newData.exists()",
+
       "$productId": {
         "$uid": {
-          ".write": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+          "rating": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5"
+          },
+          "text": {
+            ".validate": "newData.isString() && newData.val().length <= 1000"
+          },
+          "userName": {
+            ".validate": "newData.isString() && newData.val().length <= 80"
+          }
         }
       }
     },
 
     "refcodes": {
       "$code": {
-        ".read": "auth != null",
-        ".write": "auth != null && !data.exists() && newData.val() === auth.uid"
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.isString() && newData.val().length <= 64"
       }
     },
 
@@ -75,33 +157,32 @@
     },
 
     "notify_requests": {
-      "$productId": {
-        ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
-        "$uid": {
-          ".write": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+      ".read": true,
+      ".write": true
+    },
+
+    "ai_requests": {
+      ".read": true,
+      ".write": true
+    },
+
+    "ai_bulk_requests": {
+      ".read": true,
+      ".write": true,
+
+      "$uid": {
+        "usd_rate": {
+          ".validate": "!newData.isNumber() || (newData.val() > 0 && newData.val() <= 1000000)"
+        },
+        "markup_pct": {
+          ".validate": "!newData.isNumber() || (newData.val() >= 0 && newData.val() <= 1000)"
         }
       }
     },
 
-    "ai_requests": {
-      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
-      }
-    },
-
-    "ai_bulk_requests": {
-      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
-      }
-    },
-
     "ai_admin_tasks": {
-      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
-      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+      ".read": true,
+      ".write": true
     }
   }
 }

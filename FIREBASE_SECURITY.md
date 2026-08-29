@@ -90,18 +90,37 @@ Admin allowlist'ni bir marta DB'da yarating:
 
 ---
 
-## 5. ⚠️ Deploy bo'yicha MUHIM ogohlantirish
+## 5. ✅ Deploy holati (2026.08 dan boshlab)
 
-`database.rules.json` **AUTH yoqilgandan keyingina** Console'ga qo'yilsin.
+`database.rules.json` **endi joriy holatga mos** va uni Console'ga qo'yish **xavfsiz** —
+ilova buzilmaydi.
 
-- Hozir ilovada auth yo'q, shuning uchun bu qoidalarni **hozir** qo'ysangiz — barcha o'qish/yozish **rad etiladi** va **jonli bot ishlamay qoladi**.
-- Bu fayl avtomatik deploy qilinmaydi (repoda faqat GitHub Pages workflow bor, Firebase deploy yo'q). U — **maqsadli namuna va yo'l xaritasi**.
+**Nima o'zgardi:** ilgari bu fayl "maqsadli namuna" edi — u `auth` talab qiladigan
+qat'iy qoidalarni saqlardi. Ilovada esa auth **best-effort** (majburiy emas), shuning
+uchun o'sha faylni qo'yish **hamma o'qish/yozishni rad etib**, do'konni to'xtatib
+qo'yardi. Ya'ni repoda mina yotgan edi: kim `Deploy Firebase qoidalari` workflow'ini
+ishga tushirsa — ilova o'lardi.
 
-To'g'ri tartib:
-1. (Keyingi qadam) Worker'da custom-token auth'ni joriy qilish + mijozda `signInWithCustomToken`.
-2. DB'da `admins/{uid}: true` ni yaratish.
-3. `database.rules.json` ni Console → Rules ga qo'yib, avval **bitta sinov foydalanuvchi** bilan test qilish.
-4. Hammasi ishlasa — referral ikki tomonlama bonusini server tomoniga ko'chirish (4-bandga qarang).
+**Endi:** fayl haqiqatda deploy qilingan ruxsatlarni (`.read`/`.write`) **aynan
+saqlaydi**, lekin ustiga **`.validate`** qoidalari qo'shilgan. `.validate` auth
+TALAB QILMAYDI — u har qanday yozuvda ishlaydi va ma'lumot **shaklini**
+tekshiradi. Shuning uchun himoya ilovani buzmasdan qo'shildi.
+
+`.validate` nimalarni to'xtatadi:
+
+| Hujum | Natija |
+|---|---|
+| Konsoldan `cashbackTotal: 999999999` | ❌ rad etiladi (chegara + monotonlik) |
+| `cashbackSpent` ni 0 ga tushirib cashbackni qayta ishlatish | ❌ rad etiladi (monoton) |
+| Soxta 1 mlrd so'mlik buyurtma | ❌ rad etiladi |
+| `payable` ni `total` dan katta qilish | ❌ rad etiladi |
+| O'ylab topilgan holat (`status: "vip_bepul"`) | ❌ rad etiladi (5 ta haqiqiy holat) |
+| Izohga 99 yulduz qo'yish | ❌ rad etiladi (1..5) |
+| `ref('products').remove()` — katalogni o'chirish | ❌ rad etiladi |
+
+**Qolgan xavf (hali yopilmagan):** `users` tugunining `.read: true` bo'lishi.
+Admin paneli butun daraxtni 7 joyda o'qigani uchun uni hozircha yopib bo'lmaydi —
+10-bandga qarang.
 
 ---
 
@@ -176,15 +195,42 @@ GitHub → **Actions → "Deploy Firebase qoidalari" → Run workflow**. Tugagac
 
 ---
 
-## 10. ⚠️ MUHIM: Telegram'dan tashqari (APK / brauzer) foydalanuvchilar
+## 10. Keyingi qadam: `users` o'qishini yopish (hali qilinmagan)
 
-Qoidalar yoqilganda `users/{uid}` ga yozish **`auth.uid`** talab qiladi. Auth esa **Telegram `initData`** orqali (Worker `/auth`) ishlaydi. Demak:
+Hozirgi holatda `users` tuguni **`.read: true`** — ya'ni baza manzilini bilgan
+har kim barcha mijozlarning ismi, telefoni, manzili va buyurtma tarixini
+o'qib olishi mumkin. Bu qolgan eng katta xavf.
 
-- **Telegram ichidagi** foydalanuvchilar — to'liq ishlaydi (auth bor).
-- **APK / oddiy brauzer** foydalanuvchilari — `initData` yo'q → auth yo'q → soxta ID (`apk_...`, `tg_url_...`) bilan ishlaydi. Qoidalar yoqilsa, ular **o'z savati/buyurtmasini saqlay olmaydi** (faqat ommaviy `products` ni o'qiy oladi).
+**Nega hozir yopilmadi:** admin paneli butun `users` daraxtini **7 joyda**
+to'liq o'qiydi (buyurtmalar, statistika, mijozlar, broadcast). Yopish uchun
+admin Firebase auth bilan tanilishi va DB'da `admins/{uid}: true` yozuvi
+turishi kerak. Bu yozuv bor-yo'qligini kod bo'yicha tekshirib bo'lmaydi —
+Console'dan ko'rish kerak.
 
-### Tavsiyalar (joriy qilishdan oldin tanlang)
-1. **Telegram-only yozuv (eng oddiy):** xarid/buyurtma faqat Telegram Mini App'da bo'lsin; brauzer/APK — faqat ko'rish (read-only katalog). Hozirgi qoidalar shunga mos.
-2. **Anonim auth:** APK/brauzer uchun Firebase **Anonymous Authentication** yoqilsa, ular ham `auth.uid` oladi. Bunda `users/{uid}` egaligi anonim uid bo'yicha ishlaydi (lekin Telegram profili bilan bog'lanmaydi).
+### Tekshirish (30 soniya)
+Firebase Console → Realtime Database → ma'lumotlar daraxti → `admins` tugunini
+qidiring. Ichida sizning Telegram ID'ingiz `true` qiymati bilan turishi kerak:
 
-> Shu sababli `database.rules.json` ni joriy qilishdan oldin yuqoridagi ikki yo'ldan birini tanlang va **bitta sinov foydalanuvchi** bilan tekshiring.
+```
+admins
+  └── 5105291033: true
+  └── 483425630: true
+  └── 5302078: true
+```
+
+### Agar bor bo'lsa — quyidagini `users` ga qo'yish mumkin
+```json
+"users": {
+  ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+  ".write": true,
+  "$uid": { ".read": true }
+}
+```
+Bunda admin butun daraxtni o'qiydi, mijoz esa faqat **o'z** yozuvini.
+
+### Agar yo'q bo'lsa
+Avval o'sha uchta yozuvni qo'lda qo'shing, so'ng bitta sinov foydalanuvchi
+bilan admin panelini tekshirib, keyin qoidani almashtiring.
+
+> ⚠️ Bu o'zgarish **auth ishlashiga bog'liq**, shuning uchun uni alohida,
+> tekshirib qilish kerak — shu sababli joriy PR'ga kiritilmadi.

@@ -27,18 +27,31 @@
         var lite = false;
         var reasons = [];
 
-        // 1) RAM: 4 GB yoki kamroq => zaif
-        if (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 4) {
-          lite = true; reasons.push('ram<=4');
+        // 1) RAM: 2 GB yoki kamroq => zaif
+        //    ⚠️ ILGARI CHEGARA `<= 4` EDI — BU JIDDIY XATO BO'LGAN:
+        //    brauzer `deviceMemory` ni MAXFIYLIK uchun 2 ning darajasiga
+        //    yumaloqlaydi va 8 da to'xtatadi. Ya'ni 4 GB, 5 GB va 6 GB
+        //    telefonlar HAMMASI `4` deb qaytaradi. Natijada o'rta va hatto
+        //    yaxshi telefonlarning KATTA QISMI doimiy "lite" rejimda qolib,
+        //    ilovadagi 77 animatsiyadan 8 tasi ishlagan — spinnerlar esa
+        //    birinchi kadrda muzlab, BUZILGAN ko'rinishga sabab bo'lgan.
+        //    Endi chegara haqiqatan zaif qurilmalarga qaratilgan; asosiy
+        //    himoya esa pastdagi FPS QOROVULI (ishlab turganda o'lchaydi).
+        if (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 2) {
+          lite = true; reasons.push('ram<=2');
         }
-        // 2) Protsessor yadrolari: 4 yoki kamroq => zaif
-        if (typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4) {
-          lite = true; reasons.push('cpu<=4');
+        // 2) Protsessor yadrolari: 3 yoki kamroq => zaif
+        //    (4 yadro bugun o'rta darajali telefonlarda ham bor — chegara pasaytirildi)
+        if (typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 3) {
+          lite = true; reasons.push('cpu<=3');
         }
-        // 3) Foydalanuvchi "harakatni kamaytirish"ni yoqgan
-        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-          lite = true; reasons.push('reduced-motion');
-        }
+        // 3) "Harakatni kamaytirish" ENDI lite'ni YOQMAYDI.
+        //    Sabab: bu TEZLIK sozlamasi emas, ACCESSIBILITY tanlovi. Ilovada
+        //    `@media (prefers-reduced-motion: reduce)` qoidalari allaqachon bor
+        //    va ular animatsiyani to'g'ri o'chiradi. Lite esa qo'shimcha
+        //    ravishda shisha blur, soya va rasm effektlarini ham olib tashlaydi —
+        //    bular harakat EMAS, ya'ni bunday foydalanuvchini ilovaning
+        //    ko'rinishidan bekorga mahrum qilardi. Zaiflikni FPS qorovuli aniqlaydi.
         // 4) Trafik tejash / sekin tarmoq
         var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
         if (conn) {
@@ -66,6 +79,13 @@
         // Boot-lite'ni olib tashlovchi funksiya (faqat zaif bo'lmagan telefonlarda).
         window.__endBootLite = function(){
           try {
+            // ⚠️ POYGA TUZATILDI: FPS qorovuli ishlab turganda `lite` ni
+            //    QAYTA qo'shishi mumkin (kadr tezligi past bo'lsa). Ilgari bu
+            //    funksiya `__perfLite` ni TEKSHIRMASDAN klassni olib tashlardi,
+            //    shuning uchun qorovulning qarori kutib turgan taymer bilan
+            //    jimgina bekor qilinardi. Endi zaiflik aniqlangan bo'lsa —
+            //    lite JOYIDA QOLADI.
+            if (window.__perfLite) { window.__bootLiteOnly = false; return; }
             if (window.__bootLiteOnly) {
               document.documentElement.classList.remove('lite');
               window.__bootLiteOnly = false;
@@ -112,6 +132,53 @@
       } catch (e) {}
     })();
     </script>
+    <!-- ============================================================
+         ⚡ KATALOG KESHI — "BO'SH EKRAN KUTISH" MUAMMOSI
+         ────────────────────────────────────────────────────────────
+         Ilgari ilova har ochilganda mijoz Firebase javob berguncha
+         faqat 4 ta kulrang skeleton ko'rib turardi. Sekin internetda
+         bu 1-3 soniya. Bu eng yomon moment: mijoz hali hech narsa
+         ko'rmagan va chiqib ketishi mumkin.
+
+         Endi oxirgi muvaffaqiyatli katalog telefon xotirasida
+         (localStorage) saqlanadi va ilova ochilishi bilanoq DARHOL
+         chiziladi. Firebase javobi kelgach hammasi yangilanadi.
+
+         ⚠️ To'g'rilik xavfi yo'q: kesh faqat KO'RINISH uchun. Narx va
+            zaxira baribir serverdan keladi, buyurtma esa serverda
+            (Worker /stock-commit) qayta tekshiriladi.
+         ============================================================ -->
+    <script>
+    window._catalogCache = (function () {
+        var KEY = 'avto_catalog_v1';
+        var MAX_AGE = 24 * 3600 * 1000;   // 1 kundan eski keshni ishlatmaymiz
+        var MAX_BYTES = 900 * 1024;       // localStorage limitini to'ldirib qo'ymaymiz
+        return {
+            /** Saqlangan katalogni qaytaradi (yo'q/eskirgan/buzilgan bo'lsa null). */
+            read: function () {
+                try {
+                    var raw = localStorage.getItem(KEY);
+                    if (!raw) return null;
+                    var box = JSON.parse(raw);
+                    if (!box || !Array.isArray(box.items) || !box.items.length) return null;
+                    if (!box.at || (Date.now() - box.at) > MAX_AGE) return null;
+                    return box.items;
+                } catch (e) { return null; }
+            },
+            /** Katalogni saqlaydi (joy yetmasa jimgina o'tib ketadi). */
+            write: function (items) {
+                try {
+                    if (!Array.isArray(items) || !items.length) return false;
+                    var s = JSON.stringify({ at: Date.now(), items: items });
+                    if (s.length > MAX_BYTES) return false;
+                    localStorage.setItem(KEY, s);
+                    return true;
+                } catch (e) { return false; }
+            },
+            clear: function () { try { localStorage.removeItem(KEY); } catch (e) {} }
+        };
+    })();
+    </script>
     <!-- #24: yuklanish skeleton (shimmer) + #23 a11y fokus uslublari -->
     <style>
         .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.12) 37%, rgba(255,255,255,0.05) 63%); background-size: 400% 100%; animation: skelShimmer 1.4s ease infinite; border-radius: 14px; }
@@ -133,7 +200,17 @@
          (eski elementlar uchun fallback). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- ⚡ SHRIFTLAR ENDI CHIZISHNI TO'XTATMAYDI.
+         Ilgari bu `<link rel="stylesheet">` oddiy holatda edi — brauzer Google
+         serveridan javob kelmaguncha EKRANDA HECH NARSA ko'rsatmaydi. Sekin
+         internetda (3G, qishloq) bu 0.5-1.5 soniya QOP-QORONG'I ekran degani.
+         `media="print"` bilan brauzer uni "hozir kerak emas" deb hisoblaydi va
+         chizishni kutmaydi; yuklanib bo'lgach `onload` uni darhol yoqadi.
+         `display=swap` allaqachon bor — matn avval tizim shrifti bilan chiqadi,
+         keyin jimgina almashadi. Ya'ni mijoz do'konni DARROV ko'radi. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap">
+    <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap"></noscript>
     <!-- 🌟 PHASE 2: Dark/Light + Bonus + Achievement + Analitika + Referral + Bildirishnoma + Kafolat -->
     <!-- 🌟 PHASE 2 STYLES (inlined for single-file deploy) -->
     <style>
@@ -7183,6 +7260,8 @@ document.addEventListener('touchmove', function(e) {
     const ADMIN_ID = ADMIN_IDS[0];
     // 🔒 Token endi koddan olib tashlandi! Xabarlar maxfiy proxy (Cloudflare Worker) orqali yuboriladi.
     const TG_PROXY = "https://avtoa1bot.anvaraxtamov70.workers.dev";
+    // Fayl oxiridagi qatlamlar (`/stock-commit`) ham shu manzildan foydalanadi.
+    window.TG_PROXY = TG_PROXY;
     const IMGBB_API_KEY = "956de2d2a33ae1bcc56d5ada6fd8788d";
     const firebaseConfig = {
         apiKey: "AIzaSyCqK0E5hNpSHl6h-V-3WeVteWZnt7gXyOM",
@@ -7211,28 +7290,88 @@ document.addEventListener('touchmove', function(e) {
         return fetch(TG_PROXY, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
     }
     window.tgProxySend = tgProxySend;
-    // 📦 Stokni XAVFSIZ kamaytirish — butun 'products' massivini qayta yozish (.set) o'rniga
-    //    faqat sotilgan mahsulot/razmer stokiga ATOMIK transaction qo'llaymiz. Bu:
-    //      • boshqa adminlar qo'shgan mahsulotlarni o'chirib yuborilishining oldini oladi,
-    //      • bir vaqtdagi ikki buyurtmaning bir-birini ezib yozishini kamaytiradi.
-    //    changes: [{ idx, qty, sizeIdx? , fallback }]
+    // 📦 Stokni XAVFSIZ kamaytirish — ZAXIRA (fallback) yo'li.
+    //    ASOSIY yo'l endi serverda: Worker `/stock-commit` (izohni fayl oxiridagi
+    //    "QATLAM 2026.16" qatlamida o'qing). Bu funksiya faqat Worker yangilanmagan
+    //    yoki internet uzilgan holatda ishlaydi.
+    //
+    //    Bu yerda TUZATILGAN ikki jiddiy xato:
+    //      1) MANZIL INDEKS bo'yicha edi (`products/{idx}/stock`). Admin mahsulot
+    //         o'chirsa/qo'shsa indekslar suriladi va BOSHQA tovarning stoki
+    //         kamayardi. Endi manzil har safar mahsulot `id`si bo'yicha QAYTA
+    //         topiladi.
+    //      2) `fallback` — sahifa yuklanganda o'qilgan ESKI stok qiymati edi.
+    //         Transaction ichida `cur` bo'lmasa u qiymat qayta tiklanardi, ya'ni
+    //         boshqalar sotgan tovarlar "omborga qaytardi". Endi ishlatilmaydi.
+    //    changes: [{ id, size?, qty, idx?, sizeIdx?, name? }]
     function _decrementStock(changes){
-        if (!Array.isArray(changes)) return;
-        changes.forEach(function(ch){
-            try {
-                if (ch.idx == null || ch.idx < 0) return;
-                var path = (ch.sizeIdx != null && ch.sizeIdx >= 0)
-                    ? 'products/' + ch.idx + '/sizes/' + ch.sizeIdx + '/stock'
-                    : 'products/' + ch.idx + '/stock';
-                db.ref(path).transaction(function(cur){
-                    var base = (typeof cur === 'number') ? cur : (parseInt(ch.fallback) || 0);
-                    var nv = base - (parseInt(ch.qty) || 0);
-                    return nv < 0 ? 0 : nv;
+        if (!Array.isArray(changes) || !changes.length) return Promise.resolve(false);
+        // Manzilni ANIQLASH uchun `products` tugunini bir marta yangi holatda o'qiymiz.
+        var fresh = null;
+        return db.ref('products').once('value')
+            .then(function(snap){ fresh = snap.val(); })
+            .catch(function(e){ _dwarn('[stock] products o\'qilmadi, indeksga qaytamiz:', e); })
+            .then(function(){
+                var jobs = changes.map(function(ch){
+                    try {
+                        var loc = _resolveStockPath(fresh, ch);
+                        if (!loc) return Promise.resolve(false);
+                        return db.ref(loc).transaction(function(cur){
+                            // `cur` yo'q bo'lsa — bu tugunni o'zimiz yaratmaymiz:
+                            // eski (yuklanish vaqtidagi) qiymatni tiklash sotilgan
+                            // tovarni "qaytarib" qo'yardi.
+                            if (typeof cur !== 'number') return cur;
+                            var nv = cur - (parseInt(ch.qty) || 0);
+                            return nv < 0 ? 0 : nv;
+                        }).then(function(res){
+                            return !!(res && res.committed);
+                        }).catch(function(e){
+                            _dwarn('[stock] transaction rad etildi:', loc, e);
+                            return false;
+                        });
+                    } catch(e){ _dwarn('[stock] update xato:', e); return Promise.resolve(false); }
                 });
-            } catch(e){ _dwarn('[stock] update xato:', e); }
-        });
+                return Promise.all(jobs).then(function(r){
+                    return r.some(function(x){ return x === true; });
+                });
+            });
+    }
+    // Mahsulot `id`si bo'yicha DB dagi haqiqiy yozish manzilini topadi.
+    // `fresh` o'qilmagan bo'lsa — oxirgi chora sifatida eski indeksga qaytadi.
+    function _resolveStockPath(fresh, ch){
+        var key = null, node = null;
+        if (fresh) {
+            var keys = Array.isArray(fresh)
+                ? fresh.map(function(_, i){ return String(i); })
+                : Object.keys(fresh);
+            for (var i = 0; i < keys.length; i++) {
+                var v = fresh[keys[i]];
+                if (v && String(v.id) === String(ch.id)) { key = keys[i]; node = v; break; }
+            }
+        }
+        if (key === null) {
+            if (ch.idx == null || ch.idx < 0) return null;
+            key = String(ch.idx);
+            return (ch.sizeIdx != null && ch.sizeIdx >= 0)
+                ? 'products/' + key + '/sizes/' + ch.sizeIdx + '/stock'
+                : 'products/' + key + '/stock';
+        }
+        var wantSize = (ch.size != null) ? String(ch.size) : '';
+        if (wantSize && wantSize !== 'Universal' && node && node.sizes) {
+            var sKeys = Array.isArray(node.sizes)
+                ? node.sizes.map(function(_, i){ return String(i); })
+                : Object.keys(node.sizes);
+            for (var j = 0; j < sKeys.length; j++) {
+                var s = node.sizes[sKeys[j]];
+                if (s && String(s.size) === wantSize) {
+                    return 'products/' + key + '/sizes/' + sKeys[j] + '/stock';
+                }
+            }
+        }
+        return 'products/' + key + '/stock';
     }
     window._decrementStock = _decrementStock;
+    window._resolveStockPath = _resolveStockPath;
 
     // =====================================
     // 🎨 IKONKA TIZIMI (emoji o'rniga bitta SVG to'plami)
@@ -7716,7 +7855,26 @@ const Haptics = {
         } catch (e) { /* xato bo'lsa indamasdan o'tib ketamiz - boshqa funksiyalar buzilmasin */ }
     }
 
-    function saveLocalCart() { localStorage.setItem('avto_cart', JSON.stringify(cart)); if (currentUser) db.ref('users/' + currentUser + '/cart').set(cart); }
+    // ⚠️ ILGARI: har bir "+"/"-" bosilganda Firebase'ga darhol yozilardi.
+    //    Mijoz sonni 5 marta o'zgartirsa — 5 ta tarmoq yozuvi. Bu (a) trafik
+    //    va batareyani yeydi, (b) to'qnashuv oynasini kengaytiradi.
+    //    Endi localStorage DARHOL yoziladi (ilova tez javob beradi), Firebase'ga
+    //    esa 400ms jimlikdan keyin BIR MARTA yoziladi. Ilova yopilishi mumkin
+    //    bo'lgan payt (buyurtma berish) uchun `_flushCart()` bor.
+    var _cartFlushTimer = null;
+    function _flushCart() {
+        if (_cartFlushTimer) { clearTimeout(_cartFlushTimer); _cartFlushTimer = null; }
+        if (!currentUser) return Promise.resolve();
+        try { return db.ref('users/' + currentUser + '/cart').set(cart); }
+        catch (e) { return Promise.resolve(); }
+    }
+    window._flushCart = _flushCart;
+    function saveLocalCart() {
+        try { localStorage.setItem('avto_cart', JSON.stringify(cart)); } catch (e) {}
+        if (!currentUser) return;
+        if (_cartFlushTimer) clearTimeout(_cartFlushTimer);
+        _cartFlushTimer = setTimeout(function () { _cartFlushTimer = null; _flushCart(); }, 400);
+    }
     function saveLocalWishlist() { if (currentUser) db.ref('users/' + currentUser + '/wishlist').set(wishlist); }
 
     // ❤️ SAQLANGANLAR (WISHLIST) YANGLANGAN FUNKSIYASI
@@ -7770,7 +7928,35 @@ function toggleWishlist(e, id) {
         let items = wishlist.map(id => productsDB.find(x => x.id === id)).filter(x => x);
         c.innerHTML = items.map(x => cardHTML(x)).join('');
     }
-    function saveLocalOrders() { if (currentUser) db.ref('users/' + currentUser + '/orders').set(myOrders); }
+    // ⚠️ ILGARI: `.set(myOrders)` butun massivni xotiradagi nusxa bilan qayta
+    //    yozardi. Agar admin ayni paytda holatni o'zgartirgan yoki chatga javob
+    //    yozgan bo'lsa — mijozning yozuvi ularni O'CHIRIB yuborardi (va aksincha).
+    //    Endi ATOMIK tranzaksiya: lokal buyurtmalar `id` bo'yicha birlashtiriladi,
+    //    serverda bor-u lokalda YO'Q buyurtmalar esa SAQLANADI.
+    function saveLocalOrders() {
+        if (!currentUser) return Promise.resolve(null);
+        var local = Array.isArray(myOrders) ? myOrders.filter(Boolean) : [];
+        return window._ordersTxn(currentUser, function (remote) {
+            var byId = {}, noId = [];
+            // Avval server nusxasi (begona o'zgarishlar shu yerda)
+            remote.forEach(function (o) {
+                if (!o) return;
+                if (o.id != null) byId[String(o.id)] = o; else noId.push(o);
+            });
+            // So'ng lokal nusxa — bir xil id bo'lsa lokal ustun (mijoz o'z
+            // buyurtmasini hozir o'zgartirgan). Bu avvalgi xatti-harakat bilan
+            // BIR XIL, lekin serverdagi BEGONA buyurtmalar endi o'chmaydi.
+            local.forEach(function (o) {
+                if (!o) return;
+                if (o.id != null) byId[String(o.id)] = o; else noId.push(o);
+            });
+            var merged = Object.keys(byId).map(function (k) { return byId[k]; });
+            merged.sort(function (a, b) {
+                return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);   // yangi -> eski
+            });
+            return merged.concat(noId);
+        });
+    }
     function saveProfile() {
         let nN = document.getElementById('user-edit-name').value.trim();
         let nP = document.getElementById('user-edit-phone').value.trim();
@@ -7854,13 +8040,57 @@ function showToast(m, t = 'success') {
             if (ca) ca.classList.remove('hidden');
         } catch (e) {}
     })();
+    // ⚡ TEZKOR BIRINCHI CHIZISH — oxirgi katalog telefon xotirasidan.
+    //    Firebase javobi kelmasidan OLDIN mijoz allaqachon tovarlarni ko'radi.
+    //    Javob kelgach pastdagi `once` hammasini yangi ma'lumot bilan qayta chizadi.
+    //
+    //    ⚠️ TUZATILDI (2 ta xato):
+    //      1) Bu blok `renderProducts()` ni DARHOL chaqirardi. Lekin
+    //         `renderProducts` pastda e'lon qilinadigan `limitCount`
+    //         o'zgaruvchisiga tayanadi ("let limitCount = 12" — bu qatordan
+    //         PASTDA). JavaScript'da o'zgaruvchini e'londan OLDIN ishlatib
+    //         bo'lmaydi, shuning uchun chaqiruv xato tashlardi va kesh
+    //         JIMGINA chizilmasdan o'tib ketardi — ya'ni butun tezlashtirish
+    //         AMALDA ISHLAMASDI. Endi skript to'liq yuklanib bo'lgach
+    //         (`setTimeout(…, 0)`) chaqiriladi — o'sha paytda hamma
+    //         o'zgaruvchi tayyor bo'ladi.
+    //      2) Nazariy poyga: agar Firebase javobi keshdan OLDIN kelib qolsa,
+    //         kesh YANGI ma'lumot ustiga eski holatni yozib qo'yardi. Endi
+    //         `_catalogFresh` bayrog'i buni butunlay imkonsiz qiladi.
+    (function _paintCatalogFromCache() {
+        setTimeout(function () {
+            try {
+                if (window._catalogFresh) return;        // Firebase allaqachon javob berdi
+                if (!window._catalogCache) return;
+                var cached = window._catalogCache.read();
+                if (!cached || !cached.length) return;
+                productsDB = cached;
+                window.productsDB = productsDB;
+                displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
+                var lt = document.getElementById('loading-text');
+                if (lt) lt.style.display = 'none';
+                var ca = document.getElementById('content-area');
+                if (ca) ca.classList.remove('hidden');
+                renderProducts();
+                updateCartBadge();
+                window._catalogPaintedFromCache = true;
+                if (window._dlog) window._dlog('[kesh] katalog xotiradan chizildi:', cached.length);
+            } catch (e) { if (window._dwarn) window._dwarn('[kesh] chizib bo\'lmadi:', e); }
+        }, 0);
+    })();
+
     db.ref('products').once('value', (snap) => {
+        // 🛡 Yangi ma'lumot keldi — kesh chizishi endi KERAK EMAS va
+        //    ruxsat ETILMAYDI (aks holda eski holat ustiga yozib qo'yardi).
+        window._catalogFresh = true;
         document.getElementById('loading-text').style.display = 'none';
         document.getElementById('content-area').classList.remove('hidden');
 
         if (snap.exists()) {
             let allData = [];
             snap.forEach(child => { if(child.val()) allData.push(child.val()); });
+            // Keyingi ochilishda darhol ko'rinishi uchun saqlab qo'yamiz
+            try { if (window._catalogCache) window._catalogCache.write(allData); } catch (e) {}
             // ⚠️ productsDB — BAZADAGI tartibda (teskari QILMAYMIZ!).
             //    Aks holda .set(productsDB) tartibni har safar teskari yozib,
             //    keyingi ochilishда buzilardi (oscillation). Faqat displayDB teskari.
@@ -9286,38 +9516,40 @@ window.openAdminChat = (uid, orderId) => {
         let text = input.value.trim();
         if(!text) return;
 
-        db.ref('users/' + currentAdminChatUid + '/orders').once('value', snapshot => {
-            if(snapshot.exists()) {
-                let orders = snapshot.val();
-                let idx = orders.findIndex(x => x.id === currentAdminChatOrderId);
-                
-                if(idx !== -1) {
-                    if(!orders[idx].messages) orders[idx].messages = [];
-                    
-                    let now = new Date();
-                    let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-                    
-                    orders[idx].messages.push({
-                        sender: 'admin',
-                        text: text,
-                        time: timeString
-                    });
+        // ⚠️ ILGARI MA'LUMOT YO'QOLARDI: kod butun buyurtmalar massivini
+        //    `once()` bilan o'qib, xabarni qo'shib, `.set(orders)` bilan
+        //    HAMMASINI qayta yozardi. O'qish va yozish orasida mijoz yangi
+        //    buyurtma bergan bo'lsa — u JIMGINA O'CHIB KETARDI.
+        //    Endi ATOMIK tranzaksiya: buyurtma `id` bo'yicha topiladi va
+        //    faqat uning `messages` ro'yxatiga qo'shiladi. To'qnashuv bo'lsa
+        //    Firebase o'zi qayta uriniadi -> hech narsa yo'qolmaydi.
+        let now = new Date();
+        let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+        let _sentCode = null;
 
-                    // Bazaga saqlash
-                    db.ref('users/' + currentAdminChatUid + '/orders').set(orders).then(() => {
-                        input.value = '';
-                        renderAdminChatMessages();
-                        
-                        // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
-                        let orderCode = orders[idx].code || currentAdminChatOrderId;
-                        tgProxySend({ 
-                            chat_id: currentAdminChatUid, 
-                            text: `📩 <b>#${escTg(orderCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`, 
-                            parse_mode: "HTML" 
-                        });
-                    });
-                }
+        window._ordersTxn(currentAdminChatUid, function (arr) {
+            let i = arr.findIndex(x => x && x.id === currentAdminChatOrderId);
+            if (i < 0) return;                       // buyurtma topilmadi -> bekor
+            if (!arr[i].messages) arr[i].messages = [];
+            arr[i].messages.push({ sender: 'admin', text: text, time: timeString });
+            _sentCode = arr[i].code || currentAdminChatOrderId;
+            return arr;
+        }).then(function (res) {
+            if (!res || !res.committed) {
+                showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning");
+                return;
             }
+            input.value = '';
+            renderAdminChatMessages();
+
+            // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
+            tgProxySend({
+                chat_id: currentAdminChatUid,
+                text: `📩 <b>#${escTg(_sentCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`,
+                parse_mode: "HTML"
+            });
+        }).catch(function () {
+            showToast("Xabar saqlanmadi — internetni tekshiring", "warning");
         });
     }
     
@@ -9451,23 +9683,36 @@ window.openAdminChat = (uid, orderId) => {
 }
     
 async function changeOrderStatus(uid, orderId, newStatus) {
-        db.ref('users/' + uid + '/orders').once('value', async snapshot => {
-            if(snapshot.exists()) {
-                let userOrders = snapshot.val();
-                let idx = userOrders.findIndex(o => o.id === orderId);
-                
-                if(idx !== -1) {
-                    let oldStatus = userOrders[idx].status;
-                    // BAZADAN QISQA KODNI OLISH (Agar yo'q bo'lsa, ID ni oladi)
-                    let displayCode = userOrders[idx].code || orderId; 
-                    
-                    userOrders[idx].status = newStatus;
-                    
-                    db.ref('users/' + uid + '/orders').set(userOrders).then(async () => {
+        // ⚠️ ILGARI MIJOZNING BUYURTMASI JIMGINA O'CHIB KETARDI:
+        //    kod butun buyurtmalar massivini `once()` bilan o'qib, holatni
+        //    o'zgartirib, `.set(userOrders)` bilan HAMMASINI qayta yozardi.
+        //    O'qish va yozish orasida (tarmoq kechikishi — yuz millisekund)
+        //    mijoz yangi buyurtma bergan bo'lsa, admin yozuvi uni O'CHIRARDI.
+        //    Mijozga esa Telegram'da "qabul qilindi" xabari allaqachon ketgan
+        //    va savati tozalangan bo'lardi — buyurtmani tiklash IMKONSIZ.
+        //
+        //    Endi ATOMIK tranzaksiya: buyurtma `id` bo'yicha topiladi, faqat
+        //    uning holati o'zgaradi. To'qnashuv bo'lsa Firebase o'zi qayta
+        //    uriniadi (yangi ma'lumot bilan) -> hech narsa yo'qolmaydi.
+        let oldStatus = null, displayCode = orderId, _ord = null;
+
+        window._ordersTxn(uid, function (arr) {
+            let i = arr.findIndex(o => o && o.id === orderId);
+            if (i < 0) return;                        // buyurtma topilmadi -> bekor
+            oldStatus = arr[i].status;
+            displayCode = arr[i].code || orderId;
+            arr[i].status = newStatus;
+            _ord = arr[i];
+            return arr;
+        }).then(async (res) => {
+                        if (!res || !res.committed) {
+                            showToast("Holat saqlanmadi — qayta urinib ko'ring", "warning");
+                            return;
+                        }
                         showToast("Holat o'zgartirildi!");
                         // #5/#6: markaziy 'orders' holatini ham yangilaymiz + admin keshini bekor qilamiz
                         window._invalidateUsersCache();
-                        try { db.ref('orders/' + window._centralOrderKey(uid, userOrders[idx]) + '/status').set(newStatus).catch(function(){}); } catch(e){}
+                        try { db.ref('orders/' + window._centralOrderKey(uid, _ord) + '/status').set(newStatus).catch(function(){}); } catch(e){}
                         let hTitle = document.querySelector('#adminOrdersModal .modal-header h2').innerText;
                         if(hTitle === '📦 Buyurtmalar') {
                             openAdminOrders(); 
@@ -9481,8 +9726,8 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                             let mijozMsg = "";
 
                             // 🧾 Buyurtma tarkibi + jami summa (mijoz xabarini boyitadi)
-                            let _sum = window._orderItemsSummary(userOrders[idx].items || {});
-                            let _ordTotal = userOrders[idx].total || _sum.total;
+                            let _sum = window._orderItemsSummary((_ord && _ord.items) || {});
+                            let _ordTotal = (_ord && _ord.total) || _sum.total;
                             let _detail = _sum.lines
                                 ? ("\n\n🛒 Buyurtma tarkibi:" + _sum.lines + "\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm")
                                 : (_ordTotal ? ("\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm") : "");
@@ -9516,9 +9761,8 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                                 showToast("Xato: SMS jo'natilmadi!", "warning");
                             }
                         }
-                    });
-                }
-            }
+        }).catch(function () {
+            showToast("Holat saqlanmadi — internetni tekshiring", "warning");
         });
     }
     function openModal(id) {
@@ -9553,6 +9797,27 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         updateBtns();
     }
     function closeModal() { if(activeModal) window.history.back(); }
+
+    // 🎬 MODALNI QAYTA KO'RSATISH — yopilish animatsiyasini BEKOR QILIB.
+    // ------------------------------------------------------------------
+    // ⚠️ NIMA UCHUN KERAK (haqiqiy xato tuzatildi):
+    //    "Orqaga" bosilganda pastdagi `popstate` avval joriy oynani yopadi
+    //    (0.2 soniyalik chiqish animatsiyasi bilan), keyin esa ba'zi
+    //    hollarda AYNI O'SHA oynani qaytadan ko'rsatadi. Eng aniq misol:
+    //    to'lov oynasida "Karta" tafsilotidan orqaga qaytish — kod
+    //    `paymentModal` ni qayta ko'rsatadi.
+    //    Natijada oyna `display:flex` bo'ladi-yu, chiqish animatsiyasi uni
+    //    shaffof qilib turadi va 0.2 soniyadan keyin butunlay yashiradi —
+    //    ya'ni mijoz "orqaga" bosganda TO'LOV OYNASI YO'QOLIB QOLARDI.
+    //    Bu yordamchi qayta ko'rsatishdan OLDIN yopilishni bekor qiladi.
+    function _reshowModal(id) {
+        var el = (typeof id === 'string') ? document.getElementById(id) : id;
+        if (!el) return null;
+        try { if (window._modalCancelClose) window._modalCancelClose(el); } catch (e) {}
+        el.style.display = 'flex';
+        return el;
+    }
+    window._reshowModal = _reshowModal;
     function goHome() { if(activeModal) closeModal(); if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); } updateNav('nav-home'); }
 
         // 🧭 MUKAMMAL NAVIGATSIYA VA OYNALARNI YOPISH XARITASI (Qotishlarga qarshi)
@@ -9603,14 +9868,20 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 }
 
 
-                document.getElementById(current).style.display = 'none';
+                // 🎬 Modal YOPILISH animatsiyasi (QATLAM 2026.17).
+                //    Ilgari bu yerda `display='none'` edi — oyna BIR ZUMDA
+                //    g'oyib bo'lardi: ochilishi silliq, yopilishi keskin.
+                //    `_modalHide` avval qisqa chiqish animatsiyasini o'ynatib,
+                //    keyin yashiradi. Qatlam yuklanmagan bo'lsa — eski xatti-harakat.
+                if (window._modalHide) window._modalHide(document.getElementById(current));
+                else document.getElementById(current).style.display = 'none';
     
                 // 1. Admin Chatdan -> Buyurtmalarga qaytish
                 if (current === 'adminChatModal') {
                     // ⚡ Listenerni uzamiz (xotira oqishi bo'lmasligi uchun)
                     if (window._adminChatRef) { try { window._adminChatRef.off('value'); window._adminChatRef = null; } catch(e){} }
                     activeModal = 'adminOrdersModal';
-                    document.getElementById('adminOrdersModal').style.display = 'flex';
+                    _reshowModal('adminOrdersModal');
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
                     updateBtns();
@@ -9634,7 +9905,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                         if (_cd) _cd.classList.add('hidden');
                         if (_ad) _ad.classList.add('hidden');
                         document.getElementById('payment-options').classList.remove('hidden');
-                        document.getElementById('paymentModal').style.display = 'flex';
+                        _reshowModal('paymentModal');
                         activeModal = 'paymentModal';
                         document.body.style.overflow = 'hidden';
                         window.history.pushState({ modal: 'paymentModal' }, "");
@@ -9656,7 +9927,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     //    qoralamalar joyida turgani holda. Endi alohida bayroq bor.
                     if (window._editCameFromDrafts) {
                         activeModal = 'adminDraftsModal';
-                        document.getElementById('adminDraftsModal').style.display = 'flex';
+                        _reshowModal('adminDraftsModal');
                         window._editCameFromDrafts = false;   // faqat bayroqni tozalaymiz
                         // Papka ichidagi ro'yxatni yangilaymiz (tahrir natijasi ko'rinsin)
                         try {
@@ -9666,7 +9937,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                         } catch (e) {}
                     } else {
                         activeModal = 'productModal';
-                        document.getElementById('productModal').style.display = 'flex';
+                        _reshowModal('productModal');
                     }
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza
@@ -9681,7 +9952,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                     window._storyComposerFrom = null;
                     if (_scFrom && document.getElementById(_scFrom)) {
                         activeModal = _scFrom;
-                        document.getElementById(_scFrom).style.display = 'flex';
+                        _reshowModal(_scFrom);
                         document.body.style.overflow = 'hidden';
                         window._modalStack = [];
                         updateBtns();
@@ -9698,7 +9969,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 // 2c. 👤 MIJOZ TAFSILOTI -> Mijozlar ro'yxatiga qaytish
                 if (current === 'customerDetailModal') {
                     activeModal = 'adminCustomersModal';
-                    document.getElementById('adminCustomersModal').style.display = 'flex';
+                    _reshowModal('adminCustomersModal');
                     document.body.style.overflow = 'hidden';
                     window._modalStack = [];
                     updateBtns();
@@ -9708,7 +9979,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 // 3. Maxsus Admin oynalaridan -> Admin Panelga qaytish
                 if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal' || current === 'adminDraftsModal' || current === 'adminStoriesModal') {
                     activeModal = 'adminModal';
-                    document.getElementById('adminModal').style.display = 'flex';
+                    _reshowModal('adminModal');
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza
                     updateBtns();
@@ -9720,7 +9991,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 // 4. Qo'shish oynalaridan -> Admin Panelga qaytish (Faqatgina o'ziga qaytamiz)
                 if (current === 'addProductModal' || current === 'aiBulkModal') {
                     activeModal = 'adminModal';
-                    document.getElementById('adminModal').style.display = 'flex';
+                    _reshowModal('adminModal');
                     document.body.style.overflow = 'hidden';
                     window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
                     updateBtns();
@@ -9733,8 +10004,9 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 if (window._modalStack && window._modalStack.length > 0) {
                     const prevId = window._modalStack.pop();
                     activeModal = prevId;
-                    const prevEl = document.getElementById(prevId);
-                    if (prevEl) prevEl.style.display = 'flex';
+                    // `_reshowModal` — yopilish animatsiyasini bekor qilib ko'rsatadi
+                    // (yuqoridagi izohga qara). Bu yerda ham izchil ishlatamiz.
+                    const prevEl = _reshowModal(prevId);
                     if (prevId === 'cartModal') renderCartItems();
                     document.body.style.overflow = 'hidden';
                     updateBtns();
@@ -10488,14 +10760,16 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                     if (sIdx !== -1) {
                         let _orig = (parseInt(p.sizes[sIdx].stock) || 0);
                         p.sizes[sIdx].stock = (_orig - qty) < 0 ? 0 : (_orig - qty);
-                        stockChanges.push({ idx: pIdx, sizeIdx: sIdx, qty: qty, fallback: _orig });
+                        // `id` + `size` — SERVER stokni indeks emas, AYNAN shu tovar
+                        // bo'yicha topishi uchun. `fallback` faqat mahalliy tiklash uchun.
+                        stockChanges.push({ id: p.id, name: p.name, size: carOpt, idx: pIdx, sizeIdx: sIdx, qty: qty, fallback: _orig });
                         if (p.sizes[sIdx].stock <= 3) lowStockAlerts += `\n⚠️ <b>${escTg(p.name)} (${escTg(carOpt)})</b>: ${p.sizes[sIdx].stock} ta qoldi!`;
                     }
                     p.stock = p.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0);
                 } else {
                     let _orig = (parseInt(p.stock) || 10);
                     p.stock = (_orig - qty) < 0 ? 0 : (_orig - qty);
-                    stockChanges.push({ idx: pIdx, qty: qty, fallback: _orig });
+                    stockChanges.push({ id: p.id, name: p.name, idx: pIdx, qty: qty, fallback: _orig });
                     if (p.stock <= 3) lowStockAlerts += `\n⚠️ <b>${escTg(p.name)}</b>: ${p.stock} ta qoldi!`;
                 }
             } 
@@ -10528,11 +10802,49 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             if (_vipTag) adminText += `\n\n${escTg(_vipTag)}`;
         } catch (e) {}
 
+        // ============================================================
+        // 🛡 ZAXIRANI SERVERDA BAND QILISH — buyurtma yuborilishidan OLDIN
+        // ------------------------------------------------------------
+        // Ilgari stok faqat mijoz brauzerida kamayardi va tekshiruv ham
+        // brauzerdagi ESKI massivga qarardi. Shu sababli omborda 1 dona
+        // qolgan tovarni bir vaqtda bir necha kishi sotib olishi mumkin edi
+        // (oversell), keyin admin mijozga "yo'q ekan" deb tushuntirardi.
+        // Endi zaxira SERVERDA tekshiriladi va atomik band qilinadi.
+        // Yetmasa — buyurtma umuman yuborilmaydi va tovar NOMI aytiladi.
+        // ============================================================
+        var _stock = { mode: 'skip' };
+        try {
+            if (window._stockCommit) _stock = await window._stockCommit(stockChanges);
+        } catch (e) { _stock = { mode: 'fallback' }; }
+
+        if (_stock && _stock.shortage) {
+            // Serverda HECH NARSA yozilmadi -> mahalliy stokni ham tiklaymiz.
+            try { if (window._revertLocalStock) window._revertLocalStock(stockChanges); } catch (e) {}
+            if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(false);
+            if (loadingOverlay) loadingOverlay.classList.remove('active');
+            var _shortMsg = (_stock.shortages || []).map(function (s) {
+                return '• ' + s.name + (s.size ? ' (' + s.size + ')' : '') +
+                       ' — omborda ' + (parseInt(s.available, 10) || 0) + ' ta';
+            }).join('\n');
+            try { showToast("Omborda yetarli emas!", "warning"); } catch (e) {}
+            try {
+                var _alertTxt = "Kechirasiz, bu tovarlar omborda yetarli emas:\n\n" + _shortMsg +
+                                "\n\nSavatdagi sonni kamaytirib, qayta urinib ko'ring.";
+                if (typeof tg !== 'undefined' && tg.showAlert) tg.showAlert(_alertTxt);
+                else alert(_alertTxt);
+            } catch (e) {}
+            // Bu buyurtma EMAS — 15 soniyalik kutish jazosi qo'llanmasin.
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'stock', shortages: _stock.shortages || [] };
+        }
+
         // 1. ADMINGA XABAR YUBORISH
         const res = await tgProxySend({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" });
         
         if (res.ok) {
-            _decrementStock(stockChanges);
+            // Zaxira SERVERDA allaqachon kamaytirilgan bo'lsa — qayta kamaytirmaymiz
+            // (aks holda ikki barobar yechilardi).
+            if (!_stock || _stock.mode !== 'server') _decrementStock(stockChanges);
             
             // Zaxira ogohlantirishi (Admin uchun)
             if (lowStockAlerts) {
@@ -10565,10 +10877,33 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             }); 
             // Keyingi buyurtma uchun tanlovni tozalaymiz
             try { if (window._cbResetApplied) window._cbResetApplied(); } catch (e) {}
-            
+
+            // 🗂 MARKAZIY `orders` ARXIVIGA YOZAMIZ.
+            //    Nima uchun kerak: admin buyurtma holatini o'zgartirganda kod
+            //    `orders/<uid>_<kod>/status` ga yozadi va bot mijozga xabar
+            //    yuborishda o'sha yozuvdan JAMI SUMMANI o'qiydi. Lekin JONLI
+            //    kod bu yozuvni HECH QACHON yaratmagan edi (yaratuvchi kod
+            //    `confirmOrder` ning O'LIK nusxasida qolib ketgan). Natijada:
+            //      • mijozga boradigan "qabul qilindi / yo'lda" xabarlarida
+            //        summa ko'rinmasdi;
+            //      • bazada faqat `{status:...}` dan iborat "yarim" yozuvlar
+            //        paydo bo'lardi.
+            //    Endi buyurtma to'liq yoziladi. Xato bo'lsa buyurtma buzilmaydi.
+            try {
+                if (window._mirrorOrderToCentral) {
+                    window._mirrorOrderToCentral(myOrders[0], {
+                        uid: currentUser, name: profName, phone: profPhone, address: fetchedAddress
+                    });
+                }
+            } catch (e) { _dwarn('[orders] markaziy arxivga yozilmadi:', e); }
+
             saveLocalOrders(); 
             cart = {}; 
-            saveLocalCart(); 
+            saveLocalCart();
+            // Savatni DARHOL serverga yozamiz: buyurtmadan keyin ilova
+            // `tg.close()` bilan yopiladi, kechiktirilgan yozuv yetib
+            // bormasligi mumkin -> mijoz qaytganda savat to'la ko'rinardi.
+            try { if (window._flushCart) window._flushCart(); } catch (e) {}
             updateCartBadge();
             window.myOrders = myOrders;
             
@@ -10622,7 +10957,16 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                 ]),
                 new Promise(function(r){ setTimeout(r, 6000); })
             ]).then(_doClose);
+            // ✅ Chaqiruvchiga MUVAFFAQIYAT signali. Faqat shu holatda yashil
+            //    "pticha" + konfetti ko'rsatiladi (pastdagi wrapper shuni tekshiradi).
+            return { ok: true, code: newOrderCode };
         } else {
+            // Xabar ketmadi -> buyurtma YO'Q. Serverda band qilingan zaxirani
+            // QAYTARAMIZ, aks holda tovar sotilmagan holda "yo'q" bo'lib qolardi.
+            if (_stock && _stock.mode === 'server') {
+                try { window._stockCommit(stockChanges, 'release'); } catch (e) {}
+            }
+            try { if (window._revertLocalStock) window._revertLocalStock(stockChanges); } catch (e) {}
             throw new Error("API xatosi");
         }
     } catch (err) { 
@@ -10630,6 +10974,7 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
         if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(false);
         if(loadingOverlay) loadingOverlay.classList.remove('active'); 
         showToast("Xatolik! Internetni tekshiring.", "warning"); 
+        return { ok: false, reason: 'error' };
     }
 };
 
@@ -11657,9 +12002,26 @@ window.processDraftDeletion = (id, hasConflict) => {
         }
     }
     
-    db.ref('products').set(productsDB).then(() => {
+    // ⚠️ ILGARI: `db.ref('products').set(productsDB)` — butun katalogni
+    //    XOTIRADAGI (eskirgan bo'lishi mumkin) nusxa bilan qayta yozardi.
+    //    `productsDB` sahifa ochilganda BIR MARTA o'qiladi va `products` ga
+    //    listener YO'Q. Ya'ni sahifa ochilgandan keyin bot yoki boshqa admin
+    //    qo'shgan HAR QANDAY tovar shu yozuvda JIMGINA O'CHIB KETARDI.
+    //    Endi `_rewriteProductsSafely` ishlatiladi: u avval ENG SO'NGGI
+    //    holatni o'qiydi, o'zgartirishni o'shanga qo'llaydi.
+    window._rewriteProductsSafely(function (fresh) {
+        var byId = {};
+        productsDB.forEach(function (p) { if (p && p.id != null) byId[String(p.id)] = p; });
+        // Serverdagi ro'yxatni asos qilamiz; lokalda o'zgargan tovarlarni
+        // ustiga qo'yamiz; lokalda BUTUNLAY yo'q (o'chirilgan) tovarni tashlaymiz.
+        return fresh
+            .filter(function (p) { return p && p.id != null && byId[String(p.id)]; })
+            .map(function (p) { return byId[String(p.id)]; });
+    }).then(function () {
         showToast(hasConflict ? "O'chirildi va eskisi tiklandi!" : "Qoralama o'chirildi!");
         filterAdminDrafts(); // Oynani yangilab qoyish
+    }).catch(function () {
+        showToast("Saqlashda xato — qayta urinib ko'ring", "warning");
     });
 };
 
@@ -14141,9 +14503,34 @@ window.updateLivePreview = (prefix) => {
 };
 
 // ---------- 6) DB YOZISH (faqat o'zgargan tovar) va XAVFSIZ ID ----------
+// ⚠️ ILGARI XATO: tovar MASSIV INDEKSI bo'yicha yozilardi
+//    (`products/{idx}`). `_rewriteProductsSafely` esa massivni `filter()`
+//    qiladi — bitta tovar o'chirilsa, undan KEYINGI barcha indekslar suriladi.
+//    Natijada tahrirlash oynasi o'chirishdan OLDIN ochilgan bo'lsa, saqlash
+//    tahrirlangan tovarni BOSHQA tovar ustiga yozib yuborardi.
+//    Endi yozishdan oldin o'sha indeksdagi tovar AYNAN shu `id` ga tegishli
+//    ekani tekshiriladi; mos kelmasa — `id` bo'yicha to'g'ri joy topiladi.
 window.saveProductAt = (idx) => {
     if (idx < 0 || idx >= productsDB.length) return Promise.reject(new Error("Noto'g'ri indeks"));
-    return db.ref('products/' + idx).set(productsDB[idx]);
+    var prod = productsDB[idx];
+    var pid = prod && prod.id;
+    if (pid == null) return db.ref('products/' + idx).set(prod);   // id yo'q — eski yo'l
+
+    return db.ref('products/' + idx).transaction(function (cur) {
+        // Bu joyda boshqa tovar turgan bo'lsa — YOZMAYMIZ (bekor qilamiz)
+        if (cur && cur.id != null && String(cur.id) !== String(pid)) return;
+        return prod;
+    }).then(function (res) {
+        if (res && res.committed) return res;
+        // Indeks siljigan — id bo'yicha haqiqiy joyni topamiz
+        return db.ref('products').once('value').then(function (snap) {
+            var fresh = [];
+            if (snap.exists()) snap.forEach(function (c) { if (c.val()) fresh.push(c.val()); });
+            var real = fresh.findIndex(function (p) { return p && String(p.id) === String(pid); });
+            if (real < 0) throw new Error('Tovar bazada topilmadi');
+            return db.ref('products/' + real).set(prod);
+        });
+    });
 };
 // =====================================================================
 // 🔥 FLASH SALE — yordamchilar, normalizer (muddat tugashi) va countdown ticker
@@ -15286,7 +15673,14 @@ if (typeof window.confirmOrder === 'function' && !window._origConfirmOrder_v2) {
     window._origConfirmOrder_v2 = window.confirmOrder;
     window.confirmOrder = async function() {
         const r = await window._origConfirmOrder_v2.apply(this, arguments);
-        try { _showSuccessCheck(); _fireConfetti(40); _hap('success'); } catch (e) {}
+        // ⚠️ TUZATILDI: ilgari bu yerda pticha + konfetti SHARTSIZ ko'rsatilardi.
+        //    Ya'ni internet uzilganda, 15 soniya spam himoyasi ishlaganda yoki
+        //    omborda tovar yetmaganda ham mijoz yashil "muvaffaqiyat" belgisini
+        //    ko'rardi va buyurtma o'tgan deb o'ylardi. Endi faqat HAQIQIY
+        //    muvaffaqiyatda ({ok:true}) tabriklanadi.
+        try {
+            if (r && r.ok === true) { _showSuccessCheck(); _fireConfetti(40); _hap('success'); }
+        } catch (e) {}
         return r;
     };
 }
@@ -18878,11 +19272,20 @@ html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border
   }
 
   /* ——— 2) DOIMIY (infinite) BEZAK ANIMATSIYALARINI TO'XTATISH ———
-     Loyiha o'zida prefers-reduced-motion uchun aynan shu isbotlangan
-     usulni qo'llaydi: animatsiya bir marta, deyarli oniy ravishda tugab
-     OXIRGI (ko'rinadigan) holatda to'xtaydi -> kontent yashirilmaydi,
-     lekin har kadrdagi qayta-bo'yash (repaint) yo'qoladi -> qizish/qotish
-     to'xtaydi. Shimmer, glow, ken-burns, float kabilar endi CPU yemaydi. */
+     Shimmer, glow, ken-burns, float kabi CHEKSIZ bezaklar har kadrda
+     qayta-bo'yash talab qiladi -> telefon qiziydi. Ular shu qoida bilan
+     to'xtatiladi va bu TO'G'RI qaror.
+
+     ⚠️ LEKIN bu qoida `*` bo'lgani uchun FOYDALI animatsiyalarni ham
+        o'ldirardi: yuklanish spinnerlari (aylanmay MUZLAB qolardi —
+        buzilgan ikonka ko'rinardi), oyna ochilishi, ✓ pticha, toast,
+        konfetti, savat javobi, storis halqasi. Ya'ni 77 animatsiyadan
+        faqat 8 tasi ishlardi.
+
+     ENDI: qoida joyida qoladi (issiqlikdan himoya buzilmaydi), lekin fayl
+        OXIRIDA "essential-motion" RUXSAT RO'YXATI bor — u faqat arzon
+        (transform/opacity) va FOYDALI harakatlarni qaytaradi.
+        Qidirish uchun: <style id="layer-essential-motion"> */
   html.lite body *,
   html.lite body *::before,
   html.lite body *::after {
@@ -23930,5 +24333,1133 @@ html[data-theme="light"] select.pf-car-select option { color: #111; }
     if (window._dlog) window._dlog('%c[Qatlam 2026.13] Profil: mashina + doimiy manzil', 'color:#C9A84C;font-weight:bold;');
 })();
 </script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.15 — BUYURTMALARGA ATOMIK YOZISH (ma'lumot yo'qolmasligi)
+     ----------------------------------------------------------------------------
+     `users/{uid}/orders` tuguniga UCH XIL yozuvchi murojaat qiladi:
+       1) mijozning o'zi   — yangi buyurtma, chat xabari
+       2) admin            — holat o'zgartirish
+       3) admin            — chatga javob
+     Ilgari uchalasi ham `.once()` bilan BUTUN massivni o'qib, o'zgartirib,
+     `.set()` bilan hammasini qayta yozardi. O'qish va yozish orasidagi
+     yuz millisekundda boshqa tomon yozgan bo'lsa — u JIMGINA O'CHIB KETARDI.
+     Eng og'ir holat: mijoz buyurtma beradi, admin o'sha payt holatni
+     o'zgartiradi -> yangi buyurtma yo'qoladi, lekin mijozga Telegram'da
+     "qabul qilindi" xabari allaqachon ketgan va savati tozalangan.
+
+     Bu qatlam yagona ATOMIK yordamchini beradi. Firebase tranzaksiyasi
+     to'qnashuvni o'zi aniqlaydi va yangi ma'lumot bilan QAYTA uriniadi.
+     ============================================================================ -->
+<script>
+(function ordersAtomicWrites() {
+    'use strict';
+
+    /**
+     * Firebase `orders` tugunini massivga aylantiradi.
+     * RTDB ketma-ket raqamli kalitlarni massiv, "teshikli" bo'lsa obyekt
+     * qilib qaytaradi — shuning uchun ikki shaklni ham qo'llab-quvvatlaymiz.
+     */
+    window._toOrdersArray = function (v) {
+        if (!v) return [];
+        if (Array.isArray(v)) return v.filter(Boolean);
+        if (typeof v === 'object') {
+            return Object.keys(v).map(function (k) { return v[k]; }).filter(Boolean);
+        }
+        return [];
+    };
+
+    function ordersRef(uid) {
+        try { if (typeof db !== 'undefined' && db && db.ref) return db.ref('users/' + uid + '/orders'); } catch (e) {}
+        try { if (window.firebase && firebase.database) return firebase.database().ref('users/' + uid + '/orders'); } catch (e) {}
+        return null;
+    }
+
+    /**
+     * Buyurtmalar ro'yxatini ATOMIK o'zgartiradi.
+     * @param {string|number} uid
+     * @param {function(Array): (Array|undefined)} mutate
+     *        Massivni o'zgartirib QAYTARADI. `undefined` qaytarsa — bekor
+     *        qilinadi (masalan buyurtma topilmadi) va hech narsa yozilmaydi.
+     * @returns {Promise<{committed:boolean}|null>}
+     */
+    window._ordersTxn = function (uid, mutate) {
+        if (!uid || typeof mutate !== 'function') return Promise.resolve(null);
+        var ref = ordersRef(uid);
+        if (!ref) return Promise.resolve(null);
+        return ref.transaction(function (cur) {
+            var arr = window._toOrdersArray(cur);
+            var out;
+            try { out = mutate(arr); } catch (e) { return undefined; }
+            if (out === undefined || out === null) return undefined;   // bekor
+            return out;
+        });
+    };
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.15] Buyurtmalarga atomik yozish', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.14 — "ESSENTIAL MOTION" RUXSAT RO'YXATI
+     ----------------------------------------------------------------------------
+     MUAMMO:
+       Yuqorida (perf-tier-lite qatlamida) shunday qoida bor:
+
+           html.lite body *, ::before, ::after {
+               animation-duration: 0.001s !important;
+               animation-iteration-count: 1 !important;
+           }
+
+       U cheksiz bezaklarni (shimmer, glow, ken-burns, float) to'xtatish
+       uchun yozilgan — bu TO'G'RI qaror, ular telefonni qizdiradi.
+
+       LEKIN `*` bo'lgani uchun u FOYDALI harakatlarni ham o'ldirardi:
+         • yuklanish spinnerlari — aylanmay BIRINCHI KADRDA MUZLAB qolardi,
+           ya'ni ekranda buzilgan ikonka ko'rinardi (eng yomon holat);
+         • oyna ochilishi, ✓ pticha, toast, konfetti, savat javobi,
+           yurakcha, admin kartalari — hammasi shartta paydo bo'lardi.
+
+       Natijada ilovadagi 77 animatsiyadan atigi 8 tasi ishlardi.
+
+     YECHIM:
+       O'ldirgich qoidasi JOYIDA QOLADI (issiqlikdan himoya buzilmaydi),
+       bu qatlam esa faqat ARZON (transform/opacity) va FOYDALI
+       harakatlarni nomma-nom qaytaradi.
+
+     SPECIFICITY MANTIQI (nega ishlaydi):
+       O'ldirgich: `html.lite body *`  -> (0 id, 1 klass, 2 element)
+       Bizniki:    `html body .sv-spinner` -> (0, 1, 2) — TENG,
+       lekin bu qatlam faylda KEYIN turadi -> kaskadda g'olib chiqadi.
+       ID li selektorlar (`#loading-text`) esa aniq yengadi.
+
+     ♿ HARAKATNI KAMAYTIRISH:
+       • spinnerlar QOLADI — yuklanish holati muhim ma'lumot, muzlagan
+         ikonka esa "ilova qotdi" degan xato taassurot beradi;
+       • bezak va bir martalik effektlar esa O'CHADI (D bo'limi).
+     ============================================================================ -->
+<style id="layer-essential-motion">
+
+/* ═══════════════════════════════════════════════════════════
+   A) SPINNERLAR — HAR DOIM aylanadi (lite ham, reduced-motion ham)
+   ═══════════════════════════════════════════════════════════ */
+html body .sv-spinner,
+html body .aib-ring,
+html body .cst-more i,
+html body #map-locate-btn.locating svg,
+html body .scroll-loader::before {
+    animation-duration: 0.95s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+/* Shesternya kattaroq — sekinroq aylanadi (ko'zga yoqimli) */
+html body #loading-text::before {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+/* Soatcha bir tsiklda 1800° buriladi — o'z tezligini saqlaydi */
+html body .hourglass::after {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+/* Yuklanish YOZUVLARI — faqat opacity (compositor, deyarli tekin) */
+html body .order-loading-text,
+html body #loading-text::after {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B) SKELETON — "yuklanmoqda" signali ARZON usulda qaytariladi
+   -----------------------------------------------------------
+   Asl shimmer `background-position` ni harakatlantiradi — bu HAR
+   KADRDA butun gradientni qayta bo'yaydi, ya'ni haqiqatan qimmat.
+   Shuning uchun uni tiklamaymiz; o'rniga faqat `opacity` bilan
+   yumshoq "nafas" beramiz — GPU uchun deyarli tekin, lekin
+   foydalanuvchi kontent yuklanayotganini KO'RADI (ilgari o'lik
+   kulrang blok turardi).
+   ═══════════════════════════════════════════════════════════ */
+@keyframes emSoftPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.52; } }
+
+html.lite body .skeleton,
+html.lite body .sk-bone {
+    animation: emSoftPulse 1.3s ease-in-out infinite !important;
+    animation-duration: 1.3s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    background-position: 0 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   C) BIR MARTALIK JAVOBLAR — lite'da tiklanadi
+   -----------------------------------------------------------
+   Bularning hammasi transform/opacity ustida ishlaydi va BIR marta
+   o'ynab tugaydi — ya'ni davomiy yuk BERMAYDI. Aynan shular
+   ilovaga "tirik" hissini beradi.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Oyna pastdan chiqishi */
+html body .modal-standard,
+html body #productModal {
+    animation-duration: 0.5s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Toast — IKKI animatsiya (chiqish + yig'ilish), shuning uchun
+   qiymatlar vergul bilan ikkitalab beriladi. Ilgari ikkalasi ham
+   0.001s bo'lib, xabar chiqishi bilanoq yo'qolardi. */
+html body .toast {
+    animation-duration: 0.5s, 0.4s !important;
+    animation-delay: 0s, 2.6s !important;
+    animation-iteration-count: 1, 1 !important;
+}
+
+/* ✓ Muvaffaqiyat ptichasi (halqa chiqadi -> belgi chiziladi) */
+html body .css-check-circle {
+    animation-duration: 0.45s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+html body .css-check-circle svg path {
+    animation-duration: 0.4s !important;
+    animation-delay: 0.18s !important;
+    animation-iteration-count: 1 !important;
+}
+
+/* Konfetti — JS har bo'lakka tasodifiy davomiylik/kechikish beradi,
+   lekin `!important` qoidasi inline stilni ham yengadi. Shuning uchun
+   tarqoq tushish hissini `nth-child` bilan qaytaramiz. */
+html body .confetti-piece {
+    animation-duration: 2.6s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+html body .confetti-piece:nth-child(3n)   { animation-delay: 0.18s !important; }
+html body .confetti-piece:nth-child(3n+1) { animation-delay: 0.36s !important; }
+html body .confetti-piece:nth-child(4n)   { animation-duration: 3.1s !important; }
+
+/* Yurakcha (saqlanganlar) */
+html body .btn-wishlist.burst {
+    animation-duration: 0.5s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+html body .heart-particle {
+    animation-duration: 0.7s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Pastdagi menyu javobi + savat silkinishi */
+html body .nav-item.tab-pulse svg,
+html body .nav-item#nav-cart.shaking svg {
+    animation-duration: 0.45s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Tovar kartalari va taqqoslash paneli */
+html body .items-grid > .luxury-card,
+html body #compare-bar.show {
+    animation-duration: 0.35s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Admin paneli kartalari */
+html body #adminModal .ap2-hero-card,
+html body #adminModal .ap2-tile {
+    animation-duration: 0.45s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* Storis kontenti silliq paydo bo'lishi */
+html body #story-content > img,
+html body #story-content > video {
+    animation-duration: 0.35s !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   D) ♿ HARAKATNI KAMAYTIRISH — bezaklar o'chadi, spinner qoladi
+   ═══════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+    html body .modal-standard,
+    html body #productModal,
+    html body .css-check-circle,
+    html body .confetti-piece,
+    html body .btn-wishlist.burst,
+    html body .heart-particle,
+    html body .nav-item.tab-pulse svg,
+    html body .nav-item#nav-cart.shaking svg,
+    html body .items-grid > .luxury-card,
+    html body #compare-bar.show,
+    html body #adminModal .ap2-hero-card,
+    html body #adminModal .ap2-tile,
+    html body #story-content > img,
+    html body #story-content > video,
+    html.lite body .skeleton,
+    html.lite body .sk-bone {
+        animation: none !important;
+    }
+    /* Pticha CHIZILGAN holatda ko'rinsin (yarim chizilgan qolmasin) */
+    html body .css-check-circle svg path {
+        animation: none !important;
+        stroke-dashoffset: 0 !important;
+    }
+    /* Toast harakatsiz chiqadi, lekin YO'QOLISHI kerak —
+       shuning uchun yig'ilish animatsiyasi qoldiriladi. */
+    html body .toast {
+        animation-duration: 0.01s, 0.4s !important;
+        animation-delay: 0s, 2.6s !important;
+        animation-iteration-count: 1, 1 !important;
+    }
+    /* Spinnerlar (A bo'limi) ATAYLAB qoldirilgan — izohga qara. */
+}
+</style>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.16 — OMBOR ZAXIRASI: SERVERDA BAND QILISH (oversell'ga qarshi)
+     ----------------------------------------------------------------------------
+     MUAMMO (ilgari):
+       1) OVERSELL. Zaxira tekshiruvi va kamaytirilishi FAQAT mijoz brauzerida
+          bo'lardi. Brauzerdagi `productsDB` — sahifa ochilgan paytdagi nusxa.
+          Mijoz ilovani ertalab ochib qo'ygan bo'lsa, kunduzi omborda tovar
+          tugagan bo'lsa ham u "1 ta bor" deb ko'rardi va buyurtma bera olardi.
+          Bir vaqtning o'zida 5 kishi oxirgi 1 donani sotib olishi mumkin edi.
+       2) NOTO'G'RI TOVAR STOKI KAMAYARDI. Yozish manzili massiv INDEKSi edi
+          (`products/12/stock`). Admin mahsulot o'chirsa yoki qo'shsa, indekslar
+          suriladi — natijada butunlay boshqa tovarning stoki kamayardi.
+       3) YASHIL "PTICHA" YOLG'ON GAPIRARDI. Buyurtma yuborilmasa ham (internet
+          yo'q, spam himoyasi) mijoz muvaffaqiyat animatsiyasini ko'rardi.
+
+     YECHIM:
+       Zaxira Worker `/stock-commit` da — SERVERDA — tekshiriladi va atomik
+       `increment` bilan band qilinadi. Mahsulot `id` bo'yicha topiladi.
+       Yetmasa buyurtma UMUMAN yuborilmaydi va mijozga TOVAR NOMI aytiladi.
+
+       Worker hali yangilanmagan bo'lsa (yoki internet uzilgan) — ilova
+       ishlashdan TO'XTAMAYDI: eski mijoz tomonidagi tranzaksiyaga qaytadi
+       (u ham endi `id` bo'yicha manzillanadi). Buni javobdagi
+       `stockCommit: true` belgisi orqali aniqlaymiz — Worker'ning eski
+       versiyasi noma'lum manzilga sendMessage proxy sifatida javob beradi
+       va bu belgi bo'lmaydi.
+     ============================================================================ -->
+<script>
+(function stockServerGuard() {
+    'use strict';
+
+    function proxyBase() {
+        var u = window.TG_PROXY || '';
+        try { if (!u && typeof TG_PROXY !== 'undefined') u = TG_PROXY; } catch (e) {}
+        return String(u).replace(/\/+$/, '');
+    }
+
+    function initData() {
+        try { if (typeof tg !== 'undefined' && tg && tg.initData) return tg.initData; } catch (e) {}
+        return '';
+    }
+
+    /** stockChanges -> serverga yuboriladigan minimal ro'yxat */
+    function toItems(changes) {
+        if (!Array.isArray(changes)) return [];
+        return changes.map(function (ch) {
+            return {
+                id: (ch && ch.id != null) ? ch.id : null,
+                name: (ch && ch.name) ? String(ch.name) : '',
+                size: (ch && ch.size != null) ? String(ch.size) : '',
+                qty: parseInt(ch && ch.qty, 10) || 0
+            };
+        }).filter(function (it) { return it.id != null && it.qty > 0; });
+    }
+
+    /**
+     * Zaxirani serverda band qiladi (yoki qaytaradi).
+     * @param {Array} changes  stockChanges ro'yxati
+     * @param {string} [op]    'commit' (default) yoki 'release'
+     * @returns {Promise<Object>}
+     *   { mode:'server' }                          — server bajardi
+     *   { mode:'fallback' }                        — server yo'q/xato: mijoz yo'liga o'tiladi
+     *   { mode:'skip' }                            — kamaytirish kerak emas
+     *   { shortage:true, shortages:[...] }         — omborda yetarli emas, buyurtma RAD etiladi
+     */
+    window._stockCommit = function (changes, op) {
+        var items = toItems(changes);
+        if (!items.length) return Promise.resolve({ mode: 'skip' });
+
+        var base = proxyBase();
+        var id = initData();
+        // initData yo'q (brauzer/APK) yoki manzil yo'q -> serverga bora olmaymiz.
+        if (!base || !id) return Promise.resolve({ mode: 'fallback' });
+
+        // Tarmoq osilib qolmasin: 8 soniyadan keyin mijoz yo'liga o'tamiz.
+        var timer = null;
+        var guard = new Promise(function (resolve) {
+            timer = setTimeout(function () { resolve({ mode: 'fallback', timeout: true }); }, 8000);
+        });
+
+        var call = fetch(base + '/stock-commit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: id, op: (op === 'release' ? 'release' : 'commit'), items: items })
+        }).then(function (r) {
+            return r.json().then(function (d) { return { status: r.status, data: d }; })
+                            .catch(function () { return { status: r.status, data: null }; });
+        }).then(function (out) {
+            var d = out.data;
+            // Worker'ning ESKI versiyasi bu manzilni bilmaydi va sendMessage
+            // proxy sifatida javob beradi -> `stockCommit` belgisi bo'lmaydi.
+            if (!d || d.stockCommit !== true) return { mode: 'fallback', legacy: true };
+            if (d.ok === true) return { mode: 'server' };
+            if (d.error === 'stock' && Array.isArray(d.shortages) && d.shortages.length) {
+                return { shortage: true, shortages: d.shortages };
+            }
+            // Serverning boshqa xatosi (token, baza) — savdo to'xtamasin.
+            if (window._dwarn) window._dwarn('[stock] server xatosi, mijoz yo\'liga o\'tildi:', d.error);
+            return { mode: 'fallback', serverError: d.error || ('http ' + out.status) };
+        }).catch(function (e) {
+            if (window._dwarn) window._dwarn('[stock] /stock-commit ishlamadi:', e);
+            return { mode: 'fallback' };
+        });
+
+        return Promise.race([call, guard]).then(function (r) {
+            if (timer) clearTimeout(timer);
+            return r;
+        });
+    };
+
+    /**
+     * Buyurtma RAD etilganda mahalliy `productsDB` stokini tiklaydi.
+     * (Buyurtma yaratish tsikli stokni ekranda darhol kamaytirib qo'yadi —
+     *  rad etilganda mijoz noto'g'ri sonni ko'rib qolmasligi kerak.)
+     */
+    window._revertLocalStock = function (changes) {
+        if (!Array.isArray(changes) || !changes.length) return false;
+        var list = window.productsDB;
+        if (!Array.isArray(list)) return false;
+        var changed = false;
+        changes.forEach(function (ch) {
+            if (!ch || ch.fallback == null) return;
+            var p = null;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i] && String(list[i].id) === String(ch.id)) { p = list[i]; break; }
+            }
+            if (!p) return;
+            var orig = parseInt(ch.fallback, 10) || 0;
+            var wantSize = (ch.size != null) ? String(ch.size) : '';
+            if (wantSize && wantSize !== 'Universal' && Array.isArray(p.sizes)) {
+                for (var j = 0; j < p.sizes.length; j++) {
+                    if (p.sizes[j] && String(p.sizes[j].size) === wantSize) {
+                        p.sizes[j].stock = orig; changed = true; break;
+                    }
+                }
+                p.stock = p.sizes.reduce(function (acc, s) { return acc + (parseInt(s && s.stock, 10) || 0); }, 0);
+            } else {
+                p.stock = orig; changed = true;
+            }
+        });
+        if (changed) {
+            try { if (typeof renderProducts === 'function') renderProducts(); } catch (e) {}
+            try { if (typeof renderCartItems === 'function') renderCartItems(); } catch (e) {}
+        }
+        return changed;
+    };
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.16] Ombor zaxirasi serverda band qilinadi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.17 — HARAKAT PAKETI (yo'q momentlar + "jank" tuzatish)
+     ----------------------------------------------------------------------------
+     Bu qatlam IKKI ishni qiladi.
+
+     A) YO'Q BO'LGAN MOMENTLARNI QO'SHADI
+        • Modal YOPILISHI. Oynalar silliq ochilardi, lekin yopilishi bir
+          zumda — `display:none`. Ilova "arzon" ko'rinardi.
+        • Savat oynasi ochilganda jami summa 0 dan sanab chiqadi.
+        • Tovar oynasida narx sanab chiqadi.
+        • Savat belgisining "pop" ishorasi TIKLANADI (pastda izoh: u
+          takroriy `@keyframes` nomi tufayli JIMGINA o'lgan edi).
+
+     B) "JANK" (silkinish) MANBALARINI YO'QOTADI
+        Brauzer uchun animatsiyalar teng emas:
+          · `transform` / `opacity` — GPU da, deyarli tekin;
+          · `left/top/width/height` — har kadrda LAYOUT qayta hisoblanadi;
+          · `background-position` / `box-shadow` / `filter` — har kadrda
+            PIKSELLAR qayta bo'yaladi.
+        Ilovada ikkinchi va uchinchi turdagi animatsiyalar bor edi va ular
+        CHEKSIZ aylanardi — ya'ni telefon protsessori HECH QACHON tinmasdi:
+        batareya tez tugardi, skroll silkinardi.
+
+        Bu qatlam ularni AYNI KO'RINISHDA, lekin transform/opacity ustida
+        qayta yozadi:
+          · `cinematicEnter` — har bo'lim almashganda `filter: blur(5px)`
+            (ilovadagi eng qimmat effekt) -> faqat siljish + shaffoflik;
+          · `.sk-bone` / `.skeleton` — `background-position` -> `opacity`;
+          · `.skeleton::after` `gold-loading` (`left`) -> o'chirildi
+            (tepasidagi pulsning o'zi yetarli);
+          · `.btn-add-cart/.btn-checkout/.pm-sticky-btn::after` `shine-wave`
+            (`left: -150% -> 200%`) -> `translate3d`;
+          · `.p2-cashback-card::after` `p2Shimmer` (`left`) -> `translate3d`;
+          · `.nav-badge.show` `badgePulse` (`box-shadow`, CHEKSIZ) -> o'chdi,
+            o'rniga bir martalik `transform` "pop";
+          · `.es-btn` `ctaPulse`, `.tl-dot` `dotPulse`, `.cf-timer` `cfPulse`
+            (hammasi `box-shadow`, cheksiz) -> `transform`/`opacity`;
+          · `flyToCartAnimation` — `left/top/width/height` ni bir vaqtda
+            animatsiya qilardi (eng ko'p bosiladigan joyda layout bo'roni)
+            -> bitta `transform` ga o'tkazildi.
+
+     C) O'LCHOV BIRLIKLARI (`--dur-*`, `--ease-*`)
+        Ilgari har animatsiya o'z vaqtini o'zi yozardi (0.2s, 0.3s, 0.42s,
+        0.55s, 0.7s...) — natijada ilova bir joyda tez, bir joyda sust
+        tuyulardi. Endi umumiy qiymatlar bor va `prefers-reduced-motion`
+        yoqilsa HAMMASI bir joyda nolga tushadi.
+
+     D) `window.Motion`
+        "Harakat ruxsat etilganmi?" tekshiruvi kodda 8 joyda qayta-qayta
+        yozilgan edi. Endi bitta manba: `Motion.reduced()`, `Motion.lite()`,
+        `Motion.weak()`, `Motion.dur(ms)`.
+
+     ⚠️ MUHIM TEXNIK IZOH: yuqorida (perf-tier-lite) shunday qoida bor —
+        `html.lite body *, ::before, ::after { animation-duration: 0.001s !important; }`
+        va `html.lite` ilova YUKLANAYOTGANDA HAR telefonda turadi. Shuning
+        uchun bu qatlamdagi har bir `@keyframes` uchun `animation-duration`,
+        `animation-iteration-count` va `animation-delay` QAYTA, `!important`
+        bilan va kamida shu darajadagi selektor bilan yozilgan.
+     ============================================================================ -->
+<style id="layer-motion-2026">
+/* ═══════════════════════════════════════════════════════════
+   C) VAQT VA EGRILIK BIRLIKLARI
+   ═══════════════════════════════════════════════════════════ */
+:root {
+    --dur-instant: 0.12s;
+    --dur-fast:    0.18s;
+    --dur-base:    0.28s;
+    --dur-slow:    0.42s;
+    --dur-fly:     0.62s;
+    --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in:     cubic-bezier(0.4, 0, 1, 1);
+    --ease-spring: cubic-bezier(0.34, 1.45, 0.5, 1);
+}
+/* Harakatni kamaytirish rejimi — barcha yangi vaqtlar BIR JOYDA nolga tushadi */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --dur-instant: 0.001s;
+        --dur-fast:    0.001s;
+        --dur-base:    0.001s;
+        --dur-slow:    0.001s;
+        --dur-fly:     0.001s;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   A1) MODAL YOPILISHI
+   -----------------------------------------------------------
+   `transition` ishlatiladi (animation EMAS) — chunki `html.lite`
+   qoidasi faqat `animation-*` ni qisqartiradi, `transition` ga
+   tegmaydi. Ya'ni yopilish HAR telefonda silliq bo'ladi.
+   `!important` kerak: ochilish animatsiyasi `forwards` bilan
+   `transform` ni band qilib turadi.
+   ═══════════════════════════════════════════════════════════ */
+html body .modal-standard.m-closing,
+html body #productModal.m-closing {
+    transition: opacity var(--dur-fast) var(--ease-in),
+                transform var(--dur-fast) var(--ease-in) !important;
+    opacity: 0 !important;
+    transform: translate3d(0, 16px, 0) scale(0.985) !important;
+    pointer-events: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .modal-standard.m-closing,
+    html body #productModal.m-closing {
+        transition: none !important;
+        opacity: 0 !important;
+        transform: none !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B1) BO'LIM ALMASHISHI — `filter: blur()` OLIB TASHLANDI
+   -----------------------------------------------------------
+   `cinematicEnter` har bo'lim almashganda butun ekranni
+   `blur(5px)` dan `blur(0)` ga o'tkazardi. Blur — eng qimmat
+   CSS filtri: har kadrda butun sahifa qayta bo'yaladi.
+   Ko'rinish deyarli bir xil qoladi, narxi esa nolga tushadi.
+   ═══════════════════════════════════════════════════════════ */
+@keyframes mo26SectionIn {
+    0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.988); }
+    100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+html body #content-area > div {
+    animation-name: mo26SectionIn !important;
+    animation-duration: 0.34s !important;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+    animation-fill-mode: forwards !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    filter: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body #content-area > div { animation: none !important; opacity: 1 !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B2) SKELETON — `background-position` -> `opacity`
+   -----------------------------------------------------------
+   Ilgari faqat `html.lite` da arzon pulsga o'tkazilgan edi
+   (QATLAM 2026.14). Lekin QUVVATLI telefonlarda ham har kadrda
+   4-8 blokning gradienti qayta bo'yalardi — bu aynan sahifa
+   ENG BAND paytda (kontent yuklanayotganda) sodir bo'ladi.
+   Endi hamma qurilmada bir xil arzon puls.
+   ═══════════════════════════════════════════════════════════ */
+html body .sk-bone,
+html body .skeleton {
+    animation-name: emSoftPulse !important;
+    animation-duration: 1.3s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    background-position: 0 0 !important;
+}
+/* `left` bo'ylab yuguradigan oltin nur — pulsning ustiga kerak emas */
+html body .skeleton::after { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    html body .sk-bone,
+    html body .skeleton { animation: none !important; opacity: 0.75 !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B3) TUGMA "NUR"I — `left` -> `translate3d`
+   -----------------------------------------------------------
+   Element kengligi tugmaning 60% i, `left: -150%` (tugma
+   kengligining) => o'z kengligining -250% i. Tugash nuqtasi
+   200% (tugma) => 333% (o'z kengligi). Ko'rinish bir xil.
+   ═══════════════════════════════════════════════════════════ */
+@keyframes mo26Shine {
+    0%       { transform: translate3d(-250%, 0, 0) skewX(-25deg); }
+    35%      { transform: translate3d(333%, 0, 0) skewX(-25deg); }
+    100%     { transform: translate3d(333%, 0, 0) skewX(-25deg); }
+}
+html body .btn-checkout::after,
+html body .pm-sticky-btn::after,
+html body .btn-add-cart::after {
+    left: 0 !important;
+    animation-name: mo26Shine !important;
+    animation-duration: 5s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .btn-checkout::after,
+    html body .pm-sticky-btn::after,
+    html body .btn-add-cart::after { animation: none !important; opacity: 0 !important; }
+}
+
+/* Cashback kartasidagi nur: width 50%, left -60%..130% (karta kengligida)
+   => o'z kengligining -120%..260% i. */
+@keyframes mo26Sweep {
+    0%       { transform: translate3d(-120%, 0, 0) skewX(-18deg); }
+    35%      { transform: translate3d(260%, 0, 0) skewX(-18deg); }
+    100%     { transform: translate3d(260%, 0, 0) skewX(-18deg); }
+}
+html body .p2-cashback-card::after {
+    left: 0 !important;
+    animation-name: mo26Sweep !important;
+    animation-duration: 5.5s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .p2-cashback-card::after { animation: none !important; opacity: 0 !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B4) CHEKSIZ `box-shadow` PULSLARI -> transform/opacity
+   -----------------------------------------------------------
+   `box-shadow` animatsiyasi har kadrda soyani qaytadan chizadi.
+   Bu yerdagilar HAMMASI `infinite` edi — telefon hech qachon
+   tinmasdi. Ko'z uchun natija bir xil, narxi ~0.
+   ═══════════════════════════════════════════════════════════ */
+@keyframes mo26Breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes mo26Dim     { 0%, 100% { opacity: 1; }         50% { opacity: 0.78; } }
+@keyframes mo26Pop {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.38); }
+    100% { transform: scale(1); }
+}
+
+/* 🎯 SAVAT BELGISI — "pop" ishorasi TIKLANDI.
+   Ilgari `@keyframes badgePulse` IKKI joyda yozilgan edi: birinchisi
+   (transform bilan "pop") to'g'ri, ikkinchisi esa `box-shadow` halqasi.
+   CSS da bir xil nomdagi keyframes'ning OXIRGISI ustun keladi — ya'ni
+   savatga tovar qo'shilganda ko'rinishi kerak bo'lgan "pop" JIMGINA
+   o'lib ketgan va o'rniga 2 soniyalik CHEKSIZ soya halqasi qolgan edi. */
+html body .nav-badge.show { animation: none !important; }
+html body .nav-badge.pulse {
+    animation-name: mo26Pop !important;
+    animation-duration: 0.36s !important;
+    animation-timing-function: cubic-bezier(0.34, 1.45, 0.5, 1) !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+html body .empty-state-pro .es-btn {
+    animation-name: mo26Breathe !important;
+    animation-duration: 2.4s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+}
+html body .tl-step.active .tl-dot {
+    animation-name: mo26Breathe !important;
+    animation-duration: 1.8s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+}
+html body .card-flash .cf-timer {
+    animation-name: mo26Dim !important;
+    animation-duration: 1.9s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .nav-badge.pulse,
+    html body .empty-state-pro .es-btn,
+    html body .tl-step.active .tl-dot,
+    html body .card-flash .cf-timer { animation: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B5) SAVATGA UCHIB BORISH — bitta `transform`
+   -----------------------------------------------------------
+   Eski kod `left`, `top`, `width`, `height` ni BIR VAQTDA
+   animatsiya qilardi. Ya'ni eng ko'p bosiladigan tugmada har
+   kadrda layout qayta hisoblanardi. Endi faqat transform.
+   ═══════════════════════════════════════════════════════════ */
+html body .flying-img.mo-fly {
+    transition: transform var(--dur-fly) cubic-bezier(0.25, 1, 0.25, 1),
+                opacity var(--dur-fly) ease !important;
+    will-change: transform, opacity;
+}
+</style>
+
+<script>
+(function motionPackage() {
+    'use strict';
+
+    // ───────────────────────────────────────────────────────────
+    // D) YAGONA "HARAKAT RUXSATMI?" MANBASI
+    //    Ilgari bu tekshiruv kodda 8 joyda qayta-qayta yozilgan edi
+    //    (har biri bir oz boshqacha) — natijada bir joyda hisobga
+    //    olinardi, boshqa joyda unutilardi.
+    // ───────────────────────────────────────────────────────────
+    var Motion = {
+        /** Foydalanuvchi tizim sozlamasida harakatni kamaytirgan (a11y). */
+        reduced: function () {
+            try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+            catch (e) { return false; }
+        },
+        /** Qurilma zaif (yoki FPS tushib ketgan) — bezaklar cheklanadi. */
+        lite: function () {
+            try {
+                return document.documentElement.classList.contains('lite') || !!window.__perfLite;
+            } catch (e) { return false; }
+        },
+        /** Ikkisidan biri — "kamroq harakat" rejimi. */
+        weak: function () { return Motion.reduced() || Motion.lite(); },
+        /** Vaqtni qaytaradi; a11y rejimida 0 (ya'ni darhol). */
+        dur: function (ms) { return Motion.reduced() ? 0 : (parseInt(ms, 10) || 0); }
+    };
+    window.Motion = Motion;
+
+    // ───────────────────────────────────────────────────────────
+    // A1) MODAL YOPILISH ANIMATSIYASI
+    //     Modallar `class` bilan emas, INLINE `display` bilan
+    //     boshqariladi — shuning uchun sof CSS bilan chiqish
+    //     animatsiyasi qilib bo'lmaydi. Yagona yashirish nuqtasi
+    //     `popstate` handleridagi bir qator; u shu funksiyani
+    //     chaqiradi (topilmasa — eski xatti-harakat).
+    // ───────────────────────────────────────────────────────────
+    function cancelClose(el) {
+        if (!el) return;
+        if (el.__moCloseT) { clearTimeout(el.__moCloseT); el.__moCloseT = null; }
+        if (el.classList) el.classList.remove('m-closing');
+    }
+    window._modalCancelClose = cancelClose;
+
+    window._modalHide = function (el) {
+        if (!el) return;
+        cancelClose(el);
+        // a11y: harakat kerak bo'lmasa — darhol yashiramiz
+        if (Motion.reduced()) { el.style.display = 'none'; return; }
+        var ms = Motion.lite() ? 130 : 210;
+        el.classList.add('m-closing');
+        el.__moCloseT = setTimeout(function () {
+            el.classList.remove('m-closing');
+            el.style.display = 'none';
+            el.__moCloseT = null;
+        }, ms);
+    };
+
+    // ───────────────────────────────────────────────────────────
+    // A2) openModal ustiga o'ram:
+    //     1) yopilish o'rtasida QAYTA ochilsa — oyna "yarim
+    //        g'oyib" holatda qotib qolmasin;
+    //     2) savat oynasi ochilganda jami summa 0 dan sanaladi.
+    // ───────────────────────────────────────────────────────────
+    if (typeof window.openModal === 'function' && !window._origOpenModal_mo) {
+        window._origOpenModal_mo = window.openModal;
+        window.openModal = function (id) {
+            var el = null;
+            try { el = document.getElementById(id); } catch (e) {}
+            cancelClose(el);
+            var r = window._origOpenModal_mo.apply(this, arguments);
+            cancelClose(el);   // `display:flex` dan keyin ham toza bo'lsin
+            if (id === 'cartModal') countUpCartTotal();
+            return r;
+        };
+    }
+
+    /** Savat jami summasi 0 dan haqiqiy qiymatga sanab chiqadi. */
+    function countUpCartTotal() {
+        if (Motion.reduced()) return;
+        setTimeout(function () {
+            try {
+                var el = document.getElementById('cart-total-sum');
+                if (!el) return;
+                var target = parseInt(String(el.innerText).replace(/[^0-9]/g, ''), 10) || 0;
+                if (target <= 0) return;
+                el.innerText = "0 so'm";
+                if (typeof window.animatePrice === 'function') window.animatePrice('cart-total-sum', target);
+                else el.innerText = target.toLocaleString() + " so'm";
+            } catch (e) {}
+        }, 40);
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // A3) Tovar oynasidagi narx ham sanab chiqadi.
+    //     Kichik detal, lekin narxni "jonli" qiladi va mijozning
+    //     e'tiborini aynan kerakli joyga qaratadi.
+    // ───────────────────────────────────────────────────────────
+    if (typeof window.openProduct === 'function' && !window._origOpenProduct_mo) {
+        window._origOpenProduct_mo = window.openProduct;
+        window.openProduct = function () {
+            var r = window._origOpenProduct_mo.apply(this, arguments);
+            if (!Motion.reduced()) {
+                setTimeout(function () {
+                    try {
+                        var el = document.getElementById('pm-price');
+                        if (!el) return;
+                        var target = parseInt(String(el.innerText).replace(/[^0-9]/g, ''), 10) || 0;
+                        if (target <= 0) return;
+                        el.innerText = "0 so'm";
+                        if (typeof window.animatePrice === 'function') window.animatePrice('pm-price', target);
+                        else el.innerText = target.toLocaleString() + " so'm";
+                    } catch (e) {}
+                }, 60);
+            }
+            return r;
+        };
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // B5) SAVATGA UCHISH — `transform` versiyasi
+    //     Eski funksiya `left/top/width/height` ni animatsiya
+    //     qilardi (har kadrda layout). Yangisi bitta `transform`
+    //     ishlatadi va `transitionend` bilan tugaydi (taymer
+    //     faqat xavfsizlik chegarasi).
+    // ───────────────────────────────────────────────────────────
+    window.flyToCartAnimation = function (e, imgSrc) {
+        try {
+            if (Motion.reduced()) return;
+            var cx = (e && e.clientX) || (e && e.touches && e.touches.length ? e.touches[0].clientX : null);
+            var cy = (e && e.clientY) || (e && e.touches && e.touches.length ? e.touches[0].clientY : null);
+            if (!cx || !cy) return;
+            var cartNav = document.getElementById('nav-cart');
+            if (!cartNav) return;
+
+            var img = document.createElement('img');
+            img.src = imgSrc || (window._brandPlaceholder ? window._brandPlaceholder('A1') : '');
+            img.className = 'flying-img mo-fly';
+            img.style.left = (cx - 30) + 'px';
+            img.style.top = (cy - 30) + 'px';
+            img.style.width = '60px';
+            img.style.height = '60px';
+            document.body.appendChild(img);
+
+            var r = cartNav.getBoundingClientRect();
+            var dx = (r.left + r.width / 2) - cx;
+            var dy = (r.top + r.height / 2) - cy;
+
+            var done = false;
+            function finish() {
+                if (done) return;
+                done = true;
+                try { img.remove(); } catch (_) {}
+                cartNav.classList.add('cart-bounce');
+                try {
+                    if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                } catch (_) {}
+                setTimeout(function () { cartNav.classList.remove('cart-bounce'); }, 400);
+            }
+
+            // Ikki marta rAF: brauzer boshlang'ich holatni CHIZIB olsin,
+            // shundan keyingina transform o'zgarsin (aks holda sakrab o'tadi).
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    img.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0) scale(0.22) rotate(300deg)';
+                    img.style.opacity = '0.25';
+                });
+            });
+            img.addEventListener('transitionend', finish, { once: true });
+            setTimeout(finish, 900);   // xavfsizlik: transitionend kelmasa ham tozalanadi
+        } catch (err) {
+            if (window._dwarn) window._dwarn('[motion] fly xato:', err);
+        }
+    };
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.17] Harakat paketi: yopilish + jank tuzatildi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.18 — OFFLINE, XATO USHLASH VA TAKROR OCHILISH TEZLIGI
+     ----------------------------------------------------------------------------
+     UCH muammo hal qilinadi.
+
+     1) INTERNET UZILSA — MIJOZ SABABNI BILMAYDI.
+        Ilgari aloqa yo'qolganda tugmalar bosilardi, lekin hech narsa
+        bo'lmasdi: na xabar, na belgi. Mijoz "ilova buzuq" deb o'ylardi.
+        Endi ekran tepasida tinch, aniq lavha chiqadi va aloqa tiklanganda
+        o'zi yo'qoladi (yashil "aloqa tiklandi" xabari bilan).
+
+     2) BIROR JOYDA XATO CHIQSA — ILOVA JIMGINA "O'LARDI".
+        JavaScript'da bitta ushlanmagan xato butun blokni to'xtatadi.
+        Ilgari bu faqat konsolda qolardi (mijoz konsolni ko'rmaydi) —
+        u esa qotib qolgan ekranga qarab turardi. Endi:
+          • xato USHLANADI va tushunarli xabar ko'rsatiladi;
+          • oxirgi 10 xato `window._lastErrors` da turadi (diagnostika);
+          • xabarlar 30 soniyada bir martadan ko'p chiqmaydi (spam yo'q).
+
+     3) HAR OCHILISHDA HAMMASI QAYTADAN YUKLANARDI.
+        Firebase kutubxonalari (3 fayl) va Google shriftlari har safar
+        tarmoqdan tortilardi. Service Worker ularni telefon xotirasida
+        saqlaydi — takror ochilish sezilarli tez bo'ladi va offline'da
+        ilova umuman ochiladi.
+
+        ⚠️ HTML ATAYLAB keshlanmaydi (faqat offline zaxira sifatida). Sabab:
+           do'kon egasi kunda bir necha marta deploy qiladi; keshlangan HTML
+           mijozga ESKI ilovani ko'rsatib qo'yardi. Batafsil izoh `sw.js` da.
+
+        🛟 O'CHIRISH: `localStorage.avto_nosw = '1'` -> qayta ochilganda
+           Service Worker o'chadi va keshlar tozalanadi.
+     ============================================================================ -->
+<style id="layer-offline-2026">
+#net-banner {
+    position: fixed;
+    left: 12px; right: 12px;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    z-index: 99998;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 13px; font-weight: 700;
+    background: rgba(28, 28, 30, 0.96);
+    color: #fff;
+    border: 1px solid rgba(255, 159, 10, 0.45);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    /* `transform`/`opacity` — GPU uchun tekin (QATLAM 2026.17 tamoyili) */
+    opacity: 0;
+    transform: translate3d(0, -140%, 0);
+    transition: opacity var(--dur-base, 0.28s) var(--ease-out, ease),
+                transform var(--dur-base, 0.28s) var(--ease-out, ease);
+    pointer-events: none;
+}
+#net-banner.show { opacity: 1; transform: translate3d(0, 0, 0); }
+#net-banner.online { border-color: rgba(48, 209, 88, 0.5); }
+#net-banner .nb-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ff9f0a; flex-shrink: 0;
+}
+#net-banner.online .nb-dot { background: #30d158; }
+@media (prefers-reduced-motion: reduce) {
+    #net-banner { transition: none !important; }
+}
+</style>
+
+<script>
+(function offlineAndErrors() {
+    'use strict';
+
+    // ───────────────────────────────────────────────────────────
+    // 1) TARMOQ HOLATI LAVHASI
+    // ───────────────────────────────────────────────────────────
+    var banner = null;
+    var hideT = null;
+
+    function ensureBanner() {
+        if (banner && banner.parentNode) return banner;
+        banner = document.getElementById('net-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'net-banner';
+            banner.innerHTML = '<span class="nb-dot"></span><span class="nb-text"></span>';
+            document.body.appendChild(banner);
+        }
+        return banner;
+    }
+
+    /**
+     * @param {string} text  ko'rsatiladigan matn
+     * @param {boolean} good yashil (aloqa bor) yoki sariq (aloqa yo'q)
+     * @param {number} [autoHide] shu millisekunddan keyin o'zi yashiriladi
+     */
+    function showBanner(text, good, autoHide) {
+        try {
+            var b = ensureBanner();
+            b.querySelector('.nb-text').textContent = text;
+            if (good) b.classList.add('online'); else b.classList.remove('online');
+            b.classList.add('show');
+            if (hideT) { clearTimeout(hideT); hideT = null; }
+            if (autoHide) hideT = setTimeout(hideBanner, autoHide);
+        } catch (e) {}
+    }
+    function hideBanner() {
+        try { if (banner) banner.classList.remove('show'); } catch (e) {}
+    }
+
+    window._netBanner = { show: showBanner, hide: hideBanner };
+
+    function onOffline() {
+        showBanner("Internet aloqasi yo'q — ma'lumot yangilanmayapti", false);
+    }
+    function onOnline() {
+        showBanner('Aloqa tiklandi', true, 2600);
+    }
+
+    try {
+        window.addEventListener('offline', onOffline);
+        window.addEventListener('online', onOnline);
+        // Ilova offline holatda ochilgan bo'lsa — darhol aytamiz
+        if (navigator && navigator.onLine === false) setTimeout(onOffline, 400);
+    } catch (e) {}
+
+    // ───────────────────────────────────────────────────────────
+    // 2) GLOBAL XATO USHLAGICH
+    //    Ilova "jimgina o'lib qolmasin". Foydalanuvchiga eng ko'pi
+    //    30 soniyada bir marta xabar beriladi.
+    // ───────────────────────────────────────────────────────────
+    window._lastErrors = window._lastErrors || [];
+    var lastToastAt = 0;
+    var TOAST_GAP = 30000;
+
+    function record(kind, msg, extra) {
+        try {
+            window._lastErrors.push({
+                kind: kind,
+                msg: String(msg || '').slice(0, 300),
+                where: String((extra && extra.where) || '').slice(0, 200),
+                at: new Date().toISOString()
+            });
+            if (window._lastErrors.length > 10) window._lastErrors.shift();
+            if (window._dwarn) window._dwarn('[xato/' + kind + ']', msg, extra || '');
+        } catch (e) {}
+    }
+
+    function maybeToast() {
+        try {
+            // Aloqa yo'q bo'lsa — tarmoq lavhasi allaqachon tushuntirib turadi
+            if (navigator && navigator.onLine === false) return;
+            var now = Date.now();
+            if (now - lastToastAt < TOAST_GAP) return;
+            lastToastAt = now;
+            if (typeof window.showToast === 'function') {
+                window.showToast('Nimadir ishlamadi — qayta urinib ko\'ring', 'warning');
+            }
+        } catch (e) {}
+    }
+
+    try {
+        window.addEventListener('error', function (e) {
+            // Rasm/skript YUKLANMASA — bu boshqa hodisa (`e.target` bor).
+            // Rasmlar uchun allaqachon alohida fallback bor, takrorlamaymiz.
+            if (e && e.target && e.target !== window && e.target.tagName) return;
+            record('error', (e && e.message) || 'noma\'lum xato', {
+                where: e ? ((e.filename || '') + ':' + (e.lineno || 0)) : ''
+            });
+            maybeToast();
+        });
+
+        window.addEventListener('unhandledrejection', function (e) {
+            var r = e && e.reason;
+            var msg = (r && (r.message || r.code)) || String(r || 'promise rad etildi');
+            record('promise', msg, {});
+            maybeToast();
+        });
+    } catch (e) {}
+
+    // ───────────────────────────────────────────────────────────
+    // 3) SERVICE WORKER
+    // ───────────────────────────────────────────────────────────
+    (function registerSW() {
+        try {
+            if (!('serviceWorker' in navigator)) return;
+            if (location.protocol !== 'https:') return;   // lokal fayl/HTTP — kerak emas
+
+            var off = false;
+            try { off = localStorage.getItem('avto_nosw') === '1'; } catch (e) {}
+
+            if (off) {
+                // 🛟 O'chirish kaliti: ro'yxatdan chiqaramiz va keshlarni tozalaymiz
+                navigator.serviceWorker.getRegistrations().then(function (rs) {
+                    rs.forEach(function (r) { r.unregister(); });
+                }).catch(function () {});
+                try {
+                    if (window.caches && caches.keys) {
+                        caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
+                    }
+                } catch (e) {}
+                if (window._dlog) window._dlog('[sw] o\'chirildi (avto_nosw=1)');
+                return;
+            }
+
+            // Ro'yxatga olishni sahifa yuklangandan KEYIN qilamiz —
+            // birinchi chizishga xalaqit bermasin.
+            var go = function () {
+                navigator.serviceWorker.register('sw.js')
+                    .then(function (reg) {
+                        if (window._dlog) window._dlog('[sw] yoqildi, scope:', reg.scope);
+                    })
+                    .catch(function (err) {
+                        // Ishlamasa ilova AVVALGIDEK ishlashda davom etadi
+                        if (window._dwarn) window._dwarn('[sw] yoqilmadi:', err);
+                    });
+            };
+            if (document.readyState === 'complete') setTimeout(go, 1200);
+            else window.addEventListener('load', function () { setTimeout(go, 1200); });
+        } catch (e) {}
+    })();
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.18] Offline + xato ushlash + kesh', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
 </body>
 </html>
+
