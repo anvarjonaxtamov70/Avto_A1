@@ -216,6 +216,49 @@ def _tg_display_name(tg_user):
         return ""
 
 
+def _safe_int(v, default=None):
+    """Har qanday qiymatni butun songa aylantiradi (bo'lmasa — default)."""
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError, AttributeError):
+        return default
+
+
+def _is_owner(user_id):
+    """FAQAT do'kon egasi (TG ID bo'yicha). Boshqa adminlar ham False oladi.
+
+    ⚠️ Mini App'dagi uid ba'zan raqam BO'LMAYDI ("tg_url_1712..." yoki
+    brauzerdagi fakeId). Ilgari `int(uid)` shu holatda ValueError tashlardi;
+    endi xato tashlanmaydi va xavfsiz False qaytadi.
+
+    Bu funksiya KOD DARAJASIDAGI qo'riqchi: maxfiy ma'lumot (savdo, daromad,
+    mijozlar) faqat shu tekshiruvdan o'tgandan keyin beriladi. Promptdagi
+    ko'rsatmaga TAYANMAYMIZ — u kafolat emas.
+    """
+    uid = _safe_int(user_id)
+    return uid is not None and uid == OWNER_TG_ID
+
+
+# Xo'jayinga ismi bilan murojaat qilinganini tuzatish uchun.
+# «Anvar Axtamov» (do'kon egasi haqidagi javob) TEGILMAYDI — faqat
+# murojaat shaklidagi «Anvar» / «Anvarjon» o'zgartiriladi.
+_OWNER_VOCATIVE_RE = re.compile(r"\bAnvar(?:jon)?\b(?!\s+Axtamov)", re.IGNORECASE)
+
+
+def _enforce_owner_address(text):
+    """Xo'jayinga ismi bilan murojaat qilinsa — «Xo'jayin» ga o'zgartiradi.
+
+    ⚠️ NEGA KERAK: prompt ko'rsatmasi 100% kafolat bermaydi. Model suhbat
+    tarixida o'zi ilgari yozgan «Assalomu alaykum, Anvarjon» kabi javoblarga
+    TAQLID qiladi va ko'rsatmani e'tiborsiz qoldiradi. Bu qoida natijani
+    KAFOLATLAYDI.
+    """
+    try:
+        return _OWNER_VOCATIVE_RE.sub("Xo'jayin", str(text or ""))
+    except Exception:
+        return text
+
+
 def _owner_identity_block(user_id=None, display_name=""):
     """AI uchun "kim bilan gaplashayapman" bloki — HAR BIR prompt shu blokdan foydalanadi.
 
@@ -229,24 +272,36 @@ def _owner_identity_block(user_id=None, display_name=""):
     (ismga qarab EMAS — shuning uchun o'zini "Xo'jayin" deb atagan odam
     egasining murojaat shaklini o'zlashtira olmaydi).
     """
+    is_owner = _is_owner(user_id)
+
+    if is_owner:
+        # ⚠️ Bu blok promptning ENG BOSHIDA turadi (_ai_system_prompt ga qara).
+        #    Ilgari u uzun ko'rsatmaning OXIRIGA qo'shilardi — model uzun
+        #    ko'rsatmaning oxiridagi qoidaga kamroq e'tibor beradi, shuning
+        #    uchun murojaat shakli ba'zan bajarilmasdi.
+        return "\n".join([
+            "ENG MUHIM QOIDA — MUROJAAT SHAKLI:",
+            "Siz hozir DO'KON XO'JAYINI bilan gaplashayapsiz.",
+            "- Unga HAR SAFAR va FAQAT «Xo'jayin» deb murojaat qil.",
+            "- Uning ismini (Anvar, Anvarjon) murojaatda MUTLAQO ISHLATMA.",
+            "- Salomlashganda ham: «Assalomu alaykum, Xo'jayin» (ism bilan EMAS).",
+            "- Suhbat tarixida ilgari ismi bilan murojaat qilingan bo'lsa ham — "
+            "unga TAQLID QILMA, shu qoidaga amal qil.",
+            "- Ohang: hurmatli, ishonchli, qisqa — o'z rahbariga hisobot bergandek.",
+            "",
+            "DO'KON HAQIDA (shaxsiyat):",
+            f"- Do'kon egasi (xo'jayini) — {SHOP_OWNER_NAME}. Ya'ni AYNAN siz "
+            "gaplashayotgan odam.",
+            "- Kim 'do'kon egasi/xo'jayini kim?' deb so'rasa — ANIQ shu ismni ayt, to'qima.",
+        ])
+
+    # ——— Xo'jayin EMAS (oddiy mijoz yoki boshqa admin) ———
     lines = [
         "\n\nDO'KON HAQIDA (shaxsiyat):",
         f"- Do'kon egasi (xo'jayini) — {SHOP_OWNER_NAME}.",
         "- Kim 'do'kon egasi/xo'jayini kim?' deb so'rasa — ANIQ shu ismni ayt, to'qima.",
     ]
-    try:
-        is_owner = (user_id is not None and int(user_id) == OWNER_TG_ID)
-    except (TypeError, ValueError):
-        is_owner = False
-
-    if is_owner:
-        lines += [
-            "\nHOZIR SIZ BILAN GAPLASHAYOTGAN ODAM — AYNAN DO'KON XO'JAYINI.",
-            "- Unga FAQAT «Xo'jayin» deb murojaat qil.",
-            "- Uning ismini (Anvar / Anvarjon) murojaatda ISHLATMA.",
-            "- Ohang: hurmatli, ishonchli, qisqa — o'z rahbariga hisobot bergandek.",
-        ]
-    else:
+    if True:
         nm = str(display_name or "").strip()
         lines += [
             "\nHOZIR SIZ BILAN GAPLASHAYOTGAN ODAM — XO'JAYIN EMAS.",
@@ -1838,6 +1893,248 @@ async def handle_photo_redirect(message: types.Message):
         await message.reply(t(lang, "photo_vision_failed"), reply_markup=shop_kb)
 
 
+# =====================================================================
+# 📊 XO'JAYIN UCHUN BIZNES TAHLILI (FAQAT do'kon egasiga)
+# ---------------------------------------------------------------------
+# ⚠️ Ilgari botda hech qanday statistika/hisobot YO'Q edi: na /stats, na
+#    savdo hisoboti, na "omborda nima kam qoldi" ogohlantirishi. Xo'jayin
+#    biror raqamni bilishi uchun mini app'dagi admin panelini ochishi
+#    kerak edi.
+#
+# ENDI: xo'jayin botga oddiy tilda savol bersa ("omborda nima kam qoldi?",
+#    "bu hafta qancha savdo bo'ldi?", "eng ko'p sotilgan tovar qaysi?"),
+#    bot HAQIQIY ma'lumotni bazadan o'qib, AI orqali javob beradi.
+#
+# 🔒 XAVFSIZLIK: ruxsat KODDA tekshiriladi (`_is_owner`), promptga
+#    TAYANMAYDI. Boshqa adminlar ham, mijozlar ham bu ma'lumotni
+#    OLMAYDI — ular uchun blok umuman qurilmaydi.
+#
+# 💡 TEJAMKORLIK: baza faqat savol biznesga tegishli bo'lganda o'qiladi
+#    (kalit so'zlar bo'yicha), har xabarda emas.
+# =====================================================================
+
+_BIZ_KEYWORDS = (
+    # ombor
+    "ombor", "omborda", "zaxira", "qoldi", "qolgan", "tugadi", "tugab", "tugayapti",
+    "stok", "склад", "остат", "закончил",
+    # savdo / pul
+    "savdo", "sotuv", "sotil", "daromad", "tushum", "foyda", "kassa", "summa",
+    "продаж", "выручк", "доход", "прибыл",
+    # mijoz / buyurtma
+    "mijoz", "xaridor", "buyurtma", "zakaz", "клиент", "покупател", "заказ",
+    # hisobot / raqam
+    "statistika", "statistik", "hisobot", "tahlil", "analiz", "reyting",
+    "nechta", "qancha", "eng ko'p", "eng kam", "top", "o'rtacha",
+    "статистик", "отчет", "отчёт", "сколько", "средн",
+    # vaqt
+    "bugun", "kechagi", "hafta", "oylik", "сегодня", "недел", "месяц",
+)
+
+
+def _looks_like_business_question(text):
+    """Savol biznes ma'lumotiga tegishlimi? (bazani bekorga o'qimaslik uchun)"""
+    t = str(text or "").lower()
+    return any(k in t for k in _BIZ_KEYWORDS)
+
+
+def _fmt_som(n):
+    """1234567 -> '1 234 567'"""
+    try:
+        return f"{int(round(float(n))):,}".replace(",", " ")
+    except (TypeError, ValueError):
+        return "0"
+
+
+def _order_items_pairs(items):
+    """Buyurtma tarkibini (mahsulot_id, soni) juftliklariga aylantiradi.
+
+    Ikki xil format uchraydi:
+      • mini app:  {"12||Universal": 2}          -> qiymat SON
+      • eski/bot:  [{"name": ..., "quantity": 2}] -> qiymat LUG'AT
+    """
+    out = []
+    for key, val in fb_items(items):
+        base = str(key).split("||")[0]
+        if isinstance(val, dict):
+            qty = _safe_int(val.get("quantity"), 0) or 0
+            name = str(val.get("name") or "").strip()
+            out.append((base, qty, name))
+        else:
+            out.append((base, _safe_int(val, 0) or 0, ""))
+    return out
+
+
+async def _collect_owner_analytics():
+    """`products` va `users` tugunlarini o'qib, ixcham biznes xulosasini qaytaradi.
+
+    Nega `users` (markaziy `orders` emas): buyurtmalarning ISHONCHLI manbasi —
+    `users/{uid}/orders`. Markaziy `orders` tuguni faqat eski (ishlamaydigan)
+    kod yo'lidan yozilardi, ya'ni deyarli bo'sh.
+    """
+    products = await firebase_get("products")
+    users = await firebase_get("users")
+
+    # ---------------- OMBOR ----------------
+    p_total = p_instock = p_out = 0
+    stock_value = 0
+    low = []                 # [(stock, name)]
+    name_by_id = {}
+    for _, p in fb_items(products):
+        if not isinstance(p, dict) or p.get("is_draft"):
+            continue
+        p_total += 1
+        nm = str(p.get("name") or "").strip() or "(nomsiz)"
+        pid = p.get("id")
+        if pid is not None:
+            name_by_id[str(pid)] = nm
+        stock = _safe_int(p.get("stock"), 0) or 0
+        price = _safe_int(p.get("price"), 0) or 0
+        stock_value += max(0, stock) * max(0, price)
+        if stock <= 0:
+            p_out += 1
+        else:
+            p_instock += 1
+            if stock <= 3:
+                low.append((stock, nm))
+    low.sort(key=lambda x: x[0])
+
+    # ---------------- BUYURTMA / MIJOZ ----------------
+    now_ms = int(time.time() * 1000)
+    DAY_MS = 86_400_000
+    by_status = {}
+    delivered_cnt = 0
+    delivered_sum = 0
+    cnt_1d = cnt_7d = cnt_30d = 0
+    sum_1d = sum_7d = sum_30d = 0
+    per_customer = {}
+    qty_by_pid = {}
+    name_hint = {}
+    u_total = u_with_orders = u_with_car = 0
+
+    for uid, u in fb_items(users):
+        if not isinstance(u, dict):
+            continue
+        u_total += 1
+        if u.get("my_car"):
+            u_with_car += 1
+        olist = [o for _, o in fb_items(u.get("orders")) if isinstance(o, dict)]
+        if olist:
+            u_with_orders += 1
+        prof = u.get("profile") if isinstance(u.get("profile"), dict) else {}
+        cname = str(prof.get("name") or "").strip() or f"ID {uid}"
+
+        for o in olist:
+            st = str(o.get("status") or "kutilmoqda")
+            by_status[st] = by_status.get(st, 0) + 1
+            # Haqiqatda to'langan pul (cashback chegirmasidan keyin)
+            paid = _safe_int(o.get("payable"), None)
+            if paid is None:
+                paid = max(0, (_safe_int(o.get("total"), 0) or 0)
+                           - (_safe_int(o.get("cashbackUsed"), 0) or 0))
+            ts = _safe_int(o.get("id"), 0) or _safe_int(o.get("createdAt"), 0) or 0
+
+            if st == "yetkazildi":
+                delivered_cnt += 1
+                delivered_sum += paid
+                per_customer[cname] = per_customer.get(cname, 0) + paid
+                for pid, qty, nm in _order_items_pairs(o.get("items")):
+                    if qty > 0:
+                        qty_by_pid[pid] = qty_by_pid.get(pid, 0) + qty
+                        if nm and pid not in name_hint:
+                            name_hint[pid] = nm
+
+            if st != "bekor_qilingan" and ts:
+                age = now_ms - ts
+                if 0 <= age <= DAY_MS:
+                    cnt_1d += 1
+                    sum_1d += paid
+                if 0 <= age <= 7 * DAY_MS:
+                    cnt_7d += 1
+                    sum_7d += paid
+                if 0 <= age <= 30 * DAY_MS:
+                    cnt_30d += 1
+                    sum_30d += paid
+
+    avg_order = int(delivered_sum / delivered_cnt) if delivered_cnt else 0
+    top_customers = sorted(per_customer.items(), key=lambda x: -x[1])[:8]
+    top_products = sorted(qty_by_pid.items(), key=lambda x: -x[1])[:10]
+
+    # ---------------- MATN ----------------
+    L = []
+    L.append("OMBOR:")
+    L.append(f"- Jami tovar turi: {p_total} ta (mavjud: {p_instock}, tugagan: {p_out})")
+    L.append(f"- Ombor qiymati (narx x qoldiq): {_fmt_som(stock_value)} so'm")
+    if low:
+        L.append(f"- KAM QOLGAN (3 va kamroq) — {len(low)} ta:")
+        for s, nm in low[:15]:
+            L.append(f"    * {nm} — {s} dona")
+        if len(low) > 15:
+            L.append(f"    * ... va yana {len(low) - 15} ta")
+    else:
+        L.append("- Kam qolgan tovar yo'q (hammasi 3 donadan ko'p)")
+
+    L.append("")
+    L.append("SAVDO:")
+    L.append(f"- Yetkazilgan buyurtmalar: {delivered_cnt} ta, "
+             f"tushum: {_fmt_som(delivered_sum)} so'm")
+    L.append(f"- O'rtacha buyurtma: {_fmt_som(avg_order)} so'm")
+    L.append(f"- Bugun (24 soat): {cnt_1d} ta / {_fmt_som(sum_1d)} so'm")
+    L.append(f"- 7 kun: {cnt_7d} ta / {_fmt_som(sum_7d)} so'm")
+    L.append(f"- 30 kun: {cnt_30d} ta / {_fmt_som(sum_30d)} so'm")
+    if by_status:
+        parts = ", ".join(f"{k}: {v}" for k, v in sorted(by_status.items(), key=lambda x: -x[1]))
+        L.append(f"- Holatlar bo'yicha: {parts}")
+
+    if top_products:
+        L.append("")
+        L.append("ENG KO'P SOTILGAN (yetkazilganlar bo'yicha):")
+        for pid, q in top_products:
+            nm = name_by_id.get(pid) or name_hint.get(pid) or f"ID {pid}"
+            L.append(f"- {nm} — {q} dona")
+
+    L.append("")
+    L.append("MIJOZLAR:")
+    L.append(f"- Jami ro'yxatdan o'tgan: {u_total} ta")
+    L.append(f"- Buyurtma qilganlar: {u_with_orders} ta")
+    L.append(f"- Mashinasini belgilaganlar: {u_with_car} ta")
+    if top_customers:
+        L.append("- Eng ko'p xarid qilganlar:")
+        for nm, s in top_customers:
+            L.append(f"    * {nm} — {_fmt_som(s)} so'm")
+
+    return "\n".join(L)
+
+
+async def _owner_analytics_snapshot():
+    """Xato bo'lsa ham suhbatni buzmaydi — bo'sh satr qaytaradi."""
+    try:
+        return await _collect_owner_analytics()
+    except Exception as e:
+        logging.error(f"Xo'jayin tahlili xatosi: {e}")
+        return ""
+
+
+@dp.message(Command("hisobot", "report"))
+async def owner_report_command(message: types.Message):
+    """Tez hisobot — FAQAT do'kon egasiga. Boshqalar uchun jim (javob yo'q)."""
+    if not _is_owner(message.from_user.id):
+        return
+    try:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    except Exception:
+        pass
+    txt = await _owner_analytics_snapshot()
+    if not txt:
+        await message.reply("Xo'jayin, hisobot olinmadi — birozdan so'ng qayta urinib ko'ring.")
+        return
+    # Telegram chegarasi 4096 belgi — ehtiyot uchun qisqartiramiz
+    body = txt if len(txt) <= 3500 else (txt[:3500] + "\n... (qisqartirildi)")
+    await message.reply(
+        "<b>Xo'jayin, hisobot:</b>\n\n<pre>" + html.escape(body) + "</pre>",
+        parse_mode="HTML",
+    )
+
+
 def _ai_system_prompt(lang, user_id=None, display_name=""):
     """Telegram matnli AI suhbati uchun tizim ko'rsatmasi (professional sotuvchi).
 
@@ -1847,7 +2144,14 @@ def _ai_system_prompt(lang, user_id=None, display_name=""):
     qoidasi har safar yangilanadi.
     """
     profil_til = "rus" if lang == "ru" else "o'zbek"
+    # ⚠️ MUROJAAT/SHAXSIYAT BLOKI ENG BOSHDA TURADI.
+    #    Ilgari u `+ _owner_identity_block(...)` bilan promptning OXIRIGA
+    #    qo'shilardi. Til modellari uzun ko'rsatmaning oxiridagi qoidalarga
+    #    kamroq e'tibor beradi — natijada xo'jayinga «Xo'jayin» deb murojaat
+    #    qilish qoidasi ba'zan bajarilmasdi.
+    owner_block = _owner_identity_block(user_id, display_name).strip("\n")
     return (
+        owner_block + "\n\n"
         "Siz 'Avto_A1' do'konining avtomobil ehtiyot qismlari (zapchast) bo'yicha "
         "professional, tajribali va xushmuomala sotuvchi-maslahatchisiz. "
         "Do'koningiz Samarqand shahrida joylashgan.\n\n"
@@ -1871,11 +2175,10 @@ def _ai_system_prompt(lang, user_id=None, display_name=""):
         "4. Javoblaringiz qisqa, aniq, sotuvchilarona va samimiy bo'lsin (1-3 gap).\n"
         "- Aniq zapchast yoki narx so'ralsa: 'Pastdagi tugma orqali onlayn do'konimizdan "
         "qidiring' deb yo'naltiring. Hech qachon ochiq havola (link) yozmang."
-        + _owner_identity_block(user_id, display_name)
     )
 
 
-def _ensure_ai_session(user_id, lang, display_name=""):
+def _ensure_ai_session(user_id, lang, display_name="", extra=""):
     """ai_sessions[user_id] mavjudligini va system promptning YANGI ekanini ta'minlaydi.
 
     Mavjud suhbat tarixi saqlanadi — faqat birinchi (system) xabar yangilanadi.
@@ -1885,7 +2188,11 @@ def _ensure_ai_session(user_id, lang, display_name=""):
     user_id va display_name promptga uzatiladi — shunda AI kim bilan
     gaplashayotganini biladi (xo'jayin yoki oddiy mijoz).
     """
-    prompt = _ai_system_prompt(lang, user_id, display_name)
+    # `extra` — faqat SHU navbat uchun qo'shimcha kontekst (masalan xo'jayin
+    # uchun jonli biznes ma'lumoti). Suhbat TARIXIGA yozilmaydi: system xabar
+    # har navbatda qaytadan qurilgani uchun keyingi savolda eski (eskirgan)
+    # raqamlar qolib ketmaydi.
+    prompt = _ai_system_prompt(lang, user_id, display_name) + (extra or "")
     if user_id not in ai_sessions:
         ai_sessions[user_id] = [{"role": "system", "content": prompt}]
     else:
@@ -1907,15 +2214,37 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         user_id = message.from_user.id
         lang = await get_user_lang(user_id)
 
+        # 📊 XO'JAYIN BIZNES SAVOLI BERSA — bazadan HAQIQIY ma'lumot olamiz.
+        #    🔒 Ruxsat KODDA tekshiriladi: boshqa adminlar va mijozlar uchun
+        #       bu blok umuman qurilmaydi (promptga tayanmaymiz).
+        #    💡 Baza faqat savol biznesga tegishli bo'lganda o'qiladi.
+        owner = _is_owner(user_id)
+        extra = ""
+        if owner and _looks_like_business_question(message.text):
+            snap = await _owner_analytics_snapshot()
+            if snap:
+                extra = (
+                    "\n\n=== HOZIRGI HAQIQIY BIZNES MA'LUMOTI (faqat xo'jayin uchun) ===\n"
+                    + snap +
+                    "\n=== MA'LUMOT TUGADI ===\n"
+                    "Shu raqamlar asosida javob ber. Bu yerda yo'q raqamni "
+                    "TO'QIMA — bilmasang 'bu ma'lumot yo'q' deb ayt. "
+                    "Javob qisqa va aniq bo'lsin; ro'yxat so'ralsa punktlar bilan yoz."
+                )
+
         # System promptni HAR safar yangilaymiz — shunda til doim to'g'ri bo'ladi
         # (mijoz tilni almashtirsa ham), suhbat tarixi esa saqlanib qoladi.
-        _ensure_ai_session(user_id, lang, _tg_display_name(message.from_user))
+        _ensure_ai_session(user_id, lang, _tg_display_name(message.from_user), extra)
         ai_sessions[user_id].append({"role": "user", "content": message.text})
 
         bot_reply = await groq_chat(ai_sessions[user_id], temperature=0.5)
         if bot_reply is None:
             await message.reply(t(lang, "ai_busy"))
             return
+
+        # Xo'jayinga ismi bilan murojaat qilinsa — tuzatamiz (prompt kafolat emas)
+        if owner:
+            bot_reply = _enforce_owner_address(bot_reply)
 
         ai_sessions[user_id].append({"role": "assistant", "content": bot_reply})
         # Suhbatni ko'proq eslab qolsin: system + oxirgi 16 xabar (8 ta almashinuv).
