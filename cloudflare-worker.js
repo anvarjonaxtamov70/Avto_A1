@@ -26,10 +26,15 @@
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Range",
+  // X-Init-Data — /upload stream rejimida auth shu header orqali keladi
+  // (body'ga tegmasdan tekshirish uchun). Preflight ruxsati SHART.
+  "Access-Control-Allow-Headers": "Content-Type, Range, X-Init-Data",
+  "Access-Control-Max-Age": "86400",
 };
 
-const DEFAULT_ADMIN_IDS = ["5105291033", "483425630"];
+// ⚠️ Mini app'dagi ADMIN_IDS bilan BIR XIL bo'lishi shart (index.html).
+//    Ilgari 5302078 yo'q edi — o'sha admin video yuklaganda 403 olardi.
+const DEFAULT_ADMIN_IDS = ["5105291033", "483425630", "5302078"];
 const DEFAULT_DB_URL = "https://avtoa1shop-default-rtdb.firebaseio.com";
 const DEFAULT_REFERRAL_BONUS = 20000;
 // Taklif qilingan do'stning BIRINCHI buyurtmasi shu summadan OSHIQ bo'lishi shart.
@@ -53,9 +58,58 @@ function getAdminIds(env) {
   return DEFAULT_ADMIN_IDS;
 }
 
+// ===================== file_path KESHI (video qotishiga qarshi) =====================
+// ⚠️ MUAMMO (video o'ynaganda tutilib qolardi):
+//    Video <video> elementi faylni BIR BUTUN olmaydi — u ko'plab "Range"
+//    so'rovlari yuboradi (har bir bo'lak uchun bittasi; 20 MB video = o'nlab
+//    so'rov). Ilgari HAR BIR so'rovda Telegram'ga `getFile` chaqirilardi:
+//        so'rov -> getFile (~200-500ms) -> CDN'dan bo'lak (~200-500ms)
+//    Ya'ni har bo'lakka QO'SHIMCHA yarim sekund. Natijada video har necha
+//    sekundda tutilib turardi, orqaga/oldinga surish esa deyarli ishlamasdi.
+//
+// ENDI: file_id -> file_path juftligi xotirada saqlanadi. Telegram file_path
+//    ~1 soat yashaydi, shuning uchun 45 daqiqa keshlaymiz — xavfsiz zapas bor.
+//    Kesh eskirsa yoki CDN 404 qaytarsa, avtomat qayta so'raladi (pastda).
+//    Natija: birinchi bo'lakdan keyin getFile UMUMAN chaqirilmaydi -> silliq.
+const FILE_PATH_TTL = 45 * 60 * 1000;   // 45 daqiqa
+const FILE_PATH_MAX = 400;              // xotira cheklovi
+const filePathCache = new Map();        // file_id -> { path, exp }
+
+function cacheGetPath(fileId) {
+  const hit = filePathCache.get(fileId);
+  if (!hit) return null;
+  if (Date.now() > hit.exp) { filePathCache.delete(fileId); return null; }
+  return hit.path;
+}
+
+function cacheSetPath(fileId, filePath) {
+  // Eng eski yozuvlarni tashlaymiz (Map kiritish tartibini saqlaydi)
+  if (filePathCache.size >= FILE_PATH_MAX) {
+    const oldest = filePathCache.keys().next();
+    if (!oldest.done) filePathCache.delete(oldest.value);
+  }
+  filePathCache.set(fileId, { path: filePath, exp: Date.now() + FILE_PATH_TTL });
+}
+
+// file_id -> file_path (keshdan yoki Telegram'dan). `force` bilan kesh chetlanadi.
+async function resolveFilePath(fileId, env, force) {
+  if (!force) {
+    const cached = cacheGetPath(fileId);
+    if (cached) return cached;
+  }
+  const gfRes = await fetch(
+    `https://api.telegram.org/bot${env.BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`
+  );
+  const gf = await gfRes.json();
+  if (!gf || !gf.ok || !gf.result || !gf.result.file_path) return null;
+  cacheSetPath(fileId, gf.result.file_path);
+  return gf.result.file_path;
+}
+
 // ===================== /media : Telegram fayl PROXY =====================
 // file_id -> getFile -> file_path -> faylni stream qiladi.
-// Har so'rovda file_path qaytadan olinadi => link eskirmaydi (DOIMIY).
+// file_path keshlanadi (yuqoriga qara), eskirsa avtomat yangilanadi =>
+// link HECH QACHON eskirmaydi, lekin har bo'lakka ortiqcha kutish YO'Q.
 // BOT_TOKEN faqat shu serverda qoladi (Firebase'ga yozilmaydi => sirqib chiqmaydi).
 // Range (qisman yuklash) qo'llab-quvvatlanadi => video oldinga/orqaga suriladi.
 async function handleMedia(request, env) {
@@ -78,25 +132,33 @@ async function handleMedia(request, env) {
   }
 
   try {
-    // 1) file_id -> file_path (har safar yangilanadi, shuning uchun link eskirmaydi)
-    const gfRes = await fetch(
-      `https://api.telegram.org/bot${env.BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`
-    );
-    const gf = await gfRes.json();
-    if (!gf || !gf.ok || !gf.result || !gf.result.file_path) {
+    // 1) file_id -> file_path (keshdan; yo'q bo'lsa Telegram'dan)
+    let filePath = await resolveFilePath(fileId, env, false);
+    if (!filePath) {
       return new Response("Fayl topilmadi (file_id noto'g'ri yoki >20MB)", {
         status: 404,
         headers: mediaCors,
       });
     }
-    const filePath = gf.result.file_path;
 
     // 2) haqiqiy faylni Telegram CDN'dan olamiz (Range bo'lsa uzatamiz)
     const range = request.headers.get("Range");
-    const upstream = await fetch(
-      `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${filePath}`,
-      { method: request.method, headers: range ? { Range: range } : {} }
-    );
+    const fetchPart = (p) =>
+      fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${p}`, {
+        method: request.method,
+        headers: range ? { Range: range } : {},
+      });
+
+    let upstream = await fetchPart(filePath);
+
+    // 🔁 Keshdagi file_path eskirgan bo'lsa (Telegram 401/404 qaytaradi) —
+    //    bir marta MAJBURAN yangilab qayta urinamiz. Shuning uchun keshlash
+    //    "link eskirmaydi" kafolatini BUZMAYDI.
+    if (upstream.status === 404 || upstream.status === 401 || upstream.status === 403) {
+      filePathCache.delete(fileId);
+      const fresh = await resolveFilePath(fileId, env, true);
+      if (fresh) upstream = await fetchPart(fresh);
+    }
 
     // 3) javobni mijozga uzatamiz (to'g'ri Content-Type + kesh + Range)
     const headers = new Headers();
@@ -135,6 +197,144 @@ function guessMime(p) {
     gif: "image/gif",
   };
   return map[ext] || "application/octet-stream";
+}
+
+// ===================== /upload uchun umumiy yordamchilar =====================
+
+// Telegram javobidan (sendVideo/sendPhoto natijasi) mijozga kerakli
+// maydonlarni ajratib oladi. Stream rejimi ham, legacy rejimi ham shu
+// funksiyani ishlatadi — javob SHAKLI bir xil bo'lishi uchun.
+function buildUploadResult(tg, isVideo, origin, size) {
+  const r = tg.result;
+  let fileId = "";
+  let thumbId = "";
+  let duration = 0;
+  let width = 0;
+  let height = 0;
+
+  if (isVideo && r.video) {
+    fileId = r.video.file_id;
+    duration = r.video.duration || 0;
+    width = r.video.width || 0;
+    height = r.video.height || 0;
+    const th = r.video.thumbnail || r.video.thumb;
+    if (th) thumbId = th.file_id;
+  } else if (r.photo && r.photo.length) {
+    const best = r.photo[r.photo.length - 1];
+    fileId = best.file_id;
+    width = best.width || 0;
+    height = best.height || 0;
+  } else if (r.document) {
+    // Telegram ba'zan videoni "document" deb qabul qiladi (masalan .mov)
+    fileId = r.document.file_id;
+    const th = r.document.thumbnail || r.document.thumb;
+    if (th) thumbId = th.file_id;
+  } else if (r.animation) {
+    fileId = r.animation.file_id;
+    duration = r.animation.duration || 0;
+    const th = r.animation.thumbnail || r.animation.thumb;
+    if (th) thumbId = th.file_id;
+  }
+
+  if (!fileId) return null;
+
+  const mediaUrl = (id) => `${origin}/media?id=${encodeURIComponent(id)}`;
+  return {
+    ok: true,
+    file_id: fileId,
+    url: mediaUrl(fileId),
+    thumb_id: thumbId || null,
+    thumb_url: thumbId ? mediaUrl(thumbId) : null,
+    type: isVideo ? "video" : "image",
+    duration,
+    width,
+    height,
+    size: size || 0,
+  };
+}
+
+/* ===========================================================================
+ * /upload — STREAM REJIMI (asosiy yo'l)
+ * ---------------------------------------------------------------------------
+ * ⚠️ NEGA KERAK BO'LDI (video yuklash "qotib qolardi"):
+ *    Legacy yo'lda Worker `await request.formData()` chaqirardi — bu 20 MB
+ *    multipart'ni BUTUNLAY xotiraga o'qib, parse qilib, so'ng Telegram uchun
+ *    YANGI FormData yasab qayta serializatsiya qilardi. Cloudflare Worker'da
+ *    bepul rejada CPU vaqti QATTIQ cheklangan (~10ms). 20 MB parse + qayta
+ *    yasash bu chegaradan oshib ketadi -> Worker "resource limits" bilan
+ *    o'ldiriladi. Mijozda esa hech qanday aniq xato ko'rinmasdi: progress
+ *    95% da turib qolardi va 3 daqiqa timeout kutilardi. Aynan shu
+ *    "video tanlayapman va o'sha joyda qotib qolyapti" holati.
+ *
+ * ENDI: body'ga UMUMAN tegmaymiz — uni to'g'ridan-to'g'ri Telegram'ga
+ *    STREAM qilamiz (bayt-baytga o'zgarmasdan o'tadi).
+ *      • auth  -> `X-Init-Data` HEADER'idan (body o'qilmaydi)
+ *      • chat_id / caption / supports_streaming -> Telegram URL'ining
+ *        query qismida (ya'ni MIJOZ chat_id ni boshqara olmaydi — spam yo'q)
+ *      • multipart'ni Telegram o'zi parse qiladi
+ *    CPU deyarli nolga tushadi, yuklash esa tezlashadi: baytlar mijozdan
+ *    kelishi bilan darhol Telegram'ga ketadi (avval to'liq kutilardi).
+ * =========================================================================== */
+async function handleUploadStream(request, env, initData) {
+  try {
+    if (!env.BOT_TOKEN) return json({ ok: false, error: "BOT_TOKEN sozlanmagan" }, 500);
+
+    const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
+    if (!verified.ok) return json({ ok: false, error: verified.error }, 401);
+
+    const uid = String(verified.user.id);
+    if (getAdminIds(env).indexOf(uid) === -1) {
+      return json({ ok: false, error: "ruxsat yoq" }, 403);
+    }
+
+    const url = new URL(request.url);
+    const isVideo = url.searchParams.get("kind") !== "photo";
+
+    // Body multipart bo'lishi shart (Telegram faqat multipart qabul qiladi)
+    const ctype = request.headers.get("Content-Type") || "";
+    if (ctype.toLowerCase().indexOf("multipart/form-data") !== 0) {
+      return json({ ok: false, error: "multipart kerak" }, 400);
+    }
+
+    // Hajmni Content-Length bo'yicha tekshiramiz (body o'qilmaydi).
+    // +64KB — multipart sarlavhalari uchun zapas.
+    const MAX = 20 * 1024 * 1024;
+    const clen = parseInt(request.headers.get("Content-Length") || "0", 10) || 0;
+    if (clen > MAX + 65536) {
+      return json({ ok: false, error: "juda katta", size: clen, max: MAX }, 413);
+    }
+
+    const chatId = env.MEDIA_CHAT_ID || uid;
+    const method = isVideo ? "sendVideo" : "sendPhoto";
+
+    // Barcha parametrlar QUERY'da — shuning uchun body'ni ochish kerak emas
+    // va mijoz chat_id ni o'zgartira olmaydi.
+    const qs = new URLSearchParams();
+    qs.set("chat_id", String(chatId));
+    qs.set("disable_notification", "true");
+    qs.set("caption", isVideo ? "🎬 Mini app: storis videosi" : "🖼 Mini app: storis rasmi");
+    if (isVideo) qs.set("supports_streaming", "true");
+
+    const tgRes = await fetch(
+      `https://api.telegram.org/bot${env.BOT_TOKEN}/${method}?${qs.toString()}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": ctype },   // boundary AYNAN saqlanadi
+        body: request.body,                   // 🚀 stream — nusxa olinmaydi
+      }
+    );
+
+    const tg = await tgRes.json();
+    if (!tg || !tg.ok || !tg.result) {
+      return json({ ok: false, error: (tg && tg.description) || "Telegram rad etdi" }, 502);
+    }
+
+    const out = buildUploadResult(tg, isVideo, url.origin, clen);
+    if (!out) return json({ ok: false, error: "file_id qaytmadi" }, 502);
+    return json(out);
+  } catch (e) {
+    return json({ ok: false, error: String(e) }, 500);
+  }
 }
 
 export default {
@@ -188,6 +388,14 @@ export default {
     //    ko'rsatib bo'lmaydi. Shuning uchun chegara aynan shu yerda qo'yiladi
     //    (mijoz keyin "video ishlamaydi" muammosiga tushmasligi uchun).
     if (path === "/upload") {
+      // 🚀 ASOSIY YO'L: auth header'da bo'lsa — body'ni Telegram'ga stream qilamiz
+      //    (CPU cheklovi muammosi shu bilan hal bo'ladi, yuqoridagi izohga qara).
+      const hdrInit = request.headers.get("X-Init-Data");
+      if (hdrInit) return handleUploadStream(request, env, hdrInit);
+
+      // 🛟 ZAXIRA YO'L (legacy): eski mijoz initData'ni body ichida yuboradi.
+      //    Bu yo'l 20 MB ni xotirada parse qiladi va CPU cheklovига urilishi
+      //    mumkin — shuning uchun faqat moslik uchun saqlanadi.
       try {
         const form = await request.formData();
         const initData = String(form.get("initData") || "");
@@ -241,46 +449,9 @@ export default {
           return json({ ok: false, error: (tg && tg.description) || "Telegram rad etdi" }, 502);
         }
 
-        const r = tg.result;
-        let fileId = "";
-        let thumbId = "";
-        let duration = 0;
-        let width = 0;
-        let height = 0;
-
-        if (isVideo && r.video) {
-          fileId = r.video.file_id;
-          duration = r.video.duration || 0;
-          width = r.video.width || 0;
-          height = r.video.height || 0;
-          const th = r.video.thumbnail || r.video.thumb;
-          if (th) thumbId = th.file_id;
-        } else if (r.photo && r.photo.length) {
-          const best = r.photo[r.photo.length - 1];
-          fileId = best.file_id;
-          width = best.width || 0;
-          height = best.height || 0;
-        } else if (r.document) {
-          fileId = r.document.file_id;
-          const th = r.document.thumbnail || r.document.thumb;
-          if (th) thumbId = th.file_id;
-        }
-
-        if (!fileId) return json({ ok: false, error: "file_id qaytmadi" }, 502);
-
-        const origin = new URL(request.url).origin;
-        return json({
-          ok: true,
-          file_id: fileId,
-          url: `${origin}/media?id=${encodeURIComponent(fileId)}`,
-          thumb_id: thumbId || null,
-          thumb_url: thumbId ? `${origin}/media?id=${encodeURIComponent(thumbId)}` : null,
-          type: isVideo ? "video" : "image",
-          duration,
-          width,
-          height,
-          size: file.size,
-        });
+        const out = buildUploadResult(tg, isVideo, new URL(request.url).origin, file.size);
+        if (!out) return json({ ok: false, error: "file_id qaytmadi" }, 502);
+        return json(out);
       } catch (e) {
         return json({ ok: false, error: String(e) }, 500);
       }
