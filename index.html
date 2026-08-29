@@ -10334,13 +10334,19 @@ window.chg = (safeId, d) => {
 
 window.confirmOrder = async (paymentMethod) => {
     const loadingOverlay = document.getElementById('order-loading-overlay'); 
-    if(loadingOverlay) loadingOverlay.classList.add('active');
+    // 🕐 YANGI YUKLOVCHI: soatcha silliq aylanadi, kamida 2 soniya, keyin pticha.
+    //    Eski `#order-loading-overlay` `html.lite` qoidasi tufayli QOTIB turardi
+    //    (batafsil izoh fayl oxiridagi "layer-order-loader" qatlamida).
+    if (window._ordLoader) window._ordLoader.show();
+    else if(loadingOverlay) loadingOverlay.classList.add('active');
     
     try {
         let now = Date.now();
         // Spamdan himoya
         if (typeof lastOrderTime !== 'undefined' && now - lastOrderTime < 15000) { 
             if(typeof showToast === 'function') showToast("Kuting! Qayta xarid uchun 15 soniya kerak.", "warning");
+            // Bu buyurtma EMAS — kutish animatsiyasini darhol yopamiz
+            if (window._ordLoader) window._ordLoader.hide();
             if(loadingOverlay) loadingOverlay.classList.remove('active');
             return;
         }
@@ -10497,6 +10503,13 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             updateCartBadge();
             window.myOrders = myOrders;
             
+            // ✅ Soatcha kamida 2 soniya aylanib bo'lgach ptichaga o'tadi.
+            //    `_animDone` — animatsiya to'liq tugaganini bildiradigan promise;
+            //    tg.close() shuni KUTADI, aks holda ilova animatsiya o'rtasida
+            //    yopilib, mijoz hech narsa ko'rmasdan qolardi.
+            var _animDone = (window._ordLoader && window._ordLoader.finish)
+                ? window._ordLoader.finish(true)
+                : Promise.resolve();
             if(loadingOverlay) loadingOverlay.classList.remove('active'); 
             showToast("Qabul qilindi!");
             
@@ -10524,14 +10537,28 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                 try { if(paymentMethod && paymentMethod.indexOf('Karta') !== -1) tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch(e){}
                 try { tg.close(); } catch(e){}
             };
+            // Ilovani yopishdan oldin IKKI narsani kutamiz:
+            //   1) cashback Firebase'ga yozilib bo'lishi (yoki 3.5s chegarasi)
+            //   2) soatcha + pticha animatsiyasi TO'LIQ tugashi (_animDone)
+            // Ilgari faqat (1) kutilardi — shu sababli ilova animatsiya
+            // o'rtasida yopilib ketardi va mijoz ptichani ko'rmasdi.
+            // 6 soniya — mutlaq xavfsizlik chegarasi (hech qachon osilib qolmaydi).
             Promise.race([
-                _p2flush.then(function(){ return new Promise(function(r){ setTimeout(r, 2000); }); }),
-                new Promise(function(r){ setTimeout(r, 3500); })  // xavfsizlik chegarasi
+                Promise.all([
+                    _animDone,
+                    Promise.race([
+                        _p2flush.then(function(){ return new Promise(function(r){ setTimeout(r, 2000); }); }),
+                        new Promise(function(r){ setTimeout(r, 3500); })
+                    ])
+                ]),
+                new Promise(function(r){ setTimeout(r, 6000); })
             ]).then(_doClose);
         } else {
             throw new Error("API xatosi");
         }
     } catch (err) { 
+        // Xato holati ham silliq ko'rsatiladi (qizil belgi), keyin yopiladi
+        if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(false);
         if(loadingOverlay) loadingOverlay.classList.remove('active'); 
         showToast("Xatolik! Internetni tekshiring.", "warning"); 
     }
@@ -16027,9 +16054,22 @@ document.addEventListener('click', function (e) {
             // ya'ni sarflash (kamayish) darhol "tirilib" qaytardi va cashbackni
             // ishlatish PRINSIPIAL imkonsiz edi. Ikki monoton hisoblagich esa
             // Math.max bilan xavfsiz birlashadi, balans esa ulardan chiqariladi.
+            //   cashbackRefunded — umr bo'yi QAYTARILGAN (faqat o'sadi)
+            //     Bekor qilingan buyurtmada ishlatilgan cashback shu yerga tushadi.
+            //     ⚠️ NEGA ALOHIDA HISOBLAGICH: qaytarishni `cashbackTotal` ga
+            //     qo'shib bo'lmaydi — u "umr bo'yi YIG'ILGAN" degan ma'noni
+            //     bildiradi va profilda "Jami yig'ilgan" sifatida ko'rinadi,
+            //     yutuqlar (cashback_100k) ham shundan hisoblanadi. Qaytarilgan
+            //     pulni unga qo'shsak, mijoz hech narsa yig'masdan yutuq olardi.
+            //     `cashbackSpent` ni kamaytirish ham mumkin emas: P.sync uni
+            //     Math.max bilan birlashtiradi, ya'ni kamaytirish darhol
+            //     "tirilib" qaytadi. Uchinchi MONOTON hisoblagich esa
+            //     Math.max bilan xavfsiz birlashadi.
+            //   balans = cashbackTotal + cashbackRefunded − cashbackSpent
             cashback: 0,
             cashbackTotal: 0,
             cashbackSpent: 0,
+            cashbackRefunded: 0,
             cashbackHistory: [],
             achievements: {},   // {id: unlockedTimestamp}
             achSeen: 0,         // foydalanuvchi ko'rgan yutuqlar soni (badge uchun)
@@ -16226,9 +16266,11 @@ document.addEventListener('click', function (e) {
     function recalcBalance() {
         var earned = parseInt(P.state.cashbackTotal, 10) || 0;
         var spent = parseInt(P.state.cashbackSpent, 10) || 0;
+        var refunded = parseInt(P.state.cashbackRefunded, 10) || 0;
         P.state.cashbackTotal = earned;
         P.state.cashbackSpent = spent;
-        P.state.cashback = Math.max(0, earned - spent);
+        P.state.cashbackRefunded = refunded;
+        P.state.cashback = Math.max(0, earned + refunded - spent);
         return P.state.cashback;
     }
     P.recalcBalance = recalcBalance;
@@ -16243,6 +16285,10 @@ document.addEventListener('click', function (e) {
             if (amount > avail) amount = avail;
             if (amount <= 0) return;
             P.state.cashbackSpent = (parseInt(P.state.cashbackSpent, 10) || 0) + amount;
+        } else if (type === 'refund') {
+            // Bekor qilingan buyurtmada ishlatilgan cashback QAYTARILADI.
+            // `cashbackTotal` ga TEGMAYMIZ — "Jami yig'ilgan" haqiqiy qolishi kerak.
+            P.state.cashbackRefunded = (parseInt(P.state.cashbackRefunded, 10) || 0) + amount;
         } else {
             P.state.cashbackTotal = (parseInt(P.state.cashbackTotal, 10) || 0) + amount;
         }
@@ -16264,14 +16310,28 @@ document.addEventListener('click', function (e) {
         save();
         return amount;
     };
-    /** Bekor qilingan buyurtmada sarflangan cashbackni qaytarish. */
-    P.refundSpentCashback = function (amount, note) {
+    /**
+     * Bekor qilingan buyurtmada sarflangan cashbackni qaytarish (save QILMAYDI).
+     * reconcileOrders tsikli ichida ishlatiladi — yozish tsikl oxirida bir marta.
+     * @returns {number} qaytarilgan summa
+     */
+    function refundSpent(amount, note) {
         amount = Math.round(parseInt(amount, 10) || 0);
         if (amount <= 0) return 0;
-        // Sarflanganni kamaytirmaymiz (monoton) — o'rniga "earn" sifatida qaytaramiz
-        addCashback(amount, note || 'Bekor qilingan buyurtma — qaytarildi', 'earn');
-        save();
+        addCashback(amount, note || 'Bekor qilingan buyurtma — cashback qaytarildi', 'refund');
         return amount;
+    }
+    /**
+     * Ommaviy API — tashqi kod uchun (darhol saqlaydi).
+     * ⚠️ Ilgari bu funksiya YOZILGAN, lekin HECH QAYERDAN CHAQIRILMAGAN edi
+     *    (o'lik kod) — shu sababli bekor qilingan buyurtmadagi cashback
+     *    mijozga qaytmasdi. Endi bir xil mantiq `refundSpent` da va
+     *    reconcileOrders undan foydalanadi.
+     */
+    P.refundSpentCashback = function (amount, note) {
+        var n = refundSpent(amount, note);
+        if (n > 0) save();
+        return n;
     };
 
     P.openCashback = function () {
@@ -16289,8 +16349,12 @@ document.addEventListener('click', function (e) {
                 '💡 Cashback buyurtma <b>qo\'lingizga yetkazilgandan keyin</b> hisobingizga tushadi. ' +
                 'Keyingi xaridda <b>to\'lov oynasida</b> uni to\'g\'ridan-to\'g\'ri ishlatishingiz mumkin.</div>' +
                 (P.state.cashbackSpent > 0
-                    ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:14px;padding:0 4px;">' +
+                    ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:8px;padding:0 4px;">' +
                       '<span>Jami sarflangan</span><b style="color:var(--text-main,#fff);">' + fmtSom(P.state.cashbackSpent) + " so'm</b></div>"
+                    : '') +
+                (P.state.cashbackRefunded > 0
+                    ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:14px;padding:0 4px;">' +
+                      '<span>Bekor qilingan buyurtmalardan qaytgan</span><b style="color:#30d158;">+' + fmtSom(P.state.cashbackRefunded) + " so'm</b></div>"
                     : '') +
                 '<div class="p2-sec-title">📜 Tarix</div>' +
                 (h.length ? h.map(function (x) {
@@ -17036,24 +17100,57 @@ document.addEventListener('click', function (e) {
             var status = String(o.status || 'kutilmoqda');
 
             // ---------- 1) BEKOR QILINGAN ----------
+            // ⚠️ ILGARI QANDAY XATO ISHLAGAN (endi tuzatildi):
+            //    blokning birinchi qatorida `if (!entry || entry.rv) return;`
+            //    turardi. `entry` esa FAQAT buyurtma 'yetkazildi' bo'lganda
+            //    yaratiladi (pastdagi 2-blokda). Cashback esa buyurtma
+            //    BERILGANDA, ya'ni 'kutilmoqda' holatida sarflanadi.
+            //    Demak eng ko'p uchraydigan holatda — "mijoz cashback bilan
+            //    to'ladi, buyurtma yetkazilmasdan bekor qilinadi" — `entry`
+            //    mavjud bo'lmasdi va funksiya SHU YERDA chiqib ketardi.
+            //    Pastdagi "ishlatilgan cashbackni qaytarish" kodiga HECH QACHON
+            //    yetib bormasdi => mijozning puli yo'qolardi.
+            //
+            // ENDI ikki amal BIR-BIRIDAN MUSTAQIL, har birining o'z belgisi bor:
+            //    (a) `rv` — yetkazilgan deb BERILGAN cashbackni qaytarib olish
+            //        (faqat pul berilgan bo'lsa ma'noli);
+            //    (b) `ur` — buyurtmada ISHLATILGAN cashbackni QAYTARISH
+            //        (entry bo'lmasa ham bajarilishi SHART — asosiy holat shu).
             if (status === 'bekor_qilingan') {
-                if (!entry || entry.rv) return;                  // allaqachon qaytarilgan
+                var hadEntry = !!entry;
+                if (!entry) entry = { t: Date.now(), cb: 0, st: 'bekor' };
+                var didWork = false;
+
+                // (a) Berilgan cashbackni qaytarib olamiz (agar berilgan bo'lsa)
                 var back = parseInt(entry.cb, 10) || 0;
-                if (back > 0) {
+                if (back > 0 && !entry.rv) {
                     addCashback(back, 'Bekor qilingan buyurtma ' + (o.code || '#' + o.id), 'spend');
                     pushNotif('↩️', 'Cashback qaytarib olindi',
                         'Buyurtma ' + (o.code || '') + ' bekor qilindi — ' + fmtSom(back) + " so'm yechildi.", { silent: true });
+                    didWork = true;
                 }
-                // Buyurtmada ISHLATILGAN cashbackni mijozga qaytaramiz
+                entry.cb = 0;
+                entry.rv = 1;
+
+                // (b) Buyurtmada ISHLATILGAN cashbackni mijozga QAYTARAMIZ
                 var usedBack = parseInt(o.cashbackUsed, 10) || 0;
                 if (usedBack > 0 && !entry.ur) {
-                    addCashback(usedBack, 'Bekor qilingan buyurtma — cashback qaytarildi', 'earn');
+                    refundSpent(usedBack, 'Bekor qilingan buyurtma ' + (o.code || '#' + o.id) + " — cashback qaytarildi");
+                    pushNotif('🎁', 'Cashback qaytarildi',
+                        'Buyurtma ' + (o.code || '') + ' bekor qilindi — ' + fmtSom(usedBack) +
+                        " so'm hisobingizga qaytdi.", { silent: true });
                     sessionRefund += usedBack;
                     entry.ur = 1;
+                    didWork = true;
                 }
-                entry.cb = 0; entry.rv = 1; entry.st = 'bekor';
-                P.state.processedOrders[key] = entry;
-                changed = true;
+                entry.st = 'bekor';
+
+                // Yozishni FAQAT kerak bo'lganda belgilaymiz — aks holda har
+                // sinxronlashda Firebase'ga bekorga yozib turardik.
+                if (didWork || !hadEntry) {
+                    P.state.processedOrders[key] = entry;
+                    changed = true;
+                }
                 return;
             }
 
@@ -17063,7 +17160,11 @@ document.addEventListener('click', function (e) {
                 var earned = Math.round(cashbackBaseOf(o) * CASHBACK_RATE);
                 if (earned > 0) addCashback(earned, 'Buyurtma ' + (o.code || '#' + o.id), 'earn');
                 createWarranties(o);                             // kafolat qo'lga olgandan boshlanadi
-                P.state.processedOrders[key] = { t: Date.now(), cb: earned, st: 'yetkazildi' };
+                // `ur` (ishlatilgan cashback qaytarilgan) belgisini SAQLAB qolamiz.
+                // Aks holda "bekor -> yana yetkazildi -> yana bekor" ketma-ketligida
+                // belgi yo'qolib, cashback IKKI MARTA qaytarilishi mumkin edi.
+                var _keepUr = (entry && entry.ur) ? 1 : 0;
+                P.state.processedOrders[key] = { t: Date.now(), cb: earned, st: 'yetkazildi', ur: _keepUr };
                 changed = true;
                 if (firstRun) {
                     if (earned > 0) pushNotif('🎁', 'Cashback', '+' + fmtSom(earned) + " so'm — buyurtma " + (o.code || ''), { silent: true });
@@ -17156,6 +17257,9 @@ document.addEventListener('click', function (e) {
                 //    faqat o'sadi -> Math.max to'g'ri), balans esa ulardan hisoblanadi.
                 if (typeof r.cashbackTotal === 'number') P.state.cashbackTotal = Math.max(P.state.cashbackTotal || 0, r.cashbackTotal);
                 if (typeof r.cashbackSpent === 'number') P.state.cashbackSpent = Math.max(P.state.cashbackSpent || 0, r.cashbackSpent);
+                // Qaytarilgan ham MONOTON — Math.max bilan xavfsiz birlashadi.
+                // (Eski hisoblarda bu maydon yo'q -> 0 bo'lib qoladi, balans o'zgarmaydi.)
+                if (typeof r.cashbackRefunded === 'number') P.state.cashbackRefunded = Math.max(P.state.cashbackRefunded || 0, r.cashbackRefunded);
                 // 🔄 Eski hisoblardan migratsiya: `cashbackSpent` hali yo'q, lekin remote
                 //    `cashback` balansi yig'ilgandan kichik bo'lsa — ayirmasi sarflangan
                 //    deb qabul qilinadi (mijoz pulini yo'qotmaydi).
@@ -23220,5 +23324,343 @@ html.lite .story-ring.has-new::after { animation: none !important; opacity: .6 !
 .st2-up-x:active { transform: translateY(-50%) scale(.88); background: rgba(0, 0, 0, .55); }
 html[data-theme="light"] .st2-up-x { background: rgba(0, 0, 0, .30); }
 </style>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.12 — TO'LOV YUKLOVCHISI (soatcha -> pticha)
+     ----------------------------------------------------------------------------
+     ⚠️ NEGA YANGI KOMPONENT KERAK BO'LDI (eski soatcha QOTIB turardi):
+        Eski `#order-loading-overlay` ichidagi `.hourglass::after` elementi
+        `@keyframes hourglass-anim` bilan aylanardi. Lekin faylda global qoida bor:
+
+            html.lite body *,
+            html.lite body *::before,
+            html.lite body *::after {
+                animation-duration: 0.001s !important;
+                animation-iteration-count: 1 !important;
+            }
+
+        `html.lite` klassi esa ilova ishga tushganda HAR BIR telefonda
+        qo'shiladi, va quyidagi hollarda BUTUNLAY QOLIB KETADI:
+          • 4 yoki kamroq protsessor yadrosi / 4 GB yoki kamroq RAM
+          • sekin internet (2G/3G) yoki "trafikni tejash" rejimi
+          • tizimda "harakatni kamaytirish" yoqilgan
+        Natijada soatcha 0.001 soniyada BIR MARTA aylanib to'xtaydi —
+        ya'ni ekranda qotgan, buzilgan ikonka ko'rinadi. Xuddi shu qoida
+        muvaffaqiyat ptichasini (`.css-check-circle`) va boshqa barcha
+        spinnerlarni ham o'ldirgan.
+
+        Ustiga: eski yuklovchi javob kelishi bilan DARHOL yo'qolardi
+        (minimal ko'rsatish vaqti yo'q edi). Buyurtma 1 soniyada qabul
+        qilinsa, mijoz nima bo'lganini tushunmasdan qolardi.
+
+     ENDI:
+        • Alohida `#ordl` komponenti. Animatsiya qoidalari ID selektori bilan
+          yozilgani uchun `html.lite` va `body.anim-paused` ni YENGADI.
+        • Soatcha KAMIDA 2 soniya silliq aylanadi (buyurtma tezroq qabul
+          qilinsa ham), so'ng pticha chiziladi.
+        • `prefers-reduced-motion` HURMAT QILINADI: animatsiya o'rniga
+          statik ko'rinish va qisqa vaqt.
+        • `tg.close()` animatsiya tugashini kutadi.
+     ============================================================================ -->
+<style id="layer-order-loader">
+#ordl {
+    position: fixed; inset: 0; z-index: 100001;
+    display: none; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 42%, rgba(28,24,10,.97), rgba(6,6,8,.985) 70%);
+    /* backdrop-filter ATAYLAB yo'q — u har kadrda qayta hisoblanadi va
+       sekin telefonlarda aynan qotishga olib keladi (loyihada allaqachon
+       boshqa overlay'lardan ham olib tashlangan). */
+}
+#ordl.show { display: flex; }
+html[data-theme="light"] #ordl {
+    background: radial-gradient(circle at 50% 42%, rgba(255,252,244,.97), rgba(244,238,226,.985) 70%);
+}
+
+.ordl-box {
+    display: flex; flex-direction: column; align-items: center; gap: 22px;
+    padding: 0 28px; text-align: center;
+}
+
+/* ——— Halqa (soatcha) ——— */
+.ordl-ring { position: relative; width: 92px; height: 92px; flex: none; }
+.ordl-ring i {                        /* statik asos halqa */
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid rgba(201,168,76,.15);
+}
+.ordl-ring b {                        /* aylanadigan tilla yoy */
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid transparent;
+    border-top-color: #F0D060;
+    border-right-color: rgba(201,168,76,.75);
+    filter: drop-shadow(0 0 7px rgba(201,168,76,.45));
+}
+.ordl-ring s {                        /* ichki teskari aylanadigan nozik yoy */
+    position: absolute; inset: 13px; border-radius: 50%;
+    border: 2px solid transparent;
+    border-bottom-color: rgba(240,208,96,.5);
+    text-decoration: none;
+}
+@keyframes ordlSpin  { to { transform: rotate(360deg); } }
+@keyframes ordlSpinR { to { transform: rotate(-360deg); } }
+
+/* 🔴 MUHIM: ID selektori bilan yozilgan — `html.lite body *::after` va
+   `body.anim-paused *` qoidalarini specificity bo'yicha YENGADI.
+   Har uch holat uchun alohida yozamiz, chunki `!important` ga qarshi
+   faqat yuqori specificity ishlaydi. */
+body #ordl .ordl-ring b,
+html.lite body #ordl .ordl-ring b,
+body.anim-paused #ordl .ordl-ring b {
+    animation: ordlSpin .95s linear infinite !important;
+    animation-duration: .95s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+body #ordl .ordl-ring s,
+html.lite body #ordl .ordl-ring s,
+body.anim-paused #ordl .ordl-ring s {
+    animation: ordlSpinR 1.5s linear infinite !important;
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+
+/* ——— Holat matni ——— */
+.ordl-tx {
+    font-size: 15px; font-weight: 700; letter-spacing: .3px; line-height: 1.5;
+    color: var(--luxury-gold, #C9A84C);
+    max-width: 280px;
+    transition: opacity .25s ease, transform .25s ease;
+}
+html[data-theme="light"] .ordl-tx { color: #7A5E12; }
+.ordl-sub {
+    font-size: 12px; font-weight: 600; color: var(--text-muted, #8a8a8a);
+    margin-top: -12px;
+}
+
+/* ——— Pticha / xato belgisi ——— */
+.ordl-mark { position: absolute; inset: 0; display: none; }
+.ordl-mark svg { width: 92px; height: 92px; display: block; }
+.ordl-mark circle {
+    fill: none; stroke-width: 3.2; stroke-linecap: round;
+    stroke-dasharray: 151; stroke-dashoffset: 151;
+    transform: rotate(-90deg); transform-origin: 50% 50%;
+}
+.ordl-mark path {
+    fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 48; stroke-dashoffset: 48;
+}
+#ordl.is-ok  .ordl-mark circle { stroke: #30d158; }
+#ordl.is-ok  .ordl-mark path   { stroke: #30d158; }
+#ordl.is-err .ordl-mark circle { stroke: #ff453a; }
+#ordl.is-err .ordl-mark path   { stroke: #ff453a; }
+
+#ordl.is-load .ordl-ring i,
+#ordl.is-load .ordl-ring b,
+#ordl.is-load .ordl-ring s { display: block; }
+#ordl.is-ok .ordl-ring b,
+#ordl.is-ok .ordl-ring s,
+#ordl.is-err .ordl-ring b,
+#ordl.is-err .ordl-ring s { display: none; }
+#ordl.is-ok .ordl-ring i,
+#ordl.is-err .ordl-ring i { border-color: transparent; }
+#ordl.is-ok .ordl-mark,
+#ordl.is-err .ordl-mark { display: block; }
+
+@keyframes ordlRing { to { stroke-dashoffset: 0; } }
+@keyframes ordlDraw { to { stroke-dashoffset: 0; } }
+@keyframes ordlPop  { 0% { transform: scale(.55); opacity: 0; } 60% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
+
+/* Yana ID specificity bilan — lite/anim-paused ni yengish uchun */
+body #ordl.is-ok .ordl-mark circle,
+body #ordl.is-err .ordl-mark circle,
+html.lite body #ordl.is-ok .ordl-mark circle,
+html.lite body #ordl.is-err .ordl-mark circle {
+    animation: ordlRing .42s cubic-bezier(.2,.8,.25,1) forwards !important;
+    animation-duration: .42s !important;
+    animation-iteration-count: 1 !important;
+    animation-play-state: running !important;
+}
+body #ordl.is-ok .ordl-mark path,
+body #ordl.is-err .ordl-mark path,
+html.lite body #ordl.is-ok .ordl-mark path,
+html.lite body #ordl.is-err .ordl-mark path {
+    animation: ordlDraw .34s .3s ease forwards !important;
+    animation-duration: .34s !important;
+    animation-delay: .3s !important;
+    animation-iteration-count: 1 !important;
+    animation-play-state: running !important;
+}
+body #ordl.show .ordl-box,
+html.lite body #ordl.show .ordl-box {
+    animation: ordlPop .34s cubic-bezier(.2,.85,.25,1) both !important;
+    animation-duration: .34s !important;
+    animation-iteration-count: 1 !important;
+    animation-play-state: running !important;
+}
+
+/* ——— ♿ Harakatni kamaytirish — HURMAT QILAMIZ ———
+   Bu yerda animatsiyani ataylab o'chiramiz, lekin belgilar KO'RINADI
+   (stroke-dashoffset: 0), ya'ni qotgan ikonka emas — tayyor ko'rinish. */
+@media (prefers-reduced-motion: reduce) {
+    body #ordl .ordl-ring b,
+    html.lite body #ordl .ordl-ring b,
+    body.anim-paused #ordl .ordl-ring b,
+    body #ordl .ordl-ring s,
+    html.lite body #ordl .ordl-ring s,
+    body.anim-paused #ordl .ordl-ring s,
+    body #ordl.show .ordl-box,
+    html.lite body #ordl.show .ordl-box {
+        animation: none !important;
+    }
+    body #ordl .ordl-ring b { border-right-color: rgba(201,168,76,.75); }
+    body #ordl.is-ok .ordl-mark circle,
+    body #ordl.is-err .ordl-mark circle,
+    body #ordl.is-ok .ordl-mark path,
+    body #ordl.is-err .ordl-mark path,
+    html.lite body #ordl.is-ok .ordl-mark circle,
+    html.lite body #ordl.is-err .ordl-mark circle,
+    html.lite body #ordl.is-ok .ordl-mark path,
+    html.lite body #ordl.is-err .ordl-mark path {
+        animation: none !important;
+        stroke-dashoffset: 0 !important;
+    }
+}
+</style>
+
+<script>
+(function orderLoader() {
+    'use strict';
+
+    var MIN_SPIN = 2000;   // soatcha KAMIDA shuncha aylanadi (mijoz ko'rib qolsin)
+    var HOLD_OK  = 1150;   // pticha ekranda turadigan vaqt
+    var el = null;
+    var t0 = 0;
+
+    function reduced() {
+        try {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+        } catch (e) {}
+        return false;
+    }
+
+    function build() {
+        if (el && el.parentNode) return el;
+        el = document.createElement('div');
+        el.id = 'ordl';
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        el.innerHTML =
+            '<div class="ordl-box">' +
+                '<div class="ordl-ring">' +
+                    '<i></i><b></b><s></s>' +
+                    '<span class="ordl-mark">' +
+                        '<svg viewBox="0 0 92 92" aria-hidden="true">' +
+                            '<circle cx="46" cy="46" r="24"></circle>' +
+                            '<path class="ordl-p-ok" d="M34 47l9 9 17-18"></path>' +
+                        '</svg>' +
+                    '</span>' +
+                '</div>' +
+                '<div class="ordl-tx">Buyurtma yuborilmoqda...</div>' +
+            '</div>';
+        document.body.appendChild(el);
+        return el;
+    }
+
+    function setText(s) {
+        if (!el) return;
+        var t = el.querySelector('.ordl-tx');
+        if (t) t.textContent = s;
+    }
+
+    /** Belgi shaklini almashtiramiz: pticha (ok) yoki krestcha (xato). */
+    function setMark(ok) {
+        if (!el) return;
+        var p = el.querySelector('.ordl-mark path');
+        if (!p) return;
+        p.setAttribute('d', ok ? 'M34 47l9 9 17-18' : 'M37 37l18 18M55 37l-18 18');
+    }
+
+    function show(text) {
+        build();
+        el.classList.remove('is-ok', 'is-err');
+        el.classList.add('show', 'is-load');
+        setText(text || "Buyurtma yuborilmoqda...");
+        t0 = Date.now();
+        // Eski (qotib qoladigan) overlay bilan ustma-ust chiqmasin
+        try {
+            var old = document.getElementById('order-loading-overlay');
+            if (old) old.classList.remove('active');
+        } catch (e) {}
+        // Bu belgi `_showSuccessCheck` ni to'xtatadi — ikki xil pticha
+        // ustma-ust tushib xunuk ko'rinardi.
+        window._ordlActive = true;
+    }
+
+    function hide() {
+        window._ordlActive = false;
+        if (!el) return;
+        el.classList.remove('show', 'is-load', 'is-ok', 'is-err');
+    }
+
+    /**
+     * Yuklashni tugatadi: soatcha kamida MIN_SPIN aylanib bo'lgach ptichaga
+     * o'tadi, keyin yopiladi.
+     * @param {boolean} ok  muvaffaqiyatmi
+     * @returns {Promise} animatsiya TO'LIQ tugagach hal bo'ladi
+     */
+    function finish(ok, text) {
+        if (!el || !el.classList.contains('show')) return Promise.resolve();
+        var rm = reduced();
+        var minSpin = rm ? 250 : MIN_SPIN;
+        var hold = rm ? 450 : HOLD_OK;
+        var wait = Math.max(0, minSpin - (Date.now() - t0));
+
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                try {
+                    setMark(!!ok);
+                    el.classList.remove('is-load');
+                    el.classList.add(ok ? 'is-ok' : 'is-err');
+                    setText(text || (ok ? "Buyurtma qabul qilindi!" : "Xatolik yuz berdi"));
+                    window._ordlCheckShown = Date.now();
+                    if (typeof window._hap === 'function') window._hap(ok ? 'success' : 'warning');
+                } catch (e) {}
+                setTimeout(function () { hide(); resolve(); }, hold);
+            }, wait);
+        });
+    }
+
+    window._ordLoader = { show: show, hide: hide, finish: finish };
+
+    /* ------------------------------------------------------------------
+     * Eski ptichani IKKI MARTA ko'rsatmaslik.
+     * `confirmOrder` o'ramasi (15189-qator atrofida) muvaffaqiyatdan keyin
+     * `_showSuccessCheck()` chaqiradi. Bizning yuklovchi o'z ptichasini
+     * ko'rsatadi, shuning uchun eskisini o'tkazib yuboramiz — aks holda
+     * ikki xil belgi ustma-ust tushadi (va eskisi `html.lite` tufayli
+     * qotib ham turadi).
+     * ------------------------------------------------------------------ */
+    (function dedupeSuccessCheck() {
+        function wrap() {
+            if (window._ordlDeduped) return;
+            var orig = window._showSuccessCheck;
+            if (typeof orig !== 'function') return;
+            window._ordlDeduped = true;
+            window._showSuccessCheck = function () {
+                if (window._ordlActive) return;                                  // hozir bizning yuklovchi ishlayapti
+                if (window._ordlCheckShown && (Date.now() - window._ordlCheckShown) < 4000) return;
+                return orig.apply(this, arguments);
+            };
+        }
+        wrap();
+        setTimeout(wrap, 1200);
+        setTimeout(wrap, 3000);
+    })();
+
+    if (window._dlog) window._dlog('%c[Qatlam 2026.12] To\'lov yuklovchisi yuklandi', 'color:#C9A84C;font-weight:bold;');
+})();
+</script>
 </body>
 </html>
