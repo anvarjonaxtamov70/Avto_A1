@@ -9,12 +9,42 @@ Toza, ortiqchasiz versiya. Maxfiy kalitlar `.env` faylда, kodda token yo'q.
 - **Ortiqcha kod olib tashlandi** — Yandex/DuckDuckGo/Google rasm qidiruvi, `remove.bg`, ImgBB, PDF import (ishlamaydigan/keraksiz).
 - **Groq yaxshilandi** — markaziy `groq_chat()` (retry + xato boshqaruvi), modellar bitta joyda (`GROQ_TEXT_MODEL`, `GROQ_VISION_MODEL`), AI tushsa bot qulamaydi.
 
-## Admin buyruqlari
+## Buyruqlar
 
-| Buyruq | Vazifa |
-|--------|--------|
-| `/storis`, `/kategoriyalar` | Storis hashteg-kategoriyalari ro'yxatini izohi bilan ko'rsatadi |
-| `/til`, `/language` | Til (o'zbek/rus) tanlash oynasini ochadi (hammaga ochiq) |
+Buyruqlar Telegram'dagi **«Menu»** tugmasida ham ko'rinadi (`set_my_commands`).
+Admin buyruqlari faqat adminlarning o'z chatida ko'rinadi — mijozlar ularni ko'rmaydi.
+
+| Buyruq | Kimga | Vazifa |
+|--------|-------|--------|
+| `/start` | hammaga | Boshlash / til tanlash / asosiy menyu |
+| `/help`, `/yordam` | hammaga | Bot nimalar qila oladi + buyruqlar ro'yxati |
+| `/til`, `/language` | hammaga | Til (o'zbek/rus) tanlash oynasi |
+| `/bekor`, `/cancel` | hammaga | Boshlangan amalni (ro'yxatdan o'tish, Excel import) to'xtatadi |
+| `/storis`, `/kategoriyalar` | admin | Storis hashteg-kategoriyalari ro'yxati |
+| `/hisobot`, `/report` | do'kon egasi | Savdo va ombor bo'yicha tez hisobot |
+
+## Bot endi HECH QACHON jim qolmaydi
+
+Ilgari bot faqat **matn** va **rasm** ga javob berardi. Qolgan hamma narsa —
+ovozli xabar, doiracha, audio, stiker, GIF, lokatsiya, kontakt, hashtegsiz
+video, so'rovnoma — hech qanday handlerga tushmasdi va bot **butunlay jim**
+qolardi. Mijoz uchun bu "bot buzuq" degani.
+
+Endi har bir tur uchun javob bor, oxirida esa **universal to'r**
+(`handle_anything_else`) turadi — kelajakda Telegram yangi xabar turi
+qo'shsa ham bot javobsiz qolmaydi.
+
+Shu bilan birga:
+
+- **Buyruqlar FSM holatida ham ishlaydi.** Ilgari Excel importni yarim yo'lda
+  tashlab ketgan admin `/start` ham, boshqa hech narsa ham qila olmasdi —
+  faqat botni qayta ishga tushirish qutqarardi.
+- **Yangi mijozning birinchi xabari javobsiz qolmaydi.** `/start` dan keyin
+  til tugmalarini bosmasdan yozgan odam ilgari HECH QANDAY javob olmasdi.
+- **Bildirishnomalar barcha adminlarga** boradi (ilgari faqat birinchisiga).
+- **So'rov cheklovi (rate limit)** — bitta odam AI limitini hamma uchun
+  tugatib qo'ymaydi. Sozlash: `RL_AI_MAX`, `RL_AI_WINDOW`, `RL_PHOTO_MAX`,
+  `RL_PHOTO_WINDOW`. Adminlarga cheklov qo'llanmaydi.
 
 ## O'rnatish
 

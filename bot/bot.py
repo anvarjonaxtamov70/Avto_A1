@@ -35,13 +35,15 @@ from google.oauth2 import service_account
 
 from groq import AsyncGroq
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (InlineKeyboardMarkup, InlineKeyboardButton,
                            ReplyKeyboardMarkup, KeyboardButton,
-                           ReplyKeyboardRemove, WebAppInfo)
+                           ReplyKeyboardRemove, WebAppInfo,
+                           BotCommand, BotCommandScopeAllPrivateChats,
+                           BotCommandScopeChat)
 
 from bulk_import_fixed import process_ai_bulk_requests_v2
 
@@ -411,6 +413,55 @@ TEXTS = {
                              "Iltimos, birozdan so'ng qayta urinib ko'ring yoki /start bosing. "
                              "Muammo davom etsa, biz bilan bog'laning."),
         "error_toast": "Xatolik yuz berdi, qayta urinib ko'ring",
+
+        # ---- Buyruqlar va yordam ----
+        "help": ("🤖 <b>Avto_A1 yordam</b>\n\n"
+                 "Men avto-ehtiyot qismlar do'konining yordamchisiman. Menga shunchaki "
+                 "<b>yozing</b> — qanday zapchast kerakligini ayting, topib beraman.\n\n"
+                 "📷 <b>Rasm yuborsangiz</b> — qismni rasmdan aniqlab, bazadan o'xshashini topaman.\n"
+                 "🛍 <b>{shop}</b> tugmasi — to'liq katalog, savat va buyurtma.\n\n"
+                 "<b>Buyruqlar:</b>\n"
+                 "/start — boshidan boshlash\n"
+                 "/help — shu yordam\n"
+                 "/til — muloqot tilini almashtirish\n"
+                 "/bekor — boshlangan amalni bekor qilish\n\n"
+                 "📞 Savolingiz bo'lsa: {phone}"),
+        "help_admin": ("\n\n👑 <b>Admin buyruqlari:</b>\n"
+                       "/storis — storis hashteglari ro'yxati\n"
+                       "/hisobot — savdo va ombor hisoboti\n"
+                       "Excel/CSV fayl yuboring — katalogga ommaviy import."),
+        "cancel_done": "✅ Bekor qilindi. Asosiy menyuga qaytdik.",
+        "cancel_nothing": "Bekor qiladigan amal yo'q. Marhamat, savolingizni yozing 🙂",
+        "state_busy": ("Hozir sizdan ma'lumot kutilmoqda 🙂\n\n"
+                       "Iltimos, so'ralgan ma'lumotni yuboring yoki bekor qilish uchun "
+                       "/bekor bosing."),
+        "unknown_command": ("Bunday buyruq yo'q 🤔\n\n"
+                            "Mavjud buyruqlar: /start, /help, /til, /bekor\n\n"
+                            "Yoki shunchaki savolingizni <b>yozib</b> yuboring — javob beraman."),
+        "lang_pick_again": ("Iltimos, yuqoridagi tugmalardan tilni tanlang 👆\n\n"
+                            "Til / Язык"),
+        "rate_limited": ("Birpas sekinlashtiraylik 🙏 Bir daqiqada juda ko'p so'rov keldi.\n\n"
+                         "Bir necha soniyadan so'ng qayta yozsangiz, albatta javob beraman."),
+
+        # ---- Bot ILGARI JIM QOLGAN holatlar ----
+        "voice_reply": ("Ovozli xabarni hozir tinglay olmayman 🙏\n\n"
+                        "Qanday zapchast kerakligini <b>yozib</b> yuboring yoki "
+                        "qismning <b>rasmini</b> tashlang — darrov topib beraman."),
+        "sticker_reply": ("😊 Rahmat! Zapchast kerak bo'lsa nomini yozing yoki rasmini yuboring — "
+                          "bazadan topib beraman."),
+        "location_reply": ("📍 Lokatsiya uchun rahmat!\n\n"
+                           "Bizning manzil: <b>{address}</b>\n🕒 Ish vaqti: {hours}\n\n"
+                           "Yetkazib berish manzilini buyurtma berishda do'kon oynasida "
+                           "ko'rsatasiz."),
+        "contact_reply": ("📞 Raqamingiz uchun rahmat: <code>{phone}</code>\n\n"
+                          "Endi buyurtma berish yanada tez bo'ladi. Marhamat, do'konni oching."),
+        "media_reply": ("Faylni oldim 👍 Lekin video/audio bo'yicha zapchastni aniqlay olmayman.\n\n"
+                        "Iltimos, qismning <b>rasmini</b> yuboring yoki nomini <b>yozing</b>."),
+        "document_reply": ("Faylni oldim 👍 Lekin men hujjatlarni o'qiy olmayman.\n\n"
+                           "Kerakli zapchast nomini <b>yozib</b> yuboring yoki rasmini tashlang."),
+        "fallback_reply": ("Xabaringizni oldim, lekin bu turdagi xabarni tushunolmadim 🙏\n\n"
+                           "Zapchast nomini <b>yozing</b> yoki <b>rasmini</b> yuboring — "
+                           "darrov topib beraman. Katalog uchun /start bosing."),
     },
     "ru": {
         "welcome_new": "Здравствуйте! Добро пожаловать в магазин Avto_A1!",
@@ -458,6 +509,53 @@ TEXTS = {
                              "Пожалуйста, попробуйте ещё раз через минуту или нажмите /start. "
                              "Если проблема повторяется — свяжитесь с нами."),
         "error_toast": "Произошла ошибка, попробуйте снова",
+
+        # ---- Команды и помощь ----
+        "help": ("🤖 <b>Помощь Avto_A1</b>\n\n"
+                 "Я помощник магазина автозапчастей. Просто <b>напишите</b> мне, "
+                 "какая деталь нужна — найду.\n\n"
+                 "📷 <b>Пришлите фото</b> — определю деталь по фото и подберу похожее из базы.\n"
+                 "🛍 Кнопка <b>{shop}</b> — полный каталог, корзина и заказ.\n\n"
+                 "<b>Команды:</b>\n"
+                 "/start — начать заново\n"
+                 "/help — эта справка\n"
+                 "/til — сменить язык\n"
+                 "/bekor — отменить начатое действие\n\n"
+                 "📞 Вопросы: {phone}"),
+        "help_admin": ("\n\n👑 <b>Команды администратора:</b>\n"
+                       "/storis — список хештегов сторис\n"
+                       "/hisobot — отчёт по продажам и складу\n"
+                       "Пришлите файл Excel/CSV — массовый импорт в каталог."),
+        "cancel_done": "✅ Отменено. Вернулись в главное меню.",
+        "cancel_nothing": "Нечего отменять. Напишите ваш вопрос 🙂",
+        "state_busy": ("Сейчас я жду от вас данные 🙂\n\n"
+                       "Отправьте запрошенную информацию или нажмите /bekor для отмены."),
+        "unknown_command": ("Такой команды нет 🤔\n\n"
+                            "Доступные команды: /start, /help, /til, /bekor\n\n"
+                            "Или просто <b>напишите</b> ваш вопрос — я отвечу."),
+        "lang_pick_again": ("Пожалуйста, выберите язык кнопками выше 👆\n\n"
+                            "Til / Язык"),
+        "rate_limited": ("Давайте немного медленнее 🙏 За минуту пришло слишком много запросов.\n\n"
+                         "Напишите через несколько секунд — обязательно отвечу."),
+
+        # ---- Ситуации, где бот РАНЬШЕ МОЛЧАЛ ----
+        "voice_reply": ("Голосовые сообщения я пока не слушаю 🙏\n\n"
+                        "<b>Напишите</b>, какая деталь нужна, или пришлите её <b>фото</b> — "
+                        "сразу найду."),
+        "sticker_reply": ("😊 Спасибо! Если нужна запчасть — напишите название или пришлите фото, "
+                          "найду в базе."),
+        "location_reply": ("📍 Спасибо за локацию!\n\n"
+                           "Наш адрес: <b>{address}</b>\n🕒 Время работы: {hours}\n\n"
+                           "Адрес доставки укажете при оформлении заказа в магазине."),
+        "contact_reply": ("📞 Спасибо за номер: <code>{phone}</code>\n\n"
+                          "Теперь заказ оформится быстрее. Открывайте магазин."),
+        "media_reply": ("Файл получил 👍 Но по видео/аудио деталь определить не смогу.\n\n"
+                        "Пришлите <b>фото</b> детали или <b>напишите</b> её название."),
+        "document_reply": ("Файл получил 👍 Но документы я читать не умею.\n\n"
+                          "<b>Напишите</b> название нужной запчасти или пришлите фото."),
+        "fallback_reply": ("Сообщение получил, но такой тип сообщения я не понял 🙏\n\n"
+                           "<b>Напишите</b> название запчасти или пришлите <b>фото</b> — "
+                           "сразу найду. Для каталога нажмите /start."),
     },
 }
 
@@ -561,6 +659,76 @@ logging.basicConfig(level=logging.INFO)
 
 DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+
+# =====================================================================
+# BARCHA ADMINLARGA XABAR
+#   Ilgari hamma bildirishnoma FAQAT ADMIN_IDS[0] ga borardi. Ya'ni
+#   ADMIN_IDS ga qo'shilgan boshqa adminlar yangi mijoz, xatolik yoki bot
+#   holati haqida HECH NARSA bilmasdi — do'kon bir odamga bog'lanib qolgan
+#   edi (u telefonini ko'rmasa, buyurtma javobsiz qolardi).
+#   Endi bitta yordamchi barcha adminlarga yuboradi va bittasiga yetmasa
+#   (bloklagan, chat ochilmagan) qolganlari baribir oladi.
+# =====================================================================
+async def notify_admins(text, parse_mode="HTML", exclude=None):
+    """Barcha adminlarga xabar yuboradi. Nechtasiga yetganini qaytaradi."""
+    sent = 0
+    skip = set(exclude or ())
+    for aid in ADMIN_IDS:
+        if aid in skip:
+            continue
+        try:
+            await bot.send_message(chat_id=aid, text=text, parse_mode=parse_mode)
+            sent += 1
+        except Exception as e:
+            logging.warning(f"Adminga ({aid}) xabar yuborib bo'lmadi: {e}")
+    return sent
+
+
+# =====================================================================
+# BUYRUQLAR FSM HOLATIDA HAM ISHLASHI UCHUN FILTR
+#   Muammo: `ImportState.rate` handleri fayl boshida ro'yxatga olingan va
+#   HAR QANDAY matnni ushlab qolardi. Admin importni yarim yo'lda tashlab
+#   ketsa, /start ham, /bekor ham ishlamasdi — u holatda "qamalib" qolardi
+#   va botni faqat qayta ishga tushirish qutqarardi.
+#   Yechim: holat handlerlari buyruqlarni (/ bilan boshlanadigan matnni)
+#   O'TKAZIB YUBORADI — ular pastdagi buyruq handlerlariga tushadi.
+# =====================================================================
+def not_a_command(message: types.Message) -> bool:
+    return not (message.text or "").startswith("/")
+
+
+# =====================================================================
+# SO'ROV CHEKLOVI (rate limit)
+#   Ilgari hech qanday cheklov yo'q edi: bitta odam (yoki skript) ketma-ket
+#   yuzlab xabar yuborib, AI (Groq) limitini va Firebase kvotasini tugatib
+#   qo'yishi mumkin edi — natijada BARCHA mijozlar uchun bot "band" bo'lib
+#   qolardi. Endi har foydalanuvchi uchun oyna ichida chegara bor.
+#   Adminlarga cheklov qo'llanmaydi.
+# =====================================================================
+RL_AI_MAX = int(os.getenv("RL_AI_MAX", "12"))        # matnli savol / oyna
+RL_AI_WINDOW = int(os.getenv("RL_AI_WINDOW", "60"))  # oyna (soniya)
+RL_PHOTO_MAX = int(os.getenv("RL_PHOTO_MAX", "5"))   # rasm tahlili qimmatroq
+RL_PHOTO_WINDOW = int(os.getenv("RL_PHOTO_WINDOW", "60"))
+
+_rl_buckets = BoundedTTLCache(max_size=5000, ttl_seconds=900)
+
+
+def _rate_limited(user_id, bucket="ai", limit=None, window=None):
+    """True qaytarsa — foydalanuvchi chegaradan oshdi, so'rovni bajarmaymiz."""
+    if user_id in ADMIN_IDS:
+        return False
+    limit = RL_AI_MAX if limit is None else limit
+    window = RL_AI_WINDOW if window is None else window
+    key = f"{bucket}:{user_id}"
+    now = time.monotonic()
+    hits = [ts for ts in (_rl_buckets.get(key) or []) if (now - ts) < window]
+    if len(hits) >= limit:
+        _rl_buckets[key] = hits
+        return True
+    hits.append(now)
+    _rl_buckets[key] = hits
+    return False
 
 
 # =====================================================================
@@ -1063,9 +1231,16 @@ class Register(StatesGroup):
 # =====================================================================
 # EXCEL / CSV IMPORT
 # =====================================================================
-@dp.message(F.document)
+# ⚠️ `~F.animation`: Telegram GIF (animation) xabarida `document` maydoni ham
+#    to'ldiriladi. Bu filtr bo'lmasa GIF shu importer'ga tushib ketardi.
+@dp.message(F.document, ~F.animation)
 async def handle_document_import(message: types.Message, state: FSMContext, bot: Bot):
     if message.from_user.id not in ADMIN_IDS:
+        # Ilgari bu yerda shunchaki `return` bor edi: mijoz fayl yuborsa bot
+        # BUTUNLAY JIM qolardi (handler ishga tushdi, lekin javob yo'q) va
+        # mijoz "bot ishlamayapti" deb o'ylardi. Endi yo'l ko'rsatamiz.
+        lang = await get_user_lang(message.from_user.id)
+        await message.reply(t(lang, "document_reply"), parse_mode="HTML")
         return
 
     document = message.document
@@ -1092,7 +1267,7 @@ async def handle_document_import(message: types.Message, state: FSMContext, bot:
         await msg.edit_text(f"Fayl yuklashda xato: {e}")
 
 
-@dp.message(ImportState.rate)
+@dp.message(ImportState.rate, not_a_command)
 async def process_rate(message: types.Message, state: FSMContext):
     try:
         usd_rate = float(message.text.replace(",", ".").replace(" ", ""))
@@ -1172,7 +1347,7 @@ def parse_excel_file(file_path, usd_rate, markup_pct, next_id, partiya_nomi):
         return {"success": False, "error_type": "exception", "error": str(e)}
 
 
-@dp.message(ImportState.markup)
+@dp.message(ImportState.markup, not_a_command)
 async def process_markup_pandas(message: types.Message, state: FSMContext, bot: Bot):
     try:
         markup_pct = float(message.text.replace(",", "."))
@@ -1449,6 +1624,41 @@ async def start_command(message: types.Message, state: FSMContext):
         await state.set_state(Register.lang)
 
 
+@dp.message(Command("help", "yordam"))
+async def help_command(message: types.Message):
+    """/help — ilgari BOTDA UMUMAN YO'Q edi.
+
+    Yangi mijoz botga kirib nima qilishni bilmasdi: buyruqlar ro'yxati ham,
+    "menga shunchaki yozing" degan tushuntirish ham yo'q edi. Endi bitta
+    joyda: nima qila olishim, buyruqlar va aloqa raqami.
+    """
+    lang = await get_user_lang(message.from_user.id)
+    text = t(lang, "help", shop=esc(shop_label(lang)), phone=esc(SHOP_PHONE))
+    if message.from_user.id in ADMIN_IDS:
+        text += t(lang, "help_admin")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@dp.message(StateFilter("*"), Command("bekor", "cancel"))
+async def cancel_command(message: types.Message, state: FSMContext):
+    """/bekor — boshlangan amalni to'xtatadi.
+
+    Ilgari bekor qilish IMKONI YO'Q edi: ro'yxatdan o'tishni yoki Excel
+    importini boshlagan odam oxirigacha bormasa, bot undan tinmay ma'lumot
+    so'rab turardi va boshqa hech narsaga javob bermasdi.
+    """
+    lang = await get_user_lang(message.from_user.id)
+    had_state = await state.get_state() is not None
+    await state.clear()
+    prof = users_db.get(message.from_user.id) or {}
+    await message.answer(
+        t(lang, "cancel_done" if had_state else "cancel_nothing"),
+        reply_markup=main_menu(lang, registered=bool(prof.get("phone"))),
+    )
+
+
 @dp.message(Command("til", "language"))
 async def change_language_command(message: types.Message):
     lang = await get_user_lang(message.from_user.id)
@@ -1519,16 +1729,37 @@ async def set_language(call: types.CallbackQuery, state: FSMContext):
     )
 
 
-@dp.message(Register.name)
+@dp.message(Register.lang, not_a_command)
+async def register_lang_fallback(message: types.Message):
+    """🔇 ENG OG'IR JIMLIK shu yerda edi.
+
+    /start bosgan YANGI foydalanuvchi `Register.lang` holatiga o'tadi va til
+    tugmalarini oladi. Agar u tugmani bosmasdan matn yozsa (ko'pchilik shunday
+    qiladi: "salom", "narxi qancha?"), hech bir handler bu holatni
+    ushlamasdi — AI handleri esa `state is not None` bo'lsa jimgina
+    chiqib ketardi. Natija: mijozning BOTGA BIRINCHI xabari javobsiz qolardi.
+    Endi til tugmalari xushmuomala tarzda qayta ko'rsatiladi.
+    """
+    await message.answer(t(DEFAULT_LANG, "lang_pick_again"),
+                         reply_markup=lang_inline_kb(), parse_mode="HTML")
+
+
+@dp.message(Register.name, not_a_command)
 async def get_name(message: types.Message, state: FSMContext):
-    await state.update_data(name=message.text)
     data = await state.get_data()
     lang = data.get("lang", DEFAULT_LANG)
+    # Ilgari matn tekshirilmasdi: mijoz stiker/ovoz yuborsa ism `None` bo'lib
+    # bazaga yozilardi. Endi qayta so'raymiz (bot jim ham qolmaydi).
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer(t(lang, "ask_name"), parse_mode="HTML")
+        return
+    await state.update_data(name=name)
     await message.answer(t(lang, "ask_phone"), reply_markup=phone_kb(lang), parse_mode="HTML")
     await state.set_state(Register.phone)
 
 
-@dp.message(Register.phone)
+@dp.message(Register.phone, not_a_command)
 async def get_phone(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang", DEFAULT_LANG)
@@ -1549,10 +1780,15 @@ async def get_phone(message: types.Message, state: FSMContext):
     await state.set_state(Register.region)
 
 
-@dp.message(Register.region)
+@dp.message(Register.region, not_a_command)
 async def get_region(message: types.Message, state: FSMContext):
-    region = message.text
+    region = (message.text or "").strip()
     data = await state.get_data()
+    if not region:
+        # Matn emas (stiker/rasm) — viloyat `None` bo'lib yozilib qolmasin.
+        await message.answer(t(data.get("lang", DEFAULT_LANG), "ask_region"),
+                             reply_markup=viloyatlar_menyu, parse_mode="HTML")
+        return
     name = data.get("name")
     phone = data.get("phone")
     lang = data.get("lang", DEFAULT_LANG)
@@ -1579,10 +1815,8 @@ async def get_region(message: types.Message, state: FSMContext):
         f"Username: {esc(username_txt)}\n"
         f"ID: <code>{user_id}</code>"
     )
-    try:
-        await bot.send_message(chat_id=ADMIN_ID, text=admin_text, parse_mode="HTML")
-    except Exception as e:
-        logging.error(f"Adminga xabar xatosi: {e}")
+    # BARCHA adminlarga (ilgari faqat ADMIN_IDS[0] ga borardi).
+    await notify_admins(admin_text)
 
     await message.answer(
         t(lang, "register_success", shop=shop_label(lang)),
@@ -1656,6 +1890,9 @@ async def contact_handler(message: types.Message):
 async def story_categories_command(message: types.Message):
     # Admin storis hashteglarini yoddan bilishi shart emas — shu buyruq ro'yxatni ko'rsatadi.
     if message.from_user.id not in ADMIN_IDS:
+        # Mijoz bu yashirin buyruqni tasodifan yozsa — ilgari JIMLIK edi.
+        lang = await get_user_lang(message.from_user.id)
+        await message.answer(t(lang, "unknown_command"), parse_mode="HTML")
         return
     await message.answer(story_categories_text(), parse_mode="HTML")
 
@@ -1795,6 +2032,11 @@ async def handle_photo_redirect(message: types.Message):
     lang = await get_user_lang(user_id)
     shop_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+
+    # 🚦 Rasm tahlili (vision) eng qimmat amal — chegara qattiqroq.
+    if _rate_limited(user_id, "photo", RL_PHOTO_MAX, RL_PHOTO_WINDOW):
+        await message.reply(t(lang, "rate_limited"), reply_markup=shop_kb)
+        return
 
     # AI o'chirilgan bo'lsa — xushmuomala fallback (eski quruq 'rahmat' emas)
     if groq_client is None:
@@ -2116,8 +2358,15 @@ async def _owner_analytics_snapshot():
 
 @dp.message(Command("hisobot", "report"))
 async def owner_report_command(message: types.Message):
-    """Tez hisobot — FAQAT do'kon egasiga. Boshqalar uchun jim (javob yo'q)."""
+    """Tez hisobot — FAQAT do'kon egasiga.
+
+    Ilgari boshqalar uchun JIM qolardi. Endi oddiy "bunday buyruq yo'q"
+    javobi beriladi: hisobot borligi oshkor bo'lmaydi, lekin bot ham
+    "o'lik" ko'rinmaydi.
+    """
     if not _is_owner(message.from_user.id):
+        lang = await get_user_lang(message.from_user.id)
+        await message.answer(t(lang, "unknown_command"), parse_mode="HTML")
         return
     try:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
@@ -2204,11 +2453,32 @@ def _ensure_ai_session(user_id, lang, display_name="", extra=""):
     return ai_sessions[user_id]
 
 
+@dp.message(F.text.startswith("/"))
+async def unknown_command(message: types.Message, state: FSMContext):
+    """Noma'lum buyruq — ilgali bu matn AI ga ketardi va AI "/xyz" ni
+    savol deb o'ylab g'alati javob berardi. Endi aniq yo'l ko'rsatiladi."""
+    lang = await get_user_lang(message.from_user.id)
+    if await state.get_state() is not None:
+        await message.answer(t(lang, "state_busy"))
+        return
+    await message.answer(t(lang, "unknown_command"), parse_mode="HTML")
+
+
 @dp.message(F.text)
 async def handle_ai_chat(message: types.Message, state: FSMContext):
-    if await state.get_state() is not None:
-        return
     lang = DEFAULT_LANG
+    if await state.get_state() is not None:
+        # Ilgari shu yerda quruq `return` bor edi — ya'ni handler xabarni
+        # "yedi" va foydalanuvchi HECH QANDAY javob olmadi. Endi u qaysi
+        # bosqichda turganini va qanday chiqishini biladi.
+        lang = await get_user_lang(message.from_user.id)
+        await message.answer(t(lang, "state_busy"))
+        return
+    # 🚦 So'rov cheklovi: bitta odam AI limitini hammaga tugatib qo'ymasin.
+    if _rate_limited(message.from_user.id, "ai"):
+        lang = await get_user_lang(message.from_user.id)
+        await message.reply(t(lang, "rate_limited"))
+        return
     try:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         user_id = message.from_user.id
@@ -2257,6 +2527,100 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
     except Exception as e:
         logging.error(f"AI chat xatosi: {e}")
         await message.reply(t(lang, "ai_busy"))
+
+
+# =====================================================================
+# 🔇 BOT JIM QOLADIGAN BARCHA HOLATLAR YOPILADI
+# ---------------------------------------------------------------------
+# Ilgari botda faqat MATN va RASM uchun handler bor edi. Boshqa hamma narsa
+# — ovozli xabar, video, video-xabar (doiracha), stiker, GIF, lokatsiya,
+# kontakt, audio, so'rovnoma — hech qanday handlerga TUSHMASDI va bot
+# BUTUNLAY JIM qolardi. Mijoz nuqtai nazaridan bu "bot buzuq" degani:
+# u yozgan, bot javob bermagan. Ko'pi qaytib kelmaydi.
+#
+# Eng ko'p uchraydigan holat — OVOZLI XABAR. O'zbekistonda mijozlar
+# ko'pincha yozmasdan ovozli xabar yuboradi; bot ularga bir marta ham
+# javob bermagan.
+#
+# Bu bo'lim ENG OXIRIDA turishi SHART: yuqoridagi maxsus handlerlar
+# (storis, import, rasm tahlili) avval ishlaydi, bu yerga faqat "boshqa
+# hech kim ushlamagan" xabarlar tushadi.
+# =====================================================================
+@dp.message(StateFilter(None), F.voice | F.video_note | F.audio)
+async def handle_voice_like(message: types.Message):
+    """Ovozli xabar / doiracha / audio — endi javobsiz qolmaydi."""
+    lang = await get_user_lang(message.from_user.id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    await message.reply(t(lang, "voice_reply"), parse_mode="HTML", reply_markup=kb)
+
+
+@dp.message(StateFilter(None), F.sticker | F.animation | F.dice)
+async def handle_sticker_like(message: types.Message):
+    """Stiker / GIF / o'yin suyagi — do'stona javob va do'kon tugmasi."""
+    lang = await get_user_lang(message.from_user.id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    await message.reply(t(lang, "sticker_reply"), reply_markup=kb)
+
+
+@dp.message(StateFilter(None), F.location | F.venue)
+async def handle_location(message: types.Message):
+    """Lokatsiya — mijoz ko'pincha "qayerdasiz?" ma'nosida yuboradi.
+    Javobda DO'KON manzili, ish vaqti va xaritada ochish tugmasi beriladi."""
+    lang = await get_user_lang(message.from_user.id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=t(lang, "contact_map_btn"), url=shop_map_url())]])
+    await message.reply(
+        t(lang, "location_reply", address=esc(shop_address(lang)), hours=esc(shop_hours(lang))),
+        parse_mode="HTML", reply_markup=kb,
+    )
+
+
+@dp.message(StateFilter(None), F.contact)
+async def handle_contact_share(message: types.Message):
+    """Kontakt — ro'yxatdan o'tish oqimidan TASHQARIDA yuborilgan raqam.
+    Ilgari bu ham jim qolardi va raqam YO'QOLARDI. Endi profilga yoziladi,
+    ya'ni mijoz keyingi buyurtmada raqamini qayta kiritmaydi."""
+    lang = await get_user_lang(message.from_user.id)
+    phone = (message.contact.phone_number or "").strip()
+    if phone and not phone.startswith("+"):
+        phone = "+" + phone
+    try:
+        if phone:
+            user_id = message.from_user.id
+            await firebase_patch(f"users/{user_id}/profile", {"phone": phone})
+            prof = users_db.get(user_id) or {}
+            prof["phone"] = phone
+            users_db[user_id] = prof
+    except Exception as e:
+        logging.error(f"Kontakt raqamini saqlash xatosi: {e}")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    await message.reply(t(lang, "contact_reply", phone=esc(phone or "—")),
+                        parse_mode="HTML", reply_markup=kb)
+
+
+@dp.message(StateFilter(None), F.video)
+async def handle_video_other(message: types.Message):
+    """Hashtegsiz video (storis emas) — javobsiz qoldirmaymiz."""
+    lang = await get_user_lang(message.from_user.id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    await message.reply(t(lang, "media_reply"), parse_mode="HTML", reply_markup=kb)
+
+
+@dp.message()
+async def handle_anything_else(message: types.Message, state: FSMContext):
+    """🛟 OXIRGI TO'R. Yuqoridagi hech bir handler ushlamagan HAR QANDAY xabar
+    shu yerga tushadi (so'rovnoma, o'yin, joylashuv-jonli, kelajakdagi yangi
+    Telegram turlari). Shu handler borligi uchun bot BOSHQA HECH QACHON
+    jim qolmaydi."""
+    lang = await get_user_lang(message.from_user.id)
+    if await state.get_state() is not None:
+        await message.answer(t(lang, "state_busy"))
+        return
+    await message.reply(t(lang, "fallback_reply"), parse_mode="HTML")
 
 
 # =====================================================================
@@ -2379,17 +2743,17 @@ async def global_error_handler(event):
     # 3) Admin xabardor bo'lsin (lekin xabar yog'diradigan darajada emas)
     global _last_admin_error_alert
     now = time.monotonic()
-    if ADMIN_ID and (now - _last_admin_error_alert) >= ADMIN_ERROR_ALERT_INTERVAL:
+    if ADMIN_IDS and (now - _last_admin_error_alert) >= ADMIN_ERROR_ALERT_INTERVAL:
         _last_admin_error_alert = now
         try:
             who = str(user.id) if user is not None else "—"
-            await bot.send_message(
-                ADMIN_ID,
+            # Barcha adminlar xabardor bo'lsin: bittasi telefonini ko'rmasa,
+            # ikkinchisi xatoni darrov ko'radi.
+            await notify_admins(
                 "⚠️ <b>Botda kutilmagan xatolik</b>\n\n"
                 f"Foydalanuvchi: <code>{esc(who)}</code>\n"
                 f"Xato: <code>{esc(type(exc).__name__)}: {esc(str(exc)[:300])}</code>\n\n"
-                "<i>To'liq ma'lumot server loglarida (Render → Logs).</i>",
-                parse_mode="HTML",
+                "<i>To'liq ma'lumot server loglarida (Render → Logs).</i>"
             )
         except Exception as e:
             logging.error(f"Adminga xato xabarini yuborib bo'lmadi: {e}")
@@ -2489,7 +2853,7 @@ def where_am_i():
 
 async def notify_admin_lifecycle(started: bool):
     """Adminga bot yoqilgani/o'chgani haqida xabar yuboradi (xato bo'lsa — jim)."""
-    if not (ADMIN_NOTIFY_LIFECYCLE and ADMIN_ID):
+    if not (ADMIN_NOTIFY_LIFECYCLE and ADMIN_IDS):
         return
     if started:
         text = (f"🟢 <b>Bot ishga tushdi</b>\n\nQayerda: {where_am_i()}\n\n"
@@ -2499,10 +2863,7 @@ async def notify_admin_lifecycle(started: bool):
         text = (f"🔴 <b>Bot to'xtadi</b>\n\nQayerda: {where_am_i()}\n\n"
                 "<i>Sabab: qayta deploy, server to'xtatildi yoki bepul soat "
                 "limiti tugadi. Yashil xabar kelmasa — bot ishlamayapti.</i>")
-    try:
-        await bot.send_message(ADMIN_ID, text, parse_mode="HTML")
-    except Exception as e:
-        logging.warning(f"Adminga holat xabarini yuborib bo'lmadi: {e}")
+    await notify_admins(text)
 
 
 async def _on_shutdown(*args, **kwargs):
@@ -2514,6 +2875,39 @@ async def _on_shutdown(*args, **kwargs):
 # =====================================================================
 # BOTNI ISHGA TUSHIRISH
 # =====================================================================
+async def setup_bot_commands():
+    """Telegram'dagi «Menu» tugmasiga buyruqlar ro'yxatini yozadi.
+
+    Ilgari `set_my_commands` UMUMAN chaqirilmagan edi: foydalanuvchi
+    yozuv maydonining yonidagi «Menu» tugmasini bosganda BO'SH ro'yxat
+    ko'rardi va botning nimalar qila olishini bilmasdi. Buyruqlarni
+    yodda tutish ham kerak emas — Telegram o'zi taklif qiladi.
+
+    Adminlarga QO'SHIMCHA buyruqlar ko'rsatiladi (faqat o'z chatlarida),
+    mijozlar ularni ko'rmaydi.
+    """
+    common = [
+        BotCommand(command="start", description="Boshlash / Начать"),
+        BotCommand(command="help", description="Yordam / Помощь"),
+        BotCommand(command="til", description="Til almashtirish / Сменить язык"),
+        BotCommand(command="bekor", description="Bekor qilish / Отменить"),
+    ]
+    try:
+        await bot.set_my_commands(common, scope=BotCommandScopeAllPrivateChats())
+    except Exception as e:
+        logging.warning(f"Buyruqlar ro'yxatini yozib bo'lmadi: {e}")
+
+    admin_extra = common + [
+        BotCommand(command="storis", description="Storis hashteglari"),
+        BotCommand(command="hisobot", description="Savdo va ombor hisoboti"),
+    ]
+    for aid in ADMIN_IDS:
+        try:
+            await bot.set_my_commands(admin_extra, scope=BotCommandScopeChat(chat_id=aid))
+        except Exception as e:
+            logging.warning(f"Admin ({aid}) buyruqlarini yozib bo'lmadi: {e}")
+
+
 async def main():
     logging.info("Bot ishga tushdi!")
     global products_lock
@@ -2545,6 +2939,9 @@ async def main():
     # Eslatma: botni AYNI vaqtda IKKI nusxada ishga tushirmang — Telegram baribir
     # 409 beradi (har bir bot uchun faqat bitta getUpdates iste'molchisi bo'ladi).
     await bot.delete_webhook(drop_pending_updates=True)
+
+    # Telegram «Menu» tugmasidagi buyruqlar ro'yxati (ilgari bo'sh edi).
+    await setup_bot_commands()
 
     # Adminga "yoqildi" xabari — deploy muvaffaqiyatli bo'lganini bilish uchun.
     await notify_admin_lifecycle(started=True)
