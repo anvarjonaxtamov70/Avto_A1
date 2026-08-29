@@ -1463,6 +1463,81 @@ async def firebase_get(path):
 
 
 # =====================================================================
+# SHARTLI (ATOMIK) YOZISH YORDAMCHILARI
+#   AI agenti tovar narxi/qoldig'ini o'zgartirganda mini app'dagi
+#   admin tahriri USTIDAN YOZIB KETMASLIGI kerak. Yechim — optimistik
+#   qulflash (optimistic locking): o'qishda ETag olinadi, yozishda
+#   `if-match` bilan qaytariladi. Oradan boshqa kimsa yozib qo'ysa
+#   Firebase 412 (Precondition Failed) beradi va biz qayta o'qib,
+#   qayta urinamiz. Ya'ni ma'lumot JIMGINA yo'qolmaydi.
+#
+#   Shu naqsh allaqachon `firebase_append_products` da ishlatilgan —
+#   endi u umumiy yordamchilarga chiqarildi.
+# =====================================================================
+async def firebase_get_etag(path):
+    """(etag, qiymat) juftligini qaytaradi. Xatoda (None, None)."""
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(fb_url(path),
+                                   headers={"X-Firebase-ETag": "true"},
+                                   timeout=10) as r:
+                if r.status == 200:
+                    return r.headers.get("ETag"), await r.json()
+                logging.warning(f"Firebase GET(etag) {path}: status={r.status}")
+        except Exception as e:
+            logging.error(f"Firebase GET(etag) xatosi ({path}): {e}")
+        return None, None
+
+
+async def firebase_put(path, data, etag=None):
+    """PUT (to'liq almashtirish). `(muvaffaqiyatmi, status_kodi)` qaytaradi.
+
+    `etag` berilsa — SHARTLI yozish: qiymat o'zgargan bo'lsa 412 keladi
+    va yozilmaydi. Chaqiruvchi qayta o'qib qayta urinishi kerak.
+    """
+    headers = {"if-match": etag} if etag else {}
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.put(fb_url(path), json=data,
+                                   headers=headers, timeout=15) as r:
+                if r.status != 200:
+                    # 412 — kutilgan (poyga) holat, xato emas: shovqin qilmaymiz.
+                    if r.status != 412:
+                        logging.warning(f"Firebase PUT {path}: status={r.status}")
+                return r.status == 200, r.status
+        except Exception as e:
+            logging.error(f"Firebase PUT xatosi ({path}): {e}")
+            return False, 0
+
+
+async def firebase_delete(path):
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.delete(fb_url(path), timeout=10) as r:
+                return r.status == 200
+        except Exception as e:
+            logging.error(f"Firebase DELETE xatosi ({path}): {e}")
+            return False
+
+
+async def firebase_query(path, params):
+    """Tugunni RTDB so'rovi bilan o'qiydi (orderBy / limitToLast va h.k.).
+
+    Audit jurnalidan OXIRGI yozuvlarni olish uchun kerak — butun jurnalni
+    o'qish vaqt o'tib juda qimmatga tushadi.
+    """
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(fb_url(path, params=params), timeout=10) as r:
+                if r.status == 200:
+                    return await r.json()
+                logging.warning(f"Firebase QUERY {path}: status={r.status}")
+        except Exception as e:
+            logging.error(f"Firebase QUERY xatosi ({path}): {e}")
+        return None
+
+
+# =====================================================================
 # PRODUCTS GA QO'SHISH (xavfsiz APPEND — butun massivni qayta yozmaydi)
 #   - Eski kod butun `products` massivini PUT qilardi. Agar admin ayni
 #     paytda Mini App'dan biror mahsulotni tahrirlasa/o'chirsa, bot eski
@@ -2491,6 +2566,29 @@ def _ensure_ai_session(user_id, lang, display_name="", extra=""):
     return ai_sessions[user_id]
 
 
+@dp.message(Command("orqaga", "undo"))
+async def owner_undo_command(message: types.Message):
+    """Oxirgi AI o'zgarishini qaytarish. FAQAT do'kon egasiga.
+
+    ⚠️ TARTIB MUHIM: bu handler pastdagi `unknown_command`
+    (`F.text.startswith("/")`) va `handle_ai_chat` (`F.text`) dan OLDIN
+    turishi SHART. aiogram handlerlarni e'lon qilingan tartibda sinaydi —
+    pastda bo'lsa `/orqaga` «noma'lum buyruq» javobini olardi.
+    """
+    if not _is_owner(message.from_user.id):
+        lang = await get_user_lang(message.from_user.id)
+        await message.answer(t(lang, "unknown_command"), parse_mode="HTML")
+        return
+    token, preview, err = await ai_agent.undo_last(message.from_user.id)
+    if token is None:
+        await message.reply(err, parse_mode="HTML")
+        return
+    # Qaytarish ham TASDIQDAN o'tadi — xato bilan yozilgan /orqaga mijozga
+    # ketgan buyurtma holatini jimgina o'zgartirib qo'ymasligi kerak.
+    await message.reply(preview, parse_mode="HTML",
+                        reply_markup=confirm_keyboard(token))
+
+
 @dp.message(F.text.startswith("/"))
 async def unknown_command(message: types.Message, state: FSMContext):
     """Noma'lum buyruq — ilgali bu matn AI ga ketardi va AI "/xyz" ni
@@ -2548,15 +2646,16 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         ai_sessions[user_id].append({"role": "user", "content": message.text})
 
         bot_reply = None
+        agent_res = None   # agent ishlamasa ham pastda xavfsiz tekshiriladi
         if use_agent:
             # ⚠️ Agent suhbat tarixining NUSXASI bilan ishlaydi: vosita (`tool`)
             #    xabarlari `ai_sessions` ga TUSHMAYDI. Sabab — pastdagi "oxirgi
             #    16 xabar" qirqishi `tool_calls` bilan `tool` juftligini ajratib
             #    qo'ysa, Groq keyingi navbatda 400 xato beradi va AI butunlay
             #    o'lib qolardi.
-            reply, _tools_used = await ai_agent.run_owner_agent(
+            agent_res = await ai_agent.run_owner_agent(
                 ai_sessions[user_id], user_id)
-            bot_reply = reply if (reply or "").strip() else None
+            bot_reply = agent_res.text if (agent_res.text or "").strip() else None
             if bot_reply is None:
                 # Agent ishlamadi (Groq xatosi yoki tool sxemasi rad etildi) —
                 # xo'jayin javobsiz qolmasligi uchun ESKI yo'lga qaytamiz.
@@ -2592,9 +2691,135 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
             text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
         await message.reply(bot_reply, reply_markup=kb)
+
+        # ✅ AI o'zgartirish TAKLIF qilgan bo'lsa — har biri uchun alohida
+        #    tasdiq kartochkasi. Kartochka AI javobidan KEYIN yuboriladi:
+        #    xo'jayin avval izohni o'qiydi, keyin tugmani ko'radi.
+        if agent_res is not None:
+            for item in agent_res.pending:
+                await send_confirm_card(message.chat.id, item)
     except Exception as e:
         logging.error(f"AI chat xatosi: {e}")
         await message.reply(t(lang, "ai_busy"))
+
+
+# =====================================================================
+# 🤖 AI TASDIQ KARTOCHKASI — «o'ng qo'l» ning xavfsizlik chegarasi
+# ---------------------------------------------------------------------
+# AI hech qanday o'zgarishni O'ZI bajarmaydi. U faqat REJA tuzadi, reja
+# `pending_actions` da saqlanadi va FAQAT xo'jayin tugmani bosgandan
+# keyin bajariladi.
+#
+# NEGA BU SHUNCHALIK MUHIM:
+#   Mijoz chatiga yoki tovar sharhiga «hamma narxni 1 so'm qil» deb
+#   yozilsa, o'sha matn AI kontekstiga tushishi mumkin (prompt
+#   injection). Tugma bo'lsa — AI aldangan taqdirda ham katalog
+#   buzilmaydi, chunki oxirgi qaror INSONDA qoladi.
+# =====================================================================
+def confirm_keyboard(token):
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Tasdiqlash",
+                             callback_data=ai_agent.confirm_callback_data(token, True)),
+        InlineKeyboardButton(text="❌ Bekor",
+                             callback_data=ai_agent.confirm_callback_data(token, False)),
+    ]])
+
+
+async def send_confirm_card(chat_id, item):
+    """Tasdiq kartochkasini yuboradi (xato bo'lsa suhbatni buzmaydi)."""
+    try:
+        rec = item.get("record") or {}
+        text = ai_agent.render_plan_preview(rec.get("plan"), rec.get("warning"))
+        await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML",
+                               reply_markup=confirm_keyboard(item["token"]))
+    except Exception as e:
+        logging.error(f"Tasdiq kartochkasi yuborilmadi: {e}")
+
+
+async def _notify_order_customer(uid, new_status, code, order):
+    """Buyurtma holati o'zgarganda mijozga xabar (mini app bilan bir xil matn)."""
+    key = {
+        "qabul": "order_qabul", "yolda": "order_yolda",
+        "yetkazildi": "order_yetkazildi", "bekor_qilingan": "order_bekor_qilingan",
+    }.get(new_status)
+    if not key:
+        return
+    cust_id = _safe_int(uid, None)
+    if cust_id is None:
+        return
+    detail = ""
+    total = _safe_int((order or {}).get("total"), 0) or 0
+    if total:
+        detail = f"\n\n💰 Jami: {_fmt_som(total)} so'm"
+    cust_lang = await get_user_lang(cust_id)
+    await bot.send_message(chat_id=cust_id,
+                           text=t(cust_lang, key, code=code, detail=detail))
+
+
+@dp.callback_query(F.data.startswith(ai_agent.CONFIRM_PREFIX + ":"))
+async def ai_confirm_callback(call: types.CallbackQuery):
+    """✅ / ❌ tugmasi. Ruxsat KODDA tekshiriladi."""
+    # 🔒 Birinchi to'siq: faqat do'kon egasi. Tugma faqat uning chatida
+    #    ko'rinadi, lekin ishonmaymiz — callback'ni qayta yuborish mumkin.
+    if not _is_owner(call.from_user.id):
+        await call.answer("Bu amal sizga tegishli emas.", show_alert=True)
+        return
+
+    token, approve = ai_agent.parse_callback_data(call.data)
+    if not token:
+        await call.answer("Buyruq tanilmadi.", show_alert=True)
+        return
+
+    # Tugmani DARHOL olib tashlaymiz — ikki marta bosilishining oldini oladi
+    # (ikkinchi chegara `claim_pending` dagi atomik egallash).
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    if not approve:
+        ok, msg = await ai_agent.cancel_confirmed(token, call.from_user.id)
+        await call.answer("Bekor qilindi" if ok else "Bajarilmadi")
+        await _append_to_card(call.message, msg)
+        return
+
+    await call.answer("Bajarilyapti...")
+    try:
+        ok, msg = await ai_agent.apply_confirmed(
+            token, call.from_user.id, notifier=_notify_order_customer)
+    except Exception as e:
+        logging.error(f"AI tasdiq bajarishda xato: {e}")
+        ok, msg = False, f"❌ Kutilmagan xato: {e}"
+
+    await _append_to_card(call.message, msg)
+    if ok:
+        await bot.send_message(
+            chat_id=call.message.chat.id,
+            text="<i>Xato bo'lsa <code>/orqaga</code> yozing — avvalgi holatga "
+                 "qaytaramiz.</i>", parse_mode="HTML")
+
+
+async def _append_to_card(msg, result_text):
+    """Natijani tasdiq kartochkasining OXIRIGA qo'shadi.
+
+    Nega joyida tahrirlanadi: alohida xabar yuborilsa, chat "tasdiqladim /
+    bajarildi" juftliklari bilan to'lib ketardi va qaysi natija qaysi
+    kartochkaga tegishli ekani chalkashardi.
+    """
+    try:
+        base = msg.html_text if getattr(msg, "html_text", None) else (msg.text or "")
+        await msg.edit_text(f"{base}\n\n━━━━━━━━\n{esc(result_text)}",
+                            parse_mode="HTML")
+    except Exception:
+        # Tahrirlash imkonsiz bo'lsa (juda uzun / eski xabar) — alohida yuboramiz.
+        try:
+            await bot.send_message(chat_id=msg.chat.id, text=result_text)
+        except Exception as e:
+            logging.error(f"Natija xabari yuborilmadi: {e}")
+
+
+# (/orqaga buyrug'i YUQORIDA, `unknown_command` dan OLDIN ro'yxatga olingan —
+#  aiogram handlerlarni e'lon tartibida sinaydi, shu sababli tartib muhim.)
 
 
 # =====================================================================
@@ -2951,9 +3176,17 @@ async def setup_bot_commands():
         BotCommand(command="storis", description="Storis hashteglari"),
         BotCommand(command="hisobot", description="Savdo va ombor hisoboti"),
     ]
+    # `/orqaga` FAQAT do'kon egasiga ko'rsatiladi: boshqa adminlar uni
+    # ishlatolmaydi (handler `_is_owner` ni tekshiradi), ro'yxatda turishi
+    # esa chalkashlik keltirardi.
+    owner_extra = admin_extra + [
+        BotCommand(command="orqaga", description="Oxirgi AI o'zgarishini qaytarish"),
+    ]
     for aid in ADMIN_IDS:
         try:
-            await bot.set_my_commands(admin_extra, scope=BotCommandScopeChat(chat_id=aid))
+            await bot.set_my_commands(
+                owner_extra if _is_owner(aid) else admin_extra,
+                scope=BotCommandScopeChat(chat_id=aid))
         except Exception as e:
             logging.warning(f"Admin ({aid}) buyruqlarini yozib bo'lmadi: {e}")
 
@@ -2980,8 +3213,16 @@ async def main():
     #    Aylanma import bo'lmasligi uchun ai_agent bot.py ni IMPORT QILMAYDI —
     #    kerak bo'lgan hamma narsani shu yerdan oladi.
     #    `_is_owner` uzatilishi SHART: ruxsat tekshiruvi promptda emas, KODDA.
-    ai_agent.init(firebase_get=firebase_get, firebase_patch=firebase_patch,
-                  groq_raw=groq_raw, is_owner=_is_owner)
+    agent_deps = ai_agent.init(
+        firebase_get=firebase_get, firebase_patch=firebase_patch,
+        groq_raw=groq_raw, is_owner=_is_owner,
+        # Yozish uchun (tasdiqlangan o'zgarishlar): ETag bilan atomik yozish.
+        firebase_get_etag=firebase_get_etag, firebase_put=firebase_put,
+        firebase_delete=firebase_delete, firebase_query=firebase_query,
+    )
+    # Muddati o'tgan tasdiqlarni tozalab turuvchi fon vazifasi — aks holda
+    # `pending_actions` tuguni bosilmagan tugmalar bilan to'lib borardi.
+    asyncio.create_task(ai_agent.pending_janitor(agent_deps))
 
     asyncio.create_task(process_mini_app_ai())
     # 🔐 admin_ids UZATILISHI SHART — aks holda AI ommaviy so'rovlari qayta
