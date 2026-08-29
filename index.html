@@ -6945,6 +6945,32 @@ window.currentUser = null;
     try { tg.expand && tg.expand(); } catch(e) { _dwarn('[TG] expand xato:', e.message); }
     try { tg.ready && tg.ready(); } catch(e) {}
 
+    // 🔴 KRITIK TUZATISH — `window.tg` ni OCHIQ qilamiz.
+    // ------------------------------------------------------------------
+    // Yuqorida `let tg` ishlatilgan. Top-level `let`/`const` global LEKSIK
+    // muhitga tushadi, ammo `window` OBYEKTIGA TUSHMAYDI. Ya'ni `window.tg`
+    // hamisha `undefined` edi.
+    //
+    // Fayl bo'ylab 13 joyda `if (window.tg && tg.xxx)` shaklidagi qo'riqchi
+    // ishlatilgan — ularning HAMMASI doim `false` bo'lib, Telegram
+    // funksiyalari HECH QACHON ishlamagan. Buzilganlari:
+    //   • storisga video yuklash — `initData` doim bo'sh -> "faqat Telegram
+    //     ichida ishlaydi" degan ogohlantirish chiqib, yuklash boshlanmasdi
+    //     (foydalanuvchi "video tanlayapman, o'sha joyda qotib qolyapti" deb
+    //      aytgan holat AYNAN shu edi);
+    //   • referral: `start_param` o'qilmasdi -> taklif havolalari umuman
+    //     ishlamasdi; `/referral` va `/referral-qualify` ga initData bo'sh
+    //     ketardi -> 20 000 so'm bonus HECH QACHON berilmasdi;
+    //   • Telegram header/fon rangi mavzuga moslashmasdi;
+    //   • BackButton ko'rinmasdi;
+    //   • native showAlert / showConfirm o'rniga oddiy toast chiqardi;
+    //   • openLink / openTelegramLink ishlamasdi.
+    //
+    // Bitta qator — hammasi tiklanadi. Brauzer rejimida `tg` "stub" bo'ladi,
+    // unda `initData`/`showAlert` yo'q, shuning uchun o'sha qo'riqchilar
+    // avvalgidek xavfsiz zaxira yo'lga tushadi (xatti-harakat o'zgarmaydi).
+    window.tg = tg;
+
     // 📳 HAPTIC ZAXIRASI (navigator.vibrate) — XAVFSIZ va MARKAZIY.
     //    Muammo: telegram-web-app.js BRAUZERDA ham window.Telegram.WebApp yaratadi,
     //    lekin uning HapticFeedback'i Telegram TASHQARISIDA NO-OP (tebranmaydi).
@@ -12803,7 +12829,7 @@ function initReveal() {
             rings.forEach(ring => {
                 const cat = ring.getAttribute('data-story');
                 const items = STORIES_DB[cat];
-                ring.classList.remove('new', 'seen', 'empty', 'segmented');
+                ring.classList.remove('new', 'seen', 'empty', 'segmented', 'has-new');
                 ring.style.removeProperty('--ring-grad');
                 // Halqaning ota-elementi (.story-item) — uni to'liq yashirish/ko'rsatish uchun
                 const itemEl = ring.closest('.story-item');
@@ -12827,27 +12853,29 @@ function initReveal() {
                 });
                 const unseenCount = unseenFlags.filter(Boolean).length;
 
-                // Ko'rilmaganlar sonini kichik badge bilan ko'rsatamiz
+                // 🚫 RAQAMLI NISHONCHA OLIB TASHLANDI.
+                //    Ilgari halqa ustida kichik tilla doiracha ichida "1" kabi
+                //    son chiqardi (ko'rilmaganlar soni). U .story-item ning
+                //    o'ng-yuqori burchagiga yopishib, rasmdan chetga chiqib
+                //    turardi va xunuk ko'rinardi. Telegram/Instagram'da bunday
+                //    son YO'Q — halqaning o'zi hammasini bildiradi.
+                //    Eski elementlar DOM'da qolib ketmasligi uchun o'chiramiz.
                 if (itemEl) {
-                    let badge = itemEl.querySelector('.story-unseen-badge');
-                    if (unseenCount > 0 && items.length > 1) {
-                        if (!badge) {
-                            badge = document.createElement('span');
-                            badge.className = 'story-unseen-badge';
-                            (ring.parentNode || itemEl).appendChild(badge);
-                        }
-                        badge.textContent = String(unseenCount);
-                        badge.style.display = '';
-                    } else if (badge) { badge.style.display = 'none'; }
+                    const _oldBadge = itemEl.querySelector('.story-unseen-badge');
+                    if (_oldBadge && _oldBadge.parentNode) _oldBadge.parentNode.removeChild(_oldBadge);
                 }
 
+                // 🔵 TELEGRAM USLUBI — YAGONA MANTIQ:
+                //    • biror storis ko'rilmagan  -> segmentli TILLA halqa + yumshoq nur
+                //      (har storis bitta yoy; ko'rilgani xira, ko'rilmagani tilla)
+                //    • hammasi ko'rilgan         -> halqa BUTUNLAY O'CHADI
+                //    Ilgari uch xil holat (new / segmented / seen) uch xil
+                //    ko'rinishda edi: bittasi aylanardi, bittasi qotib turardi —
+                //    izchillik yo'q edi. Endi bitta til.
                 if (unseenCount === 0) {
-                    ring.classList.add('seen');            // hammasini ko'rgan -> xira
-                } else if (unseenCount === items.length) {
-                    ring.classList.add('new');             // hech biri ko'rilmagan -> aylanuvchi tilla
+                    ring.classList.add('seen');            // o'chgan holat
                 } else {
-                    // Qismi ko'rilgan -> SEGMENTLI halqa (qaysi biri qolganini ko'rsatadi)
-                    ring.classList.add('segmented');
+                    ring.classList.add('segmented', 'has-new');
                     ring.style.setProperty('--ring-grad', _segmentGradient(unseenFlags));
                 }
             });
@@ -13368,12 +13396,31 @@ function initReveal() {
                 }, { once: true });
 
                 // Sekin internet — "waiting" / "stalled" da loader qaytadi
+                //
+                // ⚠️ QOTISHNING QOLGAN SABABI (endi tuzatildi): progress chizig'i
+                //    video.currentTime dan olinadi. Bu bufferlanishda TO'G'RI ishlaydi
+                //    (chiziq ham to'xtaydi), LEKIN video o'rtada butunlay muzlab
+                //    qolsa (CDN javob bermadi, internet uzildi) currentTime hech
+                //    qachon o'zgarmaydi -> chiziq ham, storis ham ABADIY turadi.
+                //    Boshlanish uchun watchdog bor edi, O'YNASH paytida esa YO'Q edi.
+                //    Endi 12 soniya harakatsizlikda o'zi keyingisiga o'tadi.
+                const _armStallSkip = () => {
+                    _armStoryWatchdog(12000, () => {
+                        // Mijoz ataylab bosib turib PAUZA qilgan bo'lsa — o'tmaymiz
+                        if (isStoryPaused) { _armStallSkip(); return; }
+                        showToast("Video to'xtab qoldi — keyingisiga o'tdik", 'warning');
+                        nextStory();
+                    });
+                };
                 storyVideoElement.addEventListener('waiting', () => {
                     if (loader) loader.style.display = 'flex';
                     // 🌫️ Bufferlanayotganda blur'ni qaytaramiz
                     if (storyVideoElement) storyVideoElement.classList.add('stv-loading');
+                    _armStallSkip();
                 });
+                storyVideoElement.addEventListener('stalled', _armStallSkip);
                 storyVideoElement.addEventListener('playing', () => {
+                    _clearStoryWatchdog();      // harakat bor — nazoratchi kerak emas
                     if (loader) loader.style.display = 'none';
                     // 🌫️ O'ynay boshladi — blur ketadi (tiniq video)
                     if (storyVideoElement) storyVideoElement.classList.remove('stv-loading');
@@ -20464,9 +20511,18 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                         '<b id="st2-pick-vid-tx">Video</b><i id="st2-pick-vid-sub">Galereyadan &middot; 20 MB gacha</i>' +
                     '</div>' +
                 '</div>' +
-                '<input type="file" id="st2-file" accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp" style="display:none;">' +
-                '<input type="file" id="st2-file-vid" accept="video/mp4,video/quicktime,video/webm,video/*" style="display:none;">' +
-                '<div class="st2-up hidden" id="st2-up"><i id="st2-up-bar"></i><span id="st2-up-tx">0%</span></div>' +
+                // ⚠️ `display:none` EMAS: Telegram'ning ichki brauzerida (ayniqsa
+                //    iOS WKWebView) yashirilgan input'ni `.click()` bilan ochish
+                //    ba'zan UMUMAN ishlamaydi — galereya ochilmaydi. Shuning uchun
+                //    input DOM'da "ko'rinadigan" (opacity:0, 1px) holatda turadi —
+                //    tovar rasmlarida ishlab turgan usul bilan bir xil.
+                '<input type="file" id="st2-file" accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp" class="st2-hidden-file">' +
+                '<input type="file" id="st2-file-vid" accept="video/mp4,video/quicktime,video/webm,video/*" class="st2-hidden-file">' +
+                '<div class="st2-up hidden" id="st2-up">' +
+                    '<i id="st2-up-bar"></i><span id="st2-up-tx">0%</span>' +
+                    '<button type="button" class="st2-up-x" id="st2-up-x" aria-label="Bekor qilish" ' +
+                        'onclick="window._st2CancelUpload && window._st2CancelUpload()">&times;</button>' +
+                '</div>' +
                 '<div class="st2-prev hidden" id="st2-prev"></div>' +
                 '<div id="st2-url-wrap" style="display:none; margin-top:13px;">' +
                     '<p class="st2-hint" style="margin-top:0;">Video <b>galereyadan</b> yuklanadi \u2014 yuqoridagi \uD83C\uDFAC tugmasini bosing. ' +
@@ -20512,6 +20568,9 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         box.classList.remove('hidden');
         if (bar) bar.style.width = Math.max(2, Math.min(100, pct)) + '%';
         if (tx) tx.textContent = label || (pct + '%');
+        // "×" (bekor qilish) faqat haqiqiy yuklash davomida ko'rinadi
+        var x = $('st2-up-x');
+        if (x) x.style.display = _vidXhr ? 'flex' : 'none';
     }
 
     function showPreview(url, isVideo) {
@@ -20608,9 +20667,93 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         if (sb && sub != null) sb.innerHTML = sub;
     }
 
+    /* ------------------------------------------------------------------ *
+     * Yuklash holati — bekor qilish va "qotib qolishga" qarshi himoya
+     * ------------------------------------------------------------------ */
+    var _vidXhr = null;          // joriy so'rov (bekor qilish uchun)
+    var _vidStallTimer = null;   // "javob yo'q" nazoratchisi
+
+    function _clearVidStall() {
+        if (_vidStallTimer) { clearTimeout(_vidStallTimer); _vidStallTimer = null; }
+    }
+
+    /** Yuklash UI'sini boshlang'ich holatga qaytaradi (HAR qanday yo'lda). */
+    function _resetVidUI(msg, kind) {
+        _clearVidStall();
+        _vidXhr = null;
+        showProgress(null);
+        setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
+        if (msg) toast(msg, kind || 'warning');
+    }
+
+    /**
+     * ⏰ STALL NAZORATCHISI — "qotib qolish"ning oldini oladi.
+     * Belgilangan vaqt ichida hech qanday harakat bo'lmasa, so'rovni
+     * BEKOR qilamiz va UI'ni tozalaymiz. Ilgari bunday himoya yo'q edi:
+     * yuklash to'xtab qolsa, mijoz 3 daqiqa "⏳ Yuklanmoqda..." ga qarab
+     * turardi va ekran qotgandek ko'rinardi.
+     */
+    function _armVidStall(ms, reason) {
+        _clearVidStall();
+        _vidStallTimer = setTimeout(function () {
+            _vidStallTimer = null;
+            var x = _vidXhr;
+            if (!x) return;
+            try { x._st2Aborted = true; x.abort(); } catch (e) {}
+            _resetVidUI(reason || 'Aloqa uzildi — qayta urinib ko\'ring');
+        }, ms);
+    }
+
+    /** Admin "×" bosganda yuklashni bekor qiladi. */
+    window._st2CancelUpload = function () {
+        var x = _vidXhr;
+        if (!x) { showProgress(null); return; }
+        try { x._st2Aborted = true; x.abort(); } catch (e) {}
+        hap('light');
+        _resetVidUI('Yuklash bekor qilindi', 'info');
+    };
+
+    /**
+     * Fayl HAQIQATAN video ekanini aniqlaydi.
+     * ⚠️ Ba'zi Android galereyalari `file.type` ni BO'SH qaytaradi, iOS esa
+     *    `.mov` uchun ba'zan noto'g'ri MIME beradi. Faqat MIME'ga tayanib
+     *    bo'lmaydi — kengaytmani ham tekshiramiz. (Ilgari MIME bo'sh bo'lsa
+     *    Worker faylni RASM deb Telegram'ga yuborardi va Telegram rad etardi.)
+     */
+    function _isVideoFile(file) {
+        var t = String((file && file.type) || '').toLowerCase();
+        if (t.indexOf('video/') === 0) return true;
+        if (t.indexOf('image/') === 0) return false;
+        var n = String((file && file.name) || '').toLowerCase();
+        return /\.(mp4|mov|m4v|webm|3gp|3gpp|avi|mkv|qt|mpeg|mpg)$/.test(n);
+    }
+
     function uploadVideo(file) {
+        // 🛡️ Butun funksiya try/catch ichida: kutilmagan xato bo'lsa ham
+        //    UI "⏳ Yuklanmoqda..." holatida QOTIB QOLMAYDI.
+        try {
+            _uploadVideoInner(file);
+        } catch (e) {
+            _resetVidUI('Yuklash boshlanmadi: ' + ((e && e.message) || String(e)));
+        }
+    }
+
+    function _uploadVideoInner(file) {
         if (!file) return;
         if (!amAdmin()) { toast('Faqat admin', 'warning'); return; }
+
+        // 0) Video ekanini tekshiramiz (rasm tanlansa — rasm yo'liga o'tkazamiz)
+        if (!_isVideoFile(file)) {
+            var mt = String(file.type || '').toLowerCase();
+            if (mt.indexOf('image/') === 0) {
+                toast('Bu rasm — rasm sifatida yuklayapman', 'info');
+                C.type = 'image'; setPickState();
+                uploadPhoto(file);
+                return;
+            }
+            _resetVidUI('Bu fayl video emas. mp4 yoki mov tanlang.');
+            return;
+        }
 
         // 1) Hajm chegarasi — ochiq va aniq tushuntirish bilan
         if (file.size > VIDEO_MAX) {
@@ -20630,8 +20773,15 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         }
 
         // 2) initData bo'lmasa Worker rad etadi — oldindan aytamiz
+        //    ⚠️ `window.tg` GA TAYANMAYMIZ: u yuqorida `let tg` bilan
+        //    e'lon qilingani uchun uzoq vaqt `undefined` bo'lib turgan va
+        //    aynan shu sabab video yuklash umuman boshlanmagan. Endi
+        //    to'g'ridan leksik `tg` ni o'qiymiz (zaxira sifatida window ham).
         var initData = '';
-        try { initData = (window.tg && tg.initData) ? tg.initData : ''; } catch (e) {}
+        try {
+            var _tg = (typeof tg !== 'undefined' && tg) ? tg : (window.tg || null);
+            initData = (_tg && _tg.initData) ? _tg.initData : '';
+        } catch (e) {}
         if (!initData) {
             toast('Video yuklash faqat Telegram ilovasi ichida ishlaydi', 'warning');
             return;
@@ -20639,27 +20789,91 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 
         setVidPickUI('\u23F3', 'Yuklanmoqda...', fmtMB(file.size));
         showProgress(2, 'Video yuklanmoqda... 0%');
+        _sendVideo(file, initData, false);
+    }
 
+    /* ==================================================================
+     * VIDEONI YUBORISH — IKKI YO'L
+     * ------------------------------------------------------------------
+     * 1) STREAM (asosiy): initData `X-Init-Data` HEADER'ida, body'da faqat
+     *    fayl. Worker body'ni ochmasdan to'g'ridan Telegram'ga uzatadi.
+     *    Bu Worker'ning CPU cheklovi muammosini hal qiladi — ilgari 20 MB
+     *    ni Worker xotirada parse qilardi va cheklovga urilib O'LARDI,
+     *    mijozda esa progress 95% da qotib qolardi.
+     *
+     * 2) LEGACY (zaxira): initData body ichida. Agar Worker hali
+     *    yangilanmagan bo'lsa (yangi `X-Init-Data` header'ini CORS'da
+     *    ruxsat etmaydi -> so'rov umuman ketmaydi), avtomat shu yo'lga
+     *    o'tamiz. Shunda admin "Worker deploy qil" degan xabarni kutmasdan
+     *    ishlashda davom etadi.
+     * ================================================================== */
+    function _sendVideo(file, initData, legacy) {
         var fd = new FormData();
-        fd.append('initData', initData);
-        fd.append('file', file, file.name || 'story.mp4');
+        var url;
+        if (legacy) {
+            fd.append('initData', initData);
+            fd.append('file', file, file.name || 'story.mp4');
+            url = TG_PROXY + '/upload';
+        } else {
+            // Telegram `sendVideo` maydon nomi AYNAN "video" bo'lishi shart
+            fd.append('video', file, file.name || 'story.mp4');
+            url = TG_PROXY + '/upload?kind=video';
+        }
 
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', TG_PROXY + '/upload');
-        xhr.timeout = 180000;   // 3 daqiqa — sekin internet uchun
+        _vidXhr = xhr;
+        try {
+            xhr.open('POST', url);
+            if (!legacy) xhr.setRequestHeader('X-Init-Data', initData);
+        } catch (e) {
+            _resetVidUI('So\'rov ochilmadi: ' + ((e && e.message) || String(e)));
+            return;
+        }
+        xhr.timeout = 240000;   // 4 daqiqa — juda sekin internet uchun
+
+        // Zaxira yo'lga o'tish kerakmi?
+        var _canFallback = !legacy;
+        var _fallback = function () {
+            _clearVidStall();
+            _vidXhr = null;
+            showProgress(4, 'Qayta urinilmoqda...');
+            _sendVideo(file, initData, true);
+        };
+
+        // Yuklash boshlanishini kutamiz (30s harakatsizlik -> uzilgan deb hisoblaymiz)
+        _armVidStall(30000, 'Yuklash boshlanmadi — internetni tekshiring');
+
+        // `_vidXhr` endi o'rnatildi — progress panelini qayta chizamiz, shunda
+        // "×" (bekor qilish) tugmasi DARHOL ko'rinadi. (Ilgari u faqat birinchi
+        // progress hodisasidan keyin paydo bo'lardi: sekin internetda mijoz
+        // uzoq vaqt bekor qila olmasdi.)
+        showProgress(legacy ? 4 : 2, 'Video yuklanmoqda... 0%');
 
         xhr.upload.onprogress = function (e) {
             if (!e.lengthComputable) return;
             var pct = Math.round((e.loaded / e.total) * 100);
+            // Har harakatda nazoratchini qaytadan qo'yamiz
+            _armVidStall(30000, 'Yuklash to\'xtab qoldi — qayta urinib ko\'ring');
             // 95% da to'xtatamiz: qolgani Telegram qayta ishlashi
             showProgress(Math.min(95, pct), pct < 100
-                ? 'Yuklanmoqda... ' + pct + '%'
+                ? 'Yuklanmoqda... ' + pct + '% \u00B7 ' + fmtMB(e.loaded) + ' / ' + fmtMB(e.total)
                 : 'Telegram qayta ishlayapti...');
         };
 
+        // Fayl to'liq ketdi — endi SERVER javobini kutamiz.
+        // Telegram katta videoni qayta ishlashi uzoq davom etishi mumkin,
+        // shuning uchun nazoratchi oynasini kengaytiramiz.
+        xhr.upload.onloadend = function () {
+            showProgress(96, 'Telegram qayta ishlayapti...');
+            _armVidStall(120000, 'Server javob bermadi — qayta urinib ko\'ring');
+        };
+
         xhr.onload = function () {
+            _clearVidStall();
+            _vidXhr = null;
             var j = null;
             try { j = JSON.parse(xhr.responseText); } catch (e) {}
+
             if (xhr.status === 200 && j && j.ok && j.url) {
                 C.type = 'video';
                 C.src = j.url;
@@ -20676,33 +20890,56 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                 toast('Video yuklandi \u2705', 'success');
                 return;
             }
-            // Xatoni tushunarli qilib aytamiz
+
+            var err = (j && j.error) || ('HTTP ' + xhr.status);
+
+            // Worker stream rejimini bilmaydi -> legacy'ga o'tamiz
+            if (_canFallback && (xhr.status === 404 || xhr.status === 405 ||
+                                 xhr.status === 501 || err === 'multipart kerak')) {
+                _fallback();
+                return;
+            }
+
             showProgress(null);
             setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
-            var err = (j && j.error) || ('HTTP ' + xhr.status);
             if (xhr.status === 413 || err === 'juda katta') {
-                toast('Video 20 MB dan katta', 'warning');
+                toast('Video 20 MB dan katta — qisqartiring', 'warning');
             } else if (xhr.status === 403 || err === 'ruxsat yoq') {
                 toast('Ruxsat yo\'q — faqat admin yuklaydi', 'warning');
+            } else if (xhr.status === 401) {
+                toast('Sessiya eskirgan — ilovani yopib qayta oching', 'warning');
             } else if (xhr.status === 404) {
-                // Worker hali yangilanmagan bo'lsa aynan shu holat
                 toast('Server hali yangilanmagan (Worker deploy kerak). Hozircha havola qo\'ying.', 'warning');
             } else {
                 toast('Video yuklanmadi: ' + err, 'warning');
             }
         };
+
         xhr.onerror = function () {
-            showProgress(null);
-            setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
-            toast('Tarmoq xatosi — internetni tekshiring', 'warning');
-        };
-        xhr.ontimeout = function () {
-            showProgress(null);
-            setVidPickUI('\uD83C\uDFAC', 'Video', 'Galereyadan &middot; 20 MB gacha');
-            toast('Yuklash juda uzoq davom etdi. Kichikroq video tanlang.', 'warning');
+            if (xhr._st2Aborted) return;          // biz o'zimiz bekor qildik
+            // CORS/tarmoq xatosi (status 0). Eng ehtimolli sabab: Worker eski
+            // versiyada va `X-Init-Data` header'iga preflight ruxsat bermaydi.
+            if (_canFallback) { _fallback(); return; }
+            _resetVidUI('Tarmoq xatosi — internetni tekshiring');
         };
 
-        xhr.send(fd);
+        xhr.ontimeout = function () {
+            if (_canFallback) { _fallback(); return; }
+            _resetVidUI('Yuklash juda uzoq davom etdi. Kichikroq video tanlang.');
+        };
+
+        xhr.onabort = function () {
+            // `_st2CancelUpload` yoki stall nazoratchisi UI'ni allaqachon tozaladi
+            _clearVidStall();
+            if (_vidXhr === xhr) _vidXhr = null;
+        };
+
+        try {
+            xhr.send(fd);
+        } catch (e) {
+            if (_canFallback) { _fallback(); return; }
+            _resetVidUI('Yuborilmadi: ' + ((e && e.message) || String(e)));
+        }
     }
 
     function wireComposer() {
@@ -20711,8 +20948,8 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         if (pi) pi.onclick = function () { hap('light'); if (file) file.click(); };
         if (file) file.onchange = function () {
             var f = file.files && file.files[0];
-            file.value = '';
             uploadPhoto(f);
+            setTimeout(function () { try { file.value = ''; } catch (e) {} }, 1500);
         };
         // 🎬 VIDEO — endi GALEREYADAN yuklanadi (ilgari faqat havola yozish mumkin edi)
         var vfile = $('st2-file-vid');
@@ -20724,8 +20961,13 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         };
         if (vfile) vfile.onchange = function () {
             var f = vfile.files && vfile.files[0];
-            vfile.value = '';
+            // ⚠️ MUHIM: input.value ni DARHOL tozalamaymiz. iOS WKWebView'da
+            //    value tozalanganda tanlangan faylning vaqtinchalik nusxasi
+            //    bo'shatilib, `f` O'QILMAYDIGAN bo'lib qolishi mumkin —
+            //    natijada yuklash jimgina uzilardi. Avval yuklashni
+            //    boshlaymiz, tozalashni keyingi navbatga qoldiramiz.
             uploadVideo(f);
+            setTimeout(function () { try { vfile.value = ''; } catch (e) {} }, 1500);
         };
 
         var iu = $('st2-img-url');
@@ -22797,5 +23039,186 @@ body.is-scrolling #ai-bulk-content .aib-step { box-shadow: none !important; }
     setTimeout(wrap, 3000);
 })();
 </script>
+
+<!-- ============================================================================
+     ✦ QATLAM 2026.11 — STORIES: TELEGRAM USLUBIDAGI HALQA + VIDEO YUKLASH UI
+     ----------------------------------------------------------------------------
+     Uch narsa:
+       1) Halqa ustidagi RAQAMLI nishoncha ("1") butunlay olib tashlandi.
+       2) Halqa Telegram/Instagram tiliga o'tdi: ko'rilmagan bo'lsa tilla
+          segmentlar + yumshoq NUR ("yonib turadi"), hammasi ko'rilgach
+          halqa O'CHADI. Ikki mavzuda ham (dark/light) ishlaydi.
+       3) Video yuklash paneli: "×" bekor qilish tugmasi + yashirin fayl
+          input'lari uchun WebView'da ishonchli usul.
+
+     Eng oxirgi <style> = eng yuqori kaskad ustunligi.
+     ============================================================================ -->
+<style id="layer-stories-ring">
+/* ===========================================================================
+   1) 🚫 RAQAMLI NISHONCHA — YO'Q
+   JS endi uni yaratmaydi; bu qoida eski DOM/kesh uchun ikkinchi sug'urta.
+   =========================================================================== */
+.story-unseen-badge { display: none !important; }
+
+/* ===========================================================================
+   2) 🔵 HALQA — TELEGRAM USLUBI
+   ---------------------------------------------------------------------------
+   Tuzilma: `.story-ring.segmented::before` — conic-gradient halqa (mask bilan
+   faqat chegara ko'rinadi). `--ring-grad` ni JS beradi: har storis bitta yoy,
+   ko'rilmagani TILLA, ko'rilgani XIRA.
+   `::after` — halqa ORTIDAGI nur. Faqat `opacity` animatsiyalanadi, ya'ni
+   brauzer qayta bo'yamaydi (compositor-only) -> skroll silliqligi buzilmaydi.
+   =========================================================================== */
+
+/* Halqa o'lchami holatdan holatga O'ZGARMASIN (sakrash bo'lmasligi uchun
+   `seen` holatda ham padding saqlanadi — faqat rang yo'qoladi). */
+.story-ring,
+.story-ring.seen,
+.story-ring.segmented {
+    padding: 2.5px !important;
+    box-sizing: border-box;
+    position: relative;
+    overflow: visible;
+    background: transparent !important;
+}
+
+/* ——— KO'RILMAGAN: tilla segmentlar ——— */
+.story-ring.segmented {
+    border: none !important;
+    box-shadow: none !important;
+    animation: none !important;
+}
+.story-ring.segmented::before {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    padding: 2.5px;
+    background: var(--ring-grad, conic-gradient(#F0D060, #C9A84C));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ——— NUR ("atrofi yonib turadi") ——— */
+.story-ring.has-new::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    box-shadow: 0 0 10px 1px rgba(240, 208, 96, 0.55),
+                0 0 22px 4px rgba(201, 168, 76, 0.28);
+    opacity: .5;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .story-ring.has-new::after { animation: ringGlow 2.6s ease-in-out infinite; }
+}
+@keyframes ringGlow {
+    0%, 100% { opacity: .38; }
+    50%      { opacity: 1; }
+}
+
+/* ——— KO'RILGAN: halqa O'CHADI ———
+   To'liq shaffof emas — juda xira ip qoladi (10% oq). Shunda dumaloq rasm
+   "havoda qolgandek" ko'rinmaydi, lekin ko'zga ham urilmaydi: ya'ni "o'chgan".
+   ⚠️ Eski qoida (3462-qator) bu yerda `2px solid #555555` — aniq kulrang
+   halqa qoldirardi; endi u yengiladi. */
+.story-ring.seen {
+    border: 1.5px solid rgba(255, 255, 255, 0.10) !important;
+    box-shadow: none !important;
+    animation: none !important;
+}
+.story-ring.seen::before,
+.story-ring.seen::after { display: none !important; }
+
+/* Bo'sh (storis yo'q) — hech qanday halqa yo'q */
+.story-ring.empty::before,
+.story-ring.empty::after { display: none !important; }
+
+/* ——— Silliq o'tish + bosilganda Telegram'dagi kabi yumshoq cho'kish ———
+   Bitta `transition` qoidasi: ikkita alohida yozilsa keyingisi birinchisini
+   butunlay bosib ketadi (transition qisqartma xususiyat). */
+.story-ring {
+    transition: border-color .45s ease,
+                transform .18s cubic-bezier(.2, .85, .25, 1);
+}
+.story-item:active .story-ring { transform: scale(.94); }
+
+/* ===========================================================================
+   3) ☀️ LIGHT MAVZU — halqa YANA KO'RINADI
+   ⚠️ Ilgari light mavzuda halqa BUTUNLAY o'chirilgan edi
+      (`html[data-theme="light"] .story-ring{ border:none; padding:0 }` va
+      `.new::before{ display:none }`). Ya'ni yorug' rejimda mijoz qaysi storis
+      yangi ekanini UMUMAN ko'rmasdi. Endi light uchun to'qroq tilla ishlatamiz
+      (oq fonda och tilla ko'rinmaydi).
+   Specificity ataylab yuqori: `html[data-theme="light"] .story-ring.segmented`.
+   =========================================================================== */
+html[data-theme="light"] .story-ring,
+html[data-theme="light"] .story-ring.seen,
+html[data-theme="light"] .story-ring.segmented {
+    padding: 2.5px !important;
+    background: transparent !important;
+}
+html[data-theme="light"] .story-ring.segmented::before {
+    display: block !important;
+    content: "" !important;
+    background: var(--ring-grad, conic-gradient(#B8902A, #96720A));
+}
+html[data-theme="light"] .story-ring.has-new::after {
+    display: block !important;
+    box-shadow: 0 0 9px 1px rgba(150, 114, 10, 0.40),
+                0 0 18px 4px rgba(150, 114, 10, 0.18);
+}
+html[data-theme="light"] .story-ring.seen {
+    border: 1.5px solid rgba(60, 45, 10, 0.10) !important;
+}
+
+/* ⚡ Zaif telefon / harakatni kamaytirish — nur qotib turadi (animatsiya yo'q) */
+html.lite .story-ring.has-new::after { animation: none !important; opacity: .6 !important; }
+@media (prefers-reduced-motion: reduce) {
+    .story-ring.has-new::after { animation: none !important; opacity: .6 !important; }
+    .story-item:active .story-ring { transform: none; }
+}
+
+/* ===========================================================================
+   4) 🎬 VIDEO YUKLASH PANELI
+   =========================================================================== */
+
+/* Yashirin fayl input'i — `display:none` EMAS.
+   Telegram'ning ichki brauzerida (iOS WKWebView) `display:none` input'ni
+   programma orqali `.click()` qilish ba'zan galereyani UMUMAN ochmaydi.
+   Shuning uchun element render qilinadi, lekin ko'rinmaydi. */
+.st2-hidden-file {
+    position: absolute !important;
+    left: 0; top: 0;
+    width: 1px; height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    z-index: -1;
+    border: 0; padding: 0; margin: 0;
+    pointer-events: none;
+}
+
+/* "×" — yuklashni bekor qilish. Ilgari boshlangan yuklashni to'xtatib
+   bo'lmasdi: noto'g'ri fayl tanlansa, tugashini kutish kerak edi. */
+.st2-up { position: relative; }
+.st2-up span { padding-right: 30px; box-sizing: border-box; }
+.st2-up-x {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    width: 22px; height: 22px; z-index: 3;
+    display: none; align-items: center; justify-content: center;
+    border: none; border-radius: 50%; cursor: pointer;
+    background: rgba(0, 0, 0, .38); color: #fff;
+    font-size: 15px; line-height: 1; font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .18s ease, transform .18s ease;
+}
+.st2-up-x:active { transform: translateY(-50%) scale(.88); background: rgba(0, 0, 0, .55); }
+html[data-theme="light"] .st2-up-x { background: rgba(0, 0, 0, .30); }
+</style>
 </body>
 </html>
