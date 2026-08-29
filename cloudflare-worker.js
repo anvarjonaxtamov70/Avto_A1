@@ -176,6 +176,116 @@ export default {
       }
     }
 
+    // ---------- /upload : galereyadan VIDEO/RASM yuklash (faqat admin) ----------
+    // NEGA BU KERAK: ilgari mini app'dan storisga video QO'SHIB BO'LMASDI —
+    // admin faqat tashqi havola yozishi mumkin edi (ImgBB video qabul qilmaydi,
+    // bot tokeni esa mijozda yo'q, ataylab). Endi fayl shu endpoint orqali
+    // Telegram'ga yuklanadi va MUDDATSIZ `file_id` qaytadi; /media proxy uni
+    // Range (qism-qism) bilan uzatadi -> video darhol o'ynay boshlaydi.
+    //
+    // ⚠️ TELEGRAM CHEGARASI: bot `getFile` bilan faqat 20 MB gacha faylni
+    //    o'qiy oladi. Ya'ni 20 MB dan katta video YUKLANSA HAM keyin
+    //    ko'rsatib bo'lmaydi. Shuning uchun chegara aynan shu yerda qo'yiladi
+    //    (mijoz keyin "video ishlamaydi" muammosiga tushmasligi uchun).
+    if (path === "/upload") {
+      try {
+        const form = await request.formData();
+        const initData = String(form.get("initData") || "");
+        const file = form.get("file");
+
+        if (!initData) return json({ ok: false, error: "initData yoq" }, 400);
+        const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
+        if (!verified.ok) return json({ ok: false, error: verified.error }, 401);
+
+        // Faqat admin yuklashi mumkin
+        const uid = String(verified.user.id);
+        const admins = (env.ADMIN_IDS ? String(env.ADMIN_IDS).split(",") : DEFAULT_ADMIN_IDS)
+          .map((x) => String(x).trim());
+        if (admins.indexOf(uid) === -1) {
+          return json({ ok: false, error: "ruxsat yoq" }, 403);
+        }
+
+        if (!file || typeof file === "string") return json({ ok: false, error: "fayl yoq" }, 400);
+
+        const MAX = 20 * 1024 * 1024; // Telegram getFile chegarasi
+        if (file.size > MAX) {
+          return json({
+            ok: false,
+            error: "juda katta",
+            size: file.size,
+            max: MAX,
+          }, 413);
+        }
+
+        const mime = String(file.type || "");
+        const isVideo = mime.indexOf("video") === 0;
+        const method = isVideo ? "sendVideo" : "sendPhoto";
+        const field = isVideo ? "video" : "photo";
+
+        // Fayl saqlanadigan chat: alohida MEDIA_CHAT_ID bo'lmasa — yuklovchining o'zi
+        const chatId = env.MEDIA_CHAT_ID || uid;
+
+        const tgForm = new FormData();
+        tgForm.append("chat_id", String(chatId));
+        tgForm.append("disable_notification", "true");
+        tgForm.append("caption", isVideo ? "🎬 Mini app: storis videosi" : "🖼 Mini app: storis rasmi");
+        tgForm.append(field, file, file.name || (isVideo ? "story.mp4" : "story.jpg"));
+        if (isVideo) tgForm.append("supports_streaming", "true");
+
+        const tgRes = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/${method}`, {
+          method: "POST",
+          body: tgForm,
+        });
+        const tg = await tgRes.json();
+        if (!tg || !tg.ok || !tg.result) {
+          return json({ ok: false, error: (tg && tg.description) || "Telegram rad etdi" }, 502);
+        }
+
+        const r = tg.result;
+        let fileId = "";
+        let thumbId = "";
+        let duration = 0;
+        let width = 0;
+        let height = 0;
+
+        if (isVideo && r.video) {
+          fileId = r.video.file_id;
+          duration = r.video.duration || 0;
+          width = r.video.width || 0;
+          height = r.video.height || 0;
+          const th = r.video.thumbnail || r.video.thumb;
+          if (th) thumbId = th.file_id;
+        } else if (r.photo && r.photo.length) {
+          const best = r.photo[r.photo.length - 1];
+          fileId = best.file_id;
+          width = best.width || 0;
+          height = best.height || 0;
+        } else if (r.document) {
+          fileId = r.document.file_id;
+          const th = r.document.thumbnail || r.document.thumb;
+          if (th) thumbId = th.file_id;
+        }
+
+        if (!fileId) return json({ ok: false, error: "file_id qaytmadi" }, 502);
+
+        const origin = new URL(request.url).origin;
+        return json({
+          ok: true,
+          file_id: fileId,
+          url: `${origin}/media?id=${encodeURIComponent(fileId)}`,
+          thumb_id: thumbId || null,
+          thumb_url: thumbId ? `${origin}/media?id=${encodeURIComponent(thumbId)}` : null,
+          type: isVideo ? "video" : "image",
+          duration,
+          width,
+          height,
+          size: file.size,
+        });
+      } catch (e) {
+        return json({ ok: false, error: String(e) }, 500);
+      }
+    }
+
     // ---------- /referral : inviter'ga bonus (server, idempotent) ----------
     if (path === "/referral") {
       try {
