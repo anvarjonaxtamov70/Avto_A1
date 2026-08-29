@@ -47,6 +47,22 @@ from aiogram.types import (InlineKeyboardMarkup, InlineKeyboardButton,
 
 from bulk_import_fixed import process_ai_bulk_requests_v2
 
+# 🧰 Umumiy, SOF yordamchilar — bot.py va ai_agent.py BIRGA ishlatadi.
+#    Ilgari bular faqat shu faylda edi; agent ham aynan shu mantiqqa
+#    muhtoj bo'lgani uchun bitta manbaga (fb_utils) ko'chirildi — aks
+#    holda vaqt o'tib ikki nusxa bir-biridan ajralib, bot bir xil
+#    savolga ikki xil raqam qaytarardi.
+from fb_utils import (GENERIC_VALUES as _GENERIC_VALUES,
+                      fb_items,
+                      fmt_som as _fmt_som,
+                      norm as _norm,
+                      order_items_pairs as _order_items_pairs,
+                      safe_int as _safe_int,
+                      stock_of)
+# 🤖 Xo'jayin AI agenti (tool calling). Sozlamalarini `init()` ichida
+#    o'qiydi, shuning uchun import tartibi muhim emas.
+import ai_agent
+
 # =====================================================================
 # SOZLAMALAR (.env dan)
 # =====================================================================
@@ -216,14 +232,6 @@ def _tg_display_name(tg_user):
         return " ".join([x for x in parts if x]).strip()
     except Exception:
         return ""
-
-
-def _safe_int(v, default=None):
-    """Har qanday qiymatni butun songa aylantiradi (bo'lmasa — default)."""
-    try:
-        return int(str(v).strip())
-    except (TypeError, ValueError, AttributeError):
-        return default
 
 
 def _is_owner(user_id):
@@ -817,21 +825,7 @@ def fb_url(path, params=None):
     return url
 
 
-def fb_items(node):
-    """Firebase tugunini (dict YOKI list) (kalit, qiymat) juftliklariga aylantiradi.
-
-    RTDB ketma-ket raqamli kalitlarni massiv (list) qilib qaytaradi. Eski kod
-    .items() ni to'g'ridan-to'g'ri chaqirardi va list kelganda AttributeError
-    berardi. Bu yordamchi har ikki holatni ham xavfsiz qo'llab-quvvatlaydi.
-    None elementlar (o'chirilgan yozuvlar) tashlab ketiladi.
-    """
-    if not node:
-        return []
-    if isinstance(node, dict):
-        return [(k, v) for k, v in node.items() if v is not None]
-    if isinstance(node, list):
-        return [(str(i), v) for i, v in enumerate(node) if v is not None]
-    return []
+# (fb_items yuqorida `fb_utils` dan import qilinadi — bitta manba.)
 
 
 # =====================================================================
@@ -857,13 +851,19 @@ def _model_is_gone(error: Exception) -> bool:
     )
 
 
-async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
-    """Groq chat. Vaqtinchalik xatoda qayta uriniadi. Muvaffaqiyatsizda None.
+async def groq_raw(messages, model=None, temperature=0.5, max_retries=3,
+                   tools=None, tool_choice=None):
+    """Groq chat — TO'LIQ javob xabarini (message obyektini) qaytaradi.
+
+    Nega kerak: tool calling'da javob matni emas, `message.tool_calls`
+    ro'yxati kerak bo'ladi. `groq_chat()` esa faqat matn qaytaradi va
+    tool_calls'ni yo'qotadi. Shuning uchun qayta urinish / zaxira model
+    mantiqi SHU YERDA yashaydi, `groq_chat` esa ustidan yupqa qobiq
+    bo'lib qoladi — mantiq ikki joyda takrorlanmaydi.
 
     Model o'chirilgan bo'lsa (Groq vaqti-vaqti bilan eski modellarni
     o'chiradi) — zaxira modellarga o'tadi va buni loglarga ANIQ yozadi.
-    Ilgari bu holat oddiy `warning` bo'lib ketardi va AI «sababsiz»
-    jim qolardi.
+    Muvaffaqiyatsizda None.
     """
     if groq_client is None:
         logging.error("GROQ_API_KEY berilmagan — AI o'chirilgan.")
@@ -876,6 +876,14 @@ async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
     # Takrorlanmasin
     candidates = [primary] + [m for m in fallbacks if m != primary]
 
+    # Ixtiyoriy parametrlarni FAQAT berilganda uzatamiz — shunda tool
+    # ishlatmaydigan (mavjud) chaqiruvlarning so'rovi ayni avvalgidek
+    # qoladi va hech qanday xatti-harakat o'zgarmaydi.
+    extra = {}
+    if tools:
+        extra["tools"] = tools
+        extra["tool_choice"] = tool_choice or "auto"
+
     for candidate in candidates:
         delay = 1.5
         for attempt in range(1, max_retries + 1):
@@ -884,6 +892,7 @@ async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
                     messages=messages,
                     model=candidate,
                     temperature=temperature,
+                    **extra,
                 )
                 if candidate != primary:
                     logging.warning(
@@ -892,7 +901,7 @@ async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
                         primary,
                         candidate,
                     )
-                return (resp.choices[0].message.content or "").strip()
+                return resp.choices[0].message
             except Exception as e:
                 if _model_is_gone(e):
                     logging.error(
@@ -917,6 +926,19 @@ async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
     return None
 
 
+async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
+    """Groq chat — javob MATNINI qaytaradi (mavjud chaqiruvlar uchun).
+
+    Xatti-harakati avvalgidek: muvaffaqiyatda tozalangan matn, aks holda
+    None. Butun retry/fallback mantiqi `groq_raw` da.
+    """
+    msg = await groq_raw(messages, model=model, temperature=temperature,
+                         max_retries=max_retries)
+    if msg is None:
+        return None
+    return (msg.content or "").strip()
+
+
 # =====================================================================
 # MINI APP AI (mijoz chati)
 # =====================================================================
@@ -925,14 +947,7 @@ async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
 MAX_AI_PRODUCTS = 40
 
 
-# Mashina modeli / kategoriya uchun "umumiy" (ma'noga ega bo'lmagan) qiymatlar.
-# Kross-sell faqat ANIQ modeldagi qismlarni taklif qilsin — generic qiymatlar
-# bo'yicha tasodifiy tovarlar qo'shilib ketmasin.
-_GENERIC_VALUES = {"", "umumiy", "ko'rsatilmagan", "korsatilmagan", "nan", "noma'lum", "namalum"}
-
-
-def _norm(s):
-    return str(s if s is not None else "").lower().strip()
+# (_GENERIC_VALUES va _norm yuqorida `fb_utils` dan import qilinadi.)
 
 
 def _product_haystack(p):
@@ -948,10 +963,16 @@ def _product_haystack(p):
 
 
 def _in_stock(p):
-    try:
-        return float(p.get("stock", 0)) > 0
-    except (TypeError, ValueError):
-        return False
+    """Tovar omborda bormi.
+
+    ⚠️ TUZATILDI: ilgari faqat `p["stock"]` maydoniga qarardi. Razmerli
+    tovarda esa `stock` — razmerlar yig'indisining DENORMALLASHGAN nusxasi
+    (mini app yozadi). Razmer qoldig'i «Ombor» bo'limidan alohida
+    o'zgartirilsa, `stock` eskirib qolardi va AI mijozga TUGAGAN tovarni
+    «omborda mavjud» deb aytardi. Endi razmerlar bo'lsa ular bo'yicha
+    qayta hisoblanadi (fb_utils.stock_of).
+    """
+    return stock_of(p) > 0
 
 
 def _select_relevant_products(products, query, limit=MAX_AI_PRODUCTS):
@@ -2200,31 +2221,7 @@ def _looks_like_business_question(text):
     return any(k in t for k in _BIZ_KEYWORDS)
 
 
-def _fmt_som(n):
-    """1234567 -> '1 234 567'"""
-    try:
-        return f"{int(round(float(n))):,}".replace(",", " ")
-    except (TypeError, ValueError):
-        return "0"
-
-
-def _order_items_pairs(items):
-    """Buyurtma tarkibini (mahsulot_id, soni) juftliklariga aylantiradi.
-
-    Ikki xil format uchraydi:
-      • mini app:  {"12||Universal": 2}          -> qiymat SON
-      • eski/bot:  [{"name": ..., "quantity": 2}] -> qiymat LUG'AT
-    """
-    out = []
-    for key, val in fb_items(items):
-        base = str(key).split("||")[0]
-        if isinstance(val, dict):
-            qty = _safe_int(val.get("quantity"), 0) or 0
-            name = str(val.get("name") or "").strip()
-            out.append((base, qty, name))
-        else:
-            out.append((base, _safe_int(val, 0) or 0, ""))
-    return out
+# (_fmt_som va _order_items_pairs yuqorida `fb_utils` dan import qilinadi.)
 
 
 async def _collect_owner_analytics():
@@ -2250,7 +2247,10 @@ async def _collect_owner_analytics():
         pid = p.get("id")
         if pid is not None:
             name_by_id[str(pid)] = nm
-        stock = _safe_int(p.get("stock"), 0) or 0
+        # `stock_of` — razmerli tovarda razmerlar yig'indisidan hisoblanadi
+        # (eskirgan `stock` maydoniga ishonmaydi). Aks holda hisobotda
+        # tugagan tovar "bor" bo'lib ko'rinardi.
+        stock = stock_of(p)
         price = _safe_int(p.get("price"), 0) or 0
         stock_value += max(0, stock) * max(0, price)
         if stock <= 0:
@@ -2375,6 +2375,23 @@ async def _owner_analytics_snapshot():
     except Exception as e:
         logging.error(f"Xo'jayin tahlili xatosi: {e}")
         return ""
+
+
+def _owner_snapshot_block(snap):
+    """Tayyor analitikani system promptga qo'shiladigan blokka o'raydi.
+
+    Bu ZAXIRA yo'l: AI agenti (tool calling) o'chirilgan yoki ishlamagan
+    holatda ishlatiladi. Matn ikki joyda kerak bo'lgani uchun bitta
+    funksiyaga chiqarildi.
+    """
+    return (
+        "\n\n=== HOZIRGI HAQIQIY BIZNES MA'LUMOTI (faqat xo'jayin uchun) ===\n"
+        + snap +
+        "\n=== MA'LUMOT TUGADI ===\n"
+        "Shu raqamlar asosida javob ber. Bu yerda yo'q raqamni "
+        "TO'QIMA — bilmasang 'bu ma'lumot yo'q' deb ayt. "
+        "Javob qisqa va aniq bo'lsin; ro'yxat so'ralsa punktlar bilan yoz."
+    )
 
 
 @dp.message(Command("hisobot", "report"))
@@ -2508,28 +2525,58 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         # 📊 XO'JAYIN BIZNES SAVOLI BERSA — bazadan HAQIQIY ma'lumot olamiz.
         #    🔒 Ruxsat KODDA tekshiriladi: boshqa adminlar va mijozlar uchun
         #       bu blok umuman qurilmaydi (promptga tayanmaymiz).
-        #    💡 Baza faqat savol biznesga tegishli bo'lganda o'qiladi.
         owner = _is_owner(user_id)
+
+        # 🤖 AGENT REJIMI (xo'jayin uchun): AI bazani O'ZI so'rab oladi —
+        #    tool calling orqali, aniq va maqsadli. Eski usul BUTUN `products`
+        #    va `users` tugunini o'qib promptga tiqardi: sekin, qimmat va
+        #    xulosada yo'q raqamni AI to'qib yozishi mumkin edi.
+        #    Agent o'chirilgan bo'lsa (AI_AGENT_ENABLED=0) — eski yo'l ishlaydi.
+        use_agent = owner and ai_agent.is_enabled()
         extra = ""
-        if owner and _looks_like_business_question(message.text):
+        if use_agent:
+            extra = ai_agent.owner_tools_prompt_block()
+        elif owner and _looks_like_business_question(message.text):
+            # 💡 Baza faqat savol biznesga tegishli bo'lganda o'qiladi.
             snap = await _owner_analytics_snapshot()
             if snap:
-                extra = (
-                    "\n\n=== HOZIRGI HAQIQIY BIZNES MA'LUMOTI (faqat xo'jayin uchun) ===\n"
-                    + snap +
-                    "\n=== MA'LUMOT TUGADI ===\n"
-                    "Shu raqamlar asosida javob ber. Bu yerda yo'q raqamni "
-                    "TO'QIMA — bilmasang 'bu ma'lumot yo'q' deb ayt. "
-                    "Javob qisqa va aniq bo'lsin; ro'yxat so'ralsa punktlar bilan yoz."
-                )
+                extra = _owner_snapshot_block(snap)
 
         # System promptni HAR safar yangilaymiz — shunda til doim to'g'ri bo'ladi
         # (mijoz tilni almashtirsa ham), suhbat tarixi esa saqlanib qoladi.
         _ensure_ai_session(user_id, lang, _tg_display_name(message.from_user), extra)
         ai_sessions[user_id].append({"role": "user", "content": message.text})
 
-        bot_reply = await groq_chat(ai_sessions[user_id], temperature=0.5)
+        bot_reply = None
+        if use_agent:
+            # ⚠️ Agent suhbat tarixining NUSXASI bilan ishlaydi: vosita (`tool`)
+            #    xabarlari `ai_sessions` ga TUSHMAYDI. Sabab — pastdagi "oxirgi
+            #    16 xabar" qirqishi `tool_calls` bilan `tool` juftligini ajratib
+            #    qo'ysa, Groq keyingi navbatda 400 xato beradi va AI butunlay
+            #    o'lib qolardi.
+            reply, _tools_used = await ai_agent.run_owner_agent(
+                ai_sessions[user_id], user_id)
+            bot_reply = reply if (reply or "").strip() else None
+            if bot_reply is None:
+                # Agent ishlamadi (Groq xatosi yoki tool sxemasi rad etildi) —
+                # xo'jayin javobsiz qolmasligi uchun ESKI yo'lga qaytamiz.
+                logging.warning("Agent javob bermadi — oddiy suhbatga qaytilyapti "
+                                "(uid=%s)", user_id)
+                fb_extra = ""
+                if _looks_like_business_question(message.text):
+                    snap = await _owner_analytics_snapshot()
+                    if snap:
+                        fb_extra = _owner_snapshot_block(snap)
+                # `_ensure_ai_session` faqat system xabarni yangilaydi —
+                # suhbat tarixi va hozirgi savol joyida qoladi.
+                _ensure_ai_session(user_id, lang,
+                                   _tg_display_name(message.from_user), fb_extra)
+
         if bot_reply is None:
+            bot_reply = await groq_chat(ai_sessions[user_id], temperature=0.5)
+        # Bo'sh matnni ham xato deb hisoblaymiz: Telegram bo'sh xabarni
+        # qabul qilmaydi va `message.reply("")` istisno tashlaydi.
+        if not (bot_reply or "").strip():
             await message.reply(t(lang, "ai_busy"))
             return
 
@@ -2928,6 +2975,13 @@ async def main():
     # so'ng fonda muntazam yangilab turuvchi vazifani ishga tushiramiz.
     await refresh_firebase_token()
     asyncio.create_task(firebase_token_refresher())
+
+    # 🤖 AI agentiga kerakli funksiyalarni beramiz (dependency injection).
+    #    Aylanma import bo'lmasligi uchun ai_agent bot.py ni IMPORT QILMAYDI —
+    #    kerak bo'lgan hamma narsani shu yerdan oladi.
+    #    `_is_owner` uzatilishi SHART: ruxsat tekshiruvi promptda emas, KODDA.
+    ai_agent.init(firebase_get=firebase_get, firebase_patch=firebase_patch,
+                  groq_raw=groq_raw, is_owner=_is_owner)
 
     asyncio.create_task(process_mini_app_ai())
     # 🔐 admin_ids UZATILISHI SHART — aks holda AI ommaviy so'rovlari qayta
