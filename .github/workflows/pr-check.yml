@@ -20,5 +20,26 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Tekshiruvlarni ishga tushirish
+      - name: Sintaksis va maxfiy kalit tekshiruvi
         run: node .github/validate.js
+
+      # Mijoz tomoni qatlamining MANTIQ sinovi: index.html dan haqiqiy
+      # skript bloki ajratib olinib bajariladi (nusxa emas). Eng xatoga
+      # moyil qismlarni qo'riqlaydi: «mening mashinam» ni kategoriyaga
+      # moslash, filtr/saralash va «ishlab chiqarilgan joy».
+      - name: Mijoz tomoni qatlami sinovi
+        run: node .github/test-customer-layer.js
+
+      - name: Python sintaksisi (bot)
+        run: |
+          python3 -m py_compile bot/bot.py bot/ai_agent.py bot/fb_utils.py \
+                                bot/bulk_import_fixed.py
+          echo "✅ Python fayllari sintaktik toza"
+
+      # AI agenti sinovlari — Groq va Firebase SOXTA, ya'ni tashqi
+      # xizmat va maxfiy kalit KERAK EMAS.
+      - name: AI agenti sinovlari
+        working-directory: bot
+        run: |
+          python3 tests/test_ai_agent.py
+          python3 tests/test_ai_write.py
