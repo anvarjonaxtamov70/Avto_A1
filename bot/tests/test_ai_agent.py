@@ -174,8 +174,15 @@ def test_order_paid_cashbackni_hisobga_oladi():
 #  2) VOSITA SXEMALARI
 # =====================================================================
 def test_sxemalar_groq_formatiga_mos():
-    specs = ai_agent.groq_tool_specs()
+    # Yozish vositalari ham tekshiriladi: sxemadagi xato Groq'dan 400
+    # qaytaradi va AI BUTUNLAY ishlamay qoladi.
+    specs = ai_agent.groq_tool_specs(include_mutating=True)
     assert specs, "vositalar ro'yxati bo'sh"
+    # Standart holatda yozish vositalari KO'RSATILMAYDI
+    default_names = {s["function"]["name"] for s in ai_agent.groq_tool_specs()}
+    mutating_names = {n for n, sp in ai_agent.TOOLS.items() if sp.mutating}
+    assert not (default_names & mutating_names), \
+        "yozish vositalari standart holatda ko'rinmasligi kerak"
     for s in specs:
         assert s["type"] == "function"
         fn = s["function"]
@@ -191,11 +198,34 @@ def test_sxemalar_groq_formatiga_mos():
         json.dumps(s)
 
 
-def test_pr1_da_yozish_vositasi_yoq():
-    """1-PR ATAYLAB faqat o'qiydi. Bu sinov yozish vositasi tasdiq
-    mexanizmisiz sirg'alib kirishining oldini oladi."""
-    mutating = [n for n, s in ai_agent.TOOLS.items() if s.mutating]
-    assert mutating == [], f"tasdiqsiz yozish vositasi paydo bo'ldi: {mutating}"
+def test_hech_bir_vosita_togridan_yozmaydi():
+    """ENG MUHIM INVARIANT.
+
+    Har bir YOZISH vositasi FAQAT `create_pending()` orqali o'tishi shart —
+    ya'ni tasdiq tugmasini chetlab o'tib bazaga tegmasligi kerak. Bu sinov
+    kelajakda "tezroq bo'lsin" deb to'g'ridan yozadigan vosita qo'shib
+    yuborilishining oldini oladi.
+
+    O'QISH vositalari esa umuman yozmasligi kerak.
+    """
+    import inspect
+    banned = ("firebase_put", "firebase_patch", "firebase_delete",
+              "atomic_update_by_id", "apply_plan")
+    for name, spec in sorted(ai_agent.TOOLS.items()):
+        src = inspect.getsource(spec.handler)
+        for bad in banned:
+            assert bad not in src, (
+                f"«{name}» vositasi bazaga TO'G'RIDAN tegadi ({bad}). "
+                "Yozish faqat create_pending -> tasdiq -> apply_plan yo'li "
+                "bilan bo'lishi kerak.")
+        if spec.mutating:
+            assert "create_pending" in src, (
+                f"«{name}» yozish vositasi tasdiqdan O'TMAYDI — "
+                "create_pending chaqirilmagan!")
+        else:
+            assert "create_pending" not in src, (
+                f"«{name}» o'qish vositasi deb belgilangan, lekin o'zgartirish "
+                "taklif qiladi. `mutating=True` qo'yish kerak.")
 
 
 # =====================================================================
