@@ -25861,7 +25861,10 @@ html body .flying-img.mo-fly {
 #net-banner {
     position: fixed;
     left: 12px; right: 12px;
-    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    /* `var(--safe-top)` — `env()` emas: aks holda banner Telegram'ning
+       tugmalar paneli ostiga tushib qolardi (Shogird sarlavhasida aynan
+       shu xato bo'lgan). Batafsil izoh `#layer-shogird-ai` da. */
+    top: calc(var(--safe-top, 0px) + 10px);
     z-index: 99998;
     display: flex; align-items: center; gap: 10px;
     padding: 10px 14px;
@@ -28180,7 +28183,28 @@ html[data-theme="light"] #aiChatModal.modal-standard { background: #FFFDF7 !impo
     flex: none; position: relative; z-index: 3;
     display: flex; align-items: center; gap: 12px;
     padding: 12px 14px 12px 16px;
-    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    /* ⚠️ `env(safe-area-inset-top)` EMAS, `var(--safe-top)`.
+       ------------------------------------------------------------------
+       Ilgari bu yerda `calc(12px + env(safe-area-inset-top, 0px))` edi va
+       sarlavha Telegram'ning «‹ Назад» / «+» / «⌄» / «⋯» tugmalari OSTIGA
+       tushib, ular bilan USTMA-UST kelardi (iPhone'da aniq ko'rinardi).
+
+       SABAB: `env(safe-area-inset-top)` faqat QURILMA xavfsiz zonasini
+       (notch / Dynamic Island / status bar) beradi. Telegram to'liq ekran
+       rejimida esa o'z tugmalar panelini kontent USTIDA chizadi va uning
+       balandligi ALOHIDA qiymatda — `contentSafeAreaInset.top`.
+
+       Bu faylda ikkisining yig'indisi allaqachon hisoblangan
+       (`applyTgSafeTop`, ~7417-satr):
+           --safe-top = safeAreaInset.top + contentSafeAreaInset.top
+       U `:root` da `env(safe-area-inset-top)` ga teng qilib qo'yiladi va
+       Telegram insetlarni bergach JS orqali yangilanadi. Ya'ni
+       `var(--safe-top)` HAR HOLATDA `env()` dan yaxshiroq:
+         • brauzerda   -> notch qiymati (aynan avvalgidek),
+         • Telegramda  -> notch + tugmalar paneli,
+         • eski SDK'da -> 56px zaxira qiymat.
+       Aynan shu naqsh `#layer-sheet-layout` da ham ishlatilgan. */
+    padding-top: calc(12px + var(--safe-top, 0px));
     border-bottom: 1px solid rgba(212,175,55,0.14);
     background: linear-gradient(180deg, #14141a, #0d0d11);
 }
