@@ -1044,10 +1044,61 @@ def _select_relevant_products(products, query, limit=MAX_AI_PRODUCTS):
     return chosen
 
 
+def _mini_msgs(raw):
+    """Firebase massiv ham, lug'at ham qaytarishi mumkin — bir ko'rinishga keltiramiz."""
+    out = []
+    try:
+        for _k, v in fb_items(raw):
+            if isinstance(v, dict):
+                out.append(v)
+    except Exception:
+        pass
+    return out
+
+
+def _mini_active_chat(uid, data):
+    """Faol suhbatning YO'LI va XABARLARINI qaytaradi.
+
+    Mini App'da endi bir nechta suhbat bo'lishi mumkin («yangi chat»):
+        ai_requests/<uid>/active            -> faol suhbat id'si
+        ai_requests/<uid>/chats/<id>/messages
+
+    ⚠️ ESKI SXEMA BILAN MOSLIK: ilgari bitta cheksiz ro'yxat bor edi
+    (`ai_requests/<uid>/messages`). Eski mijozlar (keshdagi ilova)
+    hamon shunga yozishi mumkin, shuning uchun faol suhbat topilmasa
+    eski yo'lga qaytamiz. Aks holda ular javob olmay qolardi.
+    """
+    active = data.get("active")
+    chats = data.get("chats")
+    if active and isinstance(chats, dict):
+        node = chats.get(str(active))
+        if isinstance(node, dict):
+            return f"ai_requests/{uid}/chats/{active}", _mini_msgs(node.get("messages"))
+    return f"ai_requests/{uid}", _mini_msgs(data.get("messages"))
+
+
 async def process_mini_app_ai():
+    # 🟢 Yurak urishi: oxirgi yozilgan vaqt. Har tsiklda emas, ~30 sekundda
+    #    bir yozamiz — aks holda 2 sekundlik tsikl bazani bekorga urardi.
+    last_beat = 0.0
+
     async with aiohttp.ClientSession() as session:
         while True:
             try:
+                # 🟢 BOT TIRIKMI — Mini App'dagi onlayn indikatori shuni o'qiydi.
+                #    Ilgari bunday signal UMUMAN yo'q edi: mijoz bot javob
+                #    bermasa, sababini bilmay kutib turardi.
+                now_ts = time.time()
+                if now_ts - last_beat >= 30:
+                    last_beat = now_ts
+                    try:
+                        await session.patch(fb_url("bot_status"), json={
+                            "online": True,
+                            "ts": int(now_ts * 1000),
+                        })
+                    except Exception as e:
+                        logging.warning(f"bot_status yozilmadi: {e}")
+
                 async with session.get(fb_url("ai_requests")) as resp:
                     if resp.status != 200:
                         await asyncio.sleep(2)
@@ -1061,7 +1112,7 @@ async def process_mini_app_ai():
 
                         await session.patch(fb_url(f"ai_requests/{uid}"),
                                             json={"needs_processing": False})
-                        messages = data.get("messages", [])
+                        chat_path, messages = _mini_active_chat(uid, data)
                         if not messages:
                             continue
 
@@ -1144,11 +1195,47 @@ async def process_mini_app_ai():
                                 + f"\n\nDO'KON BAZASI (mavjud tovarlar):\n{prod_context}"
                             )
                         }]
+                        # 🖼 RASM QO'SHILGANMI — oxirgi mijoz xabarini tekshiramiz.
+                        #    Ilgari Mini App'dan rasm YUBORISH imkoni yo'q edi.
+                        #    Endi mijoz rasm biriktirsa, u `image` maydonida keladi
+                        #    va vision modelga uzatiladi.
+                        last_img = ''
+                        for m in reversed(messages):
+                            if m.get("sender") == "user":
+                                last_img = str(m.get("image") or "").strip()
+                                break
+
                         for m in messages:
                             role = "user" if m.get("sender") == "user" else "assistant"
                             groq_msgs.append({"role": role, "content": str(m.get("text", ""))})
 
-                        bot_reply = await groq_chat(groq_msgs, temperature=0.4)
+                        use_model = None
+                        if last_img.startswith("http"):
+                            # Vision modelga tarix MATN ko'rinishida qoladi, faqat
+                            # OXIRGI mijoz navbati ko'p-modal (matn + rasm) bo'ladi —
+                            # `handle_photo_redirect` dagi bilan bir xil shakl.
+                            tail_text = ""
+                            for m in reversed(messages):
+                                if m.get("sender") == "user":
+                                    tail_text = str(m.get("text", "")).strip()
+                                    break
+                            if not tail_text:
+                                tail_text = ("Mijoz zapchast rasmini yubordi. Rasmga qarab bu qanday "
+                                             "zapchast ekanini aniqla va bazadan mosini taklif qil. "
+                                             "O'zingdan razmer yoki raqam TO'QIB CHIQARMA.")
+                            if groq_msgs and groq_msgs[-1].get("role") == "user":
+                                groq_msgs.pop()
+                            groq_msgs.append({
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": tail_text},
+                                    {"type": "image_url", "image_url": {"url": last_img}},
+                                ],
+                            })
+                            use_model = GROQ_VISION_MODEL
+
+                        # `model=None` -> matn modeli (avvalgidek). Rasm bo'lsa vision.
+                        bot_reply = await groq_chat(groq_msgs, model=use_model, temperature=0.4)
                         if bot_reply is None:
                             bot_reply = ("Uzr, hozir javob bera olmayapman 🙏 Bir oz vaqtdan so'ng qayta urinib ko'ring.\n"
                                          "Извините, сейчас не могу ответить — попробуйте чуть позже.")
@@ -1168,8 +1255,11 @@ async def process_mini_app_ai():
                             "found_products": found_ids,
                             "time": int(time.time() * 1000),
                         })
-                        await session.patch(fb_url(f"ai_requests/{uid}"),
-                                            json={"messages": messages})
+                        # Javob AYNAN o'sha suhbatga yoziladi (yangi sxemada
+                        # ai_requests/<uid>/chats/<id>, eskisida ai_requests/<uid>).
+                        await session.patch(fb_url(chat_path),
+                                            json={"messages": messages,
+                                                  "updatedAt": int(time.time() * 1000)})
 
             except Exception as e:
                 logging.error(f"Mini App AI xatosi: {e}")

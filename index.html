@@ -7105,31 +7105,78 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         <span>Yordamchi</span>
     </div>
 
-    <div class="modal-standard ai-luxury-modal" id="aiChatModal" style="z-index: 4000; display: none; flex-direction: column; padding: 0;">
-        
-        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(212, 175, 55, 0.1); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(to bottom, rgba(15,15,18,0.9), rgba(15,15,18,0));">
-            <div style="display:flex; align-items:center; gap:12px;">
-                <div style="width:38px; height:38px; background:linear-gradient(135deg, #222, #0a0a0a); border:1px solid rgba(212,175,55,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
-                    <span style="font-size:18px; color:#D4AF37;">✨</span>
-                </div>
-                <div>
-                    <h2 style="margin:0; font-size:16px; color:#D4AF37; font-weight:700; letter-spacing: 0.5px;">Premium AI</h2>
-                    <div style="font-size:11px; color:rgba(255,255,255,0.4); font-weight: 500;">Shaxsiy maslahatchi</div>
-                </div>
+    <!-- ══════════════════════════════════════════════════════════════════
+         ✨ SHOGIRD AI — 2026.22 da butunlay qayta qurildi.
+         Eski holatdagi muammolar (hammasi tuzatildi):
+           • tepada ~90px qora bo'sh joy (`.modal-standard` ning
+             `padding-top: calc(20px + safe-top) !important` qoidasi
+             inline `padding:0` ni bosib ketardi + ustiga «dasta» chizig'i);
+           • RASM yuborish imkoni umuman yo'q edi;
+           • «yangi chat» yo'q — bitta cheksiz ro'yxat edi, shu sababli
+             AI promptи ham cheksiz o'sardi;
+           • bot tirikmi-yo'qmi bilinmasdi;
+           • bubble'lar 85% ga siqilgan, pastda 100px o'lik joy.
+         `#ai-chat-box` id'si ATAYLAB saqlangan: global touch-scroll
+         ro'yxati (yuqorida) uni nom bilan biladi.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="modal-standard sg-modal" id="aiChatModal" style="z-index: 4000; display: none;">
+
+        <!-- SARLAVHA -->
+        <header class="sg-head">
+            <div class="sg-ava" id="sg-ava">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15z"/></svg>
+                <i class="sg-ring"></i>
             </div>
-            <button class="close-btn" aria-label="Yopish" style="color:#D4AF37; font-size: 24px; font-weight: 300;" onclick="closeModal()">×</button>
+            <div class="sg-id">
+                <h2>Shogird</h2>
+                <!-- 🟢 ONLAYN INDIKATORI — bot yurak urishini (bot_status) o'qiydi -->
+                <div class="sg-stat" id="sg-stat"><i class="sg-dot"></i><span id="sg-stat-tx">Tekshirilmoqda…</span></div>
+            </div>
+            <div class="sg-acts">
+                <button class="sg-ico" id="sg-new-btn" onclick="aiNewChat()" aria-label="Yangi suhbat" title="Yangi suhbat">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button class="sg-ico" id="sg-hist-btn" onclick="aiToggleHistory()" aria-label="Suhbatlar tarixi" title="Suhbatlar tarixi">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>
+                </button>
+                <button class="sg-ico sg-x" aria-label="Yopish" onclick="closeModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- SUHBATLAR TARIXI (sirg'alib chiqadigan panel) -->
+        <div class="sg-hist" id="sg-hist">
+            <div class="sg-hist-top">
+                <span>Suhbatlar</span>
+                <button class="sg-hist-new" onclick="aiNewChat()">+ Yangi</button>
+            </div>
+            <div class="sg-hist-list" id="sg-hist-list"></div>
         </div>
 
-        <div id="ai-chat-box" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:15px; padding-bottom:100px;"></div>
-        
-        <div style="position:absolute; bottom:0; left:0; width:100%; padding:15px 20px 25px; background:rgba(10, 10, 12, 0.95); border-top:1px solid rgba(212, 175, 55, 0.1); display:flex; gap:10px; box-sizing:border-box;">
-            <input type="text" id="ai-chat-input" class="ai-luxury-input" placeholder="Xabar yozing..." onkeypress="if(event.key==='Enter') sendAiMessage()" style="margin: 0;">
-            <button onclick="sendAiMessage()" style="width:50px; height:50px; border-radius:12px; background:rgba(212, 175, 55, 0.1); border:1px solid rgba(212,175,55,0.5); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition: 0.2s;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-            </button>
+        <!-- XABARLAR -->
+        <div id="ai-chat-box" class="sg-box"></div>
+
+        <!-- YOZISH PANELI -->
+        <div class="sg-foot">
+            <!-- Biriktirilgan rasm ko'rinishi -->
+            <div class="sg-attach" id="sg-attach" style="display:none;">
+                <img id="sg-attach-img" alt="" loading="lazy" decoding="async">
+                <span class="sg-attach-tx" id="sg-attach-tx">Rasm yuklanmoqda…</span>
+                <button class="sg-attach-x" onclick="aiClearAttach()" aria-label="Rasmni olib tashlash">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="sg-row">
+                <input type="file" id="sg-file" accept="image/*" style="display:none;" onchange="aiPickImage(event)">
+                <button class="sg-clip" onclick="document.getElementById('sg-file').click()" aria-label="Rasm biriktirish" title="Rasm biriktirish">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+                </button>
+                <textarea id="ai-chat-input" class="sg-input" rows="1" placeholder="Zapchast nomini yozing yoki rasm yuboring…"></textarea>
+                <button class="sg-send" id="sg-send" onclick="sendAiMessage()" aria-label="Yuborish">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-2.5-6.5L4 12z"/></svg>
+                </button>
+            </div>
         </div>
     </div>
 <script>
@@ -12328,6 +12375,17 @@ window.addDescTemplate = (prefix, text) => {
 
 // ==========================================
 // 🤖 PREMIUM AI KO'PRIK VA CHAT MOTORI
+//
+// ⚠️⚠️ O'LIK KOD — 2026.22 dan boshlab BU BLOK ISHLAMAYDI.
+//   `openAiChat`, `sendAiMessage` va `renderAiChat` fayl OXIRIDAGI
+//   «QATLAM 2026.22 — SHOGIRD AI» blokida qayta yozilgan va u keyin
+//   yuklangani uchun AYNAN O'SHA ishlaydi.
+//   Bu yerni tahrirlash HECH NARSAGA ta'sir qilmaydi — fayl oxiridagi
+//   id'si "shogird-ai-2026-js" bo'lgan skript blokini tahrirlang.
+//   (Izohda marker satrini SO'ZMA-SO'Z yozib bo'lmaydi: sinov skript
+//    blokini aynan shu satr bo'yicha topadi va izohga tushib qolardi.)
+//   Ataylab o'chirilmadi: eski keshdagi ilova bir muddat shu nomlarga
+//   tayanishi mumkin. Keyingi tozalashda olib tashlanadi.
 // ==========================================
 window.openAiChat = () => {
     activeModal = 'aiChatModal';
@@ -27977,6 +28035,625 @@ html body .flying-img.mo-fly {
 
   // Katalog yangilanganda keshni tozalash uchun (ixtiyoriy chaqiriladi)
   window._smartSearchReset = function () { IDX.clear(); };
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     QATLAM 2026.22 — «SHOGIRD» AI CHAT (butunlay qayta qurildi)
+     ---------------------------------------------------------------------
+     Bu qatlam ENG OXIRIDA turishi SHART: yuqoridagi barcha qatlamlar
+     `.modal-standard` ni qayta e'lon qiladi (1527, 3006, 3955, 19440,
+     19905, «SHEET» qatlami) va ular ichida `!important` bor. Faqat
+     shu yerda, id bo'yicha yozilgan qoidalar ustun keladi.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style id="layer-shogird-ai">
+/* ── 1) TEPADAGI QORA BO'SHLIQNI YO'Q QILISH ─────────────────────────
+   SABAB (topilgan): `.modal-standard { padding-top: calc(20px + var(--safe-top)) !important }`
+   qoidasi elementdagi inline `padding:0` ni bosib ketardi. Telegram
+   to'liq ekranda `--safe-top ≈ 56px`, ustiga sarlavhaning o'z 16px'i —
+   natijada ~90px qora joy. Bundan tashqari `::before` «dasta» chizig'i
+   ham aynan o'sha bo'sh joyda turardi.
+   YECHIM: paddingni butunlay nolga tushiramiz va xavfsiz zonani
+   SARLAVHANING O'ZIGA beramiz — shunda bo'sh joy emas, sarlavha suriladi. */
+#aiChatModal.modal-standard {
+    padding: 0 !important;
+    overflow: hidden !important;          /* skroll faqat xabarlar ichida */
+    display: none;
+    flex-direction: column;
+    background: #0b0b0e !important;
+    animation: none !important;           /* «sakrash» effekti yo'q */
+}
+#aiChatModal.modal-standard::before { display: none !important; }
+html[data-theme="light"] #aiChatModal.modal-standard { background: #FFFDF7 !important; }
+
+/* ── 2) SARLAVHA ─────────────────────────────────────────────────── */
+#aiChatModal .sg-head {
+    flex: none; position: relative; z-index: 3;
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    border-bottom: 1px solid rgba(212,175,55,0.14);
+    background: linear-gradient(180deg, #14141a, #0d0d11);
+}
+html[data-theme="light"] #aiChatModal .sg-head {
+    background: linear-gradient(180deg, #FFF9EC, #FFFDF7);
+    border-bottom-color: rgba(150,120,55,0.18);
+}
+#aiChatModal .sg-ava {
+    flex: none; position: relative; width: 40px; height: 40px; border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    color: #1c1306;
+    background: linear-gradient(135deg, var(--luxury-gold-light,#F0D060), var(--luxury-gold,#C9A84C));
+}
+#aiChatModal .sg-ava svg { width: 22px; height: 22px; }
+/* Onlayn bo'lganda avatar atrofida jonli halqa (oflayn — o'chadi) */
+#aiChatModal .sg-ring {
+    position: absolute; inset: -4px; border-radius: 17px; pointer-events: none;
+    border: 1.5px solid rgba(201,168,76,.55); opacity: 0;
+}
+#aiChatModal.is-online .sg-ring { opacity: 1; animation: sgRing 2.4s ease-out infinite; }
+@keyframes sgRing { 0% { transform: scale(.92); opacity:.8 } 70% { transform: scale(1.12); opacity:0 } 100% { opacity:0 } }
+#aiChatModal .sg-id { flex: 1 1 auto; min-width: 0; }
+#aiChatModal .sg-id h2 {
+    margin: 0; font-size: 16px; font-weight: 800; letter-spacing: .2px;
+    color: var(--text-main); font-family: inherit;
+}
+#aiChatModal .sg-stat { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11px; font-weight: 700; color: var(--text-muted); }
+#aiChatModal .sg-dot { width: 7px; height: 7px; border-radius: 50%; background: #8a8a8a; flex: none; transition: background .3s ease; }
+#aiChatModal.is-online .sg-dot { background: #30d158; box-shadow: 0 0 7px rgba(48,209,88,.75); }
+#aiChatModal.is-online .sg-stat { color: #30d158; }
+#aiChatModal.is-offline .sg-dot { background: #ff9f0a; }
+#aiChatModal.is-offline .sg-stat { color: #ff9f0a; }
+#aiChatModal .sg-acts { flex: none; display: flex; align-items: center; gap: 6px; }
+#aiChatModal .sg-ico {
+    width: 36px; height: 36px; border-radius: 11px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.06); border: 1px solid var(--glass-border);
+    color: var(--luxury-gold, #d4af37); padding: 0;
+    -webkit-tap-highlight-color: transparent; transition: transform .15s ease, background .2s ease;
+}
+#aiChatModal .sg-ico svg { width: 18px; height: 18px; }
+#aiChatModal .sg-ico:active { transform: scale(.9); }
+#aiChatModal .sg-ico.on { background: linear-gradient(135deg, var(--luxury-gold-light,#F0D060), var(--luxury-gold,#C9A84C)); color: #1c1306; border-color: transparent; }
+#aiChatModal .sg-x { color: var(--text-muted); }
+html[data-theme="light"] #aiChatModal .sg-ico { background: #FAF4E8; border-color: rgba(150,120,55,.2); }
+
+/* ── 3) SUHBATLAR TARIXI (sirg'aluvchi panel) ─────────────────────── */
+#aiChatModal .sg-hist {
+    flex: none; overflow: hidden; max-height: 0; opacity: 0;
+    border-bottom: 1px solid transparent;
+    transition: max-height .28s ease, opacity .2s ease;
+    background: #101015;
+}
+html[data-theme="light"] #aiChatModal .sg-hist { background: #FFF9EC; }
+#aiChatModal.hist-open .sg-hist { max-height: 46vh; opacity: 1; border-bottom-color: rgba(212,175,55,.14); }
+#aiChatModal .sg-hist-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; font-size: 11px; font-weight: 800; letter-spacing: .4px; color: var(--text-muted); }
+#aiChatModal .sg-hist-new { background: none; border: none; font-family: inherit; font-size: 12px; font-weight: 800; color: var(--luxury-gold,#d4af37); cursor: pointer; padding: 4px 2px; }
+#aiChatModal .sg-hist-list { max-height: calc(46vh - 44px); overflow-y: auto; padding: 0 10px 10px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+#aiChatModal .sg-hrow {
+    display: flex; align-items: center; gap: 10px; padding: 11px 12px; margin-bottom: 6px;
+    border-radius: 12px; cursor: pointer; background: rgba(255,255,255,.04);
+    border: 1px solid transparent;
+}
+#aiChatModal .sg-hrow.on { background: rgba(201,168,76,.14); border-color: rgba(201,168,76,.4); }
+#aiChatModal .sg-hrow-tx { flex: 1 1 auto; min-width: 0; }
+#aiChatModal .sg-hrow-tx b { display: block; font-size: 13px; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#aiChatModal .sg-hrow-tx span { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+#aiChatModal .sg-hrow-del { flex: none; width: 30px; height: 30px; border-radius: 9px; border: none; background: rgba(255,69,58,.12); color: #ff6a60; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#aiChatModal .sg-hrow-del svg { width: 15px; height: 15px; }
+html[data-theme="light"] #aiChatModal .sg-hrow { background: #FAF4E8; }
+
+/* ── 4) XABARLAR — «bo'g'ilish» tuzatildi ────────────────────────────
+   Ilgari: bubble 85%, box'da 20px padding VA 100px o'lik pastki joy
+   (chunki yozish paneli `position:absolute` edi). Endi panel oddiy
+   oqimda turadi, shuning uchun o'lik joy KERAK EMAS va bubble 90%. */
+#aiChatModal .sg-box {
+    flex: 1 1 auto; min-height: 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain; touch-action: pan-y;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 16px 14px 20px;
+    background:
+        radial-gradient(90% 60% at 50% 0%, rgba(201,168,76,.05), transparent 70%),
+        #0b0b0e;
+}
+html[data-theme="light"] #aiChatModal .sg-box { background: #FFFDF7; }
+#aiChatModal .sg-msg { max-width: 90%; font-size: 14.5px; line-height: 1.55; }
+/* BOT: chapda tilla chizig'i bor «yozma» ko'rinish — oddiy chatlardan farqli */
+#aiChatModal .sg-bot {
+    align-self: flex-start;
+    background: rgba(255,255,255,.045);
+    border: 1px solid var(--glass-border);
+    border-left: 2.5px solid var(--luxury-gold, #C9A84C);
+    border-radius: 6px 15px 15px 6px;
+    padding: 12px 15px; color: var(--text-main);
+}
+/* MIJOZ: tilla kapsula */
+#aiChatModal .sg-me {
+    align-self: flex-end;
+    background: linear-gradient(135deg, var(--luxury-gold-light,#F0D060), var(--luxury-gold,#C9A84C));
+    border-radius: 16px 16px 5px 16px;
+    padding: 11px 15px; color: #1c1306; font-weight: 600;
+}
+html[data-theme="light"] #aiChatModal .sg-bot { background: #fff; border-color: rgba(150,120,55,.18); }
+#aiChatModal .sg-time { display: block; font-size: 10px; opacity: .55; margin-top: 5px; font-weight: 600; }
+#aiChatModal .sg-mimg { display: block; width: 100%; max-width: 210px; border-radius: 11px; margin-bottom: 8px; background: rgba(0,0,0,.25); }
+/* Yozayotganini bildiruvchi nuqtalar */
+#aiChatModal .sg-typing { align-self: flex-start; display: flex; gap: 5px; padding: 14px 16px; background: rgba(255,255,255,.045); border: 1px solid var(--glass-border); border-radius: 14px; }
+#aiChatModal .sg-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--luxury-gold,#d4af37); animation: sgDot 1.4s infinite both; }
+#aiChatModal .sg-typing i:nth-child(2) { animation-delay: .2s; }
+#aiChatModal .sg-typing i:nth-child(3) { animation-delay: .4s; }
+@keyframes sgDot { 0%,80%,100% { transform: scale(.55); opacity:.35 } 40% { transform: scale(1); opacity:1 } }
+/* Bo'sh holat + taklif chiplari */
+#aiChatModal .sg-hello { align-self: stretch; text-align: center; padding: 26px 10px 6px; }
+#aiChatModal .sg-hello .sg-h-ic { font-size: 34px; }
+#aiChatModal .sg-hello h3 { margin: 10px 0 5px; font-size: 17px; font-weight: 800; color: var(--text-main); }
+#aiChatModal .sg-hello p { margin: 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.6; }
+#aiChatModal .sg-tips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 16px; }
+#aiChatModal .sg-tip { font-size: 12px; font-weight: 700; padding: 8px 13px; border-radius: 999px; cursor: pointer; background: rgba(255,255,255,.05); border: 1px solid var(--glass-border); color: var(--text-main); }
+#aiChatModal .sg-tip:active { transform: scale(.95); }
+/* AI topgan tovar kartochkasi */
+#aiChatModal .sg-prod { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 8px; border-radius: 11px; background: rgba(0,0,0,.28); cursor: pointer; }
+html[data-theme="light"] #aiChatModal .sg-prod { background: rgba(0,0,0,.05); }
+#aiChatModal .sg-prod img { width: 42px; height: 42px; border-radius: 8px; object-fit: contain; background: #fff; flex: none; }
+#aiChatModal .sg-prod-tx { flex: 1 1 auto; min-width: 0; }
+#aiChatModal .sg-prod-tx b { display: block; font-size: 12.5px; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#aiChatModal .sg-prod-tx span { display: block; font-size: 12px; font-weight: 800; color: var(--luxury-gold,#d4af37); margin-top: 2px; }
+
+/* ── 5) YOZISH PANELI (oddiy oqimda — `absolute` EMAS) ───────────── */
+#aiChatModal .sg-foot {
+    flex: none; position: relative; z-index: 2;
+    padding: 10px 12px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgba(212,175,55,.14);
+    background: #101015;
+}
+html[data-theme="light"] #aiChatModal .sg-foot { background: #FFF9EC; border-top-color: rgba(150,120,55,.18); }
+#aiChatModal .sg-row { display: flex; align-items: flex-end; gap: 8px; }
+#aiChatModal .sg-clip, #aiChatModal .sg-send {
+    flex: none; width: 42px; height: 42px; border-radius: 12px; cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; transition: transform .15s ease;
+}
+#aiChatModal .sg-clip { background: rgba(255,255,255,.06); border: 1px solid var(--glass-border); color: var(--text-muted); }
+#aiChatModal .sg-send { background: linear-gradient(135deg, var(--luxury-gold-light,#F0D060), var(--luxury-gold,#C9A84C)); border: none; color: #1c1306; }
+#aiChatModal .sg-clip svg, #aiChatModal .sg-send svg { width: 19px; height: 19px; }
+#aiChatModal .sg-clip:active, #aiChatModal .sg-send:active { transform: scale(.9); }
+#aiChatModal .sg-send[disabled] { opacity: .45; }
+#aiChatModal .sg-input {
+    flex: 1 1 auto; min-width: 0; resize: none;
+    max-height: 110px; padding: 11px 14px;
+    border-radius: 14px; font-family: inherit; font-size: 14.5px; line-height: 1.45;
+    background: rgba(0,0,0,.42); border: 1px solid var(--glass-border);
+    color: var(--text-main); outline: none;
+}
+#aiChatModal .sg-input:focus { border-color: var(--luxury-gold, #C9A84C); }
+html[data-theme="light"] #aiChatModal .sg-input { background: #fff; border-color: rgba(150,120,55,.22); }
+/* Biriktirilgan rasm */
+#aiChatModal .sg-attach { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; padding: 8px; border-radius: 12px; background: rgba(201,168,76,.1); border: 1px solid rgba(201,168,76,.3); }
+#aiChatModal .sg-attach img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; background: rgba(0,0,0,.3); }
+#aiChatModal .sg-attach-tx { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+#aiChatModal .sg-attach-x { flex: none; width: 28px; height: 28px; border-radius: 8px; border: none; background: rgba(0,0,0,.3); color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#aiChatModal .sg-attach-x svg { width: 14px; height: 14px; }
+/* Zaif telefonlar (lite) — ortiqcha animatsiya yo'q */
+html.lite #aiChatModal .sg-ring { animation: none !important; opacity: .5 !important; }
+@media (prefers-reduced-motion: reduce) {
+    #aiChatModal .sg-ring { animation: none !important; }
+    #aiChatModal .sg-hist { transition: none !important; }
+}
+</style>
+
+<script id="shogird-ai-2026-js">
+(function shogirdAi() {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var E = function (s) { return (window.escHtml ? window.escHtml(s) : String(s == null ? '' : s)); };
+
+  /** ⚠️ `db` asosiy skriptda `const` bilan e'lon qilingan — u `window` ga
+   *  TUSHMAYDI (`window.db` doim undefined). Keyingi skriptdan u NOM bilan
+   *  o'qiladi. Boshqa kech qatlamlar ham aynan shu yo'ldan foydalanadi. */
+  function DB() {
+    try { if (typeof db !== 'undefined' && db) return db; } catch (e) {}
+    try {
+      if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
+        return window.firebase.database();
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  // Ma'lumot sxemasi (qoidalar O'ZGARMAYDI — hammasi ai_requests/<uid> ichida):
+  //   ai_requests/<uid>/active                     -> faol suhbat id
+  //   ai_requests/<uid>/needs_processing            -> bot uchun signal
+  //   ai_requests/<uid>/chats/<id>/{title,createdAt,updatedAt,messages}
+  var S = { uid: null, chatId: null, chats: {}, attach: null, busy: false, ref: null, statRef: null };
+  window._sgState = S;
+
+  function base() { return 'ai_requests/' + S.uid; }
+  function newId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  // ===================================================================
+  // ONLAYN INDIKATORI
+  // ===================================================================
+  // Bot har ~30 sekundda `bot_status` ga {online, ts} yozadi. 90 sekunddan
+  // ko'p vaqt o'tsa — oflayn deb hisoblaymiz (bir-ikki o'tkazib yuborilgan
+  // yozuv indikatorni bekorga qizartirmasin).
+  var STALE_MS = 90000;
+  function paintStatus(ts) {
+    var m = $('aiChatModal'), tx = $('sg-stat-tx');
+    if (!m || !tx) return;
+    var fresh = ts && (Date.now() - Number(ts) < STALE_MS);
+    m.classList.toggle('is-online', !!fresh);
+    m.classList.toggle('is-offline', !fresh);
+    tx.textContent = fresh ? 'Onlayn — javob beradi' : 'Oflayn — javob kechikadi';
+  }
+  function watchStatus() {
+    try {
+      if (S.statRef) { S.statRef.off('value'); S.statRef = null; }
+      S.statRef = DB().ref('bot_status');
+      S.statRef.on('value', function (s) {
+        var v = s.val() || {};
+        paintStatus(v.ts);
+      }, function () { paintStatus(0); });
+    } catch (e) { paintStatus(0); }
+  }
+
+  // ===================================================================
+  // RASM BIRIKTIRISH
+  // ===================================================================
+  window.aiClearAttach = function () {
+    S.attach = null;
+    var b = $('sg-attach'); if (b) b.style.display = 'none';
+    var f = $('sg-file'); if (f) f.value = '';
+  };
+
+  window.aiPickImage = function (ev) {
+    var file = ev && ev.target && ev.target.files && ev.target.files[0];
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { showToast('Faqat rasm yuborish mumkin', 'warning'); return; }
+    if (file.size > 8 * 1024 * 1024) { showToast("Rasm 8 MB dan kichik bo'lsin", 'warning'); return; }
+
+    var box = $('sg-attach'), img = $('sg-attach-img'), tx = $('sg-attach-tx');
+    if (box) box.style.display = 'flex';
+    if (img) { try { img.src = URL.createObjectURL(file); } catch (e) {} }
+    if (tx) tx.textContent = 'Yuklanmoqda… 0%';
+    S.attach = { pending: true, url: '' };
+
+    // Mavjud yuklovchidan foydalanamiz (admin rasm yuklashda ishlatiladi) —
+    // u ochiq HTTPS havola qaytaradi, vision model aynan shuni kutadi.
+    if (typeof window.uploadFileWithProgress !== 'function') {
+      if (tx) tx.textContent = 'Yuklash imkoni yo\u2018q';
+      S.attach = null;
+      return;
+    }
+    window.uploadFileWithProgress(file, function (pct) {
+      if (tx) tx.textContent = 'Yuklanmoqda… ' + pct + '%';
+    }).then(function (url) {
+      S.attach = { pending: false, url: url };
+      if (tx) tx.textContent = 'Rasm tayyor';
+    }).catch(function () {
+      S.attach = null;
+      if (tx) tx.textContent = 'Yuklanmadi — qayta urinib ko\u2018ring';
+      showToast('Rasm yuklanmadi', 'warning');
+    });
+  };
+
+  // ===================================================================
+  // SUHBATLAR (yangi chat + tarix)
+  // ===================================================================
+  function chatList() {
+    var out = [];
+    for (var id in S.chats) {
+      if (Object.prototype.hasOwnProperty.call(S.chats, id) && S.chats[id]) {
+        out.push({ id: id, c: S.chats[id] });
+      }
+    }
+    out.sort(function (a, b) {
+      return (Number(b.c.updatedAt || b.c.createdAt || 0) - Number(a.c.updatedAt || a.c.createdAt || 0));
+    });
+    return out;
+  }
+
+  function msgsOf(c) {
+    var raw = c && c.messages;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    return Object.keys(raw).map(function (k) { return raw[k]; }).filter(Boolean);
+  }
+
+  function titleFor(c) {
+    if (c && c.title) return c.title;
+    var m = msgsOf(c);
+    for (var i = 0; i < m.length; i++) {
+      if (m[i] && m[i].sender === 'user' && m[i].text) return String(m[i].text).slice(0, 40);
+    }
+    return 'Yangi suhbat';
+  }
+
+  function fmtWhen(ms) {
+    var d = new Date(Number(ms) || Date.now());
+    var now = new Date();
+    var sameDay = d.toDateString() === now.toDateString();
+    var hh = ('0' + d.getHours()).slice(-2), mm = ('0' + d.getMinutes()).slice(-2);
+    if (sameDay) return hh + ':' + mm;
+    return ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + ' ' + hh + ':' + mm;
+  }
+
+  window.aiToggleHistory = function () {
+    var m = $('aiChatModal');
+    if (!m) return;
+    var open = !m.classList.contains('hist-open');
+    m.classList.toggle('hist-open', open);
+    var b = $('sg-hist-btn'); if (b) b.classList.toggle('on', open);
+    try { if (window._hap) window._hap('light'); } catch (e) {}
+    if (open) renderHistory();
+  };
+
+  function renderHistory() {
+    var box = $('sg-hist-list');
+    if (!box) return;
+    var list = chatList();
+    if (!list.length) {
+      box.innerHTML = '<div style="padding:14px 12px; font-size:12px; color:var(--text-muted); text-align:center;">Hozircha suhbat yo\u2018q</div>';
+      return;
+    }
+    box.innerHTML = list.map(function (x) {
+      var n = msgsOf(x.c).length;
+      return '<div class="sg-hrow' + (x.id === S.chatId ? ' on' : '') + '" onclick="aiSelectChat(\'' + E(x.id) + '\')">' +
+        '<div class="sg-hrow-tx"><b>' + E(titleFor(x.c)) + '</b>' +
+          '<span>' + fmtWhen(x.c.updatedAt || x.c.createdAt) + ' \u00B7 ' + n + ' xabar</span></div>' +
+        '<button class="sg-hrow-del" aria-label="O\u2018chirish" onclick="event.stopPropagation(); aiDeleteChat(\'' + E(x.id) + '\')">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>' +
+        '</button></div>';
+    }).join('');
+  }
+
+  window.aiNewChat = function () {
+    if (!S.uid) return;
+    var id = newId();
+    var now = Date.now();
+    S.chatId = id;
+    S.chats[id] = { title: '', createdAt: now, updatedAt: now, messages: [] };
+    window.aiClearAttach();
+    var m = $('aiChatModal');
+    if (m) { m.classList.remove('hist-open'); }
+    var b = $('sg-hist-btn'); if (b) b.classList.remove('on');
+    try { if (window._hap) window._hap('success'); } catch (e) {}
+    // Faol suhbatni darhol yozamiz — bot ham shu suhbatga javob beradi.
+    try {
+      DB().ref(base()).update({ active: id });
+      DB().ref(base() + '/chats/' + id).update({ createdAt: now, updatedAt: now });
+    } catch (e) {}
+    paint();
+    renderHistory();
+  };
+
+  window.aiSelectChat = function (id) {
+    if (!S.chats[id]) return;
+    S.chatId = id;
+    var m = $('aiChatModal'); if (m) m.classList.remove('hist-open');
+    var b = $('sg-hist-btn'); if (b) b.classList.remove('on');
+    try { DB().ref(base()).update({ active: id }); } catch (e) {}
+    try { if (window._hap) window._hap('light'); } catch (e) {}
+    paint();
+  };
+
+  window.aiDeleteChat = function (id) {
+    var doDel = function () {
+      delete S.chats[id];
+      try { DB().ref(base() + '/chats/' + id).remove(); } catch (e) {}
+      if (S.chatId === id) {
+        var rest = chatList();
+        if (rest.length) { S.chatId = rest[0].id; try { DB().ref(base()).update({ active: S.chatId }); } catch (e) {} }
+        else { window.aiNewChat(); return; }
+      }
+      paint();
+      renderHistory();
+    };
+    var q = 'Bu suhbat o\u2018chirilsinmi?';
+    if (typeof tg !== 'undefined' && tg.showConfirm) tg.showConfirm(q, function (ok) { if (ok) doDel(); });
+    else if (confirm(q)) doDel();
+  };
+
+  // ===================================================================
+  // CHIZISH
+  // ===================================================================
+  var TIPS = ['Moybor filtr bormi?', 'Nexia uchun kalotka', 'Gazel porshen narxi', 'Rasm bo\u2018yicha topish'];
+
+  function helloHTML() {
+    return '<div class="sg-hello">' +
+      '<div class="sg-h-ic">\u2728</div>' +
+      '<h3>Assalomu alaykum!</h3>' +
+      '<p>Men Shogird \u2014 zapchast tanlashda yordam beraman.<br>Nomini yozing yoki <b>rasmini yuboring</b>.</p>' +
+      '<div class="sg-tips">' + TIPS.map(function (t) {
+        return '<span class="sg-tip" onclick="aiTip(\'' + E(t).replace(/'/g, '&#39;') + '\')">' + E(t) + '</span>';
+      }).join('') + '</div></div>';
+  }
+
+  window.aiTip = function (t) {
+    var i = $('ai-chat-input');
+    if (!i) return;
+    if (/rasm/i.test(t)) { var f = $('sg-file'); if (f) f.click(); return; }
+    i.value = t; autosize(); i.focus();
+  };
+
+  function prodHTML(ids) {
+    if (!ids || !ids.length) return '';
+    var list = window.productsDB || [];
+    var out = '';
+    for (var i = 0; i < ids.length; i++) {
+      var p = null;
+      for (var j = 0; j < list.length; j++) { if (list[j] && list[j].id == ids[i]) { p = list[j]; break; } }
+      if (!p) continue;
+      out += '<div class="sg-prod" onclick="closeModal(); setTimeout(function(){ openProduct(' + p.id + '); }, 280);">' +
+        '<img src="' + E(p.img || '') + '" alt="" loading="lazy" decoding="async" onerror="this.style.visibility=\'hidden\'">' +
+        '<div class="sg-prod-tx"><b>' + E(p.name || '') + '</b>' +
+        '<span>' + (Number(p.price) || 0).toLocaleString() + " so'm</span></div></div>";
+    }
+    return out;
+  }
+
+  function paint() {
+    var box = $('ai-chat-box');
+    if (!box) return;
+    var msgs = msgsOf(S.chats[S.chatId]);
+    if (!msgs.length) {
+      box.innerHTML = helloHTML();
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < msgs.length; i++) {
+      var m = msgs[i] || {};
+      var me = m.sender === 'user';
+      var img = m.image ? '<img class="sg-mimg" src="' + E(m.image) + '" alt="" loading="lazy" decoding="async">' : '';
+      // ⚠️ Matn ESCAPE qilinadi. Ilgari `m.text` to'g'ridan innerHTML ga
+      //    tushardi — bu XSS yo'li edi (AI javobi ham, mijoz matni ham).
+      html += '<div class="sg-msg ' + (me ? 'sg-me' : 'sg-bot') + '">' + img +
+        E(m.text || '').replace(/\n/g, '<br>') +
+        (me ? '' : prodHTML(m.found_products)) +
+        '<span class="sg-time">' + fmtWhen(m.time) + '</span></div>';
+    }
+    if (S.busy) html += '<div class="sg-typing"><i></i><i></i><i></i></div>';
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+  }
+  window._sgPaint = paint;
+
+  // ===================================================================
+  // YUBORISH
+  // ===================================================================
+  function autosize() {
+    var i = $('ai-chat-input');
+    if (!i) return;
+    i.style.height = 'auto';
+    i.style.height = Math.min(110, i.scrollHeight) + 'px';
+  }
+
+  window.sendAiMessage = function () {
+    var input = $('ai-chat-input');
+    if (!input || !S.uid) return;
+    var text = String(input.value || '').trim();
+    var img = (S.attach && !S.attach.pending && S.attach.url) ? S.attach.url : '';
+    if (S.attach && S.attach.pending) { showToast('Rasm hali yuklanmoqda…', 'warning'); return; }
+    if (!text && !img) return;
+    if (!text && img) text = 'Bu qanday zapchast? Menga mos variantni toping.';
+
+    if (!S.chatId || !S.chats[S.chatId]) window.aiNewChat();
+
+    var c = S.chats[S.chatId];
+    var msgs = msgsOf(c);
+    var rec = { sender: 'user', text: text, time: Date.now() };
+    if (img) rec.image = img;
+    msgs.push(rec);
+    c.messages = msgs;
+    c.updatedAt = Date.now();
+    if (!c.title) c.title = text.slice(0, 40);
+
+    input.value = ''; autosize();
+    window.aiClearAttach();
+    S.busy = true;
+    paint();
+
+    // Faqat SHU suhbatni yozamiz (butun tugunni emas) — trafik kam.
+    try {
+      DB().ref(base() + '/chats/' + S.chatId).update({
+        title: c.title, messages: msgs, updatedAt: c.updatedAt,
+        createdAt: c.createdAt || c.updatedAt
+      });
+      DB().ref(base()).update({ active: S.chatId, needs_processing: true });
+    } catch (e) {
+      S.busy = false; paint();
+      showToast('Yuborilmadi — internetni tekshiring', 'warning');
+    }
+  };
+
+  // ===================================================================
+  // OCHISH / TINGLASH
+  // ===================================================================
+  window.openAiChat = function () {
+    var m = $('aiChatModal');
+    if (!m) return;
+    S.uid = window.currentUser || null;
+    if (!S.uid) { showToast('Iltimos, avval tizimga kiring', 'warning'); return; }
+    if (!DB()) { showToast("Bazaga ulanilmadi — internetni tekshiring", 'warning'); return; }
+
+    m.style.display = 'flex';
+    m.classList.remove('hist-open');
+    try { activeModal = 'aiChatModal'; } catch (e) { window.activeModal = 'aiChatModal'; }
+    document.body.style.overflow = 'hidden';
+    try { window.history.pushState({ modal: 'aiChatModal' }, ''); } catch (e) {}
+    try { if (tg && tg.BackButton) tg.BackButton.show(); } catch (e) {}
+
+    watchStatus();
+
+    var inp = $('ai-chat-input');
+    if (inp && !inp._sgWired) {
+      inp._sgWired = 1;
+      inp.addEventListener('input', autosize);
+      inp.addEventListener('keydown', function (e) {
+        // Enter — yuborish, Shift+Enter — yangi qator
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendAiMessage(); }
+      });
+    }
+
+    // Suhbatlarni tinglaymiz
+    try {
+      if (S.ref) { S.ref.off('value'); S.ref = null; }
+      S.ref = DB().ref(base());
+      window._aiChatRef = S.ref;      // popstate shu nom bilan uzadi
+      S.ref.on('value', function (snap) {
+        var d = snap.val() || {};
+        S.chats = (d.chats && typeof d.chats === 'object') ? d.chats : {};
+
+        // ⚠️ ESKI SXEMADAN KO'CHIRISH: ilgari bitta cheksiz ro'yxat bor edi
+        //    (`ai_requests/<uid>/messages`). Uni yo'qotmaymiz — birinchi
+        //    ochilishda alohida suhbatga aylantiramiz.
+        if (!Object.keys(S.chats).length && d.messages) {
+          var old = Array.isArray(d.messages) ? d.messages
+            : Object.keys(d.messages).map(function (k) { return d.messages[k]; });
+          old = (old || []).filter(Boolean);
+          if (old.length) {
+            var oid = newId(), t0 = Date.now();
+            S.chats[oid] = { title: 'Oldingi suhbat', createdAt: t0, updatedAt: t0, messages: old };
+            S.chatId = oid;
+            try {
+              DB().ref(base() + '/chats/' + oid).update(S.chats[oid]);
+              DB().ref(base()).update({ active: oid });
+            } catch (e) {}
+          }
+        }
+
+        if (d.active && S.chats[d.active]) S.chatId = d.active;
+        if (!S.chatId || !S.chats[S.chatId]) {
+          var l = chatList();
+          if (l.length) S.chatId = l[0].id;
+        }
+        if (!S.chatId) { window.aiNewChat(); return; }
+
+        // Bot javob berdimi — «yozayapti» ni o'chiramiz
+        var mm = msgsOf(S.chats[S.chatId]);
+        if (mm.length && mm[mm.length - 1] && mm[mm.length - 1].sender !== 'user') S.busy = false;
+        if (d.needs_processing === false && S.busy) {
+          // bot qabul qildi, javob hali yo'q — kutamiz
+        }
+        paint();
+        if ($('aiChatModal').classList.contains('hist-open')) renderHistory();
+      });
+    } catch (e) {}
+
+    paint();
+  };
+
+  // Modal yopilganda tinglovchilarni uzamiz (popstate `_aiChatRef` ni uzadi,
+  // biz status tinglovchisini ham uzishimiz kerak).
+  window.addEventListener('popstate', function () {
+    var m = $('aiChatModal');
+    if (m && m.style.display === 'none') {
+      if (S.statRef) { try { S.statRef.off('value'); } catch (e) {} S.statRef = null; }
+      S.busy = false;
+    }
+  });
 })();
 </script>
 </body>

@@ -30,15 +30,24 @@ const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 /* ---------------------------------------------------------------- *
  * 1) Qatlam skriptini ajratib olamiz
  * ---------------------------------------------------------------- */
+/* ⚠️ Blokni AJRATIB OLISH — qator BOSHIDAN izlanadi.
+ * Oddiy `indexOf` ishonchsiz: agar marker satri biror IZOHDA ham uchrasa,
+ * qidiruv izohni topib, keyingi `</script>` gacha MUTLAQO boshqa kodni
+ * kesib olardi (bu xato bir marta sodir bo'ldi). Shuning uchun marker
+ * qator boshida bo'lishi va AYNAN bitta bo'lishi tekshiriladi. */
 const MARK = '<script id="customer-boost-2026-js">';
-const start = HTML.indexOf(MARK);
-if (start < 0) {
-  console.error('❌ `customer-boost-2026-js` skript bloki topilmadi.');
+const lineRe = /^<script id="customer-boost-2026-js">$/gm;
+const hits = HTML.match(lineRe) || [];
+if (hits.length !== 1) {
+  console.error('❌ `customer-boost-2026-js` bloki ' + hits.length + ' marta topildi (1 bo\'lishi kerak).');
   process.exit(1);
 }
-const bodyStart = start + MARK.length;
-const end = HTML.indexOf('</script>', bodyStart);
-const LAYER_SRC = HTML.slice(bodyStart, end);
+lineRe.lastIndex = 0;
+const m0 = lineRe.exec(HTML);
+const bodyStart = m0.index + MARK.length;
+const close = HTML.indexOf('</script>', bodyStart);
+if (close < 0) { console.error('❌ blok yopilmagan.'); process.exit(1); }
+const LAYER_SRC = HTML.slice(bodyStart, close);
 
 /* ---------------------------------------------------------------- *
  * 2) Minimal DOM stub — qatlam boot() paytida yiqilmasligi uchun
