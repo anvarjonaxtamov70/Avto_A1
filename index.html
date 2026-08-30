@@ -7697,6 +7697,40 @@ document.addEventListener('touchmove', function(e) {
     // boshlagachgina database.rules.json ni Firebase Console'ga qo'ying.
     // O'sha paytda DB o'qishni window._authReady ni kutadigan qilib o'zgartiring.
     window._authReady = (async function signInToFirebase() {
+        // ⏱️ TARMOQ QOTIB QOLMASLIGI UCHUN — MUHIM!
+        // `fetch()` ning O'ZIDA timeout YO'Q. Agar Worker (/auth) javob
+        // bermay «osilib» qolsa, bu promise ABADIY hal bo'lmaydi. Pastda
+        // `initUserData()` aynan shu promise'ni `await` qiladi — ya'ni
+        // savat, buyurtmalar, profil — HAMMASI yuklanmay qoladi va admin
+        // panelda «Tekshirilmoqda…» abadiy turadi. Shuning uchun har bir
+        // urinishga qat'iy vaqt chegarasi qo'yamiz.
+        function fetchWithTimeout(url, opts, ms) {
+            return new Promise(function (resolve, reject) {
+                var done = false, ctl = null;
+                try {
+                    if (typeof AbortController !== 'undefined') ctl = new AbortController();
+                } catch (e) {}
+                var timer = setTimeout(function () {
+                    if (done) return;
+                    done = true;
+                    try { if (ctl) ctl.abort(); } catch (e) {}
+                    reject(new Error('auth-timeout'));
+                }, ms);
+                var o = {};
+                for (var k in opts) {
+                    if (Object.prototype.hasOwnProperty.call(opts, k)) o[k] = opts[k];
+                }
+                if (ctl) o.signal = ctl.signal;
+                fetch(url, o).then(function (r) {
+                    if (done) return;
+                    done = true; clearTimeout(timer); resolve(r);
+                }, function (e) {
+                    if (done) return;
+                    done = true; clearTimeout(timer); reject(e);
+                });
+            });
+        }
+
         async function attempt() {
             if (!firebase.auth) return false;
             if (firebase.auth().currentUser) return true;
@@ -7704,11 +7738,11 @@ document.addEventListener('touchmove', function(e) {
             var initData = (tg && tg.initData) ? tg.initData : "";
             if (!initData) return false;
 
-            var res = await fetch(TG_PROXY + '/auth', {
+            var res = await fetchWithTimeout(TG_PROXY + '/auth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ initData: initData })
-            });
+            }, 5000);
             var data = await res.json();
             if (!data || !data.ok || !data.token) return false;
 
@@ -7728,6 +7762,17 @@ document.addEventListener('touchmove', function(e) {
         }
         return false;
     })();
+
+    // 🛡️ OXIRGI KAFOLAT (fail-safe).
+    // Yuqoridagi har bir `fetch` chegaralangan, ammo `signInWithCustomToken`
+    // yoki Firebase SDK ham kechikishi mumkin. `initUserData()` bu promise'ni
+    // kutadi — demak u HAR QANDAY holatda hal bo'lishi SHART. 12 sekunddan
+    // keyin «auth bo'lmadi» deb davom etamiz: ilova ochiladi, mijoz tovarlarni
+    // ko'radi, admin panelda esa sabab qizil yozuv bilan ko'rsatiladi.
+    window._authReady = Promise.race([
+        window._authReady,
+        new Promise(function (r) { setTimeout(function () { r(false); }, 12000); })
+    ]);
 
     // =====================================
     // 🔐 ADMIN TEKSHIRUVI (himoya darajasi: defense-in-depth)
@@ -27630,6 +27675,13 @@ html body .flying-img.mo-fly {
   // Endi admin panelni ochish kifoya: yashil bo'lsa — joriy qilish
   // xavfsiz, qizil bo'lsa — TO'XTAB, sababni o'qish kerak.
   // ===================================================================
+  // Uch holat: kutilmoqda / ishlayapti / yo'q.
+  //   ⚠️ «Kutilmoqda» ABADIY qolmasligi kerak — ilgari aynan shunday
+  //      bo'lgan. Shuning uchun 13 sekunddan keyin javob kelmasa,
+  //      bu ham XATO deb hisoblanadi va sababi yoziladi.
+  var authSettled = false;
+  var authTimedOut = false;
+
   window._authStatusRefresh = function () {
     var box = document.getElementById('auth-status');
     var tx = document.getElementById('auth-text');
@@ -27642,38 +27694,95 @@ html body .flying-img.mo-fly {
     } catch (e) {}
 
     box.classList.remove('ok', 'bad');
+
     if (uid) {
       box.classList.add('ok');
       tx.textContent = 'Xavfsiz ulanish ishlayapti (ID: ' + uid
         + '). Baza qoidalarini joriy qilish mumkin.';
-    } else {
-      box.classList.add('bad');
-      var sabab;
-      if (!(window.tg && window.tg.initData)) {
-        sabab = "Telegram tashqarisida ochilgan (initData yo'q) — Mini App'ni "
-          + 'Telegram ichidan, bot orqali oching.';
-      } else {
-        sabab = 'Worker /auth javob bermadi — Cloudflare Worker deploy '
-          + "qilinmagan yoki BOT_TOKEN sozlanmagan bo'lishi mumkin.";
-      }
-      tx.textContent = "Xavfsiz ulanish YO'Q. " + sabab
-        + ' Baza qoidalarini hozir joriy QILMANG.';
+      return;
     }
+
+    // Hali javob kelmagan va vaqt ham tugamagan — halol «kutilmoqda»
+    if (!authSettled && !authTimedOut) {
+      tx.textContent = 'Xavfsiz ulanish tekshirilmoqda\u2026';
+      return;
+    }
+
+    box.classList.add('bad');
+    var sabab;
+    if (!(window.tg && window.tg.initData)) {
+      sabab = "Telegram tashqarisida ochilgan (initData yo'q) — Mini App'ni "
+        + 'Telegram ichidan, bot orqali oching.';
+    } else if (authTimedOut && !authSettled) {
+      sabab = 'Worker /auth vaqtida javob bermadi — Cloudflare Worker '
+        + "deploy qilinmagan yoki tarmoq sekin bo'lishi mumkin.";
+    } else {
+      sabab = 'Worker /auth javob bermadi — Cloudflare Worker deploy '
+        + "qilinmagan yoki BOT_TOKEN sozlanmagan bo'lishi mumkin.";
+    }
+    tx.textContent = "Xavfsiz ulanish YO'Q. " + sabab
+      + ' Baza qoidalarini hozir joriy QILMANG.';
   };
 
-  // Admin panel ochilganda holatni yangilaymiz. Auth hali yo'lda bo'lishi
-  // mumkin — shuning uchun `_authReady` hal bo'lgach yana bir marta.
+  // ── HOLATNI YANGILASH — BIR NECHTA MUSTAQIL YO'L ─────────────────
+  //
+  // ⚠️ ILGARI faqat `openModal` ustiga o'ram qo'yilgan edi va indikator
+  //    «Tekshirilmoqda…» holatida QOTIB qolardi. Sabab: `openModal`
+  //    fayl bo'ylab BESH joyda o'raladi (23972, 24133, 24858, 25670 va
+  //    bu yer) va ularning ba'zilari KECHIKTIRIB (setTimeout /
+  //    DOMContentLoaded) o'rnatiladi. Ya'ni bizning o'ramimiz
+  //    o'rnatilmasligi yoki chetlab o'tilishi mumkin.
+  //
+  //    Endi indikator `openModal` ga UMUMAN bog'liq emas: element
+  //    sahifa yuklanganda ham bo'yaladi. Modal ochilishini kutmaymiz —
+  //    `#auth-status` statik HTML ichida, ya'ni boshidan DOM da bor.
+  function paintNow() { try { window._authStatusRefresh(); } catch (e) {} }
+
+  // 1) Darhol (auth hali tayyor bo'lmasa ham — «yo'q» deb ko'rsatadi)
+  paintNow();
+
+  // 2) Auth tugagach — asosiy yo'l
+  function settle() { authSettled = true; paintNow(); }
+  try {
+    if (window._authReady && typeof window._authReady.then === 'function') {
+      window._authReady.then(settle, settle);
+    } else {
+      // `_authReady` umuman yo'q (qatlam tartibi buzilgan) — kutmaymiz
+      settle();
+    }
+  } catch (e) { settle(); }
+
+  // 3) ABADIY «kutilmoqda» bo'lmasligi kafolati: 13 sekunddan keyin
+  //    javob kelmasa — xato deb ko'rsatamiz va sababini yozamiz.
+  //    (Auth'ning o'z chegarasi 12 s — shundan bir oz keyin tekshiramiz.)
+  setTimeout(function () {
+    if (!authSettled) { authTimedOut = true; paintNow(); }
+  }, 13000);
+
+  // 4) Zaxira: auth kechikishi mumkin (Worker javobi, sekin tarmoq).
+  //    Bir necha marta qayta tekshiramiz, keyin to'xtaydi (interval YO'Q —
+  //    batareyani yemasin).
+  [1200, 3500, 8000].forEach(function (ms) { setTimeout(paintNow, ms); });
+
+  // 5) Admin tugmasi bosilganda — qanday ochilishidan qat'i nazar
+  //    (capture fazasida, ya'ni boshqa handlerlar to'xtatsa ham ishlaydi)
+  try {
+    document.addEventListener('click', function (e) {
+      try {
+        var t = e.target;
+        if (t && t.closest && t.closest('#nav-admin')) setTimeout(paintNow, 80);
+      } catch (_) {}
+    }, true);
+  } catch (e) {}
+
+  // 6) Qo'shimcha: `openModal` o'rami (mavjud bo'lsa) — eski yo'l ham qoladi
   if (typeof window.openModal === 'function') {
     var _omOrig = window.openModal;
     window.openModal = function (id) {
       var r = _omOrig.apply(this, arguments);
       if (id === 'adminModal') {
-        try { window._authStatusRefresh(); } catch (e) {}
-        try {
-          Promise.resolve(window._authReady).then(function () {
-            try { window._authStatusRefresh(); } catch (e) {}
-          }).catch(function () {});
-        } catch (e) {}
+        paintNow();
+        try { Promise.resolve(window._authReady).then(paintNow).catch(function () {}); } catch (e) {}
       }
       return r;
     };
