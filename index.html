@@ -7283,6 +7283,20 @@ document.addEventListener('touchmove', function(e) {
     //    HTML xabarga qo'shilishidan oldin shu orqali xavfsizlashtiriladi.
     function escTg(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     window.escTg = escTg;
+    // 🔐 onclick="fn('...')" kabi INLINE atribut ichidagi JS satri uchun.
+    //    Ikki qatlam kerak: avval JS satri uchun (\ va '), keyin HTML atributi uchun.
+    //    Brauzer avval HTML entity'ni ochadi, keyin JS'ni o'qiydi — shuning uchun
+    //    tartib AYNAN shunday: escHtml(jsEscape(x)). Faqat .replace(/'/g,"\\'")
+    //    yetarli EMAS edi (mijoz ismidagi " yoki < atributdan chiqib ketardi).
+    function _jsAttr(s){
+        return escHtml(
+            String(s == null ? '' : s)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/\r?\n/g, '\\n')
+        );
+    }
+    window._jsAttr = _jsAttr;
     // 📨 Telegram proxy'ga xabar yuborish — Worker auth tekshirishi uchun initData qo'shamiz.
     //    (Ochiq proxy yopildi: endi faqat tekshirilgan foydalanuvchi/admin yubora oladi.)
     function tgProxySend(payload){
@@ -7676,7 +7690,18 @@ const Haptics = {
         // 🔐 DB'ga murojaatdan OLDIN auth tugashini kutamiz.
         // Shunda Firebase rules yoqilganda token tayyor bo'ladi (permission xatosi bo'lmaydi).
         // Auth muvaffaqiyatsiz bo'lsa ham (APK/brauzer) promise hal bo'ladi va davom etadi.
-        try { if (window._authReady) await window._authReady; } catch (e) {}
+        try { window._authOk = !!(await window._authReady); } catch (e) { window._authOk = false; }
+
+        // 🚨 JIM QOLMASLIK: qoidalar qattiqlashtirilgandan keyin auth ishlamasa
+        //    ilova "hech narsa yuklanmadi" holatiga tushadi va SABABI ko'rinmaydi.
+        //    Telegram ichidagi foydalanuvchi uchun auth SHART — shuning uchun
+        //    muvaffaqiyatsiz bo'lsa ochiq ogohlantirish beramiz (jimgina sinmaydi).
+        if (!window._authOk && isFromTelegram && tgUser) {
+            if (window._dwarn) window._dwarn('[auth] Firebase auth o\'rnatilmadi — Worker /auth yoki BOT_TOKEN sozlanmagan bo\'lishi mumkin.');
+            try {
+                showToast("Xavfsiz ulanish o'rnatilmadi — ma'lumotlar saqlanmasligi mumkin. Ilovani qayta ochib ko'ring.", "warning");
+            } catch (e) {}
+        }
 
         // Auth tugagach admin tugmasini TASDIQLANGAN identifikator bo'yicha qayta baholaymiz.
         // (Soxta currentUser tugmani ko'rsatgan bo'lsa, auth uid admin bo'lmasa — yashiriladi.)
@@ -8616,7 +8641,7 @@ function openProduct(id) {
     let pmCode = document.getElementById('pm-code');
     if (pmCode) {
         if (p.code) {
-            pmCode.innerHTML = `<svg class="uic" aria-hidden="true"><use href="#i-tag"></use></svg> Kod: <span style="color:var(--luxury-gold); font-weight:800; letter-spacing:0.5px;">${p.code}</span>`;
+            pmCode.innerHTML = `<svg class="uic" aria-hidden="true"><use href="#i-tag"></use></svg> Kod: <span style="color:var(--luxury-gold); font-weight:800; letter-spacing:0.5px;">${escHtml(p.code)}</span>`;
             pmCode.style.display = 'block';
         } else {
             pmCode.style.display = 'none';
@@ -8748,7 +8773,7 @@ function openProduct(id) {
     loadProductReviews(id);
     let edB = document.getElementById('pm-edit-btn'); if (ADMIN_IDS.includes(currentUser)) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
     let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
-    if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${_thumb(x.img, 200)}" loading="lazy" decoding="async" data-full="${(x.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)"></div><h4>${x.name}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
+    if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${_thumb(x.img, 200)}" loading="lazy" decoding="async" data-full="${(x.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)"></div><h4>${escHtml(x.name)}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
     // 🆕 Compare tugmasi + Notify me (tugaganda)
     let extra = document.getElementById('pm-extra-actions');
     if (extra) {
@@ -10096,31 +10121,43 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         btn.innerText = "...";
         btn.disabled = true;
 
-        // Firebase'dan barcha foydalanuvchilarning buyurtmalarini izlaymiz
-        db.ref('users').once('value', (s) => {
-            btn.innerText = oldText;
-            btn.disabled = false;
-            let found = false;
+        // 🔐 XAVFSIZLIK + TEZLIK TUZATISHI
+        // ⚠️ ILGARI: `db.ref('users').once('value')` — BITTA buyurtmani kod bo'yicha
+        //    topish uchun BARCHA mijozlarning ismi, telefoni, manzili va butun
+        //    buyurtma tarixi mijoz telefoniga yuklanardi. Ya'ni har bir mijoz
+        //    butun mijozlar bazasini ko'rib olardi (maxfiylik buzilishi) va
+        //    baza o'sishi bilan bu amal tobora sekinlashardi.
+        // ✅ ENDI: faqat O'ZINING buyurtmalari ichidan izlanadi — avval xotiradan
+        //    (DB'ga murojaat umuman kerak emas), topilmasa o'z yozuvi yangilanadi.
+        const _trkDone = () => { btn.innerText = oldText; btn.disabled = false; };
+        const _trkFind = (ords) => {
+            let list = Array.isArray(ords)
+                ? ords
+                : (ords ? Object.keys(ords).map((k) => ords[k]) : []);
+            return list.find((o) => o && ((o.code === code) || (o.id == code)));
+        };
 
-            if(s.exists()) {
-                let us = s.val();
-                for(let uid in us) {
-                    if(us[uid].orders) {
-                       let ords = us[uid].orders || [];
-                        let target = ords.find(o => (o.code === code) || (o.id == code));
-                        
-                        if(target) {
-                            found = true;
-                            showTrackedOrder(target);
-                            break;
-                        }
-                    }
-                }
-            }
-            if(!found) {
-                showToast("Bunday buyurtma topilmadi!", "warning");
-            }
-        });
+        // 1) Xotiradagi ro'yxat — darhol javob
+        let target = _trkFind(window.myOrders || myOrders);
+        if (target) { _trkDone(); showTrackedOrder(target); return; }
+
+        // 2) Xotirada yo'q — faqat O'Z yozuvini serverdan yangilab ko'ramiz
+        if (!window.currentUser) {
+            _trkDone();
+            showToast("Bunday buyurtma topilmadi!", "warning");
+            return;
+        }
+        db.ref('users/' + window.currentUser + '/orders').once('value')
+            .then((s) => {
+                _trkDone();
+                let t = _trkFind(s.val());
+                if (t) showTrackedOrder(t);
+                else showToast("Bu kod sizning buyurtmalaringizda topilmadi", "warning");
+            })
+            .catch(() => {
+                _trkDone();
+                showToast("Buyurtma tekshirilmadi — internetni tekshiring", "warning");
+            });
     }
 
     // Topilgan buyurtmani ekranga chiqarish (Tafsilot oynasi)
@@ -10231,11 +10268,11 @@ window.renderCustomersList = (arr) => {
     let visibleCustomers = arr.slice(0, window.adminCustomersLimit);
     
     let html = visibleCustomers.map(c => `
-        <div class="luxury-card" style="margin-bottom: 12px; padding: 15px; display: block; cursor: pointer; border: 1px solid transparent;"onclick="openCustomerSpecificOrders('${c.uid}', '${c.name.replace(/'/g, "\\'")}')" onmouseover="this.style.borderColor='var(--luxury-gold)'" onmouseout="this.style.borderColor='transparent'">
+        <div class="luxury-card" style="margin-bottom: 12px; padding: 15px; display: block; cursor: pointer; border: 1px solid transparent;"onclick="openCustomerSpecificOrders('${_jsAttr(c.uid)}', '${_jsAttr(c.name)}')" onmouseover="this.style.borderColor='var(--luxury-gold)'" onmouseout="this.style.borderColor='transparent'">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                 <div>
-                    <h4 style="margin: 0 0 4px 0; font-size: 15px;">${c.name}</h4>
-                    <span style="font-size: 11px; color: var(--text-muted);">ID: <code>${c.uid}</code></span>
+                    <h4 style="margin: 0 0 4px 0; font-size: 15px;">${escHtml(c.name)}</h4>
+                    <span style="font-size: 11px; color: var(--text-muted);">ID: <code>${escHtml(c.uid)}</code></span>
                 </div>
                 <div style="text-align: right;">
                     <div style="font-size: 14px; font-weight: bold; color: var(--luxury-gold);">${c.totalSpent.toLocaleString()} so'm</div>
@@ -10279,7 +10316,10 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
     let c = document.getElementById('admin-orders-list');
     if(!c) return;
     
-    aM.querySelector('.modal-header h2').innerHTML = `📦 ${customerName} buyurtmalari`;
+    // 🔐 XSS: `customerName` — MIJOZ o'zi kiritgan matn. Escape qilinmasa mijoz
+    //    ismiga skript yozib, ADMIN panelida (ya'ni barcha yozish huquqi bor
+    //    sessiyada) kod ishga tushirishi mumkin edi.
+    aM.querySelector('.modal-header h2').innerHTML = `📦 ${escHtml(customerName)} buyurtmalari`;
 
     c.innerHTML = `
         <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; justify-content: center;">
@@ -13793,7 +13833,10 @@ function initReveal() {
             // ============================================================
             if (item.type === 'video') {
                 // poster (cover) — agar item.poster bo'lsa shu, aks holda bo'sh (qora)
-                const poster = item.poster ? `poster="${item.poster}"` : '';
+                // 🔐 XSS: URL HTML ATRIBUTI ichiga qo'yiladi — escape qilinmasa
+                //    ichidagi qo'shtirnoq atributdan "chiqib ketib" (onerror=...)
+                //    kod ishga tushirishi mumkin edi.
+                const poster = item.poster ? `poster="${escHtml(item.poster)}"` : '';
 
                 content.innerHTML = `
                     <div id="sv-loader" style="position:absolute; z-index:2; display:flex; flex-direction:column; align-items:center;">
@@ -13802,7 +13845,7 @@ function initReveal() {
                     <video id="stVideo" class="stv-loading" ${poster} playsinline webkit-playsinline
                            preload="auto" autoplay disablepictureinpicture
                            ${_storySoundMuted ? 'muted' : ''}
-                           src="${item.src}"
+                           src="${escHtml(item.src)}"
                            style="width:100%;height:100%;object-fit:contain;background:#000;">
                     </video>
                     <div class="sv-buffer-bar" id="sv-buffer-bar"><div></div></div>
@@ -13958,7 +14001,7 @@ function initReveal() {
                     <div id="sv-loader" class="sv-loader" style="position:absolute; z-index:2; display:flex; flex-direction:column; align-items:center; gap:14px;">
                         <div class="sv-spinner"></div>
                     </div>
-                    <img id="stImg" class="stv-loading" src="${item.src}" style="width:100%;height:100%;object-fit:contain;background:#000;">
+                    <img id="stImg" class="stv-loading" src="${escHtml(item.src)}" style="width:100%;height:100%;object-fit:contain;background:#000;">
                     <div class="sv-pause-indicator" id="sv-pause-indicator">⏸</div>
                 `;
                 const _img = document.getElementById('stImg');

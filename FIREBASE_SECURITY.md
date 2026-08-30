@@ -118,9 +118,10 @@ tekshiradi. Shuning uchun himoya ilovani buzmasdan qo'shildi.
 | Izohga 99 yulduz qo'yish | ❌ rad etiladi (1..5) |
 | `ref('products').remove()` — katalogni o'chirish | ❌ rad etiladi |
 
-**Qolgan xavf (hali yopilmagan):** `users` tugunining `.read: true` bo'lishi.
-Admin paneli butun daraxtni 7 joyda o'qigani uchun uni hozircha yopib bo'lmaydi —
-10-bandga qarang.
+> ⚠️ **ESKIRGAN BO'LIM.** Yuqoridagi matn 2026.08 holatini tasvirlaydi, o'shanda
+> `users`/`products`/`orders` hamon ochiq edi va bu fayl ataylab "ochiq holatga"
+> tushirilgan edi. **2026.09 dan boshlab qoidalar haqiqatan qattiqlashtirildi** —
+> 11-bandga qarang. 4-banddagi jadval endi haqiqatga MOS.
 
 ---
 
@@ -134,9 +135,14 @@ Admin paneli butun daraxtni 7 joyda o'qigani uchun uni hozircha yopib bo'lmaydi 
 
 ## 7. Qisqacha xulosa
 
+> ⚠️ Quyidagi uch qator 2026.08 holatini tasvirlaydi. Eng yangi holat — 11-band.
+
 - ❌ Hozir: auth yo'q → DB faqat Console qoidalari bilan himoyalangan; ular ochiq bo'lsa — jiddiy PII va yaxlitlik xavfi.
 - ✅ Bu PR: auditni hujjatlashtiradi va xavfsiz `database.rules.json` (target) ni repoga qo'shadi.
 - ⏭️ Keyingi qadam: Worker custom-token auth'ni joriy qilib, shu qoidalarni faollashtirish.
+
+**2026.09 holati:** Worker custom-token auth ishlayapti va qoidalar
+qattiqlashtirildi — 11-bandga qarang.
 
 
 ---
@@ -195,21 +201,23 @@ GitHub → **Actions → "Deploy Firebase qoidalari" → Run workflow**. Tugagac
 
 ---
 
-## 10. Keyingi qadam: `users` o'qishini yopish (hali qilinmagan)
+## 10. ✅ `users` o'qishi YOPILDI (2026.09)
 
-Hozirgi holatda `users` tuguni **`.read: true`** — ya'ni baza manzilini bilgan
-har kim barcha mijozlarning ismi, telefoni, manzili va buyurtma tarixini
-o'qib olishi mumkin. Bu qolgan eng katta xavf.
+Bu bo'lim ilgari "hali qilinmagan" deb turgan edi. **Endi bajarildi** —
+11-bandga qarang.
 
-**Nega hozir yopilmadi:** admin paneli butun `users` daraxtini **7 joyda**
-to'liq o'qiydi (buyurtmalar, statistika, mijozlar, broadcast). Yopish uchun
-admin Firebase auth bilan tanilishi va DB'da `admins/{uid}: true` yozuvi
-turishi kerak. Bu yozuv bor-yo'qligini kod bo'yicha tekshirib bo'lmaydi —
-Console'dan ko'rish kerak.
+Admin panelining butun `users` daraxtini o'qishi saqlanib qoldi: `users`
+tugunining o'zida `.read` = **admin**, har bir `users/$uid` da esa `.read` =
+**o'sha mijozning o'zi**. Ya'ni admin hammasini ko'radi, mijoz faqat o'zini,
+begona odam esa **hech narsani**.
 
-### Tekshirish (30 soniya)
-Firebase Console → Realtime Database → ma'lumotlar daraxti → `admins` tugunini
-qidiring. Ichida sizning Telegram ID'ingiz `true` qiymati bilan turishi kerak:
+`admins/{uid}` yozuvi bor-yo'qligiga bog'liqlik ham olib tashlandi: qoidalarda
+admin tekshiruvi `admins/{uid} === true` **YOKI** qattiq yozilgan uid ro'yxati
+bo'yicha ishlaydi. Ikkalasi ham server tomonda — brauzerdan o'zgartirib
+bo'lmaydi (`auth.uid` = Worker `/auth` HMAC bilan tasdiqlagan Telegram ID).
+
+Shunga qaramay `admins` tugunini to'ldirish **tavsiya etiladi** — keyinchalik
+yangi admin qo'shganda qoidalar faylini tahrirlash kerak bo'lmaydi:
 
 ```
 admins
@@ -218,19 +226,61 @@ admins
   └── 5302078: true
 ```
 
-### Agar bor bo'lsa — quyidagini `users` ga qo'yish mumkin
-```json
-"users": {
-  ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
-  ".write": true,
-  "$uid": { ".read": true }
-}
-```
-Bunda admin butun daraxtni o'qiydi, mijoz esa faqat **o'z** yozuvini.
+---
 
-### Agar yo'q bo'lsa
-Avval o'sha uchta yozuvni qo'lda qo'shing, so'ng bitta sinov foydalanuvchi
-bilan admin panelini tekshirib, keyin qoidani almashtiring.
+## 11. 🔴 KRITIK TUZATISH (2026.09) — nima o'zgardi
 
-> ⚠️ Bu o'zgarish **auth ishlashiga bog'liq**, shuning uchun uni alohida,
-> tekshirib qilish kerak — shu sababli joriy PR'ga kiritilmadi.
+### Yopilgan teshiklar
+
+| Tugun | Ilgari | Endi |
+|---|---|---|
+| `users` | `.read: true` + `.write: true` — **har kim** butun mijozlar bazasini o'qiy/o'chira olardi | butun ro'yxat: admin; har bir yozuv: faqat egasi |
+| `products` | `.write: "newData.exists()"` — har kim narxlarni 0 qilardi | yozish: faqat admin (`stock` — tasdiqlangan mijoz faqat **kamaytiradi**) |
+| `orders` | `.write: "newData.exists()"` — soxta buyurtma / o'chirish | mijoz faqat yangi yaratadi; o'zgartirish: admin |
+| `reviews` | har kim istalgan nomdan sharh yozardi | faqat `auth.uid === $uid` |
+| `refcodes` | `.write: true` — referal kodni o'ziga o'girish | faqat bir marta yaratish, qiymat = o'z uid |
+| `stories` | har kim yozardi | faqat admin |
+| `notify_requests` | to'liq ochiq | o'qish: admin, yozish: o'z nomidan |
+| `ai_requests` | to'liq ochiq — begona odam AI budjetini yoqardi | faqat o'z suhbati |
+| `ai_bulk_requests`, `ai_admin_tasks` | to'liq ochiq — prompt injection + budjet | faqat admin |
+
+### Kod tomonidagi tuzatishlar
+
+- **XSS (saqlangan):** `escHtml()` qo'shildi — o'xshash tovarlar sarlavhasi,
+  tovar kodi, **mijoz ismi admin panelida** (eng xavflisi: mijoz ismiga skript
+  yozib admin sessiyasini egallash mumkin edi), storis `src`/`poster`
+  atributlari.
+- **`_jsAttr()` yordamchisi:** `onclick="fn('...')"` ichidagi matn uchun ikki
+  qatlamli escape (avval JS, keyin HTML). Ilgari `replace(/'/g,"\\'")` edi —
+  mijoz ismidagi `"` yoki `<` atributdan chiqib ketardi.
+- **`trackOrder()`:** ilgari bitta buyurtmani topish uchun **barcha** mijozlarning
+  ma'lumotini yuklardi (maxfiylik + tezlik muammosi). Endi faqat o'z
+  buyurtmalari ichidan izlaydi — DB'ga murojaat ham kamaydi.
+- **Auth jim qolmaydi:** Telegram ichida auth o'rnatilmasa endi ochiq
+  ogohlantirish chiqadi (ilgari jimgina sinardi).
+
+### ⚠️ Deploy qilishdan OLDIN majburiy tekshiruv
+
+Qoidalar **auth ishlashiga bog'liq**. Agar Worker `/auth` ishlamasa (yoki
+`BOT_TOKEN` secret'i sozlanmagan bo'lsa), ilova hech narsa o'qiy olmaydi.
+
+1. Mini App'ni Telegram'dan ochib, ogohlantirish toast'i chiqmasligini tekshiring.
+2. Admin panelini ochib ko'ring: mijozlar, statistika, buyurtmalar yuklanishi kerak.
+3. Bitta sinov buyurtma bering.
+4. Shundan keyin `Deploy Firebase qoidalari` workflow'ini ishga tushiring.
+
+### Qolgan (ataylab) bo'shliqlar
+
+- **Telegram'siz foydalanuvchilar** (`apk_*`, `tg_url_*`) auth ola olmaydi,
+  shuning uchun ularning yozuvlari ochiq qoldi — aks holda brauzer/APK
+  foydalanuvchilari umuman ishlamay qolardi. Ammo **butun ro'yxatni to'kib
+  olish endi imkonsiz** (kalitlarni sanab chiqib bo'lmaydi). To'liq yechim —
+  bu yo'lni Firebase anonymous auth'ga o'tkazish.
+- **Stok kamaytirish:** tasdiqlangan mijoz `stock` ni kamaytira oladi (buyurtma
+  paytidagi zaxira yo'li). Asosiy yo'l — Worker `/stock-commit`. Worker
+  o'chirilgan bo'lsa zaxira yo'l ishlaydi; narx/katalogga tegib bo'lmaydi.
+- **ImgBB kaliti** (`index.html`) hamon kodda — uni almashtirish va Worker
+  orqali proxy qilish alohida ish.
+- **Telegram bot tokeni** git tarixida qolgan (`index.html.backup` blob'i).
+  Faylni o'chirish yetarli EMAS — **@BotFather'da tokenni almashtirish shart**.
+  Bu token bir vaqtning o'zida `initData` ni tekshiradigan HMAC siri hamdir.
