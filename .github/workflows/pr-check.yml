@@ -54,6 +54,14 @@ jobs:
       - name: AI chat sinovi
         run: node .github/test-ai-chat.js
 
+      # 🔐 Xavfsiz ulanish (auth) QOTIB QOLMASLIGI. Haqiqiy nosozlik:
+      # `/auth` so'rovida vaqt chegarasi yo'q edi — Worker javob bermasa
+      # `_authReady` abadiy hal bo'lmay, `initUserData()` shu yerda kutib
+      # qolardi va MIJOZGA HECH NARSA YUKLANMASDI. Sinov ana shu holatni
+      # (javob bermaydigan `fetch`) taqlid qiladi.
+      - name: Auth qotib qolmasligi sinovi
+        run: node .github/test-auth-guard.js
+
       - name: Python sintaksisi (bot)
         run: |
           python3 -m py_compile bot/bot.py bot/ai_agent.py bot/fb_utils.py \
