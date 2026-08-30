@@ -350,22 +350,18 @@ t('_sfsReset yangi chiplarni ham tozalaydi', () => {
 /* ---------------------------------------------------------------- *
  * 8) KARTOCHKAGA BELGI QO'SHILISHI
  * ---------------------------------------------------------------- */
-console.log('\n=== 6) Kartochka o\'ramasi ===');
-t('origin belgisi nom OSTIGA qo\'shiladi', () => {
+console.log('\n=== 6) Kartochka TEGILMAGANLIGI ===');
+t('kartochka HTML\'i O\'ZGARMAYDI (origin bo\'lsa ham)', () => {
   const h = W.cardHTML({ id: 1, name: 'Porshen', origin: 'Original' });
-  ok(h.indexOf('card-origin') > 0, 'belgi qo\'shilmadi');
-  ok(h.indexOf('</h4><div class="card-origin') > 0, 'belgi noto\'g\'ri joyda: ' + h);
-  ok(h.indexOf('o-original') > 0, 'sinf noto\'g\'ri');
+  ok(h.indexOf('card-origin') < 0,
+     'kartochkaga belgi qo\'shilgan — ko\'rinish o\'zgaradi: ' + h);
+  ok(h.indexOf('<h4>Porshen</h4>') > 0, 'kartochka buzilgan');
 });
-t('origin yo\'q bo\'lsa kartochka O\'ZGARMAYDI', () => {
-  const plain = W.cardHTML({ id: 2, name: 'Kalotka' });
-  ok(plain.indexOf('card-origin') < 0, 'keraksiz belgi qo\'shildi');
-  ok(plain.indexOf('<h4>Kalotka</h4>') > 0);
-});
-t('asl cardHTML chaqirilishda davom etadi', () => {
-  CALLS.length = 0;
-  W.cardHTML({ id: 3, name: 'X', origin: 'Rossiya' });
-  ok(CALLS.indexOf('cardHTML') >= 0, 'asl funksiya chaqirilmadi');
+t('origin belgisi TOVAR OYNASI uchun tayyor', () => {
+  // Kartochkada emas, `#pm-origin` da ishlatiladi.
+  const b = W._originBadgeHTML('Xitoy (Zavodskoy)');
+  ok(b.indexOf('card-origin') > 0 && b.indexOf('o-xitoy') > 0, b);
+  ok(W._originBadgeHTML('') === '', 'bo\'sh origin -> bo\'sh belgi');
 });
 
 /* ---------------------------------------------------------------- *
@@ -423,17 +419,105 @@ t('mashina belgilanmagan -> bo\'sh satr', () => {
 });
 
 /* ---------------------------------------------------------------- *
- * 11) CSS QATLAMI HAQIQATDA MAVJUDMI (rasm tuzatishi)
+ * 11) CSS QATLAMI — TEJAMKORLIK QO'RIQCHILARI
+ *
+ * Bu bo'lim REGRESSIYAGA qarshi. Bir marta shu qatlamda kartochka
+ * rasmi `object-fit: contain` ga o'zgartirilgan va `.img-wrap` ga
+ * `radial-gradient` fon qo'yilgan edi. Natijada:
+ *   • fayldagi «karta parallaksi» (har skroll kadrida rasmga
+ *     `scale(1.08) translate3d(...)`) letterbox chegaralarini
+ *     ko'rsatib, rasm kartadan «uzilib» suzardi;
+ *   • gradient fon + transform + mask uch qatlamni har kadrda qayta
+ *     aralashtirishga majbur qilib, TELEFONNI QIZDIRARDI (iPhone 17
+ *     Pro Max'da ham).
+ * Shu sababli kartochka ko'rinishiga tegish TAQIQLANADI.
  * ---------------------------------------------------------------- */
-console.log('\n=== 9) CSS tuzatishi mavjudligi ===');
-t('kartochka rasmi endi qirqilmaydi (contain)', () => {
-  const css = HTML.slice(HTML.indexOf('<style id="customer-boost-2026">'));
-  const block = css.slice(0, css.indexOf('</style>'));
-  ok(/\.luxury-card \.img-wrap img\s*\{[^}]*object-fit:\s*contain\s*!important/.test(block),
-     '`object-fit: contain !important` topilmadi');
-  ok(block.indexOf('#pmz') >= 0, 'zoom qatlami CSS topilmadi');
-  ok(block.indexOf('.cfs-bar') >= 0, 'katalog filtr paneli CSS topilmadi');
-  ok(block.indexOf('#mycar-shortcut') >= 0, 'mening mashinam yorlig\'i CSS topilmadi');
+console.log('\n=== 9) CSS tejamkorlik qo\'riqchilari ===');
+
+const CSS_BLOCK = (() => {
+  const at = HTML.indexOf('<style id="customer-boost-2026">');
+  return at < 0 ? '' : HTML.slice(at, HTML.indexOf('</style>', at));
+})();
+
+t('qatlam CSS bloki mavjud', () => {
+  ok(CSS_BLOCK.length > 500, 'CSS bloki topilmadi');
+  ok(CSS_BLOCK.indexOf('#pmz') >= 0, 'zoom qatlami CSS topilmadi');
+  ok(CSS_BLOCK.indexOf('.cfs-bar') >= 0, 'katalog filtr paneli CSS topilmadi');
+  ok(CSS_BLOCK.indexOf('#mycar-shortcut') >= 0, 'mening mashinam yorlig\'i CSS topilmadi');
+});
+
+/* CSS ni HAQIQIY qoidalarga ajratamiz. Izohlar avval olib tashlanadi —
+ * aks holda izoh ichidagi «object-fit: contain» so'zi soxta ogohlantirish
+ * berardi (birinchi urinishda aynan shunday bo'lgan). */
+const CSS_RULES = (() => {
+  const clean = CSS_BLOCK.replace(/\/\*[\s\S]*?\*\//g, '');
+  const out = [];
+  const re = /([^{}]+)\{([^{}]*)\}/g;
+  let m;
+  while ((m = re.exec(clean))) {
+    out.push({ sel: m[1].trim().replace(/\s+/g, ' '), body: m[2] });
+  }
+  return out;
+})();
+
+t('CSS qoidalari o\'qildi', () => {
+  ok(CSS_RULES.length > 15, 'qoidalar ajratilmadi: ' + CSS_RULES.length);
+});
+
+t('REGRESSIYA: qatlam TOVAR KARTOCHKASIGA umuman tegmaydi', () => {
+  const forbidden = ['.luxury-card', '.similar-card', '.search-item'];
+  const hits = CSS_RULES.filter((r) => forbidden.some((f) => r.sel.indexOf(f) >= 0));
+  ok(hits.length === 0,
+     'Kartochkaga tegilgan: ' + hits.map((h) => h.sel).join(' | ') +
+     '\n       Sabab: fayldagi «karta parallaksi» har skroll kadrida rasmga ' +
+     'scale(1.08) qo\'llaydi va `cover` + mask\'ga tayanadi. Tegilsa rasm ' +
+     'ajralib turadi VA telefon qiziydi.');
+});
+
+t('REGRESSIYA: hech bir qoidada `object-fit` yo\'q', () => {
+  const hits = CSS_RULES.filter((r) => /object-fit/.test(r.body));
+  ok(hits.length === 0, 'object-fit qaytib kelgan: ' + hits.map((h) => h.sel).join(' | '));
+});
+
+t('REGRESSIYA: `will-change` faqat `#pmz.open` ostida', () => {
+  const hits = CSS_RULES.filter((r) => /will-change/.test(r.body));
+  ok(hits.length > 0, 'will-change umuman yo\'q — zoom silliq ishlamaydi');
+  hits.forEach((h) => {
+    ok(h.sel.indexOf('#pmz.open') >= 0,
+       'doimiy will-change: «' + h.sel + '» — brauzer GPU qatlamini ' +
+       'hech qachon bo\'shatmaydi (batareya va xotira isrofi)');
+  });
+});
+
+t('REGRESSIYA: doimiy ko\'rinadigan elementda `backdrop-filter` yo\'q', () => {
+  // `.pmz-tip` tovar oynasida DOIM turadi — blur qatlami ham doim mavjud
+  // bo'lardi. Bu faylda blur ataylab kamaytirilgan (25px -> 10px).
+  const hits = CSS_RULES.filter((r) => /backdrop-filter/.test(r.body));
+  ok(hits.length === 0,
+     'backdrop-filter topildi: ' + hits.map((h) => h.sel).join(' | ') +
+     ' — bu faylda blur ataylab kamaytirilgan, qimmat qatlam qo\'shmang');
+});
+
+t('lite rejim (zaif telefon) hisobga olingan', () => {
+  ok(CSS_BLOCK.indexOf('html.lite') >= 0,
+     'html.lite uchun animatsiya o\'chirilmagan');
+});
+
+t('REGRESSIYA: `cardHTML` o\'ralmaydi', () => {
+  // Kartochkaga qo'shimcha element balandlikni o'zgartiradi
+  // (`h4 { min-height: 2.6em }` narx tugmalarini bir chizqda ushlaydi)
+  // va uzun ro'yxatda har kartaga ortiqcha DOM tugun qo'shadi.
+  ok(LAYER_SRC.indexOf('window.cardHTML = function') < 0,
+     '`cardHTML` qayta o\'ralgan — kartochka ko\'rinishi o\'zgaradi');
+});
+
+t('katalog paneli standart holatda kartalarni QAYTA CHIZMAYDI', () => {
+  // Bu ham isish manbai edi: har renderda barcha <img> qayta dekod
+  // qilinardi va parallaks kuzatuvi qaytadan qurilardi.
+  ok(LAYER_SRC.indexOf('catIsDefault()') >= 0 &&
+     LAYER_SRC.indexOf('insertAdjacentHTML(\'afterbegin\'') >= 0,
+     'standart holatda faqat panel qo\'yilishi kerak, innerHTML qayta ' +
+     'yozilmasligi kerak');
 });
 
 /* ---------------------------------------------------------------- */

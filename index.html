@@ -25524,34 +25524,33 @@ html body .flying-img.mo-fly {
           va qidiruvda filtr.
      ===================================================================== -->
 <style id="customer-boost-2026">
-  /* ——— 1) KARTOCHKA RASMI: qirqilish tuzatildi ———
-     `cover` rasmni kesadi, radial `mask` chetlarini butunlay yo'qotadi.
-     Endi `contain` — QISM TO'LIQ ko'rinadi. Fonga singish effekti
-     saqlanadi, lekin endi u RASMNI emas, ORQA FONNI bo'yaydi va mask
-     92% dan boshlanadi (faqat o'ta chetlari yumshaydi).
-     ⚠️ Bu KO'RINISHGA ta'sir qiladigan yagona o'zgarish. Yoqmasa —
-        shu blokni o'chirish kifoya, boshqa hech narsa buzilmaydi. */
-  .luxury-card .img-wrap {
-    background: radial-gradient(circle at 50% 42%,
-                rgba(255,255,255,0.055) 0%,
-                rgba(255,255,255,0.022) 58%,
-                transparent 100%) !important;
-  }
-  .luxury-card .img-wrap img {
-    object-fit: contain !important;
-    padding: 7% !important;
-    -webkit-mask-image: radial-gradient(circle at center, #000 92%, transparent 100%) !important;
-    mask-image: radial-gradient(circle at center, #000 92%, transparent 100%) !important;
-  }
-  html[data-theme="light"] .luxury-card .img-wrap {
-    background: radial-gradient(circle at 50% 42%,
-                rgba(120,95,35,0.07) 0%, transparent 100%) !important;
-  }
-  /* O'xshash tovarlar va qidiruv natijasida ham qirqilmasin */
-  .similar-card .img-wrap img { object-fit: contain !important; padding: 8% !important; }
-  .search-item img { object-fit: contain !important; }
+  /* ——— 1) KARTOCHKA RASMI — ATAYLAB TEGILMAYDI ———
+     ⚠️ BU YERGA HECH NARSA QO'SHILMASIN. Sabab tarixi:
 
-  /* ——— 2) «ISHLAB CHIQARILGAN JOY» belgisi ——— */
+     Bir marta bu yerda `object-fit: contain` + `padding` + kuchsizroq
+     mask va `.img-wrap` ga `radial-gradient` fon qo'yilgan edi (maqsad:
+     ehtiyot qism chetlari qirqilmasin). Natija IKKI JIHATDAN YOMON edi:
+
+       1) RASM AJRALIB TURARDI. Fayldagi «karta parallaksi» har skroll
+          kadrida rasmga `scale(1.08) translate3d(...)` qo'llaydi va u
+          AYNAN `object-fit: cover` + `overflow:hidden` + radial-mask'ga
+          tayanadi — shular rasm qirralarini yashiradi. `contain` bilan
+          letterbox chegaralari ko'rinib qoladi va rasm kartadan
+          «uzilib» suzadi.
+
+       2) TELEFON QIZARDI. Gradient fon + har kadrda transform bo'ladigan
+          rasm + radial mask = kompozitor har kadrda uch qatlamni QAYTA
+          aralashtiradi. Ilgari fon `transparent` edi, ya'ni
+          aralashtirish uchun hech narsa yo'q edi. iPhone 17 Pro Max'da
+          ham sezilardi.
+
+     Ya'ni kartochka ko'rinishi bu faylda tejamkorlik bilan sozlangan
+     va u parallaks tizimi bilan BOG'LIQ. O'zgartirish kerak bo'lsa,
+     avval `_scanParallax` / `apply()` mantiqini o'qib chiqing. */
+
+  /* ——— 2) «ISHLAB CHIQARILGAN JOY» belgisi ———
+     Faqat TOVAR OYNASIDA (#pm-origin) ishlatiladi. Kartochkaga
+     ATAYLAB qo'shilmaydi — kartochka ko'rinishi o'zgarmasligi kerak. */
   .card-origin {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 9.5px; font-weight: 800; letter-spacing: .2px;
@@ -25654,14 +25653,19 @@ html body .flying-img.mo-fly {
   #pmz.open { display: block; }
   #pmz-img {
     position: absolute; top: 50%; left: 50%; max-width: 100%; max-height: 100%;
-    transform-origin: 0 0; will-change: transform;
+    transform-origin: 0 0;
     -webkit-user-drag: none; pointer-events: none;
   }
+  /* `will-change` FAQAT oyna ochiq turganda. Doimiy qo'yilsa brauzer
+     GPU qatlamini hech qachon bo'shatmaydi (batareya va xotira isrofi). */
+  #pmz.open #pmz-img { will-change: transform; }
   #pmz-close {
     position: absolute; top: 14px; right: 14px; z-index: 3;
     width: 42px; height: 42px; border-radius: 50%; border: none;
-    background: rgba(255,255,255,0.12); color: #fff; font-size: 24px;
-    line-height: 1; cursor: pointer; backdrop-filter: blur(6px);
+    background: rgba(255,255,255,0.14); color: #fff; font-size: 24px;
+    line-height: 1; cursor: pointer;
+    /* backdrop-filter ATAYLAB yo'q: fon allaqachon to'q qora, blur
+       ko'rinmaydi, lekin har kadrda qimmat qatlam yaratardi. */
   }
   #pmz-hint {
     position: absolute; bottom: 26px; left: 0; width: 100%; z-index: 3;
@@ -25675,18 +25679,29 @@ html body .flying-img.mo-fly {
   }
   /* Tovar oynasidagi rasm bosilishi mumkinligini bildiruvchi ishora */
   .pm-slider img { cursor: zoom-in; }
+  /* ⚠️ `backdrop-filter` ATAYLAB YO'Q. Bu ishora tovar oynasida DOIM
+     ko'rinib turadi, ya'ni blur qatlami ham doim mavjud bo'lardi. Bu
+     faylda blur ataylab kamaytirilgan (25px -> 10px) — shu yo'ldan
+     chetga chiqmaymiz. To'q fon bir xil natija beradi, tekin. */
   .pmz-tip {
     position: absolute; bottom: 14px; right: 14px; z-index: 9;
     display: flex; align-items: center; gap: 5px;
-    background: rgba(0,0,0,0.42); color: #fff; font-size: 11px; font-weight: 700;
-    padding: 5px 10px; border-radius: 999px; backdrop-filter: blur(4px);
+    background: rgba(0,0,0,0.55); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 5px 10px; border-radius: 999px;
     pointer-events: none;
   }
   .pmz-tip svg { width: 13px; height: 13px; fill: currentColor; }
 
+  /* Zaif telefon (`html.lite` / `__perfLite`) va harakatni kamaytirish
+     rejimida animatsiyalarni butunlay o'chiramiz — fayldagi mavjud
+     tejamkorlik siyosatiga moslashamiz. */
   @media (prefers-reduced-motion: reduce) {
     .cfs-chip, #mycar-shortcut { transition: none !important; }
   }
+  html.lite .cfs-chip,
+  html.lite #mycar-shortcut { transition: none !important; }
+  html.lite .cfs-chip:active,
+  html.lite #mycar-shortcut:active { transform: none !important; }
 </style>
 <script id="customer-boost-2026-js">
 /* =====================================================================
@@ -25893,23 +25908,19 @@ html body .flying-img.mo-fly {
   };
 
   /* ------------------------------------------------------------------ *
-   * 4) KARTOCHKAGA «ORIGIN» BELGISINI QO'SHISH
-   *    `cardHTML` ni o'ramiz — asl funksiyaga TEGMAYMIZ.
+   * 4) KARTOCHKA — ATAYLAB O'RALMAYDI
+   *
+   * ⚠️ `cardHTML` ni o'rab, kartochkaga «origin» belgisi qo'shilgan edi.
+   *    Olib tashlandi: kartochka ko'rinishi shu faylda tejamkorlik bilan
+   *    sozlangan va unga har qanday qo'shimcha element:
+   *      • balandlikni o'zgartiradi (narx tugmalari bir chizqda turmaydi —
+   *        `h4 { min-height: 2.6em }` aynan shu uchun qo'yilgan),
+   *      • har kartada qo'shimcha DOM tugun = uzun ro'yxatda ortiqcha yuk.
+   *
+   *    «Ishlab chiqarilgan joy» endi FAQAT tovar oynasida (`#pm-origin`)
+   *    va FILTRDA ko'rinadi — mijoz uchun foyda saqlanadi, kartochka
+   *    esa tegilmaydi.
    * ------------------------------------------------------------------ */
-  if (typeof window.cardHTML === 'function') {
-    var _origCardHTML = window.cardHTML;
-    window.cardHTML = function (p) {
-      var html = _origCardHTML.apply(this, arguments);
-      try {
-        var badge = window._originBadgeHTML(p && p.origin);
-        if (!badge) return html;
-        // Nom ostiga qo'yamiz: `</h4>` kartochkada bir marta uchraydi.
-        var at = html.indexOf('</h4>');
-        if (at < 0) return html;
-        return html.slice(0, at + 5) + badge + html.slice(at + 5);
-      } catch (e) { return html; }
-    };
-  }
 
   /* ------------------------------------------------------------------ *
    * 5) TOVAR OYNASI: origin chipi + rasmga zoom ishorasi
@@ -26054,6 +26065,17 @@ html body .flying-img.mo-fly {
     return null;
   }
 
+  /** Grid ichidagi mavjud panelni olib tashlaydi (dublikat bo'lmasin). */
+  function removeBar(grid) {
+    for (var i = 0; i < grid.children.length; i++) {
+      if (grid.children[i].className &&
+          String(grid.children[i].className).indexOf('cfs-bar') >= 0) {
+        grid.removeChild(grid.children[i]);
+        return;
+      }
+    }
+  }
+
   function decorateGrid(grid) {
     if (!grid || !grid.id) return;
     var catName = grid.id.replace(/-parts$/, '');
@@ -26063,6 +26085,23 @@ html body .flying-img.mo-fly {
     if (!base.length) return;
     if (typeof window.cardHTML !== 'function') return;
 
+    // ⚡ TEJAMKOR YO'L — filtr TEGILMAGAN bo'lsa kartalarni QAYTA CHIZMAYMIZ.
+    //
+    //    ⚠️ NEGA MUHIM: asl `renderProducts()` kartalarni allaqachon
+    //    chizib qo'yadi. Ilgari bu funksiya ustidan `innerHTML` ni QAYTA
+    //    yozardi, ya'ni har renderda:
+    //      • barcha <img> lar yangidan yaratilib QAYTA DEKOD qilinardi,
+    //      • parallaks kuzatuvi (`_scanParallax`) qaytadan qurilardi,
+    //      • reveal animatsiyasi qaytadan ishga tushardi.
+    //    `renderProducts` 14 joydan chaqiriladi — natijada telefon
+    //    bekorga qizardi. Endi standart holatda faqat PANEL qo'yiladi.
+    if (catIsDefault()) {
+      removeBar(grid);                                   // hisoblagichni yangilaymiz
+      grid.insertAdjacentHTML('afterbegin', toolbarHTML(base.length, base.length));
+      return;
+    }
+
+    // Filtr/saralash AKTIV — bu holda qayta chizishga majburmiz.
     var shown = window._applyFilterSort(base, CAT);
     var body = shown.length
       ? shown.map(function (x) { return window.cardHTML(x); }).join('')
@@ -26217,10 +26256,17 @@ html body .flying-img.mo-fly {
     return el;
   }
 
-  function syncMyCarShortcut() {
+  // Oxirgi qo'llangan qiymat — bekorga DOM ga yozmaslik uchun.
+  // `renderProducts` 14 joydan chaqiriladi, mashina esa kamdan-kam
+  // o'zgaradi; har safar `textContent` yozish keraksiz ish edi.
+  var _lastCarApplied = null;
+
+  function syncMyCarShortcut(force) {
+    var car = window._myCarValue();
+    if (!force && car === _lastCarApplied) return;   // o'zgarmagan — ish yo'q
     var el = ensureMyCarShortcut();
     if (!el) return;
-    var car = window._myCarValue();
+    _lastCarApplied = car;
     var sid = car ? window._myCarSectionId(car) : '';
     if (!car || !sid) { el.classList.remove('show'); return; }
     var nm = document.getElementById('mcs-name');
@@ -26237,7 +26283,8 @@ html body .flying-img.mo-fly {
     var _origSaveMyCar = window.saveMyCar;
     window.saveMyCar = function () {
       var r = _origSaveMyCar.apply(this, arguments);
-      try { syncMyCarShortcut(); } catch (e) {}
+      // `force` — mashina aynan hozir o'zgardi, tekshiruvni chetlab o'tamiz.
+      try { syncMyCarShortcut(true); } catch (e) {}
       return r;
     };
   }
