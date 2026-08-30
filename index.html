@@ -4966,6 +4966,27 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         #adminModal .ap2-sub { display: block; margin-top: 3px; font-size: 12px; font-weight: 600; letter-spacing: .6px; color: var(--luxury-gold); opacity: .92; }
 
         /* ——— Hero (asosiy 2 amal) ——— */
+        /* 🔐 Xavfsiz ulanish holati (admin panel tepasida) */
+        #adminModal .ap2-authbox {
+            display: flex; align-items: center; gap: 9px;
+            margin: 0 0 18px; padding: 11px 13px;
+            border-radius: 13px; cursor: pointer;
+            border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.04);
+            -webkit-tap-highlight-color: transparent;
+        }
+        #adminModal .ap2-authbox:active { transform: scale(0.99); }
+        #adminModal .ap2-auth-dot {
+            width: 9px; height: 9px; border-radius: 50%;
+            background: var(--text-muted); flex-shrink: 0;
+        }
+        #adminModal .ap2-auth-tx { font-size: 12px; font-weight: 700; color: var(--text-muted); line-height: 1.45; }
+        #adminModal .ap2-authbox.ok { background: rgba(48,209,88,0.09); border-color: rgba(48,209,88,0.32); }
+        #adminModal .ap2-authbox.ok .ap2-auth-dot { background: #30d158; box-shadow: 0 0 8px rgba(48,209,88,0.6); }
+        #adminModal .ap2-authbox.ok .ap2-auth-tx { color: #30d158; }
+        #adminModal .ap2-authbox.bad { background: rgba(255,69,58,0.09); border-color: rgba(255,69,58,0.34); }
+        #adminModal .ap2-authbox.bad .ap2-auth-dot { background: #ff453a; box-shadow: 0 0 8px rgba(255,69,58,0.6); }
+        #adminModal .ap2-authbox.bad .ap2-auth-tx { color: #ff6a60; }
         #adminModal .ap2-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
         #adminModal .ap2-hero-card {
             position: relative; overflow: hidden; cursor: pointer;
@@ -6584,6 +6605,14 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             </span>
             <span class="ap2-hero-tx"><b>AI ommaviy</b><i>Ro'yxatni tashlang</i></span>
         </div>
+    </div>
+
+    <!-- 🔐 XAVFSIZ ULANISH HOLATI — baza qoidalarini joriy qilishdan oldin
+         SHU YERGA qaralishi kerak. Ilgari auth ishlayotganini bilishning
+         yo'li yo'q edi: qoidalarni qo'yib, ilova sinsagina bilinardi. -->
+    <div id="auth-status" class="ap2-authbox" onclick="window._authStatusRefresh && window._authStatusRefresh()" role="button" tabindex="0">
+        <span class="ap2-auth-dot" id="auth-dot"></span>
+        <span class="ap2-auth-tx" id="auth-text">Tekshirilmoqda...</span>
     </div>
 
     <div class="ap2-sec-label">Boshqaruv bo'limlari</div>
@@ -27330,6 +27359,64 @@ html body .flying-img.mo-fly {
     if (typeof tg !== 'undefined' && tg.showConfirm) tg.showConfirm(q, function (ok) { if (ok) doIt(); });
     else if (confirm(q)) doIt();
   };
+
+  // ===================================================================
+  // 3) 🔐 XAVFSIZ ULANISH (AUTH) HOLATI — admin panelda ko'rinadi
+  // ---------------------------------------------------------------------
+  // NEGA KERAK: baza qoidalari `auth` ga tayanadi. Ilgari auth haqiqatan
+  // ishlayotganini bilishning yo'li yo'q edi — qoidalarni joriy qilib,
+  // ilova sinsagina bilinardi (mijozlar buyurtma bera olmay qolardi).
+  // Endi admin panelni ochish kifoya: yashil bo'lsa — joriy qilish
+  // xavfsiz, qizil bo'lsa — TO'XTAB, sababni o'qish kerak.
+  // ===================================================================
+  window._authStatusRefresh = function () {
+    var box = document.getElementById('auth-status');
+    var tx = document.getElementById('auth-text');
+    if (!box || !tx) return;
+
+    var uid = null;
+    try {
+      var u = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+      uid = u && u.uid ? String(u.uid) : null;
+    } catch (e) {}
+
+    box.classList.remove('ok', 'bad');
+    if (uid) {
+      box.classList.add('ok');
+      tx.textContent = 'Xavfsiz ulanish ishlayapti (ID: ' + uid
+        + '). Baza qoidalarini joriy qilish mumkin.';
+    } else {
+      box.classList.add('bad');
+      var sabab;
+      if (!(window.tg && window.tg.initData)) {
+        sabab = "Telegram tashqarisida ochilgan (initData yo'q) — Mini App'ni "
+          + 'Telegram ichidan, bot orqali oching.';
+      } else {
+        sabab = 'Worker /auth javob bermadi — Cloudflare Worker deploy '
+          + "qilinmagan yoki BOT_TOKEN sozlanmagan bo'lishi mumkin.";
+      }
+      tx.textContent = "Xavfsiz ulanish YO'Q. " + sabab
+        + ' Baza qoidalarini hozir joriy QILMANG.';
+    }
+  };
+
+  // Admin panel ochilganda holatni yangilaymiz. Auth hali yo'lda bo'lishi
+  // mumkin — shuning uchun `_authReady` hal bo'lgach yana bir marta.
+  if (typeof window.openModal === 'function') {
+    var _omOrig = window.openModal;
+    window.openModal = function (id) {
+      var r = _omOrig.apply(this, arguments);
+      if (id === 'adminModal') {
+        try { window._authStatusRefresh(); } catch (e) {}
+        try {
+          Promise.resolve(window._authReady).then(function () {
+            try { window._authStatusRefresh(); } catch (e) {}
+          }).catch(function () {});
+        } catch (e) {}
+      }
+      return r;
+    };
+  }
 
   // Chip'lar boshlang'ich holati (sarlavha matni to'g'ri turishi uchun)
   try { hfSyncChips(); } catch (e) {}

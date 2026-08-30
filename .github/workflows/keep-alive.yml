@@ -15,8 +15,14 @@ name: Keep Alive (botlarni uyg'oq tutish)
 #  o'rtasida tugab, IKKALA BOT HAM o'chib qolardi. Aynan shu bo'ldi.
 #
 #  YECHIM: faqat ISH VAQTIDA uyg'oq tutamiz.
-#    04:00–13:50 UTC = 09:00–18:50 Toshkent (do'kon ish vaqti)
-#    Hisob: 2 xizmat x ~10 soat x 31 kun = ~620 soat < 750 ✅
+#    04:00–16:50 UTC = 09:00–21:50 Toshkent (do'kon 09:00–21:00 ishlaydi)
+#    + 03:50 UTC (08:50 Toshkent) da bir marta «isitish» ping'i.
+#    Hisob: 1 xizmat x ~13 soat x 31 kun = ~403 soat < 750 ✅
+#
+#    ⚠️ 2026-09 da oyna 10 -> 13 soatga uzaytirildi: do'kon 21:00 gacha
+#       ishlagani holda bot 18:00 dan keyin uxlab qolardi. Agar bu Render
+#       hisobida boshqa xizmat ham bo'lsa, 750 soat BO'LINADI — o'shanda
+#       oynani qisqartiring (pastdagi kvota hisobiga qarang).
 #
 #  Kechasi bot uxlaydi — mijoz yozganda 30–60 soniyada o'zi uyg'onadi.
 #  24/7 uyg'oq bo'lishi SHART bo'lsa, yagona yo'l — pullik tarif
@@ -29,9 +35,26 @@ name: Keep Alive (botlarni uyg'oq tutish)
 # =====================================================================
 on:
   schedule:
-    # Faqat ish vaqti: 04:00–13:50 UTC (= 09:00–18:50 Toshkent), har 10 daqiqada.
-    # DIQQAT: bu qatorni 24 soatga qaytarsangiz kvota yana tugaydi.
-    - cron: '*/10 4-13 * * *'
+    # ⚠️ ILGARI `*/10 4-13` edi — ya'ni 09:00–18:50 Toshkent. Do'kon esa
+    #    21:00 gacha ishlaydi (index.html: «Har kuni 09:00 – 21:00»).
+    #    Natijada 18:00–21:00 orasida — kunning eng savdoli payti — bot
+    #    keep-alive OLMASDI va uxlab qolardi. Kechqurun birinchi yozgan
+    #    mijoz 30–60 soniya javob kutardi yoki umuman javob olmasdi.
+    #
+    # 🧮 KVOTA HISOBI (buni o'zgartirishdan oldin O'QING):
+    #    Render bepul tarifda BUTUN workspace uchun oyiga 750 instance-hour.
+    #    Xizmat ping kelib turganda UYG'OQ hisoblanadi, ya'ni sarf =
+    #    oyna uzunligi x 31 kun.
+    #      eski (10 soat):  10 x 31 = 310 soat
+    #      yangi (13 soat): 13 x 31 = 403 soat   <- hozir shu
+    #      agar 24 soat:    24 x 31 = 744 soat   <- bitta xizmatga ham yetmaydi
+    #
+    #    Shu sababli oyna do'kon ish vaqtiga AYNAN moslandi, ortiqcha emas.
+    #    Agar bu Render hisobida BOSHQA xizmat ham bo'lsa (masalan Zimmer),
+    #    ular 750 ni BO'LISHADI — o'shanda oynani yana qisqartirish kerak,
+    #    aks holda kvota oy o'rtasida tugab IKKALA bot ham o'chadi.
+    - cron: '50 3 * * *'          # 08:50 Toshkent — ochilishdan oldin «isitish»
+    - cron: '*/10 4-16 * * *'     # 09:00–21:50 Toshkent, har 10 daqiqada
   workflow_dispatch:
     inputs:
       url:

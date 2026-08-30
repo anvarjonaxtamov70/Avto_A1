@@ -1,0 +1,158 @@
+name: Bazaning zaxira nusxasi
+
+# =============================================================================
+#  NEGA BU KERAK
+#  ---------------------------------------------------------------------------
+#  Ilgari zaxira nusxa MEXANIZMI UMUMAN YO'Q edi. Bu baza qoidalari bilan
+#  birga eng xavfli holatni yaratardi: bazani har kim o'chirib tashlashi
+#  mumkin edi va tiklash uchun hech narsa yo'q edi. Ya'ni bitta buyruq
+#  butun mijozlar bazasini BUTUNLAY yo'q qilardi.
+#
+#  Endi har kecha to'liq nusxa olinadi va 90 kun saqlanadi.
+#
+#  ⚠️ NEGA SHIFRLANADI
+#  Bu repo OCHIQ (public). Ochiq repoda GitHub Actions artifact'ini
+#  internetdagi HAR KIM yuklab olishi mumkin. Nusxada esa mijozlarning
+#  ismi, telefoni va manzili bor. Shuning uchun nusxa artifact'ga
+#  qo'yilishdan OLDIN AES-256 bilan shifrlanadi — yuklab olgan odam
+#  faqat o'qilmaydigan shifrmatnni oladi.
+#
+#  Shu sababli nusxa repoga HAM commit qilinmaydi (git tarixida abadiy
+#  qolib ketardi).
+#
+#  ---------------------------------------------------------------------------
+#  BIR MARTALIK SOZLASH (30 soniya)
+#    GitHub repo -> Settings -> Secrets and variables -> Actions ->
+#    New repository secret:
+#        Nomi:   BACKUP_PASSPHRASE
+#        Qiymat: uzun, tasodifiy parol (kamida 20 belgi)
+#    Bu parolni ALOHIDA, xavfsiz joyda saqlang — u yo'qolsa nusxalarni
+#    ochib bo'lmaydi.
+#
+#  NUSXANI TIKLASH
+#    1) Actions -> "Bazaning zaxira nusxasi" -> kerakli yurish ->
+#       Artifacts -> yuklab oling.
+#    2) Ochish:
+#         gpg --batch --passphrase 'PAROL' -d avtoa1-backup.json.gz.gpg \
+#           | gunzip > db.json
+#    3) Tiklash (EHTIYOT: mavjud ma'lumot ustiga yozadi):
+#         firebase database:set / db.json --project avtoa1shop
+# =============================================================================
+
+on:
+  schedule:
+    # 20:00 UTC = 01:00 Toshkent — savdo tugagandan keyin, eng jim payt.
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Firebase -> shifrlangan artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sozlamalarni tekshirish
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          fail=0
+          if [ -z "$SA_JSON" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT secret sozlanmagan (deploy-rules.yml izohiga qarang)."
+            fail=1
+          fi
+          if [ -z "$PASSPHRASE" ]; then
+            echo "::error::BACKUP_PASSPHRASE secret sozlanmagan. Repo OCHIQ bo'lgani uchun nusxa shifrlanmasa mijoz ma'lumotlari ommaga tushadi. Settings -> Secrets and variables -> Actions -> New repository secret -> BACKUP_PASSPHRASE."
+            fail=1
+          fi
+          [ "$fail" = "0" ] || exit 1
+          echo "✅ Secretlar joyida"
+
+      - name: Node.js o'rnatish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: firebase-tools o'rnatish
+        run: npm install -g firebase-tools
+
+      - name: Service account faylini yozish
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: printf '%s' "$SA_JSON" > "$RUNNER_TEMP/sa.json"
+
+      - name: Bazani yuklab olish
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          # ⚠️ Ma'lumot LOGGA chiqarilmaydi — faqat faylga yoziladi.
+          firebase database:get / \
+            --project avtoa1shop \
+            -o "$RUNNER_TEMP/db.json"
+
+      - name: Nusxa HAQIQATAN to'g'ri ekanini tekshirish
+        run: |
+          f="$RUNNER_TEMP/db.json"
+          # 🛡 ENG MUHIM QADAM: bo'sh yoki buzuq nusxa — nusxa YO'QLIGIDAN
+          #    YOMONROQ, chunki u yolg'on ishonch beradi. Shuning uchun
+          #    hajm va JSON tuzilishi tekshiriladi.
+          if [ ! -s "$f" ]; then
+            echo "::error::Nusxa fayli bo'sh — eksport ishlamadi."
+            exit 1
+          fi
+          size=$(stat -c%s "$f")
+          echo "Nusxa hajmi: $size bayt"
+          if [ "$size" -lt 1024 ]; then
+            echo "::error::Nusxa juda kichik ($size bayt) — baza bo'sh yoki eksport buzilgan. Tekshirmasdan saqlamaymiz."
+            exit 1
+          fi
+          # JSON to'g'riligi + asosiy tugunlar bor-yo'qligi (ma'lumot chiqarilmaydi)
+          node -e '
+            const fs = require("fs");
+            const d = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/db.json", "utf8"));
+            if (!d || typeof d !== "object") { console.error("::error::JSON obyekt emas"); process.exit(1); }
+            const keys = Object.keys(d);
+            console.log("Tugunlar: " + keys.join(", "));
+            const n = (k) => (d[k] && typeof d[k] === "object") ? Object.keys(d[k]).length : 0;
+            console.log("  users: " + n("users") + " ta");
+            console.log("  products: " + n("products") + " ta");
+            console.log("  orders: " + n("orders") + " ta");
+            if (!keys.length) { console.error("::error::Baza bo\u2018sh ko\u2018rinadi"); process.exit(1); }
+          '
+          echo "✅ Nusxa to'g'ri"
+
+      - name: Siqish va SHIFRLASH (AES-256)
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          cd "$RUNNER_TEMP"
+          gzip -9 -c db.json > db.json.gz
+          # Parol buyruq qatoriga TUSHMAYDI (ps ro'yxatida ko'rinmasin) —
+          # fayl orqali beriladi va darhol o'chiriladi.
+          printf '%s' "$PASSPHRASE" > pass.txt
+          gpg --batch --yes --quiet \
+              --passphrase-file pass.txt \
+              --symmetric --cipher-algo AES256 \
+              -o avtoa1-backup.json.gz.gpg db.json.gz
+          shred -u pass.txt 2>/dev/null || rm -f pass.txt
+          rm -f db.json db.json.gz
+          ls -lh avtoa1-backup.json.gz.gpg
+          echo "✅ Shifrlandi (shifrsiz fayllar o'chirildi)"
+
+      - name: Artifact'ga yuklash
+        uses: actions/upload-artifact@v4
+        with:
+          name: avtoa1-db-backup-${{ github.run_number }}
+          path: ${{ runner.temp }}/avtoa1-backup.json.gz.gpg
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Vaqtinchalik fayllarni o'chirish
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json" "$RUNNER_TEMP/db.json" "$RUNNER_TEMP/db.json.gz" "$RUNNER_TEMP/pass.txt"
