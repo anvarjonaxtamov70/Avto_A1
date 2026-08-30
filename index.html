@@ -6082,7 +6082,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-cart"></use></svg>Savat</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
     
     <div id="cart-progress-wrap" style="display:none; padding: 0 5px;">
-        <div class="cart-progress-text" id="cart-progress-msg">Tekin yetkazib berishga: 3 000 000 so'm qoldi</div>
+        <div class="cart-progress-text" id="cart-progress-msg">Shahar bo'ylab tekin yetkazishga yana bir oz qoldi</div>
         <div class="cart-progress-container"><div class="cart-progress-bar" id="cart-progress-bar"></div></div>
     </div>
 
@@ -6866,7 +6866,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <span class="chip inv-fchip" data-f="low" onclick="setInvFilter(this,'low')" style="color:#ff9f0a;">⚠️ Kam qolgan</span>
         </div>
         <div style="display:flex; gap:10px; align-items:center; margin-top:10px;">
-            <button class="inv-btn" style="background:rgba(10,132,255,0.15); color:#0a84ff; border:1px solid rgba(10,132,255,0.35);" onclick="invSelectAllVisible()">☑️ Hammasini belgilash</button>
+            <button class="inv-btn" id="inv-selall-btn" style="background:rgba(10,132,255,0.15); color:#0a84ff; border:1px solid rgba(10,132,255,0.35);" onclick="invSelectAllVisible()">☑️ Hammasini belgilash</button>
             <span id="inv-visible-count" style="font-size:11px; color:var(--text-muted);"></span>
         </div>
     </div>
@@ -6942,7 +6942,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <span class="chip inv-fchip" data-f="plain" onclick="bdSetFilter(this,'plain')">Aksiyasiz</span>
         </div>
         <div style="display:flex; gap:9px; align-items:center; flex-wrap:wrap;">
-            <button class="inv-btn" style="background:rgba(255,69,58,0.15); color:#ff6a60; border:1px solid rgba(255,69,58,0.35);" onclick="bdSelectAllVisible()">☑️ Hammasini belgilash</button>
+            <button class="inv-btn" id="bd-selall-btn" style="background:rgba(255,69,58,0.15); color:#ff6a60; border:1px solid rgba(255,69,58,0.35);" onclick="bdSelectAllVisible()">☑️ Hammasini belgilash</button>
             <button class="inv-btn" style="background:rgba(255,255,255,0.07); color:var(--text-muted); border:1px solid var(--glass-border);" onclick="bdClearSelection()">Tozalash</button>
             <span id="bd-count" style="font-size:11px; color:var(--text-muted); font-weight:700;"></span>
         </div>
@@ -9345,10 +9345,22 @@ window.clearAppCache = () => {
         try { if (window._cbGetApplied) _cbUse = window._cbGetApplied(_gross); } catch(e) {}
         var _sum = Math.max(0, _gross - _cbUse);
         var _cbLine = _cbUse > 0 ? ("\nCashback: −" + _cbUse.toLocaleString() + " so'm") : '';
+        // 🎁 «Sizga qaytadi» — naqd to'lovda oyna emas, NATIVE dialog chiqadi,
+        //    shuning uchun cashback va'dasi shu matnga ham qo'shiladi.
+        var _cbEarnLine = '';
+        try {
+            var _r = window._cashbackRate ? window._cashbackRate() : 0.008;
+            var _e = Math.round(_sum * _r);
+            if (_e > 0) {
+                _cbEarnLine = "\nSizga qaytadi: " + _e.toLocaleString() + " so'm cashback ("
+                    + (+(_r * 100).toFixed(2)) + '%)';
+            }
+        } catch (e) {}
         if(t === 'cash') { 
             // Naqd pul — tasdiqlash so'rash
             tg.showConfirm("Buyurtmani tasdiqlaysizmi?\n\nTovarlar: " + _gross.toLocaleString() + " so'm" + _cbLine +
-                "\nTo'lanadi: " + _sum.toLocaleString() + " so'm\nTo'lov: Naqd pul (yetkazilganda)", function(ok) {
+                "\nTo'lanadi: " + _sum.toLocaleString() + " so'm" + _cbEarnLine +
+                "\nTo'lov: Naqd pul (yetkazilganda)", function(ok) {
                 if(ok) {
                     confirmOrder('Naqd pul (yetkazilganda)');
                 }
@@ -10982,6 +10994,9 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             if (window._cbGetApplied) cbUsed = window._cbGetApplied(total);
         } catch (e) { cbUsed = 0; }
         var payable = Math.max(0, total - cbUsed);
+        // Va'da qilinayotgan cashback ulushi (buyurtmaga yoziladi)
+        var cbRate = 0.008;
+        try { if (window._cashbackRate) cbRate = window._cashbackRate(); } catch (e) {}
 
         adminText += `\n💰 <b>Tovarlar summasi:</b> ${total.toLocaleString()} so'm`;
         if (cbUsed > 0) {
@@ -11062,6 +11077,10 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
                 id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), 
                 time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, 
                 cashbackUsed: cbUsed, payable: payable,
+                // 💳 To'lov vaqtida VA'DA QILINGAN cashback ulushi. Cashback
+                //    yetkazilganda beriladi — o'shanda daraja o'zgargan
+                //    bo'lsa ham mijoz aynan ko'rgan summani oladi.
+                cbRate: cbRate,
                 status: 'kutilmoqda', customerName: profName, customerPhone: profPhone,
                 customerAddress: fetchedAddress, customerUsername: userTgLink,
                 deliveryMethod: (window.selectedDelivery ? window.selectedDelivery.method : ''),
@@ -15233,13 +15252,26 @@ window._invVisibleItems = () => {
         return true;
     });
 };
-/** ☑️ Ekranda ko'rinayotgan BARCHA tovarni belgilaydi (qidiruv/filtrga bo'ysunadi). */
+/** ☑️ ALMASHTIRGICH (toggle): ko'rinayotgan tovarlarni belgilaydi, qayta
+ *  bosilganda BEKOR qiladi.
+ *
+ *  ⚠️ Ilgari faqat «belgilash» bor edi, bekor qilish yo'q edi — 76 ta
+ *  tovarni belgilab qo'ygandan keyin ularni yechish uchun har birini
+ *  qo'lda bosish kerak bo'lardi. Endi ayni tugma ikki tomonga ishlaydi. */
 window.invSelectAllVisible = () => {
     let items = window._invVisibleItems();
     if (!items.length) { showToast("Belgilash uchun tovar yo'q", "warning"); return; }
-    items.forEach(p => { if (p && p.id != null) window._invSelected[p.id] = true; });
-    try { if (typeof _hap === 'function') _hap('success'); } catch (e) {}
-    showToast(items.length + " ta tovar belgilandi", "success");
+    // Ko'rinayotganlarning HAMMASI belgilangan bo'lsa — bekor qilamiz.
+    let allOn = items.every(p => p && p.id != null && window._invSelected[p.id]);
+    if (allOn) {
+        items.forEach(p => { if (p && p.id != null) delete window._invSelected[p.id]; });
+        try { if (typeof _hap === 'function') _hap('light'); } catch (e) {}
+        showToast("Belgilash bekor qilindi", "success");
+    } else {
+        items.forEach(p => { if (p && p.id != null) window._invSelected[p.id] = true; });
+        try { if (typeof _hap === 'function') _hap('success'); } catch (e) {}
+        showToast(items.length + " ta tovar belgilandi", "success");
+    }
     renderAdminInventory();
 };
 window.invUpdateBulkBar = () => {
@@ -15332,6 +15364,13 @@ window.renderAdminInventory = () => {
     try {
         let vc = document.getElementById('inv-visible-count');
         if (vc) vc.innerText = items.length + " ta tovar ko'rinmoqda";
+        // Tugma matni holatga qarab o'zgaradi — bosishdan oldin nima
+        // bo'lishini bilib turadi.
+        let sb = document.getElementById('inv-selall-btn');
+        if (sb) {
+            let allOn = items.length > 0 && items.every(p => p && p.id != null && window._invSelected[p.id]);
+            sb.innerText = allOn ? "✖️ Belgilashni bekor qilish" : "☑️ Hammasini belgilash";
+        }
     } catch (e) {}
 
     // #30: yuqorida jami / kam qolgan / tugagan xulosasi
@@ -16761,7 +16800,33 @@ document.addEventListener('click', function (e) {
 
     /* ----------------------- Sozlamalar ----------------------- */
     var LS_KEY = 'avto_phase2';
-    var CASHBACK_RATE = 0.01;     // har xariddan 1% cashback
+    // 💳 CASHBACK ULUSHI — mijoz DARAJASIGA bog'liq (2026.09):
+    //      Oddiy mijoz — 0.8%      VIP mijoz — 2%
+    //    Ilgari bu bitta 1% edi va daraja umuman ta'sir qilmasdi
+    //    (`VIP.cashbackMultiplier()` yozilgan, lekin chaqirilmagan).
+    var CASHBACK_RATE = 0.008;    // zaxira/standart ulush (VIP qatlami yuklanmasa)
+
+    /** Joriy mijoz uchun HAQIQIY ulush. VIP qatlami bo'lmasa — standart. */
+    function cashbackRate() {
+        try {
+            if (window.VIP && window.VIP.cashbackRate) return window.VIP.cashbackRate();
+        } catch (e) {}
+        return CASHBACK_RATE;
+    }
+
+    /** Buyurtma uchun ulush: buyurtmada SAQLANGAN ulush ustuvor.
+     *
+     *  ⚠️ NEGA MUHIM: cashback yetkazilganda beriladi, ya'ni xariddan
+     *  kunlar keyin. Agar o'sha paytdagi darajaga qarab hisoblasak,
+     *  to'lov vaqtida «2% qaytadi» deb ko'rsatib, keyin 0.8% berib
+     *  qo'yishimiz mumkin edi. Endi va'da qilingan ulush buyurtmaga
+     *  yoziladi (`cbRate`) va aynan o'sha qo'llanadi. */
+    function rateForOrder(o) {
+        var r = o && Number(o.cbRate);
+        if (isFinite(r) && r > 0 && r <= 0.5) return r;
+        return cashbackRate();
+    }
+    window._cashbackRate = cashbackRate;
     var REFERRAL_BONUS = 20000;   // referral bonusi — FAQAT taklif qilgan odamga (so'm)
     var REFERRAL_MIN_ORDER = 100000; // do'stning 1-buyurtmasi shu summadan OSHIQ bo'lishi shart
     var WARRANTY_DAYS = 14;       // standart kafolat muddati (kun)
@@ -17074,7 +17139,7 @@ document.addEventListener('click', function (e) {
                 '<div class="p2-cb-icon">🎁</div>' +
                 '<div class="p2-cb-label">Cashback balansi</div>' +
                 '<div class="p2-cb-balance">' + fmtSom(P.state.cashback) + ' <small>so\'m</small></div>' +
-                '<div class="p2-cb-sub">Jami yig\'ilgan: ' + fmtSom(P.state.cashbackTotal) + " so'm · har xariddan " + (+(CASHBACK_RATE * 100).toFixed(2)) + '%</div>' +
+                '<div class="p2-cb-sub">Jami yig\'ilgan: ' + fmtSom(P.state.cashbackTotal) + " so'm · har xariddan " + (+(cashbackRate() * 100).toFixed(2)) + '%</div>' +
                 '</div>' +
                 '<div style="background:rgba(48,209,88,0.10);border:1px solid rgba(48,209,88,0.25);border-radius:14px;padding:13px 15px;margin-bottom:18px;font-size:12px;color:var(--text-muted);line-height:1.5;">' +
                 '💡 Cashback buyurtma <b>qo\'lingizga yetkazilgandan keyin</b> hisobingizga tushadi. ' +
@@ -17888,7 +17953,9 @@ document.addEventListener('click', function (e) {
             // ---------- 2) YETKAZILDI -> cashback + kafolat ----------
             if (status === 'yetkazildi') {
                 if (entry && !entry.rv) return;                  // allaqachon berilgan
-                var earned = Math.round(cashbackBaseOf(o) * CASHBACK_RATE);
+                // Buyurtmada saqlangan ulush (`cbRate`) ustuvor — to'lov vaqtida
+                // ko'rsatilgan summa bilan AYNAN mos kelishi uchun.
+                var earned = Math.round(cashbackBaseOf(o) * rateForOrder(o));
                 if (earned > 0) addCashback(earned, 'Buyurtma ' + (o.code || '#' + o.id), 'earn');
                 createWarranties(o);                             // kafolat qo'lga olgandan boshlanadi
                 // `ur` (ishlatilgan cashback qaytarilgan) belgisini SAQLAB qolamiz.
@@ -20614,12 +20681,12 @@ html.lite .story-item.st2-add .st2-add-ring { animation: none !important; }
 html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none !important; }
 </style>
 
-<script>
+<script id="vip-stories-2026-js">
 /* ============================================================================
    ✦ QATLAM 2026.06 — JS
    ----------------------------------------------------------------------------
    1) MODAL MARKUP — yangi oynalar DOM'ga qo'shiladi
-   2) window.VIP        — 4 pog'onali VIP daraja tizimi
+   2) window.VIP        — mijoz darajasi tizimi (2026.09 dan IKKI daraja)
    3) window.AvtoStories — mini app ichidan story qo'yish + boshqarish
    4) O'NGGA TORTISH IMOSI — Telegram uslubida story composer'ni ochish
    5) MIJOZLAR — ro'yxatning to'liq qayta yozilishi
@@ -20868,34 +20935,41 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
      *   • daraja ko'tarilganda tabrik + Telegram xabari (bir marta)
      *   • admin qo'lda VIP qilib qo'yishi mumkin (`profile.vip.manual`)
      * ================================================================== */
+    /* ⚠️ 2026.09 — TO'RT DARAJA IKKIGA TUSHIRILDI.
+     *
+     * ILGARI: Bronza / Kumush / Oltin / Platina — «o'yinchoq» narvon.
+     * Muammolari:
+     *   • `cashbackX` (×1, ×1.5, ×2, ×3) HECH QAYERDA qo'llanmagan —
+     *     `VIP.cashbackMultiplier()` yozilgan, lekin hech kim chaqirmagan.
+     *     Ya'ni hamma bir xil 1% olardi, ko'paytiruvchi esa bezak edi.
+     *   • `discount` (2%, 3%, 5%) ham HECH QACHON narxga qo'llanmagan —
+     *     mijozga berilmaydigan «shaxsiy chegirma» va'da qilinardi.
+     *   • Daraja «summa YOKI xarid SONI» bo'yicha berilardi, ya'ni 12 ta
+     *     arzon buyurtma bergan mijoz Platina bo'lib qolardi.
+     *
+     * ENDI: ikki daraja, HAQIQIY va faqat SUMMA bo'yicha:
+     *   Oddiy mijoz — bepul yetkazish 3 mln so'mdan, cashback 0.8%
+     *   VIP mijoz   — bepul yetkazish 2.4 mln so'mdan, cashback 2%
+     *                 (umumiy xaridi 3 mln so'mga yetganda)
+     *
+     * `rate` — HAQIQATDA qo'llanadigan cashback ulushi (Phase2 o'qiydi).
+     */
+    var VIP_MIN_SPENT = 3000000;   // VIP bo'lish chegarasi (yetkazilgan buyurtmalar summasi)
+
     var TIERS = [
         {
-            id: 'bronze', name: 'Bronza', icon: '\uD83E\uDD49', minSpent: 0, minOrders: 0,
-            grad: 'linear-gradient(145deg,#e0a06a,#b06a2e 48%,#7a3f12)', c1: '#e0a06a',
-            ink: '#2a1400', glow: 'rgba(176,106,46,.3)',
-            soft: 'linear-gradient(160deg,rgba(224,160,106,.16),rgba(0,0,0,.3))',
-            freeDelivery: 3000000, cashbackX: 1, discount: 0
-        },
-        {
-            id: 'silver', name: 'Kumush', icon: '\uD83E\uDD48', minSpent: 500000, minOrders: 2,
+            id: 'ordinary', name: 'Oddiy mijoz', icon: '\uD83D\uDED2', minSpent: 0,
             grad: 'linear-gradient(145deg,#eef2f7,#c3cad5 48%,#8b939f)', c1: '#dfe5ee',
             ink: '#1d2128', glow: 'rgba(160,170,185,.3)',
             soft: 'linear-gradient(160deg,rgba(200,208,220,.16),rgba(0,0,0,.3))',
-            freeDelivery: 2500000, cashbackX: 1.5, discount: 2
+            freeDelivery: 3000000, rate: 0.008
         },
         {
-            id: 'gold', name: 'Oltin', icon: '\uD83E\uDD47', minSpent: 1500000, minOrders: 5,
+            id: 'vip', name: 'VIP mijoz', icon: '\uD83D\uDC8E', minSpent: VIP_MIN_SPENT,
             grad: 'linear-gradient(145deg,#F0D060,#C9A84C 45%,#96720A)', c1: '#F0D060',
             ink: '#2a2000', glow: 'rgba(201,168,76,.34)',
             soft: 'linear-gradient(160deg,rgba(201,168,76,.18),rgba(0,0,0,.3))',
-            freeDelivery: 2000000, cashbackX: 2, discount: 3
-        },
-        {
-            id: 'platinum', name: 'Platina', icon: '\uD83D\uDC8E', minSpent: 5000000, minOrders: 12,
-            grad: 'linear-gradient(145deg,#d8f0ff,#9fc4e8 42%,#4a6a9c)', c1: '#cfe8ff',
-            ink: '#0c1a2c', glow: 'rgba(90,130,180,.36)',
-            soft: 'linear-gradient(160deg,rgba(159,196,232,.18),rgba(0,0,0,.32))',
-            freeDelivery: 1200000, cashbackX: 3, discount: 5
+            freeDelivery: 2400000, rate: 0.02
         }
     ];
     var TIER_BY_ID = {};
@@ -20903,8 +20977,8 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 
     var VIP = {
         TIERS: TIERS,
-        /** Daraja darajasidan yuqorisi VIP hisoblanadi (Oltin va Platina). */
-        VIP_FROM: 2
+        /** Shu indeksdan boshlab VIP hisoblanadi (endi faqat 2-daraja). */
+        VIP_FROM: 1
     };
 
     /** Buyurtma tarixidan daraja hisoblaydi. `manual` — admin qo'lda bergan daraja. */
@@ -20914,10 +20988,12 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         var spent = delivered.reduce(function (s, o) { return s + (parseInt(o.total, 10) || 0); }, 0);
         var count = delivered.length;
 
-        // Daraja: ikkala shartdan (summa YOKI xarid soni) qaysi biri yuqori bo'lsa
+        // Daraja FAQAT summa bo'yicha. Ilgari «summa YOKI xarid soni» edi —
+        // shu sababli arzon buyurtmalarni ko'p bergan mijoz eng yuqori
+        // darajaga chiqib ketardi.
         var idx = 0;
         for (var i = TIERS.length - 1; i >= 0; i--) {
-            if (spent >= TIERS[i].minSpent || count >= TIERS[i].minOrders) { idx = i; break; }
+            if (spent >= TIERS[i].minSpent) { idx = i; break; }
         }
         // Admin qo'lda ko'targan bo'lsa — pasaytirmaymiz
         if (manual && TIER_BY_ID[manual]) {
@@ -20927,19 +21003,17 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 
         var tier = TIERS[idx];
         var next = TIERS[idx + 1] || null;
-        var progress = 100, needSom = 0, needOrd = 0;
+        var progress = 100, needSom = 0;
         if (next) {
-            var bySom = next.minSpent > tier.minSpent
-                ? (spent - tier.minSpent) / (next.minSpent - tier.minSpent) : 0;
-            var byOrd = next.minOrders > tier.minOrders
-                ? (count - tier.minOrders) / (next.minOrders - tier.minOrders) : 0;
-            progress = Math.max(0, Math.min(100, Math.round(Math.max(bySom, byOrd) * 100)));
+            progress = next.minSpent > tier.minSpent
+                ? Math.max(0, Math.min(100, Math.round(
+                    (spent - tier.minSpent) / (next.minSpent - tier.minSpent) * 100)))
+                : 100;
             needSom = Math.max(0, next.minSpent - spent);
-            needOrd = Math.max(0, next.minOrders - count);
         }
         return {
             tier: tier, tierIdx: idx, next: next, spent: spent, count: count,
-            progress: progress, needSom: needSom, needOrd: needOrd,
+            progress: progress, needSom: needSom, needOrd: 0,
             isVip: idx >= VIP.VIP_FROM, manual: manual || null,
             allOrders: arr.length
         };
@@ -20953,10 +21027,19 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         var s = VIP.state;
         return (s && s.tier) ? s.tier.freeDelivery : 3000000;
     };
-    /** Cashback ko'paytiruvchisi (Phase2 kelajakda o'qishi uchun ochiq). */
-    VIP.cashbackMultiplier = function () {
+    /** 💳 HAQIQIY cashback ulushi (Oddiy 0.008 / VIP 0.02).
+     *
+     *  ⚠️ Ilgari bu yerda `cashbackMultiplier()` bor edi va u HECH KIM
+     *  tomonidan chaqirilmagan — ya'ni daraja cashback'ga umuman ta'sir
+     *  qilmasdi. Endi Phase2 aynan shu funksiyani o'qiydi. */
+    VIP.cashbackRate = function () {
         var s = VIP.state;
-        return (s && s.tier) ? s.tier.cashbackX : 1;
+        return (s && s.tier && typeof s.tier.rate === 'number') ? s.tier.rate : 0.008;
+    };
+    /** Foiz ko'rinishida: 0.008 -> "0.8", 0.02 -> "2" (ortiqcha nol yo'q). */
+    VIP.ratePct = function (tier) {
+        var r = (tier && typeof tier.rate === 'number') ? tier.rate : VIP.cashbackRate();
+        return String(+(r * 100).toFixed(2));
     };
     /** Buyurtma xabariga qo'shiladigan ustuvorlik belgisi (admin ko'rishi uchun). */
     VIP.orderTag = function () {
@@ -21002,16 +21085,10 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         if (!box) return;
         var t = s.tier, n = s.next;
 
-        var nextTx;
-        if (!n) {
-            nextTx = 'Siz eng yuqori darajadasiz. Rahmat, ishonchingiz uchun!';
-        } else if (s.needSom > 0 && s.needOrd > 0) {
-            nextTx = '<b>' + n.name + '</b> darajasiga yana ' + fmtSom(s.needSom) + " so'm xarid yoki " + s.needOrd + ' ta buyurtma qoldi';
-        } else if (s.needSom > 0) {
-            nextTx = '<b>' + n.name + '</b> darajasiga yana ' + fmtSom(s.needSom) + " so'm qoldi";
-        } else {
-            nextTx = '<b>' + n.name + '</b> darajasiga yana ' + s.needOrd + ' ta buyurtma qoldi';
-        }
+        // Daraja endi FAQAT summa bo'yicha — «yoki N ta buyurtma» matni olib tashlandi.
+        var nextTx = !n
+            ? 'Siz VIP mijozimizsiz. Rahmat, ishonchingiz uchun!'
+            : ('<b>' + n.name + '</b> bo\u2018lishga yana ' + fmtSom(s.needSom) + " so'm qoldi");
 
         box.innerHTML =
             '<div class="vipc-card" id="vipc-card" role="button" tabindex="0">' +
@@ -21029,10 +21106,9 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                     '<div class="vipc-next">' + nextTx + '</div>' +
                 '</div>' +
                 '<div class="vipc-perks">' +
-                    perkHTML('\uD83D\uDE9A', 'Bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan", true) +
-                    perkHTML('\uD83C\uDF81', 'Cashback &times;' + t.cashbackX, t.cashbackX > 1) +
-                    perkHTML('\uD83C\uDFF7', t.discount > 0 ? ('Shaxsiy chegirma ' + t.discount + '%') : 'Chegirma: Kumushdan', t.discount > 0) +
-                    perkHTML('\u26A1', s.isVip ? 'Ustuvor xizmat' : 'Ustuvor xizmat: Oltindan', s.isVip) +
+                    perkHTML('\uD83D\uDE9A', 'Shahar bo\u2018ylab bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan", true) +
+                    perkHTML('\uD83C\uDF81', 'Cashback ' + VIP.ratePct(t) + '%', true) +
+                    perkHTML('\u26A1', s.isVip ? 'Ustuvor xizmat' : 'Ustuvor xizmat: VIP dan', s.isVip) +
                 '</div>' +
             '</div>';
 
@@ -21105,9 +21181,10 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                     '<div style="font-size:14.5px; font-weight:800; color:' + (now ? t.c1 : 'var(--text-main)') + ';">' +
                         t.icon + ' ' + E(t.name) + (now ? " — sizdagi daraja" : '') + '</div>' +
                     '<div style="font-size:12px; color:var(--text-muted); margin-top:4px; line-height:1.5;">' +
-                        'Shart: ' + fmtShort(t.minSpent) + " so'm yoki " + t.minOrders + ' ta xarid<br>' +
-                        'Bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan &middot; cashback &times;" + t.cashbackX +
-                        (t.discount ? " &middot; chegirma " + t.discount + '%' : '') +
+                        (t.minSpent > 0
+                            ? ('Shart: umumiy xaridingiz ' + fmtShort(t.minSpent) + " so'mga yetsa<br>")
+                            : 'Barcha mijozlar uchun<br>') +
+                        'Bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan &middot; cashback " + VIP.ratePct(t) + '%' +
                     '</div>' +
                 '</div></div>';
         }).join('');
@@ -21155,9 +21232,9 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             var ti = $('vipc-up-title'); if (ti) ti.textContent = t.name + ' darajasi!';
             var tx = $('vipc-up-text');
             if (tx) {
-                tx.innerHTML = 'Siz <b>' + E(t.name) + '</b> mijoz bo\'ldingiz.<br>' +
-                    'Bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan, cashback &times;" + t.cashbackX +
-                    (t.discount ? ', shaxsiy chegirma ' + t.discount + '%' : '') + '.';
+                tx.innerHTML = 'Siz <b>' + E(t.name) + '</b> bo\'ldingiz.<br>' +
+                    'Shahar bo\u2018ylab bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan, cashback " +
+                    VIP.ratePct(t) + '%.';
             }
             box.classList.add('show');
         }
@@ -21172,9 +21249,8 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                     parse_mode: 'HTML',
                     text: t.icon + ' <b>Tabriklaymiz!</b>\n\nSiz Avto A1 do\'konida <b>' + t.name +
                         '</b> darajasiga ko\'tarildingiz.\n\n' +
-                        '\u2022 Bepul yetkazish: ' + fmtSom(t.freeDelivery) + " so'mdan\n" +
-                        '\u2022 Cashback: \u00D7' + t.cashbackX + '\n' +
-                        (t.discount ? '\u2022 Shaxsiy chegirma: ' + t.discount + '%\n' : '') +
+                        '\u2022 Shahar bo\u2018ylab bepul yetkazish: ' + fmtSom(t.freeDelivery) + " so'mdan\n" +
+                        '\u2022 Cashback: ' + VIP.ratePct(t) + '%\n' +
                         '\nIshonchingiz uchun rahmat!'
                 });
             }
@@ -22700,8 +22776,8 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
     /** Adminning qo'lda VIP belgilashi — darajalar aylanma tartibda o'zgaradi. */
     function toggleManualVip(c, btn) {
         if (!amAdmin()) { toast('Faqat admin', 'warning'); return; }
-        // aylanma: yo'q -> oltin -> platina -> yo'q
-        var next = !c.manual ? 'gold' : (c.manual === 'gold' ? 'platinum' : null);
+        // aylanma: yo'q -> VIP -> yo'q (endi ikki daraja bor)
+        var next = !c.manual ? 'vip' : null;
         VIP.setManual(c.uid, next).then(function () {
             c.manual = next;
             // Darajani qayta hisoblaymiz (haqiqiy buyurtmalar + qo'lda berilgan)
@@ -22739,9 +22815,8 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         var v = VIP.compute(c.ordersRaw, c.manual);
 
         var nextTx = v.next
-            ? (v.next.icon + ' ' + v.next.name + ' darajasiga ' +
-               (v.needSom > 0 ? fmtSom(v.needSom) + " so'm" : v.needOrd + ' ta buyurtma') + ' qoldi')
-            : 'Eng yuqori daraja';
+            ? (v.next.icon + ' ' + v.next.name + ' bo\u2018lishga ' + fmtSom(v.needSom) + " so'm qoldi")
+            : 'VIP mijoz';
 
         var body = $('customer-detail-body');
         if (!body) return;
@@ -22769,8 +22844,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                     '<div class="cdt-row"><span class="k">Hozirgi</span><span class="v">' + t.icon + ' ' + E(t.name) + '</span></div>' +
                     '<div class="cdt-row"><span class="k">Keyingi</span><span class="v">' + E(nextTx) + '</span></div>' +
                     '<div class="cdt-row"><span class="k">Imtiyozlar</span><span class="v">Bepul yetkazish ' +
-                        fmtShort(t.freeDelivery) + " so'mdan &middot; cashback &times;" + t.cashbackX +
-                        (t.discount ? ' &middot; chegirma ' + t.discount + '%' : '') + '</span></div>' +
+                        fmtShort(t.freeDelivery) + " so'mdan &middot; cashback " + VIP.ratePct(t) + '%</span></div>' +
                 '</div>' +
             '</div>' +
             // --- ALOQA ---
@@ -23026,16 +23100,25 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
      Phase2 avtomatik qaytaradi.
      ============================================================================ -->
 <style id="layer-cashback-pay">
+/* ⚠️ 2026.09 — BLOK QISILIB QOLGANI TUZATILDI.
+   Uch sabab bor edi:
+     1) `margin: -8px` bloki yuqoridagi oltin karta ostiga tortib, tepada
+        joy qoldirmasdi;
+     2) `overflow: hidden` o'sgan matnni qirqib tashlardi;
+     3) `.cbp-sum` bitta qatorli flex edi — `flex-wrap` va `gap` yo'q,
+        matnda esa `&nbsp;` bor edi, ya'ni qatorga sig'masa ham
+        bo'linmasdi va summa siqilib ketardi.
+   Yechim: normal margin, overflow ochiq, matn o'ralishi mumkin. */
 .cbp-box {
-    position: relative; overflow: hidden;
-    border-radius: 16px; padding: 14px 16px; margin: -8px 0 20px;
+    position: relative;
+    border-radius: 16px; padding: 14px 16px; margin: 4px 0 18px;
     background: linear-gradient(150deg, rgba(48,209,88,.12), rgba(48,209,88,.03));
     border: 1px solid rgba(48,209,88,.28);
     animation: lyRise .4s both;
 }
-.cbp-row { display: flex; align-items: center; gap: 13px; }
-.cbp-ic { flex: none; font-size: 24px; line-height: 1; }
-.cbp-tx { flex: 1; min-width: 0; }
+.cbp-row { display: flex; align-items: center; gap: 12px; }
+.cbp-ic { flex: none; font-size: 23px; line-height: 1; }
+.cbp-tx { flex: 1 1 auto; min-width: 0; }
 .cbp-tx b { display: block; font-size: 14px; font-weight: 800; color: var(--text-main); }
 .cbp-tx span { display: block; font-size: 11.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.45; }
 /* iOS uslubidagi tumbler */
@@ -23053,14 +23136,43 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 .cbp-box.on .cbp-sw { background: #30d158; }
 .cbp-box.on .cbp-sw i { transform: translateX(20px); }
 .cbp-sum {
-    display: flex; justify-content: space-between; align-items: baseline;
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
+    gap: 4px 10px;
     margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(48,209,88,.3);
     font-size: 12.5px; font-weight: 700; color: var(--text-muted);
 }
-.cbp-sum b { font-size: 15px; font-weight: 800; color: #30d158; }
+.cbp-sum > span { flex: 1 1 auto; min-width: 0; line-height: 1.5; }
+.cbp-sum b { flex: none; font-size: 15px; font-weight: 800; color: #30d158; white-space: nowrap; }
 .cbp-box.is-empty { background: rgba(127,127,127,.07); border-color: var(--glass-border); }
 .cbp-box.is-empty .cbp-ic { opacity: .5; }
 html[data-theme="light"] .cbp-tx b { color: #1b1b1d; }
+
+/* 🎁 «Sizga qaytadi» — har to'lov turida ko'rinadi (naqd, karta, ilova) */
+.cbp-earn {
+    display: flex; align-items: center; gap: 9px;
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px dashed rgba(201,168,76,.35);
+    font-size: 12.5px; font-weight: 700; color: var(--text-muted);
+    line-height: 1.5;
+}
+.cbp-earn .cbe-ic { flex: none; font-size: 17px; line-height: 1; }
+.cbp-earn .cbe-tx { flex: 1 1 auto; min-width: 0; }
+.cbp-earn b { color: var(--luxury-gold, #d4af37); font-weight: 800; white-space: nowrap; }
+.cbp-earn .cbe-vip {
+    flex: none; font-size: 10px; font-weight: 800; color: #2a2000;
+    background: linear-gradient(135deg, var(--luxury-gold-light, #F0D060), var(--luxury-gold, #C9A84C));
+    padding: 2px 7px; border-radius: 999px; letter-spacing: .3px;
+}
+/* Juda tor ekranlarda (360px va past) yana ixchamlashtiramiz */
+@media (max-width: 360px) {
+    .cbp-box { padding: 12px 13px; }
+    .cbp-row { gap: 10px; }
+    .cbp-ic { font-size: 21px; }
+    .cbp-sw { width: 46px; height: 28px; border-radius: 14px; }
+    .cbp-sw i { width: 22px; height: 22px; }
+    .cbp-box.on .cbp-sw i { transform: translateX(18px); }
+    .cbp-tx b { font-size: 13.5px; }
+}
 </style>
 
 <script>
@@ -23115,11 +23227,42 @@ html[data-theme="light"] .cbp-tx b { color: #1b1b1d; }
         var sum = $('cbp-sum');
         if (sum) {
             sum.style.display = use > 0 ? 'flex' : 'none';
-            sum.innerHTML = '<span>Tovarlar: ' + fmt(gross) + " so'm &nbsp;·&nbsp; Cashback: −" + fmt(use) + '</span>' +
+            // `&nbsp;` OLIB TASHLANDI — u matnni bo'linishga qo'ymay, tor
+            // ekranda summani siqib qo'yardi.
+            sum.innerHTML = '<span>Tovarlar: ' + fmt(gross) + " so'm · Cashback: \u2212" + fmt(use) + '</span>' +
                 '<b>' + fmt(payable) + " so'm</b>";
         }
+        paintEarn(payable);
     }
     window._cbRepaint = repaintAmounts;
+
+    /** 🎁 «Bu xariddan sizga qancha qaytadi» — mijoz to'lashdan OLDIN ko'radi.
+     *
+     *  Hisob AYNAN Phase2 bilan bir xil: cashback `payable` (haqiqatda
+     *  to'lanadigan summa) dan hisoblanadi — ya'ni cashback ustiga
+     *  cashback berilmaydi. Shu sababli bu yerda ko'rsatilgan summa
+     *  yetkazilgandan keyin hisobga tushadigan summaga teng. */
+    function earnRate() {
+        try { if (window._cashbackRate) return window._cashbackRate(); } catch (e) {}
+        return 0.008;
+    }
+    function isVipNow() {
+        try { return !!(window.VIP && window.VIP.state && window.VIP.state.isVip); } catch (e) { return false; }
+    }
+    function paintEarn(payable) {
+        var el = $('cbp-earn');
+        if (!el) return;
+        var rate = earnRate();
+        var som = Math.round((parseInt(payable, 10) || 0) * rate);
+        var pct = String(+(rate * 100).toFixed(2));
+        if (som <= 0) { el.style.display = 'none'; return; }
+        el.style.display = 'flex';
+        el.innerHTML =
+            '<span class="cbe-ic">\uD83C\uDF81</span>' +
+            '<span class="cbe-tx">Bu xariddan sizga <b>' + fmt(som) + " so'm</b> cashback qaytadi " +
+                '<span style="opacity:.75;">(' + pct + '%)</span></span>' +
+            (isVipNow() ? '<span class="cbe-vip">VIP</span>' : '');
+    }
 
     /** To'lov oynasiga cashback blokini joylaymiz (bir marta yasab, keyin yangilaymiz). */
     function renderBox() {
@@ -23145,7 +23288,10 @@ html[data-theme="light"] .cbp-tx b { color: #1b1b1d; }
                     '<span class="cbp-ic">\uD83C\uDF81</span>' +
                     '<span class="cbp-tx"><b>Cashback: 0 so\'m</b>' +
                     '<span>Buyurtma qo\'lingizga yetkazilgach cashback yig\'iladi va keyingi to\'lovda ishlatiladi.</span></span>' +
-                '</div>';
+                '</div>' +
+                // Balans nol bo'lsa ham «qancha qaytadi» KO'RINADI — mijoz
+                // tizimning foydasini aynan shu paytda tushunishi kerak.
+                '<div class="cbp-earn" id="cbp-earn"></div>';
             repaintAmounts();
             return;
         }
@@ -23160,7 +23306,8 @@ html[data-theme="light"] .cbp-tx b { color: #1b1b1d; }
                     (usable < bal ? ' · bu buyurtmaga ' + fmt(usable) + " so'm" : '') + '</span></span>' +
                 '<span class="cbp-sw"><i></i></span>' +
             '</div>' +
-            '<div class="cbp-sum" id="cbp-sum" style="display:none;"></div>';
+            '<div class="cbp-sum" id="cbp-sum" style="display:none;"></div>' +
+            '<div class="cbp-earn" id="cbp-earn"></div>';
 
         var t = $('cbp-toggle');
         if (t) t.onclick = function () {
@@ -27181,6 +27328,12 @@ html body .flying-img.mo-fly {
       var n = bdSelectedIds().length;
       cnt.innerText = items.length + " ta ko'rinmoqda" + (n ? (' · ' + n + ' belgilandi') : '');
     }
+    // Tugma matni holatga qarab (belgilash / bekor qilish)
+    var sb = document.getElementById('bd-selall-btn');
+    if (sb) {
+      var allOn = items.length > 0 && items.every(function (p) { return p && p.id != null && BD.sel[p.id]; });
+      sb.innerText = allOn ? "✖️ Belgilashni bekor qilish" : "☑️ Hammasini belgilash";
+    }
 
     if (!items.length) {
       c.innerHTML = '<p style="text-align:center; color:gray; margin:30px 0;">Tovar topilmadi.</p>';
@@ -27229,9 +27382,17 @@ html body .flying-img.mo-fly {
   window.bdSelectAllVisible = function () {
     var items = window._bdVisibleItems();
     if (!items.length) { showToast("Belgilash uchun tovar yo'q", "warning"); return; }
-    items.forEach(function (p) { if (p && p.id != null) BD.sel[p.id] = true; });
-    try { if (window._hap) window._hap('success'); } catch (e) {}
-    showToast(items.length + " ta tovar belgilandi", "success");
+    // Ombordagi kabi ALMASHTIRGICH: qayta bosilsa bekor qiladi.
+    var allOn = items.every(function (p) { return p && p.id != null && BD.sel[p.id]; });
+    if (allOn) {
+      items.forEach(function (p) { if (p && p.id != null) delete BD.sel[p.id]; });
+      try { if (window._hap) window._hap('light'); } catch (e) {}
+      showToast("Belgilash bekor qilindi", "success");
+    } else {
+      items.forEach(function (p) { if (p && p.id != null) BD.sel[p.id] = true; });
+      try { if (window._hap) window._hap('success'); } catch (e) {}
+      showToast(items.length + " ta tovar belgilandi", "success");
+    }
     window.renderBulkDiscount();
   };
 
