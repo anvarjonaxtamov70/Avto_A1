@@ -512,6 +512,84 @@ t('lite rejim (zaif telefon) hisobga olingan', () => {
      'html.lite uchun animatsiya o\'chirilmagan');
 });
 
+/* ---------------------------------------------------------------- *
+ * XAVFSIZ ZONA (Telegram tugmalari bilan ustma-ust tushmaslik)
+ *
+ * `env(safe-area-inset-top)` FAQAT qurilma xavfsiz zonasini (notch /
+ * Dynamic Island / status bar) beradi. Telegram to'liq ekran rejimida
+ * o'z tugmalar panelini («‹ Назад», «+», «⌄», «⋯») kontent USTIDA
+ * chizadi va uning balandligi ALOHIDA qiymatda —
+ * `contentSafeAreaInset.top`.
+ *
+ * Shu sababli faylda `--safe-top` o'zgaruvchisi bor:
+ *     --safe-top = safeAreaInset.top + contentSafeAreaInset.top
+ * (`applyTgSafeTop`). U `:root` da `env(...)` ga teng qilib qo'yiladi va
+ * Telegram insetlarni bergach JS orqali yangilanadi.
+ *
+ * Ya'ni tepaga joylashadigan HAR QANDAY element `var(--safe-top)`
+ * ishlatishi SHART. Bare `env(safe-area-inset-top)` faqat BITTA joyda —
+ * `:root` dagi ta'rifda — bo'lishi mumkin.
+ *
+ * Bu sinov iPhone'da «Shogird» sarlavhasi Telegram'ning «Назад»
+ * tugmasi bilan ustma-ust tushgandan keyin qo'shildi.
+ * ---------------------------------------------------------------- */
+console.log('\n=== 10) Telegram xavfsiz zonasi ===');
+
+t('`--safe-top` hisoblovchisi joyida', () => {
+  ok(/--safe-top:\s*env\(safe-area-inset-top/.test(HTML),
+     '`:root` da `--safe-top` ta\'rifi topilmadi');
+  ok(HTML.indexOf('contentSafeAreaInset') > 0,
+     '`contentSafeAreaInset` o\'qilmayapti — Telegram tugmalari hisobga olinmaydi');
+  ok(HTML.indexOf('applyTgSafeTop') > 0, '`applyTgSafeTop` topilmadi');
+});
+
+/**
+ * Izohlarni bo'shliqqa aylantiradi, SATR RAQAMLARINI saqlab.
+ *
+ * ⚠️ Nega kerak: izoh ichida `env(safe-area-inset-top)` degan MATN bo'lsa
+ *    (aynan tushuntirish izohida shunday), oddiy qidiruv uni HAQIQIY
+ *    qoida deb o'ylab soxta ogohlantirish berardi. Bu tuzoqqa bir necha
+ *    marta tushilgan, shuning uchun yordamchi funksiya qilib qo'yildi.
+ */
+function blankComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/g, (m) =>
+    m.replace(/[^\n]/g, ' ')
+  );
+}
+
+const HTML_NC = blankComments(HTML);
+
+t('izohlarni tozalash yordamchisi ishlaydi', () => {
+  const s = blankComments('a /* x\ny */ b');
+  eq(s.split('\n').length, 2, 'satr soni saqlanmadi');
+  ok(s.indexOf('x') < 0 && s.indexOf('a') >= 0 && s.indexOf('b') >= 0, s);
+});
+
+t('REGRESSIYA: bare `env(safe-area-inset-top)` faqat `:root` ta\'rifida', () => {
+  const hits = [];
+  const re = /env\(\s*safe-area-inset-top/g;
+  let m;
+  while ((m = re.exec(HTML_NC))) {
+    // `--safe-top: env(...)` — bu YAGONA qonuniy ishlatilish.
+    const before = HTML_NC.slice(Math.max(0, m.index - 60), m.index);
+    if (/--safe-top:\s*$/.test(before)) continue;
+    const lineNo = HTML_NC.slice(0, m.index).split('\n').length;
+    hits.push(lineNo + ': ' + (HTML.split('\n')[lineNo - 1] || '').trim().slice(0, 90));
+  }
+  ok(hits.length === 0,
+     'Bare `env(safe-area-inset-top)` topildi — Telegram tugmalari ostiga ' +
+     'tushib qoladi. `var(--safe-top)` ishlating:\n       ' + hits.join('\n       '));
+});
+
+t('«Shogird» sarlavhasi `--safe-top` ishlatadi', () => {
+  const at = HTML.indexOf('#aiChatModal .sg-head');
+  ok(at > 0, '`#aiChatModal .sg-head` qoidasi topilmadi');
+  const body = HTML.slice(at, HTML.indexOf('}', at));
+  ok(/padding-top:\s*calc\([^)]*var\(--safe-top/.test(body),
+     'sarlavha `var(--safe-top)` ishlatmayapti — Telegram «Назад» tugmasi ' +
+     'bilan ustma-ust tushadi');
+});
+
 t('REGRESSIYA: `cardHTML` o\'ralmaydi', () => {
   // Kartochkaga qo'shimcha element balandlikni o'zgartiradi
   // (`h4 { min-height: 2.6em }` narx tugmalarini bir chizqda ushlaydi)
