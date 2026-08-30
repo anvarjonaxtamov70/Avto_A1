@@ -26,6 +26,7 @@ import re
 import time
 import urllib.parse
 from collections import OrderedDict
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 from dotenv import load_dotenv
@@ -1695,12 +1696,156 @@ viloyatlar_menyu = ReplyKeyboardMarkup(
 
 
 # =====================================================================
+# 👔 XO'JAYIN REJIMI — «o'ng qo'l» sifatida muomala
+# ---------------------------------------------------------------------
+# Xo'jayin uchun bot MIJOZ boti emas. Unga menyu tugmalari, do'kon havolasi
+# va har xabardagi salomlashish KERAK EMAS — u shunchaki gaplashadi va
+# topshiriq beradi, bot esa bajaradi (AI agent + tasdiq kartochkasi).
+#
+# Uch muammo hal qilinadi:
+#   1. Salom — KUNDA BIR MARTA (mahalliy vaqt bo'yicha), har xabarda emas.
+#   2. «Do'konga marhamat» tugmasi xo'jayinga umuman ko'rsatilmaydi.
+#   3. Xo'jayin mijoz oqimiga (ro'yxatdan o'tish holatiga) tushib qolmaydi.
+# =====================================================================
+
+# Mahalliy vaqt (O'zbekiston = UTC+5). «Kun boshi» server UTC'si bo'yicha
+# emas, xo'jayinning HAQIQIY kuni bo'yicha hisoblanishi kerak — aks holda
+# ertalab 05:00 dan oldin yozsa bot «kechagi kun» deb hisoblardi.
+_LOCAL_TZ = timezone(timedelta(hours=int(os.getenv("LOCAL_UTC_OFFSET", "5"))))
+
+
+def _today_local():
+    return datetime.now(_LOCAL_TZ).strftime("%Y-%m-%d")
+
+
+# uid -> "YYYY-MM-DD" tezkor kesh. Haqiqiy manba — Firebase profili:
+# Render botni tez-tez qayta ishga tushiradi va faqat xotiraga tayansak
+# xo'jayin kuniga bir necha marta salom eshitardi.
+_greeted_day = {}
+
+
+async def _owner_needs_greeting(user_id):
+    """Bugun xo'jayin bilan hali salomlashilmaganmi?"""
+    today = _today_local()
+    if _greeted_day.get(user_id) == today:
+        return False
+    try:
+        prof = await firebase_get(f"users/{user_id}/profile") or {}
+        if prof.get("lastGreetedDay") == today:
+            _greeted_day[user_id] = today
+            return False
+    except Exception as e:
+        logging.warning("lastGreetedDay o'qilmadi: %s", e)
+    return True
+
+
+async def _mark_owner_greeted(user_id):
+    """Bugun salomlashildi deb belgilaymiz — keyingi xabarlarda salom yo'q."""
+    today = _today_local()
+    if _greeted_day.get(user_id) == today:
+        return
+    _greeted_day[user_id] = today
+    try:
+        await firebase_patch(f"users/{user_id}/profile", {"lastGreetedDay": today})
+    except Exception as e:
+        logging.warning("lastGreetedDay yozilmadi: %s", e)
+
+
+def shop_inline_kb(lang):
+    """Mijoz uchun «do'konga marhamat» inline tugmasi."""
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+
+
+def shop_kb_for(user_id, lang):
+    """Do'kon tugmasi — XO'JAYINGA ko'rsatilmaydi.
+
+    Xo'jayin o'z do'konini biladi; har javobga «do'konni ochish» tugmasi
+    qo'shilishi uni bezovta qilardi va suhbatni «reklama» ga aylantirardi.
+    Mijoz uchun tugma o'z joyida qoladi.
+    """
+    if _is_owner(user_id):
+        return None
+    return shop_inline_kb(lang)
+
+
+# Xo'jayinning chatida mijoz menyusi (pastdagi DOIMIY klaviatura) osilib
+# qolgan bo'lishi mumkin — Telegram uni faqat yangi reply_markup bilan
+# olib tashlaydi. Har jarayonda bir marta `ReplyKeyboardRemove()` yuboramiz.
+_owner_kb_cleared = set()
+
+
+def _owner_reply_markup(user_id):
+    """Xo'jayinga: birinchi javobda klaviaturani olib tashlaymiz, keyin — hech narsa."""
+    if user_id in _owner_kb_cleared:
+        return None
+    _owner_kb_cleared.add(user_id)
+    return ReplyKeyboardRemove()
+
+
+@dp.message(
+    StateFilter(None, Register.lang, Register.name, Register.phone, Register.region),
+    F.text,
+    ~F.text.startswith("/"),
+    F.from_user.id == OWNER_TG_ID,
+)
+async def owner_free_chat(message: types.Message, state: FSMContext):
+    """Xo'jayinning ERKIN suhbati — mijoz handlerlaridan OLDIN turadi.
+
+    ⚠️ NEGA ALOHIDA HANDLER KERAK:
+    Ilgari xo'jayinning matni mijoz uchun yozilgan handlerlarga tushardi.
+    Eng yomoni: `/start` dan keyin u `Register.lang` holatida qolsa, nima
+    yozsa ham «tilni tanlang» javobini olardi va AI ga MUTLAQO yetib
+    bormasdi. Endi xo'jayin hech qachon mijoz oqimiga tushmaydi — holat
+    qolib ketgan bo'lsa avtomatik tozalanadi.
+
+    `ImportState` (Excel import) ataylab bu filtrga KIRMAYDI: o'sha yerda
+    xo'jayin kurs/ustama raqamini kiritadi va u AI ga ketmasligi kerak.
+    """
+    if await state.get_state() is not None:
+        await state.clear()
+
+    txt = (message.text or "").strip()
+    # Eski doimiy klaviaturaning tugmasi bosilgan bo'lsa — AI ga yubormaymiz,
+    # klaviaturani butunlay olib tashlaymiz.
+    if txt in SHOP_BUTTONS or txt in CONTACT_BUTTONS \
+            or txt in LANG_BUTTONS or txt in REGISTER_BUTTONS:
+        _owner_kb_cleared.add(message.from_user.id)
+        await message.answer(
+            "Mijoz menyusi olib tashlandi, xo'jayin. Endi shunchaki yozing — "
+            "men bajaraman.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+
+    await handle_ai_chat(message, state)
+
+
+# =====================================================================
 # HANDLERLAR
 # =====================================================================
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
+
+    # 👔 XO'JAYIN: mijoz oqimi (til tanlash / ro'yxatdan o'tish / menyu)
+    #    unga umuman kerak emas. Kunda bir marta salom, tugmalarsiz.
+    if _is_owner(user_id):
+        greet = await _owner_needs_greeting(user_id)
+        if greet:
+            await message.answer(
+                "Assalomu alaykum, xo'jayin. Buyruqlaringizni kutaman — "
+                "shunchaki yozing.",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            await _mark_owner_greeted(user_id)
+        else:
+            await message.answer("Tinglayman, xo'jayin.",
+                                 reply_markup=ReplyKeyboardRemove())
+        _owner_kb_cleared.add(user_id)
+        return
+
     existing_user = await firebase_get(f"users/{user_id}/profile")
     if existing_user and existing_user.get("lang"):
         users_db[user_id] = existing_user
@@ -2069,8 +2214,7 @@ async def handle_stories(message: types.Message, bot: Bot):
             await handle_photo_redirect(message)
             return
         lang = await get_user_lang(message.from_user.id)
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-            text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+        kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
         await message.reply(t(lang, "media_reply"), parse_mode="HTML", reply_markup=kb)
         return
 
@@ -2147,8 +2291,7 @@ async def handle_photo_redirect(message: types.Message):
     """
     user_id = message.from_user.id
     lang = await get_user_lang(user_id)
-    shop_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    shop_kb = shop_kb_for(user_id, lang)   # xo'jayinga tugma yo'q
 
     # 🚦 Rasm tahlili (vision) eng qimmat amal — chegara qattiqroq.
     if _rate_limited(user_id, "photo", RL_PHOTO_MAX, RL_PHOTO_WINDOW):
@@ -2497,7 +2640,65 @@ async def owner_report_command(message: types.Message):
     )
 
 
-def _ai_system_prompt(lang, user_id=None, display_name=""):
+def _owner_system_prompt(user_id, display_name="", greet=False):
+    """👔 XO'JAYIN uchun ALOHIDA ko'rsatma — sotuvchi emas, SHAXSIY YORDAMCHI.
+
+    ⚠️ NEGA MIJOZ PROMPTI YARAMAYDI (xo'jayinning aynan shikoyati):
+      1. Mijoz promptining oxirida «Aniq zapchast yoki narx so'ralsa —
+         "Pastdagi tugma orqali onlayn do'konimizdan qidiring" deb
+         yo'naltiring» qoidasi bor edi. Ya'ni model xo'jayinni HAR SAFAR
+         o'zining do'koniga yuborardi — mutlaqo ma'nosiz.
+      2. «professional xushmuomala sotuvchi-maslahatchi» roli modelni har
+         javobda salomlashish/xush kelibsiz kabi kirish gaplariga majburlardi.
+      3. Mijoz qoidalari (rasm, razmer, mashina rusumi) xo'jayinning
+         boshqaruv topshiriqlariga aloqasi yo'q edi.
+
+    Endi xo'jayin uchun rol boshqa: u topshiriq beradi — yordamchi BAJARADI.
+    """
+    if greet:
+        salom = ("- Bu BUGUNGI BIRINCHI muloqot. Qisqa salomlashing (bir gap: "
+                 "«Assalomu alaykum, Xo'jayin»), keyin DARHOL ishga o'ting.\n")
+    else:
+        salom = ("- Bugun siz allaqachon salomlashgansiz. QAYTA SALOMLASHMANG. "
+                 "«Assalomu alaykum», «xush kelibsiz», «yana qanday xizmat», "
+                 "«sizga yordam berishdan xursandman» kabi KIRISH gaplarini "
+                 "YOZMANG — to'g'ridan-to'g'ri javobning o'zini bering.\n")
+
+    return (
+        _owner_identity_block(user_id, display_name).strip("\n") + "\n\n"
+        "SIZNING ROLINGIZ:\n"
+        "Siz 'Avto_A1' do'koni xo'jayinining shaxsiy yordamchisi — uning o'ng "
+        "qo'lisiz. Siz mijozlar bilan ishlaydigan sotuvchi EMASSIZ. Vazifangiz: "
+        "xo'jayin aytgan ishni BAJARISH va aniq javob berish.\n\n"
+        "MUOMALA:\n"
+        + salom +
+        "- Inson kabi, tabiiy gaplashing. Rasmiy shablon javoblar bermang.\n"
+        "- Qisqa va aniq bo'ling. Bo'sh gap, ortiqcha maqtov va uzun kirish yo'q.\n"
+        "- Xo'jayin oddiy gap aytsa (hazil, shikoyat, fikr) — odam kabi javob "
+        "bering, har gapni vazifaga aylantirishga urinmang.\n\n"
+        "ISHNI BAJARISH:\n"
+        "- Topshiriq berilsa — vositalar (tools) bilan BAJARING yoki reja "
+        "tuzing. «Buni qila olmayman» deb boshlab yubormang: avval vositalarni "
+        "tekshiring.\n"
+        "- Ma'lumot so'ralsa — bazadan vosita bilan oling. Raqamni O'ZINGIZDAN "
+        "TO'QIMANG. Bilmasangiz «aniq ma'lumot yo'q» deb ayting.\n"
+        "- Topshiriq tushunarsiz bo'lsa — bitta aniq savol bilan so'rang.\n"
+        "- O'zgartirish kerak bo'lsa, u tasdiq kartochkasi orqali boradi: "
+        "xo'jayin tugmani bosmaguncha hech narsa o'zgarmaydi. Buni bilib "
+        "ishlang va nima qilmoqchi bo'lganingizni bir gapda tushuntiring.\n\n"
+        "TAQIQLAR (xo'jayin uchun):\n"
+        "- Xo'jayinni o'z do'koniga YO'NALTIRMANG: uni katalogdan qidirishga, "
+        "ilovani ochishga yoki biror tugmani bosishga undaydigan gap yozmang. "
+        "Do'kon uning o'ziga tegishli — kerakli ma'lumotni O'ZINGIZ vositalar "
+        "bilan olib bering.\n"
+        "- Do'kon telefoni yoki manzilini unga taklif qilmang — u biladi.\n"
+        "- Havola (link) yozmang.\n"
+        "- O'zingizni sotuvchi sifatida tanishtirmang.\n\n"
+        "TIL: xo'jayin qaysi tilda yozsa — AYNAN o'sha tilda javob bering."
+    )
+
+
+def _ai_system_prompt(lang, user_id=None, display_name="", owner_greet=False):
     """Telegram matnli AI suhbati uchun tizim ko'rsatmasi (professional sotuvchi).
 
     MUHIM: bu ko'rsatma HAR XABARDA qayta o'rnatiladi. Ilgari til faqat birinchi
@@ -2505,6 +2706,12 @@ def _ai_system_prompt(lang, user_id=None, display_name=""):
     berardi. Endi profil tili + 'mijoz qaysi tilda yozsa o'sha tilda javob ber'
     qoidasi har safar yangilanadi.
     """
+    # 👔 XO'JAYIN uchun butunlay BOSHQA ko'rsatma. Pastdagi mijoz prompti
+    #    unga yaramaydi: u modelni har javobda «do'kondan qidiring» deb
+    #    yo'naltirishga va sotuvchi kabi salomlashishga majburlardi.
+    if _is_owner(user_id):
+        return _owner_system_prompt(user_id, display_name, greet=owner_greet)
+
     profil_til = "rus" if lang == "ru" else "o'zbek"
     # ⚠️ MUROJAAT/SHAXSIYAT BLOKI ENG BOSHDA TURADI.
     #    Ilgari u `+ _owner_identity_block(...)` bilan promptning OXIRIGA
@@ -2540,7 +2747,7 @@ def _ai_system_prompt(lang, user_id=None, display_name=""):
     )
 
 
-def _ensure_ai_session(user_id, lang, display_name="", extra=""):
+def _ensure_ai_session(user_id, lang, display_name="", extra="", owner_greet=False):
     """ai_sessions[user_id] mavjudligini va system promptning YANGI ekanini ta'minlaydi.
 
     Mavjud suhbat tarixi saqlanadi — faqat birinchi (system) xabar yangilanadi.
@@ -2554,7 +2761,8 @@ def _ensure_ai_session(user_id, lang, display_name="", extra=""):
     # uchun jonli biznes ma'lumoti). Suhbat TARIXIGA yozilmaydi: system xabar
     # har navbatda qaytadan qurilgani uchun keyingi savolda eski (eskirgan)
     # raqamlar qolib ketmaydi.
-    prompt = _ai_system_prompt(lang, user_id, display_name) + (extra or "")
+    prompt = _ai_system_prompt(lang, user_id, display_name,
+                               owner_greet=owner_greet) + (extra or "")
     if user_id not in ai_sessions:
         ai_sessions[user_id] = [{"role": "system", "content": prompt}]
     else:
@@ -2630,6 +2838,11 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         #    va `users` tugunini o'qib promptga tiqardi: sekin, qimmat va
         #    xulosada yo'q raqamni AI to'qib yozishi mumkin edi.
         #    Agent o'chirilgan bo'lsa (AI_AGENT_ENABLED=0) — eski yo'l ishlaydi.
+        # 👔 Salom KUNDA BIR MARTA. Bu yerda faqat ANIQLAYMIZ — belgilash
+        #    javob muvaffaqiyatli yuborilgandan KEYIN bo'ladi, aks holda
+        #    Groq xato bersa xo'jayin o'sha kuni salom eshitmay qolardi.
+        owner_greet = await _owner_needs_greeting(user_id) if owner else False
+
         use_agent = owner and ai_agent.is_enabled()
         extra = ""
         if use_agent:
@@ -2642,7 +2855,8 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
 
         # System promptni HAR safar yangilaymiz — shunda til doim to'g'ri bo'ladi
         # (mijoz tilni almashtirsa ham), suhbat tarixi esa saqlanib qoladi.
-        _ensure_ai_session(user_id, lang, _tg_display_name(message.from_user), extra)
+        _ensure_ai_session(user_id, lang, _tg_display_name(message.from_user), extra,
+                           owner_greet=owner_greet)
         ai_sessions[user_id].append({"role": "user", "content": message.text})
 
         bot_reply = None
@@ -2669,7 +2883,8 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
                 # `_ensure_ai_session` faqat system xabarni yangilaydi —
                 # suhbat tarixi va hozirgi savol joyida qoladi.
                 _ensure_ai_session(user_id, lang,
-                                   _tg_display_name(message.from_user), fb_extra)
+                                   _tg_display_name(message.from_user), fb_extra,
+                                   owner_greet=owner_greet)
 
         if bot_reply is None:
             bot_reply = await groq_chat(ai_sessions[user_id], temperature=0.5)
@@ -2688,9 +2903,21 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         if len(ai_sessions[user_id]) > 17:
             ai_sessions[user_id] = [ai_sessions[user_id][0]] + ai_sessions[user_id][-16:]
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-            text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
-        await message.reply(bot_reply, reply_markup=kb)
+        # 🔕 XO'JAYINGA DO'KON TUGMASI YO'Q.
+        #    Ilgari shu yerda har AI javobiga «Do'konga marhamat» WebApp
+        #    tugmasi qo'shilardi — xo'jayin uchun bu bezovta qiluvchi va
+        #    ma'nosiz edi (do'kon uning o'ziga tegishli). Mijoz uchun tugma
+        #    o'z joyida. Xo'jayinga esa birinchi javobda mijoz menyusini
+        #    (pastdagi doimiy klaviaturani) olib tashlaymiz.
+        if owner:
+            markup = _owner_reply_markup(user_id)
+        else:
+            markup = shop_inline_kb(lang)
+        await message.reply(bot_reply, reply_markup=markup)
+
+        # ✅ Javob yetib bordi — bugun salomlashildi deb belgilaymiz.
+        if owner and owner_greet:
+            await _mark_owner_greeted(user_id)
 
         # ✅ AI o'zgartirish TAKLIF qilgan bo'lsa — har biri uchun alohida
         #    tasdiq kartochkasi. Kartochka AI javobidan KEYIN yuboriladi:
@@ -2843,8 +3070,7 @@ async def _append_to_card(msg, result_text):
 async def handle_voice_like(message: types.Message):
     """Ovozli xabar / doiracha / audio — endi javobsiz qolmaydi."""
     lang = await get_user_lang(message.from_user.id)
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
     await message.reply(t(lang, "voice_reply"), parse_mode="HTML", reply_markup=kb)
 
 
@@ -2852,8 +3078,7 @@ async def handle_voice_like(message: types.Message):
 async def handle_sticker_like(message: types.Message):
     """Stiker / GIF / o'yin suyagi — do'stona javob va do'kon tugmasi."""
     lang = await get_user_lang(message.from_user.id)
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
     await message.reply(t(lang, "sticker_reply"), reply_markup=kb)
 
 
@@ -2888,8 +3113,7 @@ async def handle_contact_share(message: types.Message):
             users_db[user_id] = prof
     except Exception as e:
         logging.error(f"Kontakt raqamini saqlash xatosi: {e}")
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
     await message.reply(t(lang, "contact_reply", phone=esc(phone or "—")),
                         parse_mode="HTML", reply_markup=kb)
 
@@ -2898,8 +3122,7 @@ async def handle_contact_share(message: types.Message):
 async def handle_video_other(message: types.Message):
     """Hashtegsiz video (storis emas) — javobsiz qoldirmaymiz."""
     lang = await get_user_lang(message.from_user.id)
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
     await message.reply(t(lang, "media_reply"), parse_mode="HTML", reply_markup=kb)
 
 
