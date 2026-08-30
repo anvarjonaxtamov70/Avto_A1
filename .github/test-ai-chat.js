@@ -185,8 +185,26 @@ t('«dasta» chizig\'i (::before) o\'chirilgan', () => {
   ok(HTML.indexOf('#aiChatModal.modal-standard::before { display: none !important; }') !== -1);
 });
 t('xavfsiz zona SARLAVHAGA berilgan (bo\'sh joyga emas)', () => {
-  ok(/\.sg-head\s*\{[\s\S]*?padding-top:\s*calc\(12px \+ env\(safe-area-inset-top/.test(HTML),
-    'sarlavhada safe-area yo\'q');
+  // ⚠️ `env(safe-area-inset-top)` EMAS, `var(--safe-top)`.
+  //
+  // Ilgari bu sinov `env(safe-area-inset-top)` ni talab qilardi va aynan
+  // shu tufayli haqiqiy nosozlik yuzaga keldi: sarlavha Telegram'ning
+  // «‹ Назад» / «+» / «⌄» / «⋯» tugmalari bilan USTMA-UST tushardi
+  // (iPhone'da sarlavhaning faqat «...gird» qismi ko'rinardi).
+  //
+  // SABAB: `env(safe-area-inset-top)` faqat QURILMA xavfsiz zonasini
+  // (notch / Dynamic Island / status bar) beradi. Telegram to'liq ekran
+  // rejimida esa o'z tugmalar panelini kontent USTIDA chizadi va uning
+  // balandligi ALOHIDA qiymatda — `contentSafeAreaInset.top`.
+  //
+  // `index.html` da ikkisining yig'indisi allaqachon hisoblangan
+  // (`applyTgSafeTop`):
+  //     --safe-top = safeAreaInset.top + contentSafeAreaInset.top
+  // `:root` da u `env(safe-area-inset-top)` ga teng qilib qo'yiladi,
+  // ya'ni `var(--safe-top)` HAR HOLATDA `env()` dan yaxshiroq.
+  ok(/\.sg-head\s*\{[\s\S]*?padding-top:\s*calc\(12px \+ var\(--safe-top/.test(HTML),
+    'sarlavhada `var(--safe-top)` yo\'q — Telegram tugmalari bilan ' +
+    'ustma-ust tushadi. `env(safe-area-inset-top)` bu yerda YETARLI EMAS.');
 });
 t('pastdagi panel ham xavfsiz zonani hisobga oladi', () => {
   ok(/\.sg-foot\s*\{[\s\S]*?padding-bottom:\s*calc\(10px \+ env\(safe-area-inset-bottom/.test(HTML));
