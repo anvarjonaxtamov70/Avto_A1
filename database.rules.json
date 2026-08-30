@@ -1,6 +1,14 @@
 {
   "rules": {
-    "//": "==================================================================== XAVFSIZLIK QOIDALARI — 2026.09 (KRITIK TUZATISH) ==================================================================== ADMIN TEKSHIRUVI ikki xil ishlaydi (ikkalasi ham SERVER tomonda, soxtalashtirib bo'lmaydi): 1) admins/{uid} === true  — Console'dan qo'shiladigan asosiy yo'l; 2) qattiq yozilgan uid ro'yxati — admins tuguni hali to'ldirilmagan bo'lsa ham admin panel ISHLAB TURISHI uchun zaxira. auth.uid = Telegram ID (Worker /auth initData'ni HMAC bilan tekshirib beradi), shuning uchun bu ro'yxatni brauzerdan o'zgartirib bo'lmaydi. MUHIM: bot va Worker service-account bilan ishlaydi — ular bu qoidalarni chetlab o'tadi, shuning uchun ularning ishi buzilmaydi.",
+    // ==================================================================== XAVFSIZLIK QOIDALARI
+    // — 2026.09 (KRITIK TUZATISH)
+    // ==================================================================== ADMIN TEKSHIRUVI ikki
+    // xil ishlaydi (ikkalasi ham SERVER tomonda, soxtalashtirib bo'lmaydi): 1) admins/{uid} ===
+    // true  — Console'dan qo'shiladigan asosiy yo'l; 2) qattiq yozilgan uid ro'yxati — admins
+    // tuguni hali to'ldirilmagan bo'lsa ham admin panel ISHLAB TURISHI uchun zaxira. auth.uid =
+    // Telegram ID (Worker /auth initData'ni HMAC bilan tekshirib beradi), shuning uchun bu
+    // ro'yxatni brauzerdan o'zgartirib bo'lmaydi. MUHIM: bot va Worker service-account bilan
+    // ishlaydi — ular bu qoidalarni chetlab o'tadi, shuning uchun ularning ishi buzilmaydi.
 
     ".read": false,
     ".write": false,
@@ -11,7 +19,12 @@
     },
 
     "users": {
-      "//": "ILGARI: '.read': true + '.write': true — ya'ni internetdagi HAR KIM /users.json orqali barcha mijozlarning ismi, telefoni, manzili va buyurtma tarixini yuklab olardi yoki hammasini o'chirib tashlardi. ENDI: butun ro'yxatni faqat admin o'qiydi; har bir mijoz faqat O'ZINING yozuvini o'qiydi/yozadi. tg_url_* / apk_* (Telegram'siz brauzer/APK) yozuvlari auth ola olmaydi, shuning uchun ular ochiq qoladi — lekin butun ro'yxatni to'kib olish endi imkonsiz.",
+      // ILGARI: '.read': true + '.write': true — ya'ni internetdagi HAR KIM /users.json orqali
+      // barcha mijozlarning ismi, telefoni, manzili va buyurtma tarixini yuklab olardi yoki
+      // hammasini o'chirib tashlardi. ENDI: butun ro'yxatni faqat admin o'qiydi; har bir mijoz
+      // faqat O'ZINING yozuvini o'qiydi/yozadi. tg_url_* / apk_* (Telegram'siz brauzer/APK)
+      // yozuvlari auth ola olmaydi, shuning uchun ular ochiq qoladi — lekin butun ro'yxatni
+      // to'kib olish endi imkonsiz.
 
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
 
@@ -72,7 +85,9 @@
     },
 
     "orders": {
-      "//": "Markaziy buyurtma ro'yxati. ILGARI '.write': 'newData.exists()' — har kim soxta buyurtma to'kib tashlashi yoki butun tugunni o'chirishi mumkin edi. ENDI: mijoz faqat YANGI buyurtma yaratadi (mavjudini o'zgartira olmaydi), holatni faqat admin o'zgartiradi.",
+      // Markaziy buyurtma ro'yxati. ILGARI '.write': 'newData.exists()' — har kim soxta buyurtma
+      // to'kib tashlashi yoki butun tugunni o'chirishi mumkin edi. ENDI: mijoz faqat YANGI
+      // buyurtma yaratadi (mavjudini o'zgartira olmaydi), holatni faqat admin o'zgartiradi.
 
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
       ".indexOn": ["createdAt", "status", "uid"],
@@ -93,7 +108,10 @@
     },
 
     "products": {
-      "//": "ILGARI '.write': 'newData.exists()' — bu RUXSAT tekshiruvi EMAS, faqat 'o'chirmang' degani edi. Har kim barcha narxlarni 0 qilib qo'yishi yoki katalogni buzishi mumkin edi. ENDI: yozish faqat admin. ISTISNO: stock — tasdiqlangan mijoz uni FAQAT KAMAYTIRISHI mumkin (buyurtma paytidagi zaxira yo'li; asosiy yo'l Worker /stock-commit).",
+      // ILGARI '.write': 'newData.exists()' — bu RUXSAT tekshiruvi EMAS, faqat 'o'chirmang'
+      // degani edi. Har kim barcha narxlarni 0 qilib qo'yishi yoki katalogni buzishi mumkin edi.
+      // ENDI: yozish faqat admin. ISTISNO: stock — tasdiqlangan mijoz uni FAQAT KAMAYTIRISHI
+      // mumkin (buyurtma paytidagi zaxira yo'li; asosiy yo'l Worker /stock-commit).
 
       ".read": true,
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
@@ -121,7 +139,7 @@
     },
 
     "stories": {
-      "//": "ILGARI har kim yozardi. Storis — faqat admin qo'yadigan reklama kontenti.",
+      // ILGARI har kim yozardi. Storis — faqat admin qo'yadigan reklama kontenti.
       ".read": true,
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
     },
@@ -137,7 +155,8 @@
     },
 
     "reviews": {
-      "//": "ILGARI har kim istalgan mijoz nomidan sharh yozishi/o'chirishi mumkin edi. ENDI: har kim faqat O'Z nomidan (auth.uid === $uid) yozadi.",
+      // ILGARI har kim istalgan mijoz nomidan sharh yozishi/o'chirishi mumkin edi. ENDI: har kim
+      // faqat O'Z nomidan (auth.uid === $uid) yozadi.
       ".read": true,
 
       "$productId": {
@@ -158,7 +177,10 @@
     },
 
     "refcodes": {
-      "//": "ILGARI '.write': true — hujumchi mavjud referal kodni O'ZIGA o'girib, boshqa odamning cashback'ini yig'ib olardi. ENDI: kod faqat BIR MARTA yaratiladi va qiymati yozuvchining o'z uid'i bo'lishi shart. (index.html allaqachon shu qoidani kutadi — 'faqat yo'q bo'lsa yozamiz'.)",
+      // ILGARI '.write': true — hujumchi mavjud referal kodni O'ZIGA o'girib, boshqa odamning
+      // cashback'ini yig'ib olardi. ENDI: kod faqat BIR MARTA yaratiladi va qiymati yozuvchining
+      // o'z uid'i bo'lishi shart. (index.html allaqachon shu qoidani kutadi — 'faqat yo'q bo'lsa
+      // yozamiz'.)
 
       "$code": {
         ".read": true,
@@ -182,7 +204,8 @@
     },
 
     "notify_requests": {
-      "//": "'Kelganda xabar bering' so'rovlari. ILGARI to'liq ochiq edi — mijozlar ro'yxatini o'qib olish mumkin edi. ENDI: o'qish faqat admin, yozish faqat o'z nomidan.",
+      // 'Kelganda xabar bering' so'rovlari. ILGARI to'liq ochiq edi — mijozlar ro'yxatini o'qib
+      // olish mumkin edi. ENDI: o'qish faqat admin, yozish faqat o'z nomidan.
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
 
       "$productId": {
@@ -193,7 +216,9 @@
     },
 
     "ai_requests": {
-      "//": "ILGARI to'liq ochiq — begona odam boshqa mijozlarning AI suhbatini o'qishi va cheksiz so'rov yozib AI budjetini yoqib yuborishi mumkin edi (botni har 2 sekundda so'rov yuboradi). ENDI: har kim faqat o'z suhbatini ko'radi.",
+      // ILGARI to'liq ochiq — begona odam boshqa mijozlarning AI suhbatini o'qishi va cheksiz
+      // so'rov yozib AI budjetini yoqib yuborishi mumkin edi (botni har 2 sekundda so'rov
+      // yuboradi). ENDI: har kim faqat o'z suhbatini ko'radi.
 
       "$uid": {
         ".read": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
@@ -202,7 +227,7 @@
     },
 
     "ai_bulk_requests": {
-      "//": "Ommaviy import — faqat admin funksiyasi. ILGARI to'liq ochiq edi.",
+      // Ommaviy import — faqat admin funksiyasi. ILGARI to'liq ochiq edi.
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
 
@@ -217,19 +242,24 @@
     },
 
     "ai_admin_tasks": {
-      "//": "AI tavsif yozish topshiriqlari — faqat admin. ILGARI to'liq ochiq edi: begona odam istalgan matnni va istalgan rasm URL'ini AI'ga yuborishi mumkin edi (prompt injection + budjet).",
+      // AI tavsif yozish topshiriqlari — faqat admin. ILGARI to'liq ochiq edi: begona odam
+      // istalgan matnni va istalgan rasm URL'ini AI'ga yuborishi mumkin edi (prompt injection +
+      // budjet).
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
     },
 
     "pending_actions": {
-      "//": "AI tasdiq kutayotgan o'zgarishlar. FAQAT bot (service account) o'qiydi va yozadi — u qoidalarni chetlab o'tadi. Mijoz uchun to'liq YOPIQ: aks holda begona odam token'ni ko'rib, tasdiqlanmagan amalni o'zgartirishi mumkin edi.",
+      // AI tasdiq kutayotgan o'zgarishlar. FAQAT bot (service account) o'qiydi va yozadi — u
+      // qoidalarni chetlab o'tadi. Mijoz uchun to'liq YOPIQ: aks holda begona odam token'ni
+      // ko'rib, tasdiqlanmagan amalni o'zgartirishi mumkin edi.
       ".read": false,
       ".write": false
     },
 
     "audit_log": {
-      "//": "AI qilgan har bir o'zgarishning jurnali (oldingi qiymat bilan) — '/orqaga' buyrug'i shundan o'qiydi. Mijoz uchun YOPIQ: bu yerda narx tarixi va buyurtma ma'lumotlari bor.",
+      // AI qilgan har bir o'zgarishning jurnali (oldingi qiymat bilan) — '/orqaga' buyrug'i
+      // shundan o'qiydi. Mijoz uchun YOPIQ: bu yerda narx tarixi va buyurtma ma'lumotlari bor.
       ".read": false,
       ".write": false
     }
