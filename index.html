@@ -20625,7 +20625,6 @@ html.lite[data-theme="light"] body .story-item {
 @keyframes lyRingSpin { to { transform: rotate(360deg); } }
 @keyframes lyPulse  { 0%,100% { box-shadow: 0 0 0 0 rgba(201,168,76,.45); } 50% { box-shadow: 0 0 0 9px rgba(201,168,76,0); } }
 @keyframes lyDash   { to { stroke-dashoffset: -28; } }
-@keyframes st2AddPulse { 0%,100% { box-shadow: 0 3px 9px rgba(201,168,76,.42), 0 0 0 0 rgba(201,168,76,.34); } 50% { box-shadow: 0 3px 9px rgba(201,168,76,.42), 0 0 0 7px rgba(201,168,76,0); } }
 
 /* ===========================================================================
    1) STORIES — Telegram uslubidagi "Mening storyim" (faqat admin)
@@ -20645,26 +20644,15 @@ html.lite[data-theme="light"] body .story-item {
     position: relative; width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
     background: linear-gradient(150deg, #26262b, #131315);
-    color: var(--luxury-gold); font-size: 22px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
-    box-shadow: inset 0 0 0 2px var(--bg-dark);
 }
-.story-item.st2-add .st2-add-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.story-item.st2-add .st2-add-badge {
-    position: absolute; right: -3px; bottom: -2px; z-index: 2;
-    width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box;
-    display: flex; align-items: center; justify-content: center;
-    border: 2.5px solid var(--bg-dark); background: var(--gold-gradient); color: #2a2000;
-    font-size: 17px; font-weight: 800; line-height: 1;
-    box-shadow: 0 3px 9px rgba(201,168,76,.42);
+.story-item.st2-add .st2-add-plus {
+    font-size: 30px; font-weight: 300; line-height: 1; margin-top: -2px;
+    color: var(--luxury-gold) !important;
 }
 .story-item.st2-add > span { color: var(--text-main) !important; font-weight: 650 !important; }
 html[data-theme="light"] .story-item.st2-add .st2-add-ring { box-shadow: 0 4px 12px rgba(150,114,10,.22), 0 0 0 1px rgba(150,114,10,.2); }
-html[data-theme="light"] .story-item.st2-add .st2-add-avatar { background: linear-gradient(150deg, #fbf6ea, #efe3c9); color: var(--luxury-gold); }
-html[data-theme="light"] .story-item.st2-add .st2-add-avatar span { color: var(--luxury-gold) !important; }
-html[data-theme="light"] .story-item.st2-add .st2-add-badge { border-color: var(--bg-dark); background: var(--gold-gradient) !important; color: #2a2000 !important; }
-@media (prefers-reduced-motion: no-preference) {
-    .story-item.st2-add .st2-add-badge { animation: st2AddPulse 3s ease-in-out infinite; }
-}
+html[data-theme="light"] .story-item.st2-add .st2-add-avatar { background: linear-gradient(150deg, #fbf6ea, #efe3c9); }
+html[data-theme="light"] .story-item.st2-add .st2-add-plus { color: var(--luxury-gold) !important; }
 
 /* ===========================================================================
    2) STORIES — "o'ngga tortish" imo paneli (Telegram uslubi)
@@ -21248,8 +21236,7 @@ html:not([data-theme="light"]) .cst-card {
     .vipc-bar i { transition: none !important; }
 }
 html.lite .vipc-card::after,
-html.lite .st2-save::after,
-html.lite .story-item.st2-add .st2-add-badge { animation: none !important; }
+html.lite .st2-save::after { animation: none !important; }
 html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none !important; }
 </style>
 
@@ -22840,15 +22827,6 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             if (!amAdmin()) return;
             var list = $('stories-list');
             if (!list || $('st2-add-item')) return;
-            var u = {}, profile = myProfileSafe() || {};
-            try {
-                var tgu = (typeof tg !== 'undefined' && tg && tg.initDataUnsafe) ? tg.initDataUnsafe.user : null;
-                if (tgu) u = tgu;
-            } catch (e) {}
-            var name = u.first_name || profile.name || profile.firstName || 'Admin';
-            var initial = String(name).trim().charAt(0).toUpperCase() || 'A';
-            var photo = u.photo_url || profile.photo_url || profile.photo || '';
-
             var el = document.createElement('div');
             el.className = 'story-item st2-add';
             el.id = 'st2-add-item';
@@ -22857,10 +22835,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             el.setAttribute('aria-label', 'Mening storyimga yangi story qo‘shish');
             el.innerHTML =
                 '<div class="st2-add-ring">' +
-                    '<div class="st2-add-avatar"><span>' + E(initial) + '</span>' +
-                        (photo ? '<img src="' + E(photo) + '" alt="" onerror="this.remove()">' : '') +
-                    '</div>' +
-                    '<span class="st2-add-badge" aria-hidden="true">+</span>' +
+                    '<div class="st2-add-avatar"><span class="st2-add-plus" aria-hidden="true">+</span></div>' +
                 '</div><span>Mening storyim</span>';
             var openComposer = function () { hap('medium'); AvtoStories.openComposer(null, null); };
             el.onclick = openComposer;
