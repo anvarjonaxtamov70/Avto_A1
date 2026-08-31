@@ -20,6 +20,8 @@
 //     BOT_TOKEN, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
 //  Ixtiyoriy:
 //     ADMIN_IDS        (vergul bilan, mas: "5105291033,483425630")
+//     ADMIN_ALERT_CHAT_ID (yangi mijoz xabari boradigan bitta Telegram chat)
+//     CUSTOMER_REGISTRATION_RATE_LIMIT (anonymous IP uchun soatlik limit, standart 20)
 //     FIREBASE_DB_URL  (mas: "https://avtoa1shop-default-rtdb.firebaseio.com")
 //     REFERRAL_BONUS   (mas: "20000")
 //
@@ -492,6 +494,7 @@ export default {
     // dispatched explicitly so an unknown path can never fall through to Telegram.
     if (path === "/order-commit") return handleOrderCommit(request, env);
     if (path === "/order-status") return handleOrderStatus(request, env);
+    if (path === "/customer-register") return handleCustomerRegister(request, env);
     if (path === "/referral") return handleReferralSecure(request, env);
     if (path === "/referral-qualify") return handleReferralQualifySecure(request, env);
     if (path === "/stock-commit") return handleDeprecatedStockCommit(request, env);
@@ -2350,6 +2353,305 @@ async function handleReferralQualifySecure(request, env) {
   }
 }
 
+
+function escapeTelegramHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function normalizeCustomerRegistration(body, identity) {
+  const supplied = body.profile && typeof body.profile === "object" && !Array.isArray(body.profile)
+    ? body.profile
+    : {};
+  const telegram = identity.source === "telegram";
+  const claims = identity.claims && typeof identity.claims === "object" ? identity.claims : {};
+  const firstName = cleanText(telegram ? claims.first_name : supplied.firstName, 80, false);
+  const lastName = cleanText(telegram ? claims.last_name : supplied.lastName, 80, false);
+  const suppliedName = cleanText(supplied.name, 100, false);
+  const name = cleanText(
+    telegram ? ([firstName, lastName].filter(Boolean).join(" ") || suppliedName || "Mijoz") : suppliedName,
+    100,
+    !telegram
+  );
+  const username = cleanText(telegram ? claims.username : supplied.username, 64, false).replace(/^@+/, "");
+  const phone = cleanText(supplied.phone, 40, false);
+  if (!telegram) {
+    if (!phone || !/^[+0-9()\-\s]{5,40}$/.test(phone)) {
+      throw httpError(400, "telefon formati noto'g'ri");
+    }
+  } else if (phone && !/^[+0-9()\-\s]{5,40}$/.test(phone)) {
+    throw httpError(400, "telefon formati noto'g'ri");
+  }
+  return {
+    uid: identity.uid,
+    source: telegram ? "telegram" : "anonymous",
+    registeredAt: Date.now(),
+    name,
+    firstName,
+    lastName,
+    username,
+    phone,
+    notify: true,
+  };
+}
+
+function newCustomerTelegramText(registration) {
+  const NL = String.fromCharCode(10);
+  const lines = [
+    "🆕 <b>Yangi mijoz ro'yxatdan o'tdi</b>",
+    "",
+    "Ism: <b>" + escapeTelegramHtml(registration.name || "Mijoz") + "</b>",
+  ];
+  if (registration.username) lines.push("Username: @" + escapeTelegramHtml(registration.username));
+  if (registration.phone) lines.push("Telefon: <code>" + escapeTelegramHtml(registration.phone) + "</code>");
+  lines.push("Manba: " + (registration.source === "telegram" ? "Telegram" : "Mini App"));
+  lines.push("UID: <code>" + escapeTelegramHtml(registration.uid) + "</code>");
+  return lines.join(NL);
+}
+
+async function projectNewCustomerNotification(ctx, token, registration) {
+  const eventId = "new_customer_" + registration.uid;
+  const event = {
+    id: eventId,
+    type: "new_customer",
+    uid: registration.uid,
+    source: registration.source,
+    title: "Yangi mijoz ro'yxatdan o'tdi",
+    text: registration.name + (registration.username ? " (@" + registration.username + ")" : "") +
+      " — " + (registration.source === "telegram" ? "Telegram" : "Mini App"),
+    createdAt: Number(registration.registeredAt) || Date.now(),
+  };
+  await rtdbCreateIfNull(
+    ctx.dbUrl,
+    "admin_notifications/" + eventId,
+    event,
+    token,
+    (value) => value && value.id === eventId && value.uid === registration.uid && value.type === "new_customer"
+  );
+  return event;
+}
+
+async function sendNewCustomerTelegramOnce(ctx, token, registration, env) {
+  const destination = String(env.ADMIN_ALERT_CHAT_ID || getAdminIds(env)[0] || "").trim();
+  if (!env.BOT_TOKEN || !/^-?[1-9]\d{0,19}$/.test(destination)) {
+    return { state: "unconfigured" };
+  }
+  const eventId = "new_customer_" + registration.uid;
+  const claimPath = "notification_outbox/" + eventId;
+  const claim = await rtdbCreateIfNull(
+    ctx.dbUrl,
+    claimPath,
+    {
+      type: "new_customer",
+      uid: registration.uid,
+      destination,
+      state: "sending",
+      claimedAt: Date.now(),
+    },
+    token,
+    (value) => value && value.type === "new_customer" && value.uid === registration.uid
+  );
+  if (!claim.created) return { state: String(claim.value.state || "claimed"), duplicate: true };
+
+  let state = "ambiguous";
+  let messageId = null;
+  let telegramError = "";
+  try {
+    const response = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: destination,
+        text: newCustomerTelegramText(registration),
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    });
+    let data = null;
+    try { data = await response.json(); } catch (_) {}
+    if (response.ok && data && data.ok === true && data.result) {
+      state = "sent";
+      messageId = data.result.message_id == null ? null : data.result.message_id;
+    } else {
+      state = "failed";
+      telegramError = data && data.description ? String(data.description).slice(0, 300) : "Telegram rad etdi";
+    }
+  } catch (err) {
+    // Telegram so'rovni olgan-olmaganini bilib bo'lmaydi. Qayta yuborish
+    // dublikat berishi mumkin, shuning uchun claim saqlanadi va retry qilinmaydi.
+    state = "ambiguous";
+    telegramError = String(err && err.message || "tarmoq xatosi").slice(0, 300);
+  }
+
+  try {
+    await rtdbPatch(ctx.dbUrl, claimPath, {
+      state,
+      finishedAt: Date.now(),
+      messageId,
+      error: telegramError || null,
+    }, token);
+  } catch (_) {
+    // Claim send'dan OLDIN yozilgan. Status proyeksiyasi ishlamasa ham qayta
+    // yubormaymiz — aynan shu tartib Telegram dublikatini to'sadi.
+  }
+  return { state, messageId };
+}
+
+async function consumeCustomerRegistrationRate(request, identity, env, ctx, token) {
+  if (identity.source === "telegram") return;
+  const forwarded = String(request.headers.get("CF-Connecting-IP") || "").trim();
+  const ipHash = (await sha256Hex(forwarded || "unknown")).slice(0, 40);
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000;
+  const configured = Number(env.CUSTOMER_REGISTRATION_RATE_LIMIT || 20);
+  const limit = Number.isFinite(configured) ? Math.max(1, Math.min(100, Math.floor(configured))) : 20;
+  await rtdbEtagMutate(ctx.dbUrl, "registration_rate_limits/" + ipHash, token, (current) => {
+    const sameWindow = current && Number(current.windowStart) > 0 &&
+      now - Number(current.windowStart) < windowMs;
+    const windowStart = sameWindow ? Number(current.windowStart) : now;
+    const count = sameWindow ? Math.max(0, Number(current.count) || 0) : 0;
+    if (count >= limit) {
+      throw httpError(429, "yangi mijoz so'rovlari chegarasi tugadi", {
+        retryAfter: Math.max(1, Math.ceil((windowStart + windowMs - now) / 1000)),
+      });
+    }
+    return {
+      value: { windowStart, count: count + 1, updatedAt: now },
+      result: { remaining: limit - count - 1 },
+    };
+  });
+}
+
+function isLanguageOnlyTelegramProfile(profile) {
+  if (!profile || typeof profile !== "object" || !profile.lang) return false;
+  return !(profile.uid || profile.phone || profile.name || profile.firstName || profile.username ||
+    Number(profile.registrationCompletedAt) > 0);
+}
+
+function isLegacyTelegramProfile(profile) {
+  if (!profile || typeof profile !== "object") return false;
+  // Yangi botning to'liq registration oqimi shu timestampni yozadi. Worker
+  // u bilan parallel kelsa bu rollout legacy emas, haqiqiy yangi mijoz.
+  if (Number(profile.registrationCompletedAt) > 0) return false;
+  return !!(profile.uid || profile.phone || profile.name || profile.firstName || profile.username);
+}
+
+async function handleCustomerRegister(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const identity = await authenticateBody(body, env);
+    const proposed = normalizeCustomerRegistration(body, identity);
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const markerPath = "customer_registrations/" + identity.uid;
+    let existingMarker = await rtdbGet(ctx.dbUrl, markerPath, token);
+    let marker;
+    let pendingRegistration = null;
+
+    if (!existingMarker && identity.source !== "telegram") {
+      const storedProfile = await rtdbGet(ctx.dbUrl, "users/" + identity.uid + "/profile", token);
+      const storedName = cleanText(storedProfile && storedProfile.name, 100, false);
+      const storedPhone = cleanText(storedProfile && storedProfile.phone, 40, false);
+      if (!storedProfile || storedName !== proposed.name || storedPhone !== proposed.phone) {
+        throw httpError(409, "profil serverda tasdiqlanmadi");
+      }
+    }
+
+    // Rollout himoyasi: eski Mini App har ochilishda profilni update qilgan,
+    // ammo marker bu relizgacha mavjud emas edi. Telegram profilini Worker
+    // chaqiruvidan OLDIN tekshirib, avvaldan mavjud mijozga jim marker qo'yamiz.
+    if (!existingMarker && identity.source === "telegram") {
+      const existingProfile = await rtdbGet(ctx.dbUrl, "users/" + identity.uid + "/profile", token);
+      const pendingPath = "customer_registration_pending/" + identity.uid;
+      pendingRegistration = await rtdbGet(ctx.dbUrl, pendingPath, token);
+      if (pendingRegistration && !(Number(existingProfile && existingProfile.registrationCompletedAt) > 0)) {
+        return json({
+          ok: true,
+          suppressedIncomplete: true,
+          telegram: { state: "suppressed" },
+        });
+      }
+      if (isLanguageOnlyTelegramProfile(existingProfile)) {
+        // Til tanlash browse-first oqimi hali registration emas. Alohida pending
+        // marker Mini App profilni identity maydonlari bilan boyitgandan keyin ham
+        // shu holatni saqlaydi; haqiqiy bot registration normal marker yarata oladi.
+        const pending = await rtdbCreateIfNull(
+          ctx.dbUrl,
+          pendingPath,
+          { uid: identity.uid, state: "incomplete", createdAt: Date.now() },
+          token,
+          (value) => value && value.uid === identity.uid && value.state === "incomplete"
+        );
+        pendingRegistration = pending.value;
+        return json({
+          ok: true,
+          suppressedIncomplete: true,
+          telegram: { state: "suppressed" },
+        });
+      }
+      if (isLegacyTelegramProfile(existingProfile)) {
+        const silent = { ...proposed, notify: false, reason: "preexisting_profile" };
+        marker = await rtdbCreateIfNull(
+          ctx.dbUrl,
+          markerPath,
+          silent,
+          token,
+          (value) => value && value.uid === identity.uid && value.registeredAt
+        );
+      }
+    }
+
+    if (!marker) {
+      if (existingMarker) {
+        if (!existingMarker.uid || existingMarker.uid !== identity.uid || !existingMarker.registeredAt) {
+          throw httpError(409, "mijoz marker yozuvi mos emas");
+        }
+        marker = { created: false, value: existingMarker };
+      } else {
+        await consumeCustomerRegistrationRate(request, identity, env, ctx, token);
+        marker = await rtdbCreateIfNull(
+          ctx.dbUrl,
+          markerPath,
+          proposed,
+          token,
+          (value) => value && value.uid === identity.uid && value.registeredAt
+        );
+      }
+    }
+
+    const registration = marker.value;
+    if (registration.notify === false) {
+      return json({
+        ok: true,
+        duplicate: !marker.created,
+        suppressedLegacy: true,
+        telegram: { state: "suppressed" },
+      });
+    }
+    if (pendingRegistration) {
+      try {
+        await rtdbPut(ctx.dbUrl, "customer_registration_pending/" + identity.uid, null, token);
+      } catch (_) {
+        // Normal registration marker authoritative; stale pending key harmless.
+      }
+    }
+    const notification = await projectNewCustomerNotification(ctx, token, registration);
+    const telegram = await sendNewCustomerTelegramOnce(ctx, token, registration, env);
+    return json({
+      ok: true,
+      duplicate: !marker.created,
+      eventId: notification.id,
+      telegram,
+      telegramDelivered: telegram.state === "sent",
+    });
+  } catch (err) {
+    const response = errorResponse(err);
+    if (response.status === 429) response.headers.set("Retry-After", String(err.extra && err.extra.retryAfter || 3600));
+    return response;
+  }
+}
 
 function consumeMessageRate(identity, isAdmin) {
   const now = Date.now();

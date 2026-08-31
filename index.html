@@ -7856,6 +7856,56 @@ document.addEventListener('touchmove', function(e) {
         new Promise(function (r) { setTimeout(function () { r(false); }, 12000); })
     ]);
 
+    // 🆕 YANGI MIJOZ HODISASI — faqat Worker orqali, server-authoritative.
+    // Endpoint auth.uid'dan deterministic marker yaratadi; app qayta ochilishi,
+    // retry yoki parallel tab Telegram/Mini App xabarini takrorlamaydi.
+    window._registerCustomerOnce = async function (profile) {
+        try {
+            var payload = { profile: profile || {} };
+            if (tg && tg.initData) {
+                payload.initData = tg.initData;
+            } else {
+                if (window._ensureAuth) await window._ensureAuth();
+                var authUser = firebase.auth && firebase.auth().currentUser;
+                if (!authUser || typeof authUser.getIdToken !== 'function') return false;
+                payload.idToken = await authUser.getIdToken();
+            }
+            var ctl = null;
+            try { if (typeof AbortController !== 'undefined') ctl = new AbortController(); } catch (e) {}
+            var timer = ctl ? setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 8000) : null;
+            var response;
+            try {
+                var requestPromise = fetch(TG_PROXY + '/customer-register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: ctl ? ctl.signal : undefined
+                });
+                response = await requestPromise;
+            } finally {
+                if (timer) clearTimeout(timer);
+            }
+            if (!response.ok) {
+                if (window._dwarn) window._dwarn('[customer-register] Worker rad etdi:', response.status);
+                return false;
+            }
+            var result = await response.json();
+            var completed = !!(result && result.ok);
+            if (completed && !(tg && tg.initData)) {
+                try {
+                    var pending = JSON.parse(localStorage.getItem('avto_registration_pending') || 'null');
+                    if (pending && authUser && String(pending.uid) === String(authUser.uid)) {
+                        localStorage.removeItem('avto_registration_pending');
+                    }
+                } catch (e) {}
+            }
+            return completed;
+        } catch (e) {
+            if (window._dwarn) window._dwarn('[customer-register] xato:', e);
+            return false;
+        }
+    };
+
     // =====================================
     // 🔐 ADMIN TEKSHIRUVI (himoya darajasi: defense-in-depth)
     // =====================================
@@ -7993,11 +8043,28 @@ const Haptics = {
             //    yoziladi (egaga ruxsat), so'ng bazani o'qish boshlanadi.
             var _proceed = function (u) {
                 if (u && u.uid) window.currentUser = u.uid; else window.currentUser = fakeId;
+                if (u && u.uid) {
+                    try {
+                        localStorage.setItem('avto_registration_pending', JSON.stringify({
+                            uid: String(u.uid), name: nameVal, phone: phoneVal
+                        }));
+                    } catch (e) {}
+                }
+                var _profileWrite = Promise.reject(new Error('Firebase mavjud emas'));
                 try {
                     if (typeof db !== 'undefined' && db.ref) {
-                        db.ref('users/' + window.currentUser + '/profile').update({ name: nameVal, phone: phoneVal });
+                        _profileWrite = db.ref('users/' + window.currentUser + '/profile').update({ name: nameVal, phone: phoneVal });
                     }
-                } catch (e) {}
+                } catch (e) { _profileWrite = Promise.reject(e); }
+                // Anonymous authning o'zi ro'yxatdan o'tish EMAS. Faqat ism/telefon
+                // profili muvaffaqiyatli yozilgandan keyin server hodisasini yaratamiz.
+                _profileWrite.then(function () {
+                    if (window._registerCustomerOnce) {
+                        return window._registerCustomerOnce({ name: nameVal, phone: phoneVal });
+                    }
+                }).catch(function (e) {
+                    if (window._dwarn) window._dwarn('[profil] ro\'yxatdan o\'tish yozilmadi:', e);
+                });
                 updateProfileUI();
                 showToast("Xush kelibsiz, " + nameVal + "!", "success");
                 initUserData(); // Mijoz qo'lda kirgandan keyin ruxsat beramiz
@@ -8045,6 +8112,18 @@ const Haptics = {
             }
         } catch (e) {}
 
+        // Manual profil yozilib, Worker vaqtincha ishlamagan bo'lsa pending hodisa
+        // Firebase UID bilan saqlanadi va keyingi ochilishlarda tasdiqlanguncha qayta
+        // reconcile qilinadi. Endpoint deterministic bo'lgani uchun retry dublikat emas.
+        if (!(tg && tg.initData) && window._registerCustomerOnce) {
+            try {
+                var _pendingReg = JSON.parse(localStorage.getItem('avto_registration_pending') || 'null');
+                if (_pendingReg && String(_pendingReg.uid) === String(window.currentUser)) {
+                    window._registerCustomerOnce({ name: _pendingReg.name || '', phone: _pendingReg.phone || '' });
+                }
+            } catch (e) {}
+        }
+
         // 🚨 JIM QOLMASLIK: qoidalar qattiqlashtirilgandan keyin auth ishlamasa
         //    ilova "hech narsa yuklanmadi" holatiga tushadi va SABABI ko'rinmaydi.
         //    Telegram ichidagi foydalanuvchi uchun auth SHART — shuning uchun
@@ -8070,12 +8149,29 @@ const Haptics = {
 
         // 2. Telegramdagi ma'lumotlarni bazaga yozish
         if (isFromTelegram && tgUser) {
-            db.ref('users/' + window.currentUser + '/profile').update({
+            var _tgProfile = {
                 uid: window.currentUser,
                 username: tgUser.username ? "@" + tgUser.username : "Yo'q",
                 firstName: tgUser.first_name || "",
                 lastName: tgUser.last_name || ""
-            });
+            };
+            try {
+                // Worker profil yozilishidan OLDIN eski profil bor-yo'qligini
+                // tekshiradi. Shu tartib rolloutda mavjud mijozlarni «yangi» deb
+                // qayta e'lon qilmaydi; yangi Telegram userda esa profil hali yo'q.
+                if (window._registerCustomerOnce) {
+                    await window._registerCustomerOnce({
+                        name: [tgUser.first_name || '', tgUser.last_name || ''].join(' ').trim(),
+                        username: tgUser.username || '',
+                        phone: myProfile.phone || ''
+                    });
+                }
+                await db.ref('users/' + window.currentUser + '/profile').update(_tgProfile);
+            } catch (e) {
+                if (window._dwarn) window._dwarn('[profil] Telegram profili/hodisasi yozilmadi:', e);
+                // Notification xatosi profilni saqlashni bloklamasin.
+                try { await db.ref('users/' + window.currentUser + '/profile').update(_tgProfile); } catch (_) {}
+            }
         }
 
         // 3. Savat va Tarixni tortib olish
@@ -17141,6 +17237,10 @@ document.addEventListener('click', function (e) {
         orders: [],
         wishlistCount: 0,
         state: defaultState(),
+        adminNotifications: [],
+        _adminNotificationReads: {},
+        _adminNotificationUid: null,
+        _adminNotificationRefs: null,
         _writing: false,
         _unlockQueue: []
     };
@@ -17283,7 +17383,12 @@ document.addEventListener('click', function (e) {
         if (!opts.silent) save();
         updateBell(true);
     }
-    function unreadCount() { return P.state.notifications.filter(function (n) { return !n.read; }).length; }
+    function allNotifications() {
+        return (P.adminNotifications || []).concat(P.state.notifications || []).sort(function (a, b) {
+            return Number(b.date || 0) - Number(a.date || 0);
+        });
+    }
+    function unreadCount() { return allNotifications().filter(function (n) { return !n.read; }).length; }
     function updateBell(ring) {
         var badge = document.getElementById('p2-bell-badge');
         var c = unreadCount();
@@ -17298,14 +17403,83 @@ document.addEventListener('click', function (e) {
         var tb = document.getElementById('p2-tile-notif-badge');
         if (tb) { tb.textContent = c > 9 ? '9+' : c; tb.classList.toggle('show', c > 0); }
     }
+    function markAdminNotificationsRead(items) {
+        if (!P.uid || !hasFB() || !window.isAdmin || !window.isAdmin()) return Promise.resolve();
+        var patch = {};
+        var targets = [];
+        (items || P.adminNotifications || []).forEach(function (n) {
+            if (n && n._admin && !n.read && n.id) {
+                patch[n.id] = true;
+                targets.push(n);
+            }
+        });
+        if (!Object.keys(patch).length) return Promise.resolve();
+        return firebase.database().ref('admin_notification_reads/' + P.uid).update(patch).then(function () {
+            // UI faqat server receipt tasdiqlagandan KEYIN o'qilgan ko'rinadi.
+            targets.forEach(function (n) {
+                n.read = true;
+                P._adminNotificationReads[n.id] = true;
+            });
+            updateBell(false);
+            renderNotifs();
+        }).catch(function (e) {
+            if (window._dwarn) window._dwarn('[admin-notifications] o\'qilgan holat yozilmadi:', e);
+            updateBell(false);
+            renderNotifs();
+        });
+    }
+    function startAdminNotifications() {
+        if (!P.uid || !hasFB() || !window.isAdmin || !window.isAdmin()) return;
+        if (P._adminNotificationUid === P.uid) return;
+        if (P._adminNotificationRefs) {
+            try { P._adminNotificationRefs.events.off(); P._adminNotificationRefs.reads.off(); } catch (e) {}
+        }
+        P._adminNotificationUid = P.uid;
+        var eventsRef = firebase.database().ref('admin_notifications').orderByChild('createdAt').limitToLast(200);
+        var readsRef = firebase.database().ref('admin_notification_reads/' + P.uid);
+        P._adminNotificationRefs = { events: eventsRef, reads: readsRef };
+        var events = {};
+        var reads = {};
+        function applyAdminNotifications(ring) {
+            var previousUnread = (P.adminNotifications || []).filter(function (n) { return !n.read; }).length;
+            P._adminNotificationReads = reads;
+            P.adminNotifications = Object.keys(events || {}).map(function (key) {
+                var item = events[key] || {};
+                return {
+                    id: item.id || key,
+                    icon: item.type === 'new_customer' ? '🆕' : '🔔',
+                    title: item.title || 'Admin bildirishnomasi',
+                    text: item.text || '',
+                    date: Number(item.createdAt) || Date.now(),
+                    read: reads[item.id || key] === true,
+                    _admin: true
+                };
+            });
+            var nextAdminUnread = P.adminNotifications.filter(function (n) { return !n.read; }).length;
+            updateBell(ring && nextAdminUnread > previousUnread);
+            var modal = document.getElementById('p2NotifModal');
+            if (modal && !modal.classList.contains('hidden')) renderNotifs();
+        }
+        eventsRef.on('value', function (snap) {
+            events = snap.val() || {};
+            applyAdminNotifications(true);
+        }, function (e) {
+            if (window._dwarn) window._dwarn('[admin-notifications] o\'qilmadi:', e);
+        });
+        readsRef.on('value', function (snap) {
+            reads = snap.val() || {};
+            applyAdminNotifications(false);
+        });
+    }
     P.markAllRead = function () {
         P.state.notifications.forEach(function (n) { n.read = true; });
+        markAdminNotificationsRead(P.adminNotifications);
         save(); updateBell(false); renderNotifs();
     };
     function renderNotifs() {
         var box = document.getElementById('p2-notif-list');
         if (!box) return;
-        var n = P.state.notifications;
+        var n = allNotifications();
         if (!n.length) { box.innerHTML = emptyHTML('🔔', "Hozircha bildirishnoma yo'q"); return; }
         box.innerHTML = n.map(function (x) {
             return '<div class="p2-notif ' + (x.read ? '' : 'unread') + '">' +
@@ -17318,7 +17492,11 @@ document.addEventListener('click', function (e) {
     P.openNotifs = function () {
         renderNotifs();
         if (typeof openModal === 'function') openModal('p2NotifModal');
-        setTimeout(function () { P.state.notifications.forEach(function (n) { n.read = true; }); save(); updateBell(false); }, 900);
+        setTimeout(function () {
+            P.state.notifications.forEach(function (n) { n.read = true; });
+            markAdminNotificationsRead(P.adminNotifications);
+            save(); updateBell(false); renderNotifs();
+        }, 900);
     };
 
     /* ============================================================
@@ -18301,6 +18479,7 @@ document.addEventListener('click', function (e) {
     // Firebase'dan ma'lumot kelganda (mavjud listener ichidan)
     P.sync = function (data, uid, productsDB) {
         if (uid) P.uid = uid;
+        if (P.uid) startAdminNotifications();
         if (productsDB) P.productsDB = productsDB;
         if (data) {
             P.orders = toArray(data.orders);
@@ -18397,6 +18576,7 @@ document.addEventListener('click', function (e) {
             if (window.currentUser && !P.uid) {
                 P.uid = window.currentUser;
                 ensureReferralCode();
+                startAdminNotifications();
             }
             if ((window.currentUser && P.uid) || tries > 40) clearInterval(iv);
         }, 500);
