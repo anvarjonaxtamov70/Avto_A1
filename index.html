@@ -7524,8 +7524,52 @@ document.addEventListener('touchmove', function(e) {
     window._jsAttr = _jsAttr;
     // 📨 Telegram proxy'ga xabar yuborish — Worker auth tekshirishi uchun initData qo'shamiz.
     //    (Ochiq proxy yopildi: endi faqat tekshirilgan foydalanuvchi/admin yubora oladi.)
-    function tgProxySend(payload){
-        try { if (typeof tg !== 'undefined' && tg.initData) payload.initData = tg.initData; } catch(e){}
+    // 🔑 SERVER-AUTHORITATIVE AUTH KREDENTIALI.
+    //    Telegram ichida — initData (Worker HMAC bilan tekshiradi).
+    //    Brauzer/APK — Firebase anonim foydalanuvchisining ID tokeni.
+    //    Worker /order-commit, /order-status, / (proxy) va boshqalar shu
+    //    kredentialni talab qiladi (yangi database.rules.json + Worker).
+    window._authCred = async function () {
+        try { if (typeof tg !== 'undefined' && tg.initData) return { initData: tg.initData }; } catch (e) {}
+        try {
+            var u = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null;
+            if (u) return { idToken: await u.getIdToken() };
+        } catch (e) {}
+        return null;
+    };
+    // 🔐 Auth kafolati: Worker chaqiruvi / DB yozuvidan OLDIN chaqiriladi.
+    //    Telegram — custom token (window._authReady kutiladi).
+    //    Brauzer/APK — anonim kirish (barqaror uid, LOCAL persistence).
+    //    Firebase user obyektini (yoki null) qaytaradi.
+    window._ensureAuth = async function () {
+        try {
+            if (!(window.firebase && firebase.auth)) return null;
+            var cur = firebase.auth().currentUser;
+            if (cur) return cur;
+            if (typeof tg !== 'undefined' && tg.initData) {
+                try { await window._authReady; } catch (e) {}
+                return firebase.auth().currentUser;
+            }
+            if (typeof firebase.auth().signInAnonymously === 'function') {
+                try { await firebase.auth().signInAnonymously(); } catch (e) {}
+            }
+            return firebase.auth().currentUser;
+        } catch (e) {
+            try { return (window.firebase && firebase.auth) ? firebase.auth().currentUser : null; } catch (e2) { return null; }
+        }
+    };
+    // 📨 Telegram proxy'ga xabar yuborish — Worker auth tekshirishi uchun kredential qo'shamiz.
+    //    (Ochiq proxy yopildi: endi faqat tekshirilgan foydalanuvchi/admin yubora oladi.
+    //     initData bo'lmasa anonim Firebase ID token yuboriladi.)
+    //    Async: avval kredential hal qilinadi, keyin fetch qaytariladi — mavjud
+    //    `await tgProxySend(...)` va `.then/.catch` chaqiruvchilar ishlayveradi.
+    async function tgProxySend(payload){
+        try {
+            var _cred = window._authCred ? await window._authCred() : null;
+            if (_cred && _cred.initData) payload.initData = _cred.initData;
+            else if (_cred && _cred.idToken) payload.idToken = _cred.idToken;
+            else if (typeof tg !== 'undefined' && tg.initData) payload.initData = tg.initData;
+        } catch(e){}
         return fetch(TG_PROXY, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
     }
     window.tgProxySend = tgProxySend;
@@ -7775,8 +7819,20 @@ document.addEventListener('touchmove', function(e) {
             await firebase.auth().signInWithCustomToken(data.token);
             return true;
         }
-        // initData yo'q bo'lsa (brauzer/APK) — qayta urinishning ma'nosi yo'q.
+        // initData yo'q bo'lsa (brauzer/APK) — Telegram custom token yo'q.
+        // Buning o'rniga ANONIM Firebase kirish qilamiz, shunda brauzer/APK
+        // mijozi ham HAQIQIY auth.uid oladi (yangi qoidalar auth.uid ni talab
+        // qiladi). Anonim kirish tarmoq so'rovi yubormaydi (Worker /auth EMAS)
+        // va SDK mavjud bo'lmasa jimgina o'tkazib yuboriladi. `_authReady`
+        // qiymati baribir `false` bo'ladi — u faqat TELEGRAM admin auth'ini
+        // bildiradi; anonim kirish alohida (window._ensureAuth) boshqariladi.
         if (!(tg && tg.initData)) {
+            try {
+                if (firebase.auth && firebase.auth().currentUser == null &&
+                    typeof firebase.auth().signInAnonymously === 'function') {
+                    await firebase.auth().signInAnonymously();
+                }
+            } catch (e) {}
             try { return await attempt(); } catch (e) { return false; }
         }
         // Telegram ichida: vaqtinchalik tarmoq uzilishiga qarshi 1 marta qayta urinamiz.
@@ -7932,9 +7988,25 @@ const Haptics = {
                 if (ls) { ls.classList.add('hidden'); ls.classList.remove('login-leaving'); }
                 if (btn) { btn.dataset.busy = '0'; btn.classList.remove('is-loading'); btn.textContent = 'Tizimga kirish'; }
             }, 280);
-            updateProfileUI();
-            showToast("Xush kelibsiz, " + nameVal + "!", "success");
-            initUserData(); // Mijoz qo'lda kirgandan keyin ruxsat beramiz
+            // 🆔 ANONIM FIREBASE KIRISH — mijozga HAQIQIY auth.uid beradi (yangi
+            //    qoidalar buni talab qiladi). uid o'rnatilgach ism/telefon profilга
+            //    yoziladi (egaga ruxsat), so'ng bazani o'qish boshlanadi.
+            var _proceed = function (u) {
+                if (u && u.uid) window.currentUser = u.uid; else window.currentUser = fakeId;
+                try {
+                    if (typeof db !== 'undefined' && db.ref) {
+                        db.ref('users/' + window.currentUser + '/profile').update({ name: nameVal, phone: phoneVal });
+                    }
+                } catch (e) {}
+                updateProfileUI();
+                showToast("Xush kelibsiz, " + nameVal + "!", "success");
+                initUserData(); // Mijoz qo'lda kirgandan keyin ruxsat beramiz
+            };
+            if (window._ensureAuth) {
+                window._ensureAuth().then(_proceed, function () { _proceed(null); });
+            } else {
+                _proceed(null);
+            }
         }, 180);
     };
 
@@ -7961,6 +8033,17 @@ const Haptics = {
         // Shunda Firebase rules yoqilganda token tayyor bo'ladi (permission xatosi bo'lmaydi).
         // Auth muvaffaqiyatsiz bo'lsa ham (APK/brauzer) promise hal bo'ladi va davom etadi.
         try { window._authOk = !!(await window._authReady); } catch (e) { window._authOk = false; }
+
+        // 🆔 BRAUZER/APK KIMLIGI = ANONIM FIREBASE UID.
+        //    Yangi qoidalar auth.uid === $uid ni talab qiladi. Telegram tashqarisida
+        //    (initData yo'q) DB o'qishdan OLDIN anonim uid'ni o'rnatamiz — aks holda
+        //    "apk_" / "tg_url_" kabi soxta id'lar bo'yicha yozuvlar rad etilardi.
+        try {
+            if (!(tg && tg.initData) && window._ensureAuth) {
+                var _anonUser = await window._ensureAuth();
+                if (_anonUser && _anonUser.uid) window.currentUser = _anonUser.uid;
+            }
+        } catch (e) {}
 
         // 🚨 JIM QOLMASLIK: qoidalar qattiqlashtirilgandan keyin auth ishlamasa
         //    ilova "hech narsa yuklanmadi" holatiga tushadi va SABABI ko'rinmaydi.
@@ -8000,7 +8083,7 @@ const Haptics = {
             if (snap.exists()) {
                 let data = snap.val(); 
                 cart = data.cart || {}; 
-                myOrders = data.orders || []; 
+                myOrders = (window._toOrdersArray ? window._toOrdersArray(data.orders) : (data.orders || []));
                 wishlist = data.wishlist || [];
                 window.myOrders = myOrders; window.wishlist = wishlist; // Phase2 doim yangi ma'lumot o'qishi uchun
                 if(data.profile) { myProfile = data.profile; updateProfileUI(); }
@@ -8065,26 +8148,12 @@ const Haptics = {
     window._centralOrderKey = function (uid, o) {
         return String(uid || 'anon') + '_' + String((o && (o.code || o.id)) || Date.now());
     };
+    // 🔒 NEUTRALIZED: markaziy `orders` tuguni endi SERVER-OWNED (Worker /order-commit
+    //    uni o'zi yozadi). Yangi database.rules.json mijozga bu tugunni yozishga ruxsat
+    //    bermaydi — shuning uchun bu funksiya endi HECH NARSA YOZMAYDI (permission-denied
+    //    siklining oldini oladi). Signatura saqlanadi (boshqa chaqiruvlar buzilmasin).
     window._mirrorOrderToCentral = function (order, extra) {
-        try {
-            if (!order) return;
-            extra = extra || {};
-            var key = window._centralOrderKey(extra.uid, order);
-            var rec = {
-                code: order.code || '',
-                id: order.id || 0,
-                uid: extra.uid != null ? String(extra.uid) : '',
-                customer_name: extra.name || '',
-                phone: extra.phone || '',
-                address: extra.address || '',
-                items: order.items || {},
-                total: order.total || 0,
-                status: order.status || 'kutilmoqda',
-                createdAt: Date.now(),
-                notified_admin: true
-            };
-            db.ref('orders/' + key).set(rec).catch(function () {});
-        } catch (e) {}
+        // no-op — server owns central orders
     };
 
     // 🧾 Buyurtma tarkibini chiroyli matn qilib beradi (mijozga ketadigan xabarlar uchun).
@@ -8223,34 +8292,18 @@ function toggleWishlist(e, id) {
         let items = wishlist.map(id => productsDB.find(x => x.id === id)).filter(x => x);
         c.innerHTML = items.map(x => cardHTML(x)).join('');
     }
-    // ⚠️ ILGARI: `.set(myOrders)` butun massivni xotiradagi nusxa bilan qayta
-    //    yozardi. Agar admin ayni paytda holatni o'zgartirgan yoki chatga javob
-    //    yozgan bo'lsa — mijozning yozuvi ularni O'CHIRIB yuborardi (va aksincha).
-    //    Endi ATOMIK tranzaksiya: lokal buyurtmalar `id` bo'yicha birlashtiriladi,
-    //    serverda bor-u lokalda YO'Q buyurtmalar esa SAQLANADI.
+    // 🔒 SERVER-OWNED: buyurtmalar (users/{uid}/orders) endi FAQAT server (Worker)
+    //    tomonidan yoziladi. Yangi database.rules.json mijozga bu tugunni yozishga
+    //    ruxsat bermaydi — shuning uchun bu funksiya endi REMOTE'ga YOZMAYDI
+    //    (aks holda permission-denied siklini keltirib chiqarardi). Faqat lokal
+    //    massiv/localStorage yangilanadi (ko'rsatuv uchun). on('value') listener
+    //    serverdan haqiqiy holatni o'zi tortadi.
     function saveLocalOrders() {
-        if (!currentUser) return Promise.resolve(null);
-        var local = Array.isArray(myOrders) ? myOrders.filter(Boolean) : [];
-        return window._ordersTxn(currentUser, function (remote) {
-            var byId = {}, noId = [];
-            // Avval server nusxasi (begona o'zgarishlar shu yerda)
-            remote.forEach(function (o) {
-                if (!o) return;
-                if (o.id != null) byId[String(o.id)] = o; else noId.push(o);
-            });
-            // So'ng lokal nusxa — bir xil id bo'lsa lokal ustun (mijoz o'z
-            // buyurtmasini hozir o'zgartirgan). Bu avvalgi xatti-harakat bilan
-            // BIR XIL, lekin serverdagi BEGONA buyurtmalar endi o'chmaydi.
-            local.forEach(function (o) {
-                if (!o) return;
-                if (o.id != null) byId[String(o.id)] = o; else noId.push(o);
-            });
-            var merged = Object.keys(byId).map(function (k) { return byId[k]; });
-            merged.sort(function (a, b) {
-                return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);   // yangi -> eski
-            });
-            return merged.concat(noId);
-        });
+        try {
+            window.myOrders = Array.isArray(myOrders) ? myOrders : [];
+            localStorage.setItem('avto_orders_cache', JSON.stringify(window.myOrders));
+        } catch (e) {}
+        return Promise.resolve(null);
     }
     function saveProfile() {
         let nN = document.getElementById('user-edit-name').value.trim();
@@ -9651,7 +9704,7 @@ window.clearAppCache = () => {
         }
     }
 
-    function renderMyOrders() { let c = document.getElementById('orders-list-container'); if (myOrders.length === 0) { c.innerHTML = window._emptyState({ icon: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>', title: "Buyurtmalar yo'q", desc: "Hali buyurtma bermagansiz. Birinchi buyurtmangizni hoziroq bering!", btnText: "Xarid qilish", btnAction: "closeModal(); showCatalog()" }); return; } c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails(${o.id})"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${o.total.toLocaleString()} so'm</div></div>`).join(''); }
+    function renderMyOrders() { let c = document.getElementById('orders-list-container'); if (myOrders.length === 0) { c.innerHTML = window._emptyState({ icon: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>', title: "Buyurtmalar yo'q", desc: "Hali buyurtma bermagansiz. Birinchi buyurtmangizni hoziroq bering!", btnText: "Xarid qilish", btnAction: "closeModal(); showCatalog()" }); return; } c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails('${o.id}')"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${(Number(o.total)||0).toLocaleString()} so'm</div></div>`).join(''); }
 
 // =====================================
     // CHAT: BUYURTMA TAFSILOTI VA YOZISHMA
@@ -9700,28 +9753,29 @@ window.clearAppCache = () => {
     }
 
         // 💬 PREMIUM CHAT: Xabarlarni chizish funksiyasi
+    // 💬 PREMIUM CHAT: xabarlar endi ALOHIDA `order_chats/{uid}/{orderId}` tugunida
+    //    (buyurtma yozuvi SERVER-OWNED bo'lgani uchun). Egasi faqat 'mijoz' nomidan
+    //    yozadi; jonli listener orqali yangilanadi. Eski order.messages faqat
+    //    O'QISH uchun zaxira (order_chats bo'sh bo'lsa).
     window.renderChatMessages = () => {
         let box = document.getElementById('od-chat-messages');
         if(!box) return;
-        
-        // Chat qutisiga yangi klassni ulaymiz
-        box.className = "chat-messages"; 
-        box.innerHTML = '';
-        
-        // ❗️ XATO SHU YERDA EDI, TO'G'RILANDI:
-        let o = myOrders.find(x => x.id === currentOpenOrderId); 
-        if(!o) return;
+        box.className = "chat-messages";
 
-        if(!o.messages || o.messages.length === 0) {
-            box.innerHTML = `<div style="text-align:center; color:gray; font-size:12px; margin: 20px 0;">Hali xabarlar yo'q. Savolingiz bo'lsa yozing...</div>`;
-            return;
-        }
+        let o = myOrders.find(x => x.id == currentOpenOrderId);
+        var uid = window.currentUser;
+        var oid = currentOpenOrderId;
+        var legacy = (o && Array.isArray(o.messages)) ? o.messages : [];
 
-        let chatHtml = '';
-        o.messages.forEach(msg => {
-            let isMe = msg.sender === 'mijoz' || msg.sender === 'user';
-            
-            chatHtml += `
+        function paint(msgs) {
+            if (!msgs || !msgs.length) {
+                box.innerHTML = `<div style="text-align:center; color:gray; font-size:12px; margin: 20px 0;">Hali xabarlar yo'q. Savolingiz bo'lsa yozing...</div>`;
+                return;
+            }
+            let chatHtml = '';
+            msgs.forEach(function (msg) {
+                let isMe = msg.sender === 'mijoz' || msg.sender === 'user';
+                chatHtml += `
             <div style="display: flex; flex-direction: column; width: 100%; margin-bottom: 8px;">
                 <div class="chat-bubble ${isMe ? 'chat-user' : 'chat-admin'}">
                     ${escHtml(msg.text)}
@@ -9729,41 +9783,57 @@ window.clearAppCache = () => {
                 </div>
             </div>
             `;
-        });
-        
-        box.innerHTML = chatHtml;
-        
-        // Yangi xabar kelganda avtomat pastga tushish
-        setTimeout(() => {
-            box.scrollTop = box.scrollHeight;
-        }, 50);
+            });
+            box.innerHTML = chatHtml;
+            setTimeout(() => { box.scrollTop = box.scrollHeight; }, 50);
+        }
+
+        // Avvalgi listenerni uzamiz (xotira oqishiga qarshi)
+        if (window._custChatRef) { try { window._custChatRef.off('value'); } catch (e) {} window._custChatRef = null; }
+
+        if (uid && oid != null && typeof db !== 'undefined' && db.ref) {
+            try {
+                window._custChatRef = db.ref('order_chats/' + uid + '/' + oid);
+                window._custChatRef.on('value', function (snap) {
+                    var val = snap.val();
+                    var msgs = [];
+                    if (val && typeof val === 'object') {
+                        msgs = Object.keys(val).sort().map(function (k) { return val[k]; }).filter(Boolean);
+                    }
+                    if (!msgs.length && legacy.length) msgs = legacy;   // eski buyurtmalar uchun zaxira
+                    paint(msgs);
+                }, function () { paint(legacy); });
+            } catch (e) { paint(legacy); }
+        } else {
+            paint(legacy);
+        }
     };
 
-    // 💬 PREMIUM CHAT: Xabar jo'natish tugmasi
+    // 💬 PREMIUM CHAT: Xabar jo'natish tugmasi — order_chats ga push (sender:'mijoz')
     window.sendOrderMessage = () => {
         let input = document.getElementById('od-chat-input');
         if(!input) return;
-        
+
         let text = input.value.trim();
         if(!text) return;
+        if (!window.currentUser || currentOpenOrderId == null) return;
 
-        let idx = myOrders.findIndex(x => x.id === currentOpenOrderId);
-        if(idx !== -1) {
-            if(!myOrders[idx].messages) myOrders[idx].messages = [];
-            
-            let now = new Date();
-            let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-            
-            myOrders[idx].messages.push({
-                sender: 'mijoz', // Eski xabarlar bilan bir xil bo'lishi uchun
-                text: text,
-                time: timeString
-            });
+        let now = new Date();
+        let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
 
-            saveLocalOrders();
-            input.value = ''; // Yozish joyini tozalash
-            renderChatMessages(); // Oynani srazi yangilash
-        }
+        var _send = function () {
+            try {
+                db.ref('order_chats/' + window.currentUser + '/' + currentOpenOrderId)
+                  .push({ sender: 'mijoz', text: text, time: timeString })
+                  .catch(function () { try { showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning"); } catch (e) {} });
+                input.value = '';   // jonli listener o'zi qayta chizadi
+            } catch (e) {
+                try { showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning"); } catch (e2) {}
+            }
+        };
+        // Yozishdan oldin auth kafolatlanadi (qoidalar auth.uid === $uid ni talab qiladi)
+        if (window._ensureAuth) { window._ensureAuth().then(_send, _send); }
+        else _send();
     };
 
 // =====================================
@@ -9798,17 +9868,19 @@ window.openAdminChat = (uid, orderId) => {
         box.innerHTML = '<p style="text-align:center; color:gray;">Yuklanmoqda...</p>';
     // ⚡ XOTIRA OQISHINI TUZATISH: eski listenerni o'chirib, keyin yangisini ulaymiz
     if (window._adminChatRef) { try { window._adminChatRef.off('value'); } catch(e){} }
-    window._adminChatRef = db.ref('users/' + currentAdminChatUid + '/orders');
+    // 💬 order_chats/{uid}/{orderId} — buyurtma SERVER-OWNED, chat alohida tugunda.
+    window._adminChatRef = db.ref('order_chats/' + currentAdminChatUid + '/' + currentAdminChatOrderId);
     window._adminChatRef.on('value', snapshot => {
-            if(snapshot.exists()) {
-                let orders = snapshot.val();
-                let o = orders.find(x => x.id === currentAdminChatOrderId);
-                
-                if(o && o.messages && o.messages.length > 0) {
-                    let chatHtml = '';
-                    o.messages.forEach(msg => {
-                        let isMe = msg.sender === 'admin';
-                        chatHtml += `
+            var val = snapshot.val();
+            var msgs = [];
+            if (val && typeof val === 'object') {
+                msgs = Object.keys(val).sort().map(function (k) { return val[k]; }).filter(Boolean);
+            }
+            if (msgs.length > 0) {
+                let chatHtml = '';
+                msgs.forEach(msg => {
+                    let isMe = msg.sender === 'admin';
+                    chatHtml += `
                             <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'};">
                                 <div style="max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 13px; 
                                      background: ${isMe ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)'}; 
@@ -9818,57 +9890,56 @@ window.openAdminChat = (uid, orderId) => {
                                 </div>
                             </div>
                         `;
-                    });
-                    box.innerHTML = chatHtml;
-                } else {
-                    box.innerHTML = `<div style="color: gray; text-align: center; font-size: 12px; margin-top: 20px;">Hali xabarlar yo'q.</div>`;
-                }
-                box.scrollTop = box.scrollHeight; // Har doim pastga tushirib qo'yish
+                });
+                box.innerHTML = chatHtml;
+            } else {
+                box.innerHTML = `<div style="color: gray; text-align: center; font-size: 12px; margin-top: 20px;">Hali xabarlar yo'q.</div>`;
             }
+            box.scrollTop = box.scrollHeight; // Har doim pastga tushirib qo'yish
         });
     }
 
-    // Admindan xabar jo'natish
+    // Admindan xabar jo'natish — order_chats ga push (sender:'admin'). Admin initData
+    // bilan auth bo'lgani uchun qoidalar bu yozuvga ruxsat beradi. Buyurtma yozuviga
+    // (users/{uid}/orders) ENDI TEGMAYMIZ — u SERVER-OWNED.
     window.sendAdminMessage = () => {
         let input = document.getElementById('admin-chat-input');
         let text = input.value.trim();
         if(!text) return;
+        if (!currentAdminChatUid || currentAdminChatOrderId == null) return;
 
-        // ⚠️ ILGARI MA'LUMOT YO'QOLARDI: kod butun buyurtmalar massivini
-        //    `once()` bilan o'qib, xabarni qo'shib, `.set(orders)` bilan
-        //    HAMMASINI qayta yozardi. O'qish va yozish orasida mijoz yangi
-        //    buyurtma bergan bo'lsa — u JIMGINA O'CHIB KETARDI.
-        //    Endi ATOMIK tranzaksiya: buyurtma `id` bo'yicha topiladi va
-        //    faqat uning `messages` ro'yxatiga qo'shiladi. To'qnashuv bo'lsa
-        //    Firebase o'zi qayta uriniadi -> hech narsa yo'qolmaydi.
         let now = new Date();
         let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-        let _sentCode = null;
 
-        window._ordersTxn(currentAdminChatUid, function (arr) {
-            let i = arr.findIndex(x => x && x.id === currentAdminChatOrderId);
-            if (i < 0) return;                       // buyurtma topilmadi -> bekor
-            if (!arr[i].messages) arr[i].messages = [];
-            arr[i].messages.push({ sender: 'admin', text: text, time: timeString });
-            _sentCode = arr[i].code || currentAdminChatOrderId;
-            return arr;
-        }).then(function (res) {
-            if (!res || !res.committed) {
-                showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning");
-                return;
-            }
-            input.value = '';
-            renderAdminChatMessages();
-
-            // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
-            tgProxySend({
-                chat_id: currentAdminChatUid,
-                text: `📩 <b>#${escTg(_sentCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`,
-                parse_mode: "HTML"
+        // Kod (best-effort) — Telegram xabarida ko'rsatish uchun
+        var _sentCode = currentAdminChatOrderId;
+        try {
+            (window.allFetchedOrders || []).some(function (o) {
+                if (o && String(o.uI) === String(currentAdminChatUid) && String(o.id) === String(currentAdminChatOrderId)) {
+                    _sentCode = o.code || currentAdminChatOrderId; return true;
+                }
+                return false;
             });
-        }).catch(function () {
-            showToast("Xabar saqlanmadi — internetni tekshiring", "warning");
-        });
+        } catch (e) {}
+
+        var _send = function () {
+            try {
+                db.ref('order_chats/' + currentAdminChatUid + '/' + currentAdminChatOrderId)
+                  .push({ sender: 'admin', text: text, time: timeString })
+                  .then(function () {
+                        input.value = '';   // jonli listener o'zi qayta chizadi
+                        // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
+                        tgProxySend({
+                            chat_id: currentAdminChatUid,
+                            text: `📩 <b>#${escTg(_sentCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`,
+                            parse_mode: "HTML"
+                        });
+                  })
+                  .catch(function () { showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning"); });
+            } catch (e) { showToast("Xabar saqlanmadi — internetni tekshiring", "warning"); }
+        };
+        if (window._ensureAuth) { window._ensureAuth().then(_send, _send); }
+        else _send();
     }
     
     function openAdminStats() {
@@ -10001,87 +10072,101 @@ window.openAdminChat = (uid, orderId) => {
 }
     
 async function changeOrderStatus(uid, orderId, newStatus) {
-        // ⚠️ ILGARI MIJOZNING BUYURTMASI JIMGINA O'CHIB KETARDI:
-        //    kod butun buyurtmalar massivini `once()` bilan o'qib, holatni
-        //    o'zgartirib, `.set(userOrders)` bilan HAMMASINI qayta yozardi.
-        //    O'qish va yozish orasida (tarmoq kechikishi — yuz millisekund)
-        //    mijoz yangi buyurtma bergan bo'lsa, admin yozuvi uni O'CHIRARDI.
-        //    Mijozga esa Telegram'da "qabul qilindi" xabari allaqachon ketgan
-        //    va savati tozalangan bo'lardi — buyurtmani tiklash IMKONSIZ.
-        //
-        //    Endi ATOMIK tranzaksiya: buyurtma `id` bo'yicha topiladi, faqat
-        //    uning holati o'zgaradi. To'qnashuv bo'lsa Firebase o'zi qayta
-        //    uriniadi (yangi ma'lumot bilan) -> hech narsa yo'qolmaydi.
-        let oldStatus = null, displayCode = orderId, _ord = null;
+        // 🔒 SERVER-AUTHORITATIVE: holat Worker /order-status orqali o'zgaradi
+        //    (admin initData/idToken bilan). Mijoz brauzeri users/{uid}/orders yoki
+        //    markaziy orders/.../status ni ENDI YOZMAYDI (yangi database.rules.json).
+        //    Server ikkalasini ham (+ stok qaytarish, cashback) yangilaydi;
+        //    on('value') listener ro'yxatni o'zi yangilaydi.
+        var _cred = null;
+        try { if (window._ensureAuth) await window._ensureAuth(); } catch (e) {}
+        try { _cred = window._authCred ? await window._authCred() : null; } catch (e) { _cred = null; }
+        if (!_cred || !(_cred.initData || _cred.idToken)) {
+            showToast("Xavfsiz ulanish kerak", "warning");
+            return;
+        }
 
-        window._ordersTxn(uid, function (arr) {
-            let i = arr.findIndex(o => o && o.id === orderId);
-            if (i < 0) return;                        // buyurtma topilmadi -> bekor
-            oldStatus = arr[i].status;
-            displayCode = arr[i].code || orderId;
-            arr[i].status = newStatus;
-            _ord = arr[i];
-            return arr;
-        }).then(async (res) => {
-                        if (!res || !res.committed) {
-                            showToast("Holat saqlanmadi — qayta urinib ko'ring", "warning");
-                            return;
-                        }
-                        showToast("Holat o'zgartirildi!");
-                        // #5/#6: markaziy 'orders' holatini ham yangilaymiz + admin keshini bekor qilamiz
-                        window._invalidateUsersCache();
-                        try { db.ref('orders/' + window._centralOrderKey(uid, _ord) + '/status').set(newStatus).catch(function(){}); } catch(e){}
-                        let hTitle = document.querySelector('#adminOrdersModal .modal-header h2').innerText;
-                        if(hTitle === '📦 Buyurtmalar') {
-                            openAdminOrders(); 
-                        } else {
-                            openCustomerSpecificOrders(uid, hTitle.replace('📦 ', '').replace(' buyurtmalari', ''));
-                        }
-                        
-                        // TELEGRAMGA TO'G'RIDAN-TO'G'RI XABAR JO'NATISH
-                        if (oldStatus !== newStatus) {
-                            let statusText = "";
-                            let mijozMsg = "";
+        // Telegram xabari uchun buyurtma tafsilotlari (best-effort, mahalliy keshdan).
+        var _ord = null, oldStatus = null, displayCode = orderId;
+        try {
+            (window.allFetchedOrders || []).some(function (o) {
+                if (o && String(o.uI) === String(uid) && String(o.id) === String(orderId)) { _ord = o; return true; }
+                return false;
+            });
+        } catch (e) {}
+        if (_ord) { oldStatus = _ord.status; displayCode = _ord.code || orderId; }
 
-                            // 🧾 Buyurtma tarkibi + jami summa (mijoz xabarini boyitadi)
-                            let _sum = window._orderItemsSummary((_ord && _ord.items) || {});
-                            let _ordTotal = (_ord && _ord.total) || _sum.total;
-                            let _detail = _sum.lines
-                                ? ("\n\n🛒 Buyurtma tarkibi:" + _sum.lines + "\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm")
-                                : (_ordTotal ? ("\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm") : "");
+        var _statusBody = { uid: String(uid), orderId: String(orderId), status: newStatus };
+        if (_cred.initData) _statusBody.initData = _cred.initData;
+        else if (_cred.idToken) _statusBody.idToken = _cred.idToken;
 
-                            if (newStatus === "qabul") {
-                                statusText = "✅ QABUL QILINDI";
-                                mijozMsg = `✅ #${displayCode} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!${_detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.`;
-                            } else if (newStatus === "yolda") {
-                                statusText = "🚚 YO'LGA CHIQDI";
-                                mijozMsg = `🚚 #${displayCode} raqamli buyurtmangiz yo'lga chiqdi!${_detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.`;
-                            } else if (newStatus === "yetkazildi") {
-                                statusText = "🏁 YETKAZIB BERILDI";
-                                mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz yetkazib berildi.${_detail}\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.`;
-                            } else if (newStatus === "bekor_qilingan") {
-                                statusText = "❌ BEKOR QILINDI";
-                                mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30`;
-                            }
-
-                            // ADMINGA SMS DA HAM QISQA KOD ISHLATILADI
-                            let adminMsg = `🔄 <b>Diqqat!</b> WebApp orqali buyurtma holati o'zgardi.\n\n🆔 Buyurtma: <b>#${escTg(displayCode)}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
-
-                            try {
-                                // 1. ADMINGA SMS
-                                await tgProxySend({ chat_id: ADMIN_ID, text: adminMsg, parse_mode: "HTML" });
-
-                                // 2. MIJOZGA SMS
-                                if (uid && uid !== "Noma'lum" && mijozMsg !== "") {
-                                    await tgProxySend({ chat_id: uid, text: mijozMsg });
-                                }
-                            } catch(e) {
-                                showToast("Xato: SMS jo'natilmadi!", "warning");
-                            }
-                        }
-        }).catch(function () {
+        var _resp, _data;
+        try {
+            _resp = await fetch(TG_PROXY + '/order-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(_statusBody)
+            });
+            _data = await _resp.json().catch(function () { return null; });
+        } catch (e) {
             showToast("Holat saqlanmadi — internetni tekshiring", "warning");
-        });
+            return;
+        }
+        if (!_resp.ok || !_data || !_data.ok) {
+            showToast("Holat saqlanmadi — qayta urinib ko'ring", "warning");
+            return;
+        }
+
+        showToast("Holat o'zgartirildi!");
+        window._invalidateUsersCache();
+        // Server users/{uid}/orders + markaziy orders ni yangiladi; ro'yxatni qayta ochamiz.
+        let hTitle = document.querySelector('#adminOrdersModal .modal-header h2').innerText;
+        if (hTitle === '📦 Buyurtmalar') {
+            openAdminOrders();
+        } else {
+            openCustomerSpecificOrders(uid, hTitle.replace('📦 ', '').replace(' buyurtmalari', ''));
+        }
+
+        // 📨 TELEGRAM XABARLARI — SERVER TASDIQLAGANDAN KEYIN (dublikat bo'lmasa).
+        if (!_data.duplicate) {
+            let statusText = "";
+            let mijozMsg = "";
+
+            // 🧾 Buyurtma tarkibi + jami summa (mijoz xabarini boyitadi)
+            let _sum = window._orderItemsSummary((_ord && _ord.items) || {});
+            let _ordTotal = (_ord && _ord.total) || _sum.total;
+            let _detail = _sum.lines
+                ? ("\n\n🛒 Buyurtma tarkibi:" + _sum.lines + "\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm")
+                : (_ordTotal ? ("\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm") : "");
+
+            if (newStatus === "qabul") {
+                statusText = "✅ QABUL QILINDI";
+                mijozMsg = `✅ #${displayCode} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!${_detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.`;
+            } else if (newStatus === "yolda") {
+                statusText = "🚚 YO'LGA CHIQDI";
+                mijozMsg = `🚚 #${displayCode} raqamli buyurtmangiz yo'lga chiqdi!${_detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.`;
+            } else if (newStatus === "yetkazildi") {
+                statusText = "🏁 YETKAZIB BERILDI";
+                mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz yetkazib berildi.${_detail}\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.`;
+            } else if (newStatus === "bekor_qilingan") {
+                statusText = "❌ BEKOR QILINDI";
+                mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30`;
+            }
+
+            // ADMINGA SMS DA HAM QISQA KOD ISHLATILADI
+            let adminMsg = `🔄 <b>Diqqat!</b> WebApp orqali buyurtma holati o'zgardi.\n\n🆔 Buyurtma: <b>#${escTg(displayCode)}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
+
+            try {
+                // 1. ADMINGA SMS
+                await tgProxySend({ chat_id: ADMIN_ID, text: adminMsg, parse_mode: "HTML" });
+
+                // 2. MIJOZGA SMS
+                if (uid && uid !== "Noma'lum" && mijozMsg !== "") {
+                    await tgProxySend({ chat_id: uid, text: mijozMsg });
+                }
+            } catch(e) {
+                showToast("Xato: SMS jo'natilmadi!", "warning");
+            }
+        }
     }
     function openModal(id) {
         if (activeModal === id) return;
@@ -11033,160 +11118,160 @@ window.chg = (safeId, d) => {
 // 📍 MANZIL, ISM VA NUQTA MUAMMOLARINI HAL QILUVCHI YAKUNIY KOD
 // =====================================
 
+// 🔁 Buyurtma attemptId — SERVER idempotentligi uchun (Worker /order-commit).
+//    Bir XIL savat tarkibi qayta yuborilsa AYNI attemptId ishlatiladi (server
+//    bir xil natijani qaytaradi). Savat o'zgarsa — yangi tasodifiy id.
+function _randAttemptId() {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
+    var s = '';
+    for (var i = 0; i < 20; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+}
+window._orderAttemptId = function (sig) {
+    try {
+        var raw = localStorage.getItem('avto_order_attempt');
+        var obj = raw ? JSON.parse(raw) : null;
+        if (obj && obj.sig === sig && obj.id) return obj.id;
+        var id = _randAttemptId();
+        localStorage.setItem('avto_order_attempt', JSON.stringify({ sig: sig, id: id }));
+        return id;
+    } catch (e) { return _randAttemptId(); }
+};
+window._orderAttemptClear = function () {
+    try { localStorage.removeItem('avto_order_attempt'); } catch (e) {}
+};
+
+// ⚙️ SERVER-AUTHORITATIVE BUYURTMA — barcha pul/stok/cashback SERVERDA (Worker
+//    /order-commit). Mijoz brauzeri buyurtma/stok/cashback YOZMAYDI (yangi
+//    database.rules.json). Bu funksiya faqat so'rov yuboradi va natijani ko'rsatadi.
 window.confirmOrder = async (paymentMethod) => {
-    const loadingOverlay = document.getElementById('order-loading-overlay'); 
-    // 🕐 YANGI YUKLOVCHI: soatcha silliq aylanadi, kamida 2 soniya, keyin pticha.
-    //    Eski `#order-loading-overlay` `html.lite` qoidasi tufayli QOTIB turardi
-    //    (batafsil izoh fayl oxiridagi "layer-order-loader" qatlamida).
+    const loadingOverlay = document.getElementById('order-loading-overlay');
     if (window._ordLoader) window._ordLoader.show();
     else if(loadingOverlay) loadingOverlay.classList.add('active');
-    
+
+    var _hideLoader = function (okFlag) {
+        try {
+            if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(okFlag);
+            else if (window._ordLoader) window._ordLoader.hide();
+        } catch (e) {}
+        if (loadingOverlay) loadingOverlay.classList.remove('active');
+    };
+
     try {
         let now = Date.now();
-        // Spamdan himoya
-        if (typeof lastOrderTime !== 'undefined' && now - lastOrderTime < 15000) { 
+        // Spamdan himoya (15s)
+        if (typeof lastOrderTime !== 'undefined' && now - lastOrderTime < 15000) {
             if(typeof showToast === 'function') showToast("Kuting! Qayta xarid uchun 15 soniya kerak.", "warning");
-            // Bu buyurtma EMAS — kutish animatsiyasini darhol yopamiz
             if (window._ordLoader) window._ordLoader.hide();
             if(loadingOverlay) loadingOverlay.classList.remove('active');
-            return;
+            return { ok: false, reason: 'spam' };
         }
         window.lastOrderTime = now;
 
-        let newOrderCode = generateOrderCode(); 
-        
-        // 📞 MA'LUMOTLARNI ANIQLASH (Uch tomonlama tekshiruv)
-        let profPhone = myProfile.phone || botPhone || "Raqam yozilmagan";
-        let profName = myProfile.name || botName || userName || "Ismsiz mijoz";
-        let userTgLink = (tg.initDataUnsafe?.user?.username) ? '@' + tg.initDataUnsafe.user.username : "Username yo'q";
-
-        // Manzil va ID
-        // Firebase'dan manzilni qayta o'qish
-if (currentUser && (!myProfile.address || myProfile.address === "Noma'lum")) {
-    try {
-        let snap = await db.ref('users/' + currentUser + '/profile').once('value');
-        if (snap.exists() && snap.val().address) {
-            myProfile.address = snap.val().address;
+        // 🔑 XAVFSIZ ULANISH — Worker /order-commit auth (initData yoki idToken) talab qiladi.
+        try { if (window._ensureAuth) await window._ensureAuth(); } catch (e) {}
+        var _cred = null;
+        try { _cred = window._authCred ? await window._authCred() : null; } catch (e) { _cred = null; }
+        if (!_cred) {
+            _hideLoader(false);
+            try { showToast("Xavfsiz ulanish kerak", "warning"); } catch (e) {}
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'auth' };
         }
-    } catch(e) {}
-}
 
-let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
-        // 🚚 YETKAZIB BERISH ma'lumotini qo'shamiz (delivery step'dan)
-        let deliveryLine = "";
-        let _dlv = window.selectedDelivery;
-        if (_dlv) {
-            if (_dlv.method === 'courier') {
-                fetchedAddress = _dlv.address || fetchedAddress;
-                deliveryLine = `🚚 <b>Yetkazish:</b> Kuryer (manzilga)`;
-                if (_dlv.mapLink) deliveryLine += `\n🗺 <b>Xaritada:</b> ${escTg(_dlv.mapLink)}`;
-            } else if (_dlv.method === 'bts') {
-                fetchedAddress = (_dlv.branch || "") + (_dlv.district ? (", " + _dlv.district) : "") + (_dlv.region ? (", " + _dlv.region) : "");
-                deliveryLine = `📦 <b>Yetkazish:</b> BTS ${escTg(_dlv.branch || '')} filiali`;
-                if (_dlv.branchAddress) deliveryLine += `\n📍 <b>Filial manzili:</b> ${escTg(_dlv.branchAddress)}`;
-                if (_dlv.branchLandmark) deliveryLine += ` (${escTg(_dlv.branchLandmark)})`;
-            }
-        }
-        let cUser = currentUser || "Noma'lum";
-        
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${escTg(profName)}\n📞 <b>Telefon:</b> <code>${escTg(profPhone)}</code>\n💬 <b>Telegram:</b> ${escTg(userTgLink)}\n📍 <b>Manzil:</b> ${escTg(fetchedAddress)}\n${deliveryLine ? deliveryLine + '\n' : ''}🆔 <b>ID:</b> <code>${escTg(cUser)}</code>\n💳 <b>To'lov turi:</b> ${escTg(paymentMethod)}\n\n🛒 <b>Mahsulotlar:</b>\n`;
-        
-        let total = 0; 
-        let savedItems = {};
-        let lowStockAlerts = ""; 
-        let stockChanges = [];
-        
-        for (let safeId in cart) { 
-            if(!cart[safeId]) continue; 
+        // 🛒 Savatdan qatorlarni yig'amiz. Server narx/stok/summani O'ZI hisoblaydi;
+        //    estimatedTotal faqat cashback taxmini uchun (serverda cheklanadi).
+        var items = [];
+        var estimatedTotal = 0;
+        for (let safeId in cart) {
+            if (!cart[safeId]) continue;
             let parts = String(safeId).split('||');
             let baseId = parts[0];
             let carOptRaw = parts[1] || "";
-            let carOpt = carOptRaw.replace(/_dot_/g, "."); 
-            
-            let p = productsDB.find(x => x.id == baseId); 
-            if (p) { 
-                let qty = parseInt(cart[safeId]) || 0;
-                if(qty <= 0) continue;
-                let sum = p.price * qty; 
-                let dName = carOpt && carOpt !== "Universal" ? `${escTg(p.name)} (${escTg(carOpt)})` : escTg(p.name);
-                adminText += `▪️ ${dName}\n   ➖ ${qty} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
-                total += sum; 
-                savedItems[safeId] = qty; 
-                
-                // Sklad (zaxira) nazorati — DB'ga atomik transaction orqali yoziladi (pastda)
-                let pIdx = productsDB.indexOf(p);
-                if (p.product_type === 'razmerli' && p.sizes) {
-                    let sIdx = p.sizes.findIndex(s => s.size === carOpt);
-                    if (sIdx !== -1) {
-                        let _orig = (parseInt(p.sizes[sIdx].stock) || 0);
-                        p.sizes[sIdx].stock = (_orig - qty) < 0 ? 0 : (_orig - qty);
-                        // `id` + `size` — SERVER stokni indeks emas, AYNAN shu tovar
-                        // bo'yicha topishi uchun. `fallback` faqat mahalliy tiklash uchun.
-                        stockChanges.push({ id: p.id, name: p.name, size: carOpt, idx: pIdx, sizeIdx: sIdx, qty: qty, fallback: _orig });
-                        if (p.sizes[sIdx].stock <= 3) lowStockAlerts += `\n⚠️ <b>${escTg(p.name)} (${escTg(carOpt)})</b>: ${p.sizes[sIdx].stock} ta qoldi!`;
-                    }
-                    p.stock = p.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0);
-                } else {
-                    let _orig = (parseInt(p.stock) || 10);
-                    p.stock = (_orig - qty) < 0 ? 0 : (_orig - qty);
-                    stockChanges.push({ id: p.id, name: p.name, idx: pIdx, qty: qty, fallback: _orig });
-                    if (p.stock <= 3) lowStockAlerts += `\n⚠️ <b>${escTg(p.name)}</b>: ${p.stock} ta qoldi!`;
-                }
-            } 
+            let carOpt = carOptRaw.replace(/_dot_/g, ".");
+            let qty = parseInt(cart[safeId]) || 0;
+            if (qty <= 0) continue;
+            let p = productsDB.find(x => x.id == baseId);
+            // Razmeri yo'q tovar -> "" (server buni "Universal" deb qabul qiladi).
+            var _size = (carOpt && carOpt !== "Universal") ? carOpt : "";
+            items.push({ id: String(baseId), size: _size, qty: qty });
+            if (p) estimatedTotal += (p.price || 0) * qty;
         }
-        // ============================================================
-        // 🎁 CASHBACKNI TO'LOVDA ISHLATISH
-        // ------------------------------------------------------------
-        // Mijoz to'lov oynasida "Cashback ishlatish" ni yoqqan bo'lsa,
-        // balansdan summa yechiladi va TO'LANADIGAN summa kamayadi.
-        //   total    — tovarlarning to'liq narxi (o'zgarmaydi, hisobot uchun)
-        //   cbUsed   — ishlatilgan cashback
-        //   payable  — mijoz haqiqatda to'laydigan pul
-        // Cashback keyingi safar AYNAN payable'dan hisoblanadi (cashback ustiga
-        // cashback berilmaydi).
-        // ============================================================
-        var cbUsed = 0;
-        try {
-            if (window._cbGetApplied) cbUsed = window._cbGetApplied(total);
-        } catch (e) { cbUsed = 0; }
-        var payable = Math.max(0, total - cbUsed);
-        // Va'da qilinayotgan cashback ulushi (buyurtmaga yoziladi)
-        var cbRate = 0.008;
-        try { if (window._cashbackRate) cbRate = window._cashbackRate(); } catch (e) {}
-
-        adminText += `\n💰 <b>Tovarlar summasi:</b> ${total.toLocaleString()} so'm`;
-        if (cbUsed > 0) {
-            adminText += `\n🎁 <b>Cashback ishlatildi:</b> −${cbUsed.toLocaleString()} so'm`;
-            adminText += `\n💵 <b>TO'LANADI:</b> ${payable.toLocaleString()} so'm`;
+        if (!items.length) {
+            _hideLoader(false);
+            try { showToast("Savat bo'sh", "warning"); } catch (e) {}
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'empty' };
         }
-        // 👑 VIP mijoz belgisi — admin darhol ko'radi
-        try {
-            var _vipTag = (window.VIP && window.VIP.orderTag) ? window.VIP.orderTag() : '';
-            if (_vipTag) adminText += `\n\n${escTg(_vipTag)}`;
-        } catch (e) {}
 
-        // ============================================================
-        // 🛡 ZAXIRANI SERVERDA BAND QILISH — buyurtma yuborilishidan OLDIN
-        // ------------------------------------------------------------
-        // Ilgari stok faqat mijoz brauzerida kamayardi va tekshiruv ham
-        // brauzerdagi ESKI massivga qarardi. Shu sababli omborda 1 dona
-        // qolgan tovarni bir vaqtda bir necha kishi sotib olishi mumkin edi
-        // (oversell), keyin admin mijozga "yo'q ekan" deb tushuntirardi.
-        // Endi zaxira SERVERDA tekshiriladi va atomik band qilinadi.
-        // Yetmasa — buyurtma umuman yuborilmaydi va tovar NOMI aytiladi.
-        // ============================================================
-        var _stock = { mode: 'skip' };
-        try {
-            if (window._stockCommit) _stock = await window._stockCommit(stockChanges);
-        } catch (e) { _stock = { mode: 'fallback' }; }
+        // 🔁 Savat imzosiga bog'langan barqaror attemptId (bir xil savatni qayta
+        //    yuborish xavfsiz — server bir xil natija qaytaradi).
+        var _sig = items.map(function (it) { return it.id + ':' + it.size + ':' + it.qty; }).sort().join('|');
+        var _attemptId = window._orderAttemptId(_sig);
 
-        if (_stock && _stock.shortage) {
-            // Serverda HECH NARSA yozilmadi -> mahalliy stokni ham tiklaymiz.
-            try { if (window._revertLocalStock) window._revertLocalStock(stockChanges); } catch (e) {}
-            if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(false);
-            if (loadingOverlay) loadingOverlay.classList.remove('active');
-            var _shortMsg = (_stock.shortages || []).map(function (s) {
-                return '• ' + s.name + (s.size ? ' (' + s.size + ')' : '') +
+        // 🎁 So'ralgan cashback — SERVER cheklaydi (pulga ishonmaymiz).
+        var cashbackRequested = 0;
+        try { if (window._cbGetApplied) cashbackRequested = window._cbGetApplied(estimatedTotal) || 0; } catch (e) { cashbackRequested = 0; }
+
+        // 📞 Mijoz ma'lumotlari (manzil bazadan tiklanadi, kerak bo'lsa)
+        if (currentUser && (!myProfile.address || myProfile.address === "Noma'lum")) {
+            try {
+                let snap = await db.ref('users/' + currentUser + '/profile').once('value');
+                if (snap.exists() && snap.val().address) myProfile.address = snap.val().address;
+            } catch (e) {}
+        }
+        var profName = myProfile.name || userName || "Ismsiz mijoz";
+        var profPhone = myProfile.phone || "";
+        var userTgLink = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.username)
+            ? tg.initDataUnsafe.user.username : "";
+        var custAddress = myProfile.address || (typeof botRegion !== 'undefined' ? botRegion : '') || "";
+
+        // 🚚 Yetkazish (courier / bts) — joriy kodning derivatsiyasi bilan bir xil
+        var _dlv = window.selectedDelivery || {};
+        var deliveryMethod = _dlv.method || 'delivery';
+        var deliveryAddress = custAddress;
+        var deliveryMapLink = _dlv.mapLink || '';
+        var deliveryNote = '';
+        if (_dlv.method === 'courier') {
+            deliveryAddress = _dlv.address || custAddress;
+        } else if (_dlv.method === 'bts') {
+            deliveryAddress = (_dlv.branch || "") + (_dlv.district ? (", " + _dlv.district) : "") + (_dlv.region ? (", " + _dlv.region) : "");
+            deliveryNote = [_dlv.branchAddress, _dlv.branchLandmark].filter(Boolean).join(' ');
+        }
+
+        var _body = {
+            attemptId: _attemptId,
+            items: items,
+            customer: { name: profName, phone: profPhone, address: custAddress, username: userTgLink },
+            delivery: { method: deliveryMethod, address: deliveryAddress, mapLink: deliveryMapLink, note: deliveryNote },
+            payment: { method: paymentMethod },
+            cashbackRequested: cashbackRequested
+        };
+        if (_cred.initData) _body.initData = _cred.initData;
+        else if (_cred.idToken) _body.idToken = _cred.idToken;
+
+        // 🛡 SERVERDA ATOMIK: stok band qilinadi, buyurtma yoziladi, cashback hisoblanadi.
+        var resp, data;
+        try {
+            resp = await fetch(TG_PROXY + '/order-commit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(_body)
+            });
+            data = await resp.json().catch(function () { return null; });
+        } catch (e) {
+            _hideLoader(false);
+            try { showToast("Xatolik! Internetni tekshiring.", "warning"); } catch (e2) {}
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'error' };
+        }
+
+        // 🚫 STOK YETMASA (HTTP 409, error:"stock") — serverda hech narsa yozilmadi.
+        if (resp.status === 409 && data && data.error === 'stock') {
+            _hideLoader(false);
+            var _short = data.shortages || [];
+            var _shortMsg = _short.map(function (s) {
+                return '• ' + (s.name || s.id) + (s.size ? ' (' + s.size + ')' : '') +
                        ' — omborda ' + (parseInt(s.available, 10) || 0) + ' ta';
             }).join('\n');
             try { showToast("Omborda yetarli emas!", "warning"); } catch (e) {}
@@ -11198,149 +11283,116 @@ let fetchedAddress = myProfile.address || botRegion || "Kiritilmagan";
             } catch (e) {}
             // Bu buyurtma EMAS — 15 soniyalik kutish jazosi qo'llanmasin.
             window.lastOrderTime = 0;
-            return { ok: false, reason: 'stock', shortages: _stock.shortages || [] };
+            return { ok: false, reason: 'stock', shortages: _short };
         }
 
-        // 1. ADMINGA XABAR YUBORISH
-        const res = await tgProxySend({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" });
-        
-        if (res.ok) {
-            // Zaxira SERVERDA allaqachon kamaytirilgan bo'lsa — qayta kamaytirmaymiz
-            // (aks holda ikki barobar yechilardi).
-            if (!_stock || _stock.mode !== 'server') _decrementStock(stockChanges);
-            
-            // Zaxira ogohlantirishi (Admin uchun)
-            if (lowStockAlerts) {
-                tgProxySend({ chat_id: ADMIN_ID, text: `🚨 <b>OMBORDA KAM QOLDI:</b>${lowStockAlerts}`, parse_mode: "HTML" });
-            }
+        // ❌ Boshqa xato (tarmoq/server)
+        if (!resp.ok || !data || !data.ok || !data.committed || !data.order) {
+            _hideLoader(false);
+            try { showToast("Xatolik! Qayta urinib ko'ring.", "warning"); } catch (e) {}
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'error' };
+        }
 
-            // 2. MIJOZGA TASDIQLASH XABARI
-            tgProxySend({ chat_id: cUser, text: `✅ Buyurtmangiz qabul qilindi!\n🆔 Kod: #${newOrderCode}` +
-                (cbUsed > 0 ? `\n🎁 Cashback: −${cbUsed.toLocaleString()} so'm\n💵 To'lanadi: ${payable.toLocaleString()} so'm` : '') +
-                `\n📞 Bog'lanish: ${profPhone}` });
+        // ✅ MUVAFFAQIYAT (committed:true). SERVER buyurtma/stok/cashback egasi:
+        //    mijoz brauzeri buyurtma YOZMAYDI, stok KAMAYTIRMAYDI, Phase2.spendCashback
+        //    CHAQIRMAYDI. on('value') listener buyurtmani serverdan o'zi tortadi.
+        var order = data.order;
+        try { window._orderAttemptClear(); } catch (e) {}
 
-            // 🎁 Ishlatilgan cashbackni balansdan YECHAMIZ (buyurtma yozilishidan oldin)
-            if (cbUsed > 0) {
-                try {
-                    if (window.Phase2 && window.Phase2.spendCashback) {
-                        window.Phase2.spendCashback(cbUsed, 'Buyurtma ' + newOrderCode + ' — to\'lovda ishlatildi');
-                    }
-                } catch (e) { _dwarn('[cashback] spend xato:', e); }
-            }
+        // Savat va qo'llangan cashback tozalanadi
+        cart = {};
+        try { saveLocalCart(); } catch (e) {}
+        try { if (window._flushCart) window._flushCart(); } catch (e) {}
+        try { if (window._cbResetApplied) window._cbResetApplied(); } catch (e) {}
+        updateCartBadge();
 
-            // 3. TARIXGA VA BAZAGA YOZISH
-            myOrders.unshift({ 
-                id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), 
-                time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, 
-                cashbackUsed: cbUsed, payable: payable,
-                // 💳 To'lov vaqtida VA'DA QILINGAN cashback ulushi. Cashback
-                //    yetkazilganda beriladi — o'shanda daraja o'zgargan
-                //    bo'lsa ham mijoz aynan ko'rgan summani oladi.
+        // 🕒 OPTIMISTIK LOKAL KO'RSATISH — DB'ga YOZILMAYDI (buyurtma SERVER-OWNED).
+        //    on('value') listener biroздан haqiqiy yozuvni tortadi va myOrders'ni
+        //    to'liq almashtiradi. Buyurtmaga SERVER hisoblab yozgan ulush (cbRate)
+        //    saqlanadi — cashback aynan o'sha ulush bilan beriladi (rateForOrder).
+        try {
+            var cbRate = (order.cbRate != null) ? order.cbRate : (window._cashbackRate ? window._cashbackRate() : 0.008);
+            var _localOrder = {
+                id: order.id, code: order.code, date: order.date, time: order.time,
+                status: order.status || 'kutilmoqda', total: order.total,
+                cashbackUsed: order.cashbackUsed || 0, payable: order.payable,
                 cbRate: cbRate,
-                status: 'kutilmoqda', customerName: profName, customerPhone: profPhone,
-                customerAddress: fetchedAddress, customerUsername: userTgLink,
-                deliveryMethod: (window.selectedDelivery ? window.selectedDelivery.method : ''),
-                deliveryMapLink: (window.selectedDelivery && window.selectedDelivery.mapLink) || ''
-            }); 
-            // Keyingi buyurtma uchun tanlovni tozalaymiz
-            try { if (window._cbResetApplied) window._cbResetApplied(); } catch (e) {}
-
-            // 🗂 MARKAZIY `orders` ARXIVIGA YOZAMIZ.
-            //    Nima uchun kerak: admin buyurtma holatini o'zgartirganda kod
-            //    `orders/<uid>_<kod>/status` ga yozadi va bot mijozga xabar
-            //    yuborishda o'sha yozuvdan JAMI SUMMANI o'qiydi. Lekin JONLI
-            //    kod bu yozuvni HECH QACHON yaratmagan edi (yaratuvchi kod
-            //    `confirmOrder` ning O'LIK nusxasida qolib ketgan). Natijada:
-            //      • mijozga boradigan "qabul qilindi / yo'lda" xabarlarida
-            //        summa ko'rinmasdi;
-            //      • bazada faqat `{status:...}` dan iborat "yarim" yozuvlar
-            //        paydo bo'lardi.
-            //    Endi buyurtma to'liq yoziladi. Xato bo'lsa buyurtma buzilmaydi.
-            try {
-                if (window._mirrorOrderToCentral) {
-                    window._mirrorOrderToCentral(myOrders[0], {
-                        uid: currentUser, name: profName, phone: profPhone, address: fetchedAddress
-                    });
-                }
-            } catch (e) { _dwarn('[orders] markaziy arxivga yozilmadi:', e); }
-
-            saveLocalOrders(); 
-            cart = {}; 
-            saveLocalCart();
-            // Savatni DARHOL serverga yozamiz: buyurtmadan keyin ilova
-            // `tg.close()` bilan yopiladi, kechiktirilgan yozuv yetib
-            // bormasligi mumkin -> mijoz qaytganda savat to'la ko'rinardi.
-            try { if (window._flushCart) window._flushCart(); } catch (e) {}
-            updateCartBadge();
-            window.myOrders = myOrders;
-            
-            // ✅ Soatcha kamida 2 soniya aylanib bo'lgach ptichaga o'tadi.
-            //    `_animDone` — animatsiya to'liq tugaganini bildiradigan promise;
-            //    tg.close() shuni KUTADI, aks holda ilova animatsiya o'rtasida
-            //    yopilib, mijoz hech narsa ko'rmasdan qolardi.
-            var _animDone = (window._ordLoader && window._ordLoader.finish)
-                ? window._ordLoader.finish(true)
-                : Promise.resolve();
-            if(loadingOverlay) loadingOverlay.classList.remove('active'); 
-            showToast("Qabul qilindi!");
-            
-             shootConfetti();
-
-            // 🎁 CASHBACK + KAFOLAT — VA Firebase yozuvi tugashini KUTAMIZ (tg.close oldidan)
-            // MUHIM: window.confirmOrder asl confirmOrder'ni override qilgani uchun,
-            // Phase2 hook AYNAN shu yerda chaqirilishi shart — aks holda cashback ishlamaydi.
-            var _p2flush = Promise.resolve();
-            try {
-                if (window.Phase2 && typeof window.Phase2.onOrderPlaced === 'function') {
-                    _p2flush = window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB) || Promise.resolve();
-                }
-            } catch(e){ _dwarn('[Phase2] onOrderPlaced xato:', e); }
-
-            // Cashback Firebase'ga yozilib bo'lgach (yoki eng ko'pi 3.5s) ilovani yopamiz —
-            // shunda Telegramda cashback yo'qolmaydi. Konfetti uchun ham vaqt qoladi.
-            var _closed = false;
-            var _doClose = function () {
-                if (_closed) return; _closed = true;
-                // 💳 KARTA ORQALI O'TKAZMA: mijoz "To'ladim" bosgach, chekni shaxsan
-                // adminga yuborishi uchun uning Telegram chatini ochamiz.
-                // (Eski kodda shart "=== 'Karta'" edi va hech qachon ishlamasdi, chunki
-                //  haqiqiy qiymat "Karta orqali o'tkazma".)
-                try { if(paymentMethod && paymentMethod.indexOf('Karta') !== -1) tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch(e){}
-                try { tg.close(); } catch(e){}
+                items: order.items, itemDetails: order.itemDetails,
+                customerName: order.customerName, customerPhone: order.customerPhone,
+                customerAddress: order.customerAddress, customerUsername: order.customerUsername,
+                deliveryMethod: order.deliveryMethod, deliveryMapLink: order.deliveryMapLink
             };
-            // Ilovani yopishdan oldin IKKI narsani kutamiz:
-            //   1) cashback Firebase'ga yozilib bo'lishi (yoki 3.5s chegarasi)
-            //   2) soatcha + pticha animatsiyasi TO'LIQ tugashi (_animDone)
-            // Ilgari faqat (1) kutilardi — shu sababli ilova animatsiya
-            // o'rtasida yopilib ketardi va mijoz ptichani ko'rmasdi.
-            // 6 soniya — mutlaq xavfsizlik chegarasi (hech qachon osilib qolmaydi).
-            Promise.race([
-                Promise.all([
-                    _animDone,
-                    Promise.race([
-                        _p2flush.then(function(){ return new Promise(function(r){ setTimeout(r, 2000); }); }),
-                        new Promise(function(r){ setTimeout(r, 3500); })
-                    ])
-                ]),
-                new Promise(function(r){ setTimeout(r, 6000); })
-            ]).then(_doClose);
-            // ✅ Chaqiruvchiga MUVAFFAQIYAT signali. Faqat shu holatda yashil
-            //    "pticha" + konfetti ko'rsatiladi (pastdagi wrapper shuni tekshiradi).
-            return { ok: true, code: newOrderCode };
-        } else {
-            // Xabar ketmadi -> buyurtma YO'Q. Serverda band qilingan zaxirani
-            // QAYTARAMIZ, aks holda tovar sotilmagan holda "yo'q" bo'lib qolardi.
-            if (_stock && _stock.mode === 'server') {
-                try { window._stockCommit(stockChanges, 'release'); } catch (e) {}
+            if (Array.isArray(window.myOrders)) {
+                if (!window.myOrders.some(function (x) { return x && String(x.id) === String(order.id); })) {
+                    myOrders.unshift(_localOrder);
+                }
+            } else {
+                myOrders = [_localOrder];
             }
-            try { if (window._revertLocalStock) window._revertLocalStock(stockChanges); } catch (e) {}
-            throw new Error("API xatosi");
-        }
-    } catch (err) { 
-        // Xato holati ham silliq ko'rsatiladi (qizil belgi), keyin yopiladi
+            window.myOrders = myOrders;
+        } catch (e) {}
+
+        // 📨 Telegram xabarlari — commitdan KEYIN, best-effort (muvaffaqiyatga ta'sir qilmaydi).
+        try {
+            var _cb = order.cashbackUsed || 0;
+            var _pay = (order.payable != null) ? order.payable : order.total;
+            var _lines = '';
+            (order.itemDetails || []).forEach(function (it) {
+                var _co = (it.size && it.size !== 'Universal') ? ' (' + escTg(it.size) + ')' : '';
+                _lines += "\n\u25AA\uFE0F " + escTg(it.name) + _co + " \u2014 " + (it.qty || 0) +
+                          " x " + (it.unitPrice || 0).toLocaleString() + " = " + (it.lineTotal || 0).toLocaleString() + " so'm";
+            });
+            var _adminText = "\uD83C\uDD95 <b>YANGI BUYURTMA: #" + escTg(order.code || '') + "</b>\n\n" +
+                "\uD83D\uDC64 <b>Ism:</b> " + escTg(order.customerName || profName) + "\n" +
+                "\uD83D\uDCDE <b>Telefon:</b> <code>" + escTg(order.customerPhone || profPhone) + "</code>\n" +
+                "\uD83D\uDCCD <b>Manzil:</b> " + escTg(order.customerAddress || deliveryAddress) + "\n" +
+                "\uD83C\uDD94 <b>ID:</b> <code>" + escTg(String(order.uid || currentUser || '')) + "</code>\n" +
+                "\uD83D\uDCB3 <b>To'lov turi:</b> " + escTg(paymentMethod) + "\n\n" +
+                "\uD83D\uDED2 <b>Mahsulotlar:</b>" + _lines +
+                "\n\n\uD83D\uDCB0 <b>Jami:</b> " + (order.total || 0).toLocaleString() + " so'm";
+            if (_cb > 0) {
+                _adminText += "\n\uD83C\uDF81 <b>Cashback ishlatildi:</b> \u2212" + _cb.toLocaleString() + " so'm";
+                _adminText += "\n\uD83D\uDCB5 <b>TO'LANADI:</b> " + _pay.toLocaleString() + " so'm";
+            }
+            try {
+                var _vipTag = (window.VIP && window.VIP.orderTag) ? window.VIP.orderTag() : '';
+                if (_vipTag) _adminText += "\n\n" + escTg(_vipTag);
+            } catch (e) {}
+            tgProxySend({ chat_id: ADMIN_ID, text: _adminText, parse_mode: "HTML" });
+            if (currentUser) {
+                tgProxySend({ chat_id: currentUser, text: "\u2705 Buyurtmangiz qabul qilindi!\n\uD83C\uDD94 Kod: #" + (order.code || '') +
+                    (_cb > 0 ? "\n\uD83C\uDF81 Cashback: \u2212" + _cb.toLocaleString() + " so'm\n\uD83D\uDCB5 To'lanadi: " + _pay.toLocaleString() + " so'm" : '') +
+                    "\n\uD83D\uDCDE Bog'lanish: " + profPhone });
+            }
+        } catch (e) {}
+
+        // ✅ Animatsiya + konfetti + yopilish (mavjud xatti-harakat saqlanadi).
+        var _animDone = (window._ordLoader && window._ordLoader.finish)
+            ? window._ordLoader.finish(true)
+            : Promise.resolve();
+        if (loadingOverlay) loadingOverlay.classList.remove('active');
+        showToast("Qabul qilindi!");
+        shootConfetti();
+
+        var _closed = false;
+        var _doClose = function () {
+            if (_closed) return; _closed = true;
+            try { if (paymentMethod && paymentMethod.indexOf('Karta') !== -1) tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch (e) {}
+            try { tg.close(); } catch (e) {}
+        };
+        Promise.race([
+            Promise.resolve(_animDone),
+            new Promise(function (r) { setTimeout(r, 6000); })
+        ]).then(_doClose);
+
+        // ✅ Wrapper (pastda) faqat shu holatda konfetti + pticha ko'rsatadi.
+        return { ok: true, code: order.code };
+    } catch (err) {
         if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(false);
-        if(loadingOverlay) loadingOverlay.classList.remove('active'); 
-        showToast("Xatolik! Internetni tekshiring.", "warning"); 
+        if (loadingOverlay) loadingOverlay.classList.remove('active');
+        showToast("Xatolik! Internetni tekshiring.", "warning");
+        window.lastOrderTime = 0;
         return { ok: false, reason: 'error' };
     }
 };
@@ -11390,6 +11442,47 @@ window.getTimelineHTML = (status) => {
     </div>`;
 };
 
+// 🧾 BUYURTMA QATORLARI HTML — SERVER `itemDetails` ni AFZAL ko'radi.
+//    Server buyurtmasi { itemDetails:[{id,name,size,qty,unitPrice,lineTotal}] }
+//    beradi (nom/narx buyurtma vaqtida qotirilgan). Eski buyurtmalar (itemDetails
+//    yo'q) uchun ESKI yo'l: `items` map (baseId||carOpt) + productsDB lookup.
+window._odItemsHTML = function (o) {
+    var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
+    var iH = '';
+    function row(imgSrc, nameHTML, qty, lineTotal) {
+        var imgTag = imgSrc
+            ? '<img class="od-item-img" src="' + imgSrc + '" alt="" onerror="this.style.display=\'none\'">'
+            : '<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-muted);">📦</div>';
+        return '<div class="od-item">' + imgTag +
+            '<div class="od-item-info"><div class="od-item-name">' + nameHTML + '</div>' +
+            '<div class="od-item-meta"><span class="od-item-qty">×' + qty + '</span>' +
+            '<span class="od-item-price">' + (Number(lineTotal) || 0).toLocaleString() + " so'm</span></div></div></div>";
+    }
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        o.itemDetails.forEach(function (it) {
+            var p = pdb.find(function (x) { return x.id == it.id; });
+            var imgSrc = p ? (p.img || p.image || '') : '';
+            var carOpt = (it.size && it.size !== 'Universal') ? it.size : '';
+            var carOptHTML = carOpt ? '<span class="od-car-opt">[' + escHtml(carOpt) + ']</span>' : '';
+            var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
+            iH += row(imgSrc, escHtml(it.name) + ' ' + carOptHTML, (it.qty || 0), line);
+        });
+        return iH;
+    }
+    // Eski buyurtmalar uchun zaxira
+    for (var fullId in (o && o.items ? o.items : {})) {
+        var parts = String(fullId).split('||');
+        var baseId = parts[0];
+        var carOptRaw = parts[1];
+        var pp = pdb.find(function (x) { return x.id == baseId; });
+        if (!pp) continue;
+        var co = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+        var coHTML = (co && co !== "Universal") ? '<span class="od-car-opt">[' + escHtml(co) + ']</span>' : '';
+        iH += row(pp.img || pp.image || '', escHtml(pp.name) + ' ' + coHTML, o.items[fullId], (pp.price * o.items[fullId]));
+    }
+    return iH;
+};
+
 // ==========================================
 // 📦 2. BUYURTMA ICHIGA KIRISH (KABINETDAN)
 // ==========================================
@@ -11405,31 +11498,8 @@ window.openOrderDetails = (id) => {
     // Eski yozuv o'rniga Zanjirni ulaymiz
     document.getElementById('od-status').innerHTML = getTimelineHTML(o.status || 'kutilmoqda'); 
     
-    let iH = ''; 
-    for(let fullId in o.items) { 
-        let [baseId, carOptRaw] = fullId.split('||');
-        let p = productsDB.find(x => x.id == baseId); 
-        if(p) {
-            let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-            let carOptHTML = carOpt && carOpt !== "Universal" ? `<span class="od-car-opt">[${escHtml(carOpt)}]</span>` : '';
-            let imgSrc = p.img || p.image || '';
-            let imgTag = imgSrc 
-                ? `<img class="od-item-img" src="${imgSrc}" alt="${escHtml(p.name)}" onerror="this.style.display='none'">` 
-                : `<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-muted);">📦</div>`;
-            iH += `<div class="od-item">
-                ${imgTag}
-                <div class="od-item-info">
-                    <div class="od-item-name">${escHtml(p.name)} ${carOptHTML}</div>
-                    <div class="od-item-meta">
-                        <span class="od-item-qty">×${o.items[fullId]}</span>
-                        <span class="od-item-price">${(p.price * o.items[fullId]).toLocaleString()} so'm</span>
-                    </div>
-                </div>
-            </div>`; 
-        }
-    }
-    document.getElementById('od-items').innerHTML = iH; 
-    document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm"; 
+    document.getElementById('od-items').innerHTML = window._odItemsHTML(o);
+    document.getElementById('od-total').innerText = "Jami: " + (Number(o.total) || 0).toLocaleString() + " so'm";
     
     // CHAT FUNKSIYASI SHU YERDA CHAQIRILADI (Yo'qolib ketmaydi)
     if(typeof renderChatMessages === 'function') renderChatMessages();
@@ -11446,33 +11516,8 @@ window.showTrackedOrder = (o) => {
     // Bu yerga ham Zanjirni ulaymiz
     document.getElementById('od-status').innerHTML = getTimelineHTML(o.status || 'kutilmoqda');
     
-    let itemsHtml = ''; 
-    if (o.items) {
-        for(let pid in o.items) { 
-            let [baseId, carOptRaw] = String(pid).split('||');
-            let p = productsDB.find(x => x.id == baseId); 
-            if(p) {
-                let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-                let carOptHTML = carOpt && carOpt !== "Universal" ? `<span class="od-car-opt">[${escHtml(carOpt)}]</span>` : '';
-                let imgSrc = p.img || p.image || '';
-                let imgTag = imgSrc 
-                    ? `<img class="od-item-img" src="${imgSrc}" alt="${escHtml(p.name)}" onerror="this.style.display='none'">` 
-                    : `<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-muted);">📦</div>`;
-                itemsHtml += `<div class="od-item">
-                    ${imgTag}
-                    <div class="od-item-info">
-                        <div class="od-item-name">${escHtml(p.name)} ${carOptHTML}</div>
-                        <div class="od-item-meta">
-                            <span class="od-item-qty">×${o.items[pid]}</span>
-                            <span class="od-item-price">${(p.price * o.items[pid]).toLocaleString()} so'm</span>
-                        </div>
-                    </div>
-                </div>`; 
-            }
-        }
-    }
-    document.getElementById('od-items').innerHTML = itemsHtml; 
-    document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm";
+    document.getElementById('od-items').innerHTML = window._odItemsHTML(o);
+    document.getElementById('od-total').innerText = "Jami: " + (Number(o.total) || 0).toLocaleString() + " so'm";
     
     if(document.getElementById('od-review-section')) document.getElementById('od-review-section').innerHTML = '';
     
@@ -11483,6 +11528,38 @@ window.showTrackedOrder = (o) => {
     }
     
     openModal('orderDetailModal');
+};
+
+// 🧾 ADMIN buyurtma qatorlari — SERVER `itemDetails` ni afzal ko'radi, eski
+//    buyurtmalar uchun `items` map + productsDB zaxira yo'li.
+window._adminOrderItemsHTML = function (o) {
+    var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
+    var rows = '';
+    function row(nameHTML, qty, sum) {
+        return '<div style="display:flex; justify-content:space-between; font-size: 12px; margin-bottom: 8px; color: #d1d1d6; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 6px;">' +
+            '<span style="flex:1; line-height: 1.4;">▪️ ' + nameHTML + ' <b style="color:#fff; margin-left:5px;">x' + qty + '</b></span>' +
+            '<span style="color:var(--luxury-gold); font-weight:bold; white-space:nowrap; margin-left: 10px;">' + (Number(sum) || 0).toLocaleString() + ' s</span></div>';
+    }
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        o.itemDetails.forEach(function (it) {
+            var carOpt = (it.size && it.size !== 'Universal') ? it.size : '';
+            var nm = escHtml(it.name) + (carOpt ? ' <span style="color:var(--luxury-gold); font-size:10px;">[' + escHtml(carOpt) + ']</span>' : '');
+            var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
+            rows += row(nm, (it.qty || 0), line);
+        });
+        return rows;
+    }
+    for (var pid in (o && o.items ? o.items : {})) {
+        var parts = String(pid).split('||');
+        var baseId = parts[0];
+        var carOptRaw = parts[1];
+        var p = pdb.find(function (x) { return x.id == baseId; });
+        if (!p) continue;
+        var co = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+        var nm2 = escHtml(p.name) + ((co && co !== "Universal") ? ' <span style="color:var(--luxury-gold); font-size:10px;">[' + escHtml(co) + ']</span>' : '');
+        rows += row(nm2, o.items[pid], (p.price * o.items[pid]));
+    }
+    return rows;
 };
 
 // =====================================
@@ -11522,39 +11599,26 @@ window.renderAdminOrdersUI = (ordersArr) => {
         let dPhone = o.customerPhone || o.uP || 'Raqamsiz';
         let dAddr = o.customerAddress && o.customerAddress !== "Kiritilmagan" ? o.customerAddress : '';
 
-        // Xarid qilingan tovarlarni chiroyli ro'yxat qilish
+        // Xarid qilingan tovarlarni chiroyli ro'yxat qilish — SERVER itemDetails afzal.
         let itemsHtml = '';
-        if (o.items) {
-            itemsHtml = `<div style="background: rgba(0,0,0,0.3); border-radius: 14px; padding: 12px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.03); box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">`;
-            for(let pid in o.items) {
-                let [baseId, carOptRaw] = String(pid).split('||');
-                let p = productsDB.find(x => x.id == baseId);
-                if(p) {
-                    let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-                    let dNameItem = carOpt && carOpt !== "Universal" ? `${p.name} <span style="color:var(--luxury-gold); font-size:10px;">[${carOpt}]</span>` : p.name;
-                    itemsHtml += `
-                    <div style="display:flex; justify-content:space-between; font-size: 12px; margin-bottom: 8px; color: #d1d1d6; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 6px;">
-                        <span style="flex:1; line-height: 1.4;">▪️ ${dNameItem} <b style="color:#fff; margin-left:5px;">x${o.items[pid]}</b></span>
-                        <span style="color:var(--luxury-gold); font-weight:bold; white-space:nowrap; margin-left: 10px;">${(p.price * o.items[pid]).toLocaleString()} s</span>
-                    </div>`;
-                }
-            }
-            itemsHtml += `</div>`;
+        var _admRows = window._adminOrderItemsHTML(o);
+        if (_admRows) {
+            itemsHtml = `<div style="background: rgba(0,0,0,0.3); border-radius: 14px; padding: 12px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.03); box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">` + _admRows + `</div>`;
         }
 
         // Holatga qarab aqlli tugmalar yasash
         let actionBtns = '';
         if (o.status === 'kutilmoqda' || !o.status) {
-            actionBtns = `<button style="background: rgba(0,122,255,0.15); color: #007aff; border: 1px solid rgba(0,122,255,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'qabul')">✅ Qabul qilish</button>`;
+            actionBtns = `<button style="background: rgba(0,122,255,0.15); color: #007aff; border: 1px solid rgba(0,122,255,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'qabul')">✅ Qabul qilish</button>`;
         } else if (o.status === 'qabul') {
-            actionBtns = `<button style="background: rgba(255,149,0,0.15); color: #ff9500; border: 1px solid rgba(255,149,0,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yolda')">🚚 Yo'lga chiqarish</button>`;
+            actionBtns = `<button style="background: rgba(255,149,0,0.15); color: #ff9500; border: 1px solid rgba(255,149,0,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'yolda')">🚚 Yo'lga chiqarish</button>`;
         } else if (o.status === 'yolda') {
-            actionBtns = `<button style="background: rgba(52,199,89,0.15); color: #30d158; border: 1px solid rgba(52,199,89,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'yetkazildi')">🏁 Yetkazildi</button>`;
+            actionBtns = `<button style="background: rgba(52,199,89,0.15); color: #30d158; border: 1px solid rgba(52,199,89,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'yetkazildi')">🏁 Yetkazildi</button>`;
         }
         
         let cancelBtn = '';
         if (o.status !== 'bekor_qilingan' && o.status !== 'yetkazildi') {
-            cancelBtn = `<button style="background: rgba(255,69,58,0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.3); padding: 12px; border-radius: 12px; flex: 0.5; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', ${o.id}, 'bekor_qilingan')">Bekor</button>`;
+            cancelBtn = `<button style="background: rgba(255,69,58,0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.3); padding: 12px; border-radius: 12px; flex: 0.5; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'bekor_qilingan')">Bekor</button>`;
         }
 
         return `
@@ -11585,11 +11649,11 @@ window.renderAdminOrdersUI = (ordersArr) => {
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; background: rgba(212,175,55,0.05); padding: 12px 15px; border-radius: 14px; border: 1px solid rgba(212,175,55,0.2);">
                 <span style="font-size: 12px; color: var(--luxury-gold); text-transform: uppercase; font-weight: 800; opacity: 0.8;">Jami Summa</span>
-                <span style="font-size: 20px; font-weight: 900; color: var(--luxury-gold);">${o.total.toLocaleString()} so'm</span>
+                <span style="font-size: 20px; font-weight: 900; color: var(--luxury-gold);">${(Number(o.total)||0).toLocaleString()} so'm</span>
             </div>
             
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button style="background: ${unreadCount > 0 ? 'var(--accent-red)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${unreadCount > 0 ? 'var(--accent-red)' : 'rgba(255,255,255,0.1)'}; padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: ${unreadCount > 0 ? '0 4px 15px rgba(255,69,58,0.4)' : 'none'};" onclick="openAdminChat('${o.uI}', ${o.id})">
+                <button style="background: ${unreadCount > 0 ? 'var(--accent-red)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${unreadCount > 0 ? 'var(--accent-red)' : 'rgba(255,255,255,0.1)'}; padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: ${unreadCount > 0 ? '0 4px 15px rgba(255,69,58,0.4)' : 'none'};" onclick="openAdminChat('${o.uI}', '${o.id}')">
                     ${chatBtnText}
                 </button>
                 ${actionBtns}
@@ -17135,7 +17199,21 @@ document.addEventListener('click', function (e) {
         if (!P.uid || !hasFB()) return Promise.resolve();
         P._writing = true;
         try {
-            return firebase.database().ref('users/' + P.uid + '/phase2').set(clean(P.state))
+            // 🔒 SERVER-AUTHORITATIVE: pul maydonlari (cashbackTotal/Spent/Refunded/
+            //    cashback, loyaltyProjection, processedOrders, referrals ...) SERVER
+            //    tomonidan (Worker) yoziladi. Yangi database.rules.json mijozga faqat
+            //    KOSMETIK / jurnal maydonlarini yozishga ruxsat beradi. Shuning uchun
+            //    `.set(butun state)` O'RNIGA faqat ruxsat etilgan kalitlarni `.update()`
+            //    qilamiz (aks holda multi-path update TO'LIQ rad etilardi).
+            var s = P.state || {};
+            var patch = {};
+            if (typeof s.theme !== 'undefined') patch.theme = s.theme;
+            if (typeof s.themeSwitched !== 'undefined') patch.themeSwitched = !!s.themeSwitched;
+            if (typeof s.lang !== 'undefined') patch.lang = s.lang;
+            if (typeof s.wishlistCount !== 'undefined') patch.wishlistCount = s.wishlistCount;
+            if (typeof s.notifications !== 'undefined') patch.notifications = clean(s.notifications);
+            if (typeof s.cashbackHistory !== 'undefined') patch.cashbackHistory = clean(s.cashbackHistory);
+            return firebase.database().ref('users/' + P.uid + '/phase2').update(patch)
                 .then(function () { P._writing = false; })
                 .catch(function () { P._writing = false; });
         } catch (e) { P._writing = false; return Promise.resolve(); }
@@ -17263,22 +17341,19 @@ document.addEventListener('click', function (e) {
     function addCashback(amount, note, type) {
         amount = Math.round(amount);
         if (!amount || amount < 0) return;
-        if (type === 'spend') {
-            // Balansdan ortiq sarflash mumkin emas
-            var avail = recalcBalance();
-            if (amount > avail) amount = avail;
-            if (amount <= 0) return;
-            P.state.cashbackSpent = (parseInt(P.state.cashbackSpent, 10) || 0) + amount;
-        } else if (type === 'refund') {
-            // Bekor qilingan buyurtmada ishlatilgan cashback QAYTARILADI.
-            // `cashbackTotal` ga TEGMAYMIZ — "Jami yig'ilgan" haqiqiy qolishi kerak.
-            P.state.cashbackRefunded = (parseInt(P.state.cashbackRefunded, 10) || 0) + amount;
-        } else {
-            P.state.cashbackTotal = (parseInt(P.state.cashbackTotal, 10) || 0) + amount;
-        }
+        // 🔒 SERVER-OWNED PUL: cashbackTotal/cashbackSpent/cashbackRefunded
+        //    endi FAQAT server (Worker /order-commit, /order-status) tomonidan
+        //    yoziladi va P.sync ularni serverdan o'qiydi. Ilgari bu funksiya
+        //    o'sha hisoblagichlarni MAHALLIY oshirardi — natijada reconcileOrders
+        //    server bergan cashback ustiga yana qo'shib, balans IKKI MARTA
+        //    ko'rinardi. Endi bu yerda pul hisoblagichlariga TEGILMAYDI; faqat
+        //    ko'rsatuv jurnali (cashbackHistory) yangilanadi.
+        try {
+            if (!Array.isArray(P.state.cashbackHistory)) P.state.cashbackHistory = [];
+            P.state.cashbackHistory.unshift({ date: Date.now(), amount: amount, type: type || 'earn', note: note || '' });
+            if (P.state.cashbackHistory.length > 80) P.state.cashbackHistory.length = 80;
+        } catch (e) {}
         recalcBalance();
-        P.state.cashbackHistory.unshift({ date: Date.now(), amount: amount, type: type || 'earn', note: note || '' });
-        if (P.state.cashbackHistory.length > 80) P.state.cashbackHistory.length = 80;
     }
 
     /**
@@ -18241,11 +18316,15 @@ document.addEventListener('click', function (e) {
                 //    tiklab qo'yardi. Ya'ni cashbackni sarflash printsipial ishlamasdi.
                 // ENDI: faqat "yig'ilgan" va "sarflangan" birlashtiriladi (ikkalasi ham
                 //    faqat o'sadi -> Math.max to'g'ri), balans esa ulardan hisoblanadi.
-                if (typeof r.cashbackTotal === 'number') P.state.cashbackTotal = Math.max(P.state.cashbackTotal || 0, r.cashbackTotal);
-                if (typeof r.cashbackSpent === 'number') P.state.cashbackSpent = Math.max(P.state.cashbackSpent || 0, r.cashbackSpent);
-                // Qaytarilgan ham MONOTON — Math.max bilan xavfsiz birlashadi.
-                // (Eski hisoblarda bu maydon yo'q -> 0 bo'lib qoladi, balans o'zgarmaydi.)
-                if (typeof r.cashbackRefunded === 'number') P.state.cashbackRefunded = Math.max(P.state.cashbackRefunded || 0, r.cashbackRefunded);
+                // 🔒 SERVER — PUL EGASI. Bu hisoblagichlarni to'g'ridan-to'g'ri
+                //    serverdan olamiz (Math.max EMAS). Mijoz brauzeri ularni
+                //    endi o'zgartirmaydi, server esa har commit/statusda ularni
+                //    yozib boradi. To'g'ridan-to'g'ri o'zlashtirish eski (deploy
+                //    oldidan mahalliy ikki marta hisoblangan) shishgan qiymatni
+                //    ham keyingi sync'da haqiqiy server qiymatiga TEKISLAYDI.
+                if (typeof r.cashbackTotal === 'number') P.state.cashbackTotal = Math.max(0, r.cashbackTotal);
+                if (typeof r.cashbackSpent === 'number') P.state.cashbackSpent = Math.max(0, r.cashbackSpent);
+                if (typeof r.cashbackRefunded === 'number') P.state.cashbackRefunded = Math.max(0, r.cashbackRefunded);
                 // 🔄 Eski hisoblardan migratsiya: `cashbackSpent` hali yo'q, lekin remote
                 //    `cashback` balansi yig'ilgandan kichik bo'lsa — ayirmasi sarflangan
                 //    deb qabul qilinadi (mijoz pulini yo'qotmaydi).

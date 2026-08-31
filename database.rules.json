@@ -1,14 +1,24 @@
 {
   "rules": {
-    // ==================================================================== XAVFSIZLIK QOIDALARI
-    // — 2026.09 (KRITIK TUZATISH)
-    // ==================================================================== ADMIN TEKSHIRUVI ikki
-    // xil ishlaydi (ikkalasi ham SERVER tomonda, soxtalashtirib bo'lmaydi): 1) admins/{uid} ===
-    // true  — Console'dan qo'shiladigan asosiy yo'l; 2) qattiq yozilgan uid ro'yxati — admins
-    // tuguni hali to'ldirilmagan bo'lsa ham admin panel ISHLAB TURISHI uchun zaxira. auth.uid =
-    // Telegram ID (Worker /auth initData'ni HMAC bilan tekshirib beradi), shuning uchun bu
-    // ro'yxatni brauzerdan o'zgartirib bo'lmaydi. MUHIM: bot va Worker service-account bilan
-    // ishlaydi — ular bu qoidalarni chetlab o'tadi, shuning uchun ularning ishi buzilmaydi.
+    // ====================================================================
+    // AVTO A1 — XAVFSIZLIK QOIDALARI — 2026.10 (SERVER-AUTHORITATIVE)
+    // --------------------------------------------------------------------
+    // ASOSIY TAMOYIL: pul, ombor va buyurtma holati bilan bog'liq HAR QANDAY
+    // yozuv faqat SERVER (Cloudflare Worker service-account yoki bot) orqali
+    // amalga oshiriladi. Worker/bot service-account bilan ishlaydi va bu
+    // qoidalarni CHETLAB O'TADI — shuning uchun ularga alohida ".write"
+    // grant KERAK EMAS. Mijoz brauzeri esa quyidagilarni QILA OLMAYDI:
+    //   • markaziy yoki shaxsiy buyurtma yozuvini yaratish/o'zgartirish
+    //   • cashback (cashbackTotal/Spent/Refunded) qiymatlarini yozish
+    //   • mahsulot stokini kamaytirish
+    //   • boshqa mijozning ma'lumotini o'qish
+    //
+    // AUTENTIFIKATSIYA: auth.uid barcha foydalanuvchilar uchun majburiy.
+    //   • Telegram mijoz  -> Worker /auth custom token (uid = Telegram ID)
+    //   • Brauzer/APK     -> Firebase Anonymous Auth (uid = anonim UID)
+    //   Ilgari "!$uid.matches(/^[0-9]+$/)" orqali apk_/tg_url_ yozuvlari
+    //   autentifikatsiyasiz OCHIQ edi — bu TESHIK YOPILDI.
+    // ====================================================================
 
     ".read": false,
     ".write": false,
@@ -19,20 +29,22 @@
     },
 
     "users": {
-      // ILGARI: '.read': true + '.write': true — ya'ni internetdagi HAR KIM /users.json orqali
-      // barcha mijozlarning ismi, telefoni, manzili va buyurtma tarixini yuklab olardi yoki
-      // hammasini o'chirib tashlardi. ENDI: butun ro'yxatni faqat admin o'qiydi; har bir mijoz
-      // faqat O'ZINING yozuvini o'qiydi/yozadi. tg_url_* / apk_* (Telegram'siz brauzer/APK)
-      // yozuvlari auth ola olmaydi, shuning uchun ular ochiq qoladi — lekin butun ro'yxatni
-      // to'kib olish endi imkonsiz.
-
+      // Butun ro'yxatni faqat admin o'qiydi. Har bir mijoz faqat O'ZINI ko'radi.
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
 
       "$uid": {
-        ".read": "(auth != null && auth.uid === $uid) || !$uid.matches(/^[0-9]+$/) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
-        ".write": "(auth != null && auth.uid === $uid) || !$uid.matches(/^[0-9]+$/) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+        // O'qish: egasi yoki admin. (Endi hech qanday "ochiq" tugun yo'q.)
+        ".read": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+
+        // ⚠️ MUHIM: $uid darajasida UMUMIY ".write" YO'Q. RTDB'da yuqori
+        //    darajadagi ".write" butun ostki daraxtga tarqaladi va uni
+        //    pastroqda "false" bilan QAYTARIB BO'LMAYDI. Shuning uchun
+        //    yozish huquqi faqat kerakli bolalarga ALOHIDA beriladi. Pul
+        //    maydonlariga esa hech qanday mijoz-grant berilmaydi -> ular
+        //    faqat serverga (qoidalarni chetlab o'tuvchi) ochiq qoladi.
 
         "profile": {
+          ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
           "name": {
             ".validate": "newData.isString() && newData.val().length <= 80"
           },
@@ -44,19 +56,48 @@
           },
           "lang": {
             ".validate": "newData.isString() && newData.val().length <= 8"
+          },
+          "vip": {
+            // Manual VIP darajasi — faqat admin bera oladi (server ham o'qiydi).
+            // Mijoz o'zini VIP qila olmasligi uchun bu yerda mijoz-grant YO'Q.
+            ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
+            "manual": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 16)"
+            }
           }
         },
 
+        "cart": {
+          ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
+        },
+
+        "wishlist": {
+          ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
+        },
+
+        "my_car": {
+          ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+
+        "addresses": {
+          ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
+        },
+
         "orders": {
-          "$orderIdx": {
+          // 🔒 SERVER-OWNED. Mijoz buyurtma yozuvini yarata/o'zgartira OLMAYDI
+          //    (ilgari mijoz o'z buyurtmasining status/summasini yozardi).
+          //    Yozish faqat admin uchun; Worker service-account chetlab o'tadi.
+          ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
+          "$orderId": {
             "total": {
               ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000000"
             },
             "payable": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && (!newData.parent().child('total').isNumber() || newData.val() <= newData.parent().child('total').val())"
+              ".validate": "newData.isNumber() && newData.val() >= 0"
             },
             "cashbackUsed": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && (!newData.parent().child('total').isNumber() || newData.val() <= newData.parent().child('total').val())"
+              ".validate": "newData.isNumber() && newData.val() >= 0"
             },
             "status": {
               ".validate": "newData.isString() && newData.val().matches(/^(kutilmoqda|qabul|yolda|yetkazildi|bekor_qilingan)$/)"
@@ -65,36 +106,64 @@
         },
 
         "phase2": {
+          // ⚠️ Pul maydonlari (cashbackTotal/Spent/Refunded/cashback,
+          //    loyaltyProjection, referrals, processedOrders) — SERVER-OWNED.
+          //    Mijoz uchun yozish grant'i YO'Q -> faqat server yozadi, mijoz
+          //    o'qiydi ($uid ".read" orqali). Faqat KOSMETIK / jurnal
+          //    maydonlariga egasi yoza oladi.
+
+          "theme": {
+            ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+            ".validate": "newData.isString() && newData.val().length <= 16"
+          },
+          "themeSwitched": {
+            ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+            ".validate": "newData.isBoolean()"
+          },
+          "lang": {
+            ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+            ".validate": "newData.isString() && newData.val().length <= 8"
+          },
+          "wishlistCount": {
+            ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+          },
+          "cashbackHistory": {
+            // Ko'rsatuv jurnali (pul emas) — egasi yozishi mumkin. Haqiqiy
+            // balans server-owned cashbackTotal/Spent/Refunded'dan hisoblanadi.
+            ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
+          },
+          "notifications": {
+            // Bildirishnomalarni "o'qildi" belgilash kosmetik. Server ham
+            // referral bonus bildirishnomasini shu yerga yozadi (chetlab o'tib).
+            ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
+          },
+
           "cashbackTotal": {
-            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && ((!data.exists() && newData.val() <= 1000000) || (data.exists() && newData.val() >= data.val() && newData.val() <= data.val() + 1000000))"
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000"
           },
           "cashbackSpent": {
-            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && ((!data.exists() && newData.val() <= 1000000) || (data.exists() && newData.val() >= data.val() && newData.val() <= data.val() + 1000000))"
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000"
           },
           "cashbackRefunded": {
-            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && ((!data.exists() && newData.val() <= 1000000) || (data.exists() && newData.val() >= data.val() && newData.val() <= data.val() + 1000000))"
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000"
           },
           "cashback": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000"
-          },
-          "referralPaid": {
-            ".validate": "newData.isBoolean()"
           }
         }
       }
     },
 
     "orders": {
-      // Markaziy buyurtma ro'yxati. ILGARI '.write': 'newData.exists()' — har kim soxta buyurtma
-      // to'kib tashlashi yoki butun tugunni o'chirishi mumkin edi. ENDI: mijoz faqat YANGI
-      // buyurtma yaratadi (mavjudini o'zgartira olmaydi), holatni faqat admin o'zgartiradi.
-
+      // 🔒 Markaziy buyurtma ro'yxati — SERVER-OWNED. Mijoz soxta buyurtma
+      //    (masalan "yetkazildi" holatida) yarata olmaydi. Yozish faqat admin;
+      //    Worker service-account chetlab o'tadi. O'qish faqat admin.
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
       ".indexOn": ["createdAt", "status", "uid"],
 
       "$orderKey": {
-        ".write": "(auth != null && !data.exists() && newData.exists()) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
-
         "total": {
           ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000000"
         },
@@ -107,12 +176,64 @@
       }
     },
 
-    "products": {
-      // ILGARI '.write': 'newData.exists()' — bu RUXSAT tekshiruvi EMAS, faqat 'o'chirmang'
-      // degani edi. Har kim barcha narxlarni 0 qilib qo'yishi yoki katalogni buzishi mumkin edi.
-      // ENDI: yozish faqat admin. ISTISNO: stock — tasdiqlangan mijoz uni FAQAT KAMAYTIRISHI
-      // mumkin (buyurtma paytidagi zaxira yo'li; asosiy yo'l Worker /stock-commit).
+    "order_chats": {
+      // 💬 Buyurtma bo'yicha yozishma. Buyurtmalar SERVER-OWNED bo'lgani uchun
+      //    chat alohida shu tugunda saqlanadi. Egasi FAQAT o'z nomidan ('mijoz')
+      //    xabar yoza oladi; admin har kimga yozadi. Bu buyurtma pul/holat
+      //    yozuviga tegmasdan yozishmani saqlaydi.
+      "$uid": {
+        ".read": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+        "$orderId": {
+          "$msgId": {
+            ".write": "(auth != null && auth.uid === $uid && !data.exists()) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
+            "sender": {
+              ".validate": "newData.isString() && ((auth.uid === $uid && newData.val() === 'mijoz') || root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length <= 2000"
+            },
+            "time": {
+              ".validate": "newData.isNumber() || (newData.isString() && newData.val().length <= 40)"
+            }
+          }
+        }
+      }
+    },
 
+    "order_attempts": {
+      // Worker buyurtma idempotentligi (attemptId lease/commit). Faqat server.
+      ".read": false,
+      ".write": false
+    },
+
+    "order_state": {
+      // Buyurtma holati mashinasi (status lease/transition). Faqat server.
+      ".read": false,
+      ".write": false
+    },
+
+    "loyalty_accounts": {
+      // Cashback hisobining ETag-CAS manbasi (earned/spent/refunded/reversed).
+      // Faqat server; mijoz phase2 proyeksiyasini o'qiydi.
+      ".read": false,
+      ".write": false
+    },
+
+    "referral_payouts": {
+      // Referral to'lovi idempotentligi (exactly-once). Faqat server.
+      ".read": false,
+      ".write": false
+    },
+
+    "notification_outbox": {
+      // Bot yuboradigan bildirishnoma navbati. Faqat server/bot.
+      ".read": false,
+      ".write": false
+    },
+
+    "products": {
+      // O'qish hamma uchun. Yozish faqat admin. STOK endi mijoz tomonidan
+      // KAMAYTIRILMAYDI — zaxira faqat Worker /order-commit da band qilinadi.
       ".read": true,
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
 
@@ -121,7 +242,6 @@
           ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500000000"
         },
         "stock": {
-          ".write": "auth != null && data.exists() && newData.isNumber() && newData.val() >= 0 && newData.val() < data.val()",
           ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
         },
         "name": {
@@ -130,7 +250,6 @@
         "sizes": {
           "$sizeIdx": {
             "stock": {
-              ".write": "auth != null && data.exists() && newData.isNumber() && newData.val() >= 0 && newData.val() < data.val()",
               ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
             }
           }
@@ -139,37 +258,27 @@
     },
 
     "stories": {
-      // ILGARI har kim yozardi. Storis — faqat admin qo'yadigan reklama kontenti.
       ".read": true,
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
     },
 
     "banners": {
-      // 🖼 BOSH SAHIFA SLAYDERI. O'qish — hamma uchun ochiq (banner bosh sahifada
-      // hamma ko'radigan reklama, maxfiy ma'lumot yo'q va tizimga kirmagan mehmon
-      // ham ko'rishi kerak). Yozish — FAQAT admin: aks holda begona odam do'kon
-      // bosh sahifasiga istalgan rasmni qo'yib qo'yardi. Storis bilan bir xil model.
       ".read": true,
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
 
       "$bannerKey": {
-        // `img` — rasm havolasi yoki repo ichidagi yo'l ('banners/banner1.svg').
-        // Bo'sh bo'lishi mumkin emas: bo'sh banner sliderda "teshik" qoldiradi.
         "img": {
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000"
         },
         "alt": {
           ".validate": "newData.isString() && newData.val().length <= 200"
         },
-        // Tartib raqami — slaydlar ketma-ketligi. Admin ▲▼ bilan o'zgartiradi.
         "order": {
           ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
         },
-        // «HAMKORLIK» belgisi shu slaydda ko'rinadi (reklama ekanini bildiradi).
         "partner": {
           ".validate": "newData.isBoolean()"
         },
-        // false -> banner bazada qoladi, lekin bosh sahifada ko'rinmaydi.
         "active": {
           ".validate": "newData.isBoolean()"
         },
@@ -193,8 +302,6 @@
     },
 
     "reviews": {
-      // ILGARI har kim istalgan mijoz nomidan sharh yozishi/o'chirishi mumkin edi. ENDI: har kim
-      // faqat O'Z nomidan (auth.uid === $uid) yozadi.
       ".read": true,
 
       "$productId": {
@@ -215,11 +322,6 @@
     },
 
     "refcodes": {
-      // ILGARI '.write': true — hujumchi mavjud referal kodni O'ZIGA o'girib, boshqa odamning
-      // cashback'ini yig'ib olardi. ENDI: kod faqat BIR MARTA yaratiladi va qiymati yozuvchining
-      // o'z uid'i bo'lishi shart. (index.html allaqachon shu qoidani kutadi — 'faqat yo'q bo'lsa
-      // yozamiz'.)
-
       "$code": {
         ".read": true,
         ".write": "auth != null && !data.exists() && newData.val() === auth.uid",
@@ -228,6 +330,7 @@
     },
 
     "referralRedeemed": {
+      // Faqat server (Worker) yozadi/o'qiydi.
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
       ".write": false
     },
@@ -242,8 +345,6 @@
     },
 
     "notify_requests": {
-      // 'Kelganda xabar bering' so'rovlari. ILGARI to'liq ochiq edi — mijozlar ro'yxatini o'qib
-      // olish mumkin edi. ENDI: o'qish faqat admin, yozish faqat o'z nomidan.
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
 
       "$productId": {
@@ -254,10 +355,6 @@
     },
 
     "ai_requests": {
-      // ILGARI to'liq ochiq — begona odam boshqa mijozlarning AI suhbatini o'qishi va cheksiz
-      // so'rov yozib AI budjetini yoqib yuborishi mumkin edi (botni har 2 sekundda so'rov
-      // yuboradi). ENDI: har kim faqat o'z suhbatini ko'radi.
-
       "$uid": {
         ".read": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
         ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
@@ -265,19 +362,11 @@
     },
 
     "bot_status": {
-      // 🟢 BOT TIRIKLIGI (yurak urishi) — AI chatdagi onlayn/oflayn indikatori
-      // shu tugunni o'qiydi. Bot har ~30 sekundda {online, ts} yozib turadi.
-      //
-      // O'qish: tizimga kirgan har kim (maxfiy ma'lumot yo'q — faqat vaqt belgisi).
-      // Yozish: FAQAT bot. Bot service-account bilan ishlaydi va qoidalarni
-      // chetlab o'tadi, shuning uchun mijoz uchun yozish YOPIQ — aks holda
-      // begona odam «bot oflayn» deb ko'rsatib qo'yishi mumkin edi.
       ".read": "auth != null",
       ".write": false
     },
 
     "ai_bulk_requests": {
-      // Ommaviy import — faqat admin funksiyasi. ILGARI to'liq ochiq edi.
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
 
@@ -292,24 +381,16 @@
     },
 
     "ai_admin_tasks": {
-      // AI tavsif yozish topshiriqlari — faqat admin. ILGARI to'liq ochiq edi: begona odam
-      // istalgan matnni va istalgan rasm URL'ini AI'ga yuborishi mumkin edi (prompt injection +
-      // budjet).
       ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
     },
 
     "pending_actions": {
-      // AI tasdiq kutayotgan o'zgarishlar. FAQAT bot (service account) o'qiydi va yozadi — u
-      // qoidalarni chetlab o'tadi. Mijoz uchun to'liq YOPIQ: aks holda begona odam token'ni
-      // ko'rib, tasdiqlanmagan amalni o'zgartirishi mumkin edi.
       ".read": false,
       ".write": false
     },
 
     "audit_log": {
-      // AI qilgan har bir o'zgarishning jurnali (oldingi qiymat bilan) — '/orqaga' buyrug'i
-      // shundan o'qiydi. Mijoz uchun YOPIQ: bu yerda narx tarixi va buyurtma ma'lumotlari bor.
       ".read": false,
       ".write": false
     }
