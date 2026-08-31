@@ -144,6 +144,44 @@
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
     },
 
+    "banners": {
+      // 🖼 BOSH SAHIFA SLAYDERI. O'qish — hamma uchun ochiq (banner bosh sahifada
+      // hamma ko'radigan reklama, maxfiy ma'lumot yo'q va tizimga kirmagan mehmon
+      // ham ko'rishi kerak). Yozish — FAQAT admin: aks holda begona odam do'kon
+      // bosh sahifasiga istalgan rasmni qo'yib qo'yardi. Storis bilan bir xil model.
+      ".read": true,
+      ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
+
+      "$bannerKey": {
+        // `img` — rasm havolasi yoki repo ichidagi yo'l ('banners/banner1.svg').
+        // Bo'sh bo'lishi mumkin emas: bo'sh banner sliderda "teshik" qoldiradi.
+        "img": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000"
+        },
+        "alt": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        // Tartib raqami — slaydlar ketma-ketligi. Admin ▲▼ bilan o'zgartiradi.
+        "order": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+        },
+        // «HAMKORLIK» belgisi shu slaydda ko'rinadi (reklama ekanini bildiradi).
+        "partner": {
+          ".validate": "newData.isBoolean()"
+        },
+        // false -> banner bazada qoladi, lekin bosh sahifada ko'rinmaydi.
+        "active": {
+          ".validate": "newData.isBoolean()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        }
+      }
+    },
+
     "bts_branches": {
       ".read": true,
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
