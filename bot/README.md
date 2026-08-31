@@ -41,7 +41,7 @@ Shu bilan birga:
   faqat botni qayta ishga tushirish qutqarardi.
 - **Yangi mijozning birinchi xabari javobsiz qolmaydi.** `/start` dan keyin
   til tugmalarini bosmasdan yozgan odam ilgari HECH QANDAY javob olmasdi.
-- **Bildirishnomalar barcha adminlarga** boradi (ilgari faqat birinchisiga).
+- **Umumiy bildirishnomalar barcha adminlarga** boradi (ilgari faqat birinchisiga). Yangi mijoz hodisasi esa dublikat bo‘lmasligi uchun `ADMIN_ALERT_CHAT_ID` dagi bitta chatga aynan bir marta yuboriladi va Mini App admin inboxida ham ko‘rinadi.
 - **So'rov cheklovi (rate limit)** — bitta odam AI limitini hamma uchun
   tugatib qo'ymaydi. Sozlash: `RL_AI_MAX`, `RL_AI_WINDOW`, `RL_PHOTO_MAX`,
   `RL_PHOTO_WINDOW`. Adminlarga cheklov qo'llanmaydi.

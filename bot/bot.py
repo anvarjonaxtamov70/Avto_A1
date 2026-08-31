@@ -111,6 +111,9 @@ def story_categories_text():
 
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "5105291033,483425630,5302078").replace(" ", "").split(",") if x]
 ADMIN_ID = ADMIN_IDS[0] if ADMIN_IDS else 0
+# Yangi mijoz haqida aynan BITTA Telegram xabar: alohida chat berilmasa
+# birinchi admin ishlatiladi. `notify_admins()` bu hodisa uchun ataylab ishlatilmaydi.
+ADMIN_ALERT_CHAT_ID = int(os.getenv("ADMIN_ALERT_CHAT_ID", str(ADMIN_ID or 0)) or 0)
 
 # =====================================================================
 #  GROQ MODELLARI
@@ -1611,6 +1614,161 @@ async def firebase_delete(path):
             return False
 
 
+async def firebase_create_if_null(path, data, matches=None):
+    """RTDB tugunini ETag bilan faqat `null` bo'lsa yaratadi.
+
+    `(created, value)` qaytaradi. Tarmoq javobi yo'qolsa yozuvni qayta o'qiydi;
+    mavjud yozuvni hech qachon ustidan yozmaydi.
+    """
+    for _ in range(8):
+        etag, current = await firebase_get_etag(path)
+        if etag is None:
+            return None, None
+        if current is not None:
+            if matches and not matches(current):
+                logging.error("Firebase mavjud yozuvi mos emas: %s", path)
+                return None, current
+            return False, current
+        ok, status = await firebase_put(path, data, etag=etag)
+        if ok:
+            return True, data
+        if status == 412:
+            continue
+        # PUT javobi noaniq bo'lishi mumkin: qayta yuborishdan oldin o'qiymiz.
+        after = await firebase_get(path)
+        if after is not None and (not matches or matches(after)):
+            return False, after
+        return None, None
+    logging.warning("Firebase parallel yaratish limiti tugadi: %s", path)
+    return None, None
+
+
+def _new_customer_text(registration):
+    lines = [
+        "🆕 <b>Yangi mijoz ro'yxatdan o'tdi</b>",
+        "",
+        f"Ism: <b>{esc(registration.get('name') or 'Mijoz')}</b>",
+    ]
+    if registration.get("username"):
+        lines.append(f"Username: @{esc(registration['username'])}")
+    if registration.get("phone"):
+        lines.append(f"Telefon: <code>{esc(registration['phone'])}</code>")
+    lines.append("Manba: Telegram")
+    lines.append(f"UID: <code>{esc(registration['uid'])}</code>")
+    return "\n".join(lines)
+
+
+async def register_new_customer_once(tg_user, profile=None):
+    """Bot va Worker bilan umumiy deterministic yangi-mijoz hodisasi.
+
+    Marker, Mini App admin eventi va Telegram send-claim alohida yaratiladi.
+    Har qayta chaqiruv yetishmayotgan proyeksiyani tiklaydi, lekin mavjud
+    Telegram claim bo'lsa xabarni qayta yubormaydi.
+    """
+    profile = profile or {}
+    uid = str(tg_user.id)
+    username = str(tg_user.username or "").lstrip("@")
+    first_name = str(tg_user.first_name or "").strip()
+    last_name = str(tg_user.last_name or "").strip()
+    name = str(profile.get("name") or " ".join(x for x in (first_name, last_name) if x) or "Mijoz").strip()[:100]
+    proposed = {
+        "uid": uid,
+        "source": "telegram",
+        "registeredAt": int(time.time() * 1000),
+        "name": name,
+        "firstName": first_name[:80],
+        "lastName": last_name[:80],
+        "username": username[:64],
+        "phone": str(profile.get("phone") or "").strip()[:40],
+        "notify": True,
+    }
+    marker_path = f"customer_registrations/{uid}"
+    created, registration = await firebase_create_if_null(
+        marker_path,
+        proposed,
+        matches=lambda value: isinstance(value, dict) and str(value.get("uid")) == uid,
+    )
+    if created is None or not isinstance(registration, dict):
+        logging.error("Yangi mijoz markerini yaratib bo'lmadi: %s", uid)
+        return False
+    if registration.get("notify") is False:
+        # Rolloutdan oldin mavjud bo'lgan mijoz uchun Worker jim marker yaratgan.
+        # Uni keyin bot qayta «yangi» deb e'lon qilmaydi.
+        return True
+    # Language-only browse holatidan qolgan pending marker normal registrationga
+    # ta'sir qilmaydi; tozalash best-effort.
+    await firebase_delete(f"customer_registration_pending/{uid}")
+
+    event_id = f"new_customer_{uid}"
+    event = {
+        "id": event_id,
+        "type": "new_customer",
+        "uid": uid,
+        "source": registration.get("source") or "telegram",
+        "title": "Yangi mijoz ro'yxatdan o'tdi",
+        "text": f"{registration.get('name') or 'Mijoz'}" +
+                (f" (@{registration.get('username')})" if registration.get("username") else "") +
+                " — Telegram",
+        "createdAt": int(registration.get("registeredAt") or time.time() * 1000),
+    }
+    event_created, _ = await firebase_create_if_null(
+        f"admin_notifications/{event_id}",
+        event,
+        matches=lambda value: isinstance(value, dict) and value.get("id") == event_id and
+        str(value.get("uid")) == uid and value.get("type") == "new_customer",
+    )
+    if event_created is None:
+        logging.error("Yangi mijoz admin eventini yaratib bo'lmadi: %s", uid)
+        return False
+
+    if not ADMIN_ALERT_CHAT_ID:
+        logging.error("ADMIN_ALERT_CHAT_ID sozlanmagan")
+        return False
+    claim_path = f"notification_outbox/{event_id}"
+    claim = {
+        "type": "new_customer",
+        "uid": uid,
+        "destination": str(ADMIN_ALERT_CHAT_ID),
+        "state": "sending",
+        "claimedAt": int(time.time() * 1000),
+    }
+    claim_created, existing_claim = await firebase_create_if_null(
+        claim_path,
+        claim,
+        matches=lambda value: isinstance(value, dict) and value.get("type") == "new_customer" and
+        str(value.get("uid")) == uid,
+    )
+    if claim_created is None:
+        logging.error("Yangi mijoz Telegram claimini yaratib bo'lmadi: %s", uid)
+        return False
+    if not claim_created:
+        return True
+
+    state = "ambiguous"
+    error = None
+    message_id = None
+    try:
+        sent = await bot.send_message(
+            chat_id=ADMIN_ALERT_CHAT_ID,
+            text=_new_customer_text(registration),
+            parse_mode="HTML",
+        )
+        state = "sent"
+        message_id = sent.message_id
+    except Exception as exc:
+        # Bot API so'rovni qabul qilgan-qilmaganini aniq bilmaymiz. Dublikatni
+        # oldini olish uchun claimni saqlaymiz va avtomatik retry qilmaymiz.
+        error = str(exc)[:300]
+        logging.warning("Yangi mijoz xabari noaniq/xato (%s): %s", uid, exc)
+    await firebase_patch(claim_path, {
+        "state": state,
+        "finishedAt": int(time.time() * 1000),
+        "messageId": message_id,
+        "error": error,
+    })
+    return state == "sent"
+
+
 async def firebase_query(path, params):
     """Tugunni RTDB so'rovi bilan o'qiydi (orderBy / limitToLast va h.k.).
 
@@ -1939,6 +2097,15 @@ async def start_command(message: types.Message, state: FSMContext):
     existing_user = await firebase_get(f"users/{user_id}/profile")
     if existing_user and existing_user.get("lang"):
         users_db[user_id] = existing_user
+        # Yangi registration profilga yozilgan, lekin RTDB/Telegram vaqtincha
+        # ishlamagan bo'lsa keyingi /start yetishmagan proyeksiyani tiklaydi.
+        # Eski (rolloutdan oldingi) profillarda registrationCompletedAt yo'q —
+        # ular qayta «yangi mijoz» deb e'lon qilinmaydi.
+        if existing_user.get("registrationCompletedAt"):
+            try:
+                await register_new_customer_once(message.from_user, existing_user)
+            except Exception as e:
+                logging.error(f"Yangi mijoz hodisasi reconcile bo'lmadi ({user_id}): {e}")
         lang = existing_user.get("lang", DEFAULT_LANG)
         has_phone = bool(existing_user.get("phone"))
         if has_phone:
@@ -2018,6 +2185,8 @@ async def set_language(call: types.CallbackQuery, state: FSMContext):
         prof["lang"] = lang
         users_db[user_id] = prof
         # Tilni darhol profilga yozamiz — keyingi /start da qayta so'ralmaydi.
+        # Bu hali ro'yxatdan o'tish EMAS (`registered=False`): yangi mijoz
+        # hodisasi ism/telefon/viloyat saqlangan haqiqiy registration oxirida yaratiladi.
         await firebase_patch(f"users/{user_id}/profile", {"lang": lang})
         try:
             await call.message.edit_text(t(lang, "lang_set"))
@@ -2139,21 +2308,19 @@ async def get_region(message: types.Message, state: FSMContext):
         "uid": user_id, "name": name, "phone": phone, "address": region, "lang": lang,
         "username": f"@{username}" if username else "Yo'q",
         "firstName": first_name, "lastName": last_name,
+        "registrationCompletedAt": int(time.time() * 1000),
     }
-    await firebase_patch(f"users/{user_id}/profile", profile_data)
+    profile_saved = await firebase_patch(f"users/{user_id}/profile", profile_data)
 
-    username_txt = f"@{username}" if username else "Yo'q"
-    admin_text = (
-        "<b>YANGI MIJOZ RO'YXATDAN O'TDI</b>\n\n"
-        f"Ism: <b>{esc(name)}</b>\n"
-        f"Tel: <code>{esc(phone)}</code>\n"
-        f"Viloyat: {esc(region)}\n"
-        f"Til: {esc(lang)}\n"
-        f"Username: {esc(username_txt)}\n"
-        f"ID: <code>{user_id}</code>"
-    )
-    # BARCHA adminlarga (ilgari faqat ADMIN_IDS[0] ga borardi).
-    await notify_admins(admin_text)
+    # Eski oqim barcha adminlarga yana xabar yuborardi. Endi bot / Mini App
+    # bir xil deterministic marker ishlatadi va faqat bitta admin chatiga bir marta yuboradi.
+    if profile_saved:
+        try:
+            await register_new_customer_once(message.from_user, profile_data)
+        except Exception as e:
+            logging.error(f"Yangi mijoz hodisasi yakunlanmadi ({user_id}): {e}")
+    else:
+        logging.error(f"Yangi mijoz profili saqlanmadi, hodisa yuborilmadi ({user_id})")
 
     await message.answer(
         t(lang, "register_success", shop=shop_label(lang)),
