@@ -5991,11 +5991,20 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         <div class="pm-edit-icon" id="pm-edit-btn">✏️</div>
     </div>
     <div class="pm-info-section">
+        <div class="pm-product-eyebrow"><span></span> AVTO A1 TANLOVI</div>
         <h2 id="pm-title" class="pm-title"></h2>
-        <div id="pm-code" style="display:none; font-size:12px; color:var(--text-muted); font-weight:700; margin-bottom:10px;"></div>
-        <div id="pm-unit-badge" style="display: inline-block; background: rgba(212, 175, 55, 0.15); color: var(--luxury-gold); padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; margin-bottom: 15px; border: 1px solid rgba(212, 175, 55, 0.3);"></div>
-        <div id="pm-stock" class="pm-stock-info"></div>
-        <div id="pm-desc" class="pm-desc"></div>
+        <div class="pm-meta-row">
+            <div id="pm-code" class="pm-code"></div>
+            <div id="pm-unit-badge" class="pm-unit-badge"></div>
+        </div>
+        <div class="pm-purchase-card">
+            <div class="pm-card-caption">Moslik va mavjudlik</div>
+            <div id="pm-stock" class="pm-stock-info"></div>
+        </div>
+        <div class="pm-description-card">
+            <div class="pm-card-caption">Mahsulot haqida</div>
+            <div id="pm-desc" class="pm-desc"></div>
+        </div>
         <!-- 🛡️ 7/9: ISHONCH paneli (kafolat / yetkazib berish / haqiqiy tovar) — ikkala mavzu -->
         <div class="pm-trust" role="list">
             <div class="pm-trust-item" role="listitem">
@@ -7114,10 +7123,13 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         <div id="admin-drafts-list"></div>
         </div>
 </div>
-<div class="ai-luxury-btn" onclick="openAiChat()">
-        <span style="font-size: 16px; filter: drop-shadow(0 0 2px #D4AF37);">✨</span>
-        <span>Yordamchi</span>
-    </div>
+<button type="button" id="shogird-launcher" class="ai-luxury-btn" aria-label="Shogird AI yordamchini ochish" onclick="openAiChat()">
+        <span class="shogird-orbit" aria-hidden="true"></span>
+        <span class="shogird-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path class="shogird-bubble" d="M7.5 6.5h17a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4h-7.2l-5.8 4v-4h-4a4 4 0 0 1-4-4v-9a4 4 0 0 1 4-4Z"/><path class="shogird-a1" d="M10 18.7l3.3-7.4h2.2l3.3 7.4h-2.2l-.6-1.5h-3.4l-.6 1.5h-2Zm3.3-3.3h2l-1-2.5-1 2.5Zm6.4 3.3v-5.5l-1.5.8v-1.9l2.1-1.2h1.4v7.8h-2Z"/></svg>
+        </span>
+        <span class="shogird-label">Shogird</span>
+    </button>
 
     <!-- ══════════════════════════════════════════════════════════════════
          ✨ SHOGIRD AI — 2026.22 da butunlay qayta qurildi.
@@ -8854,7 +8866,7 @@ function cardHTML(p) {
 
     return `<div class="luxury-card" data-pid="${p.id}" onclick="openProduct(${p.id})">
         ${bH}${heartBtn}
-        <div class="btn-compare-card ${(window.compareList||[]).includes(p.id)?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">${icon('scale')}</div>
+        <div class="btn-compare-card ${(window.compareList||[]).includes(String(p.id))?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash">${icon('scale')}</div>
         <div class="img-wrap" style="${oosStyle}">
         <img src="${_thumb(p.img, 240)}" 
      loading="lazy" 
@@ -8931,7 +8943,9 @@ function openProduct(id) {
             box.id = 'pm-flash-cd';
             box.className = 'pm-flash-cd';
             box.innerHTML = '🔥 Flash chegirma tugashiga: <span class="flash-cd" data-until="' + p.flashUntil + '"></span>';
-            if (host.parentNode) host.parentNode.insertBefore(box, host.nextSibling);
+            var stickyBar = host.closest('.pm-sticky-bar');
+            if (stickyBar) stickyBar.appendChild(box);
+            else if (host.parentNode) host.parentNode.insertBefore(box, host.nextSibling);
         }
     })();
     
@@ -9037,7 +9051,7 @@ function openProduct(id) {
     if (extra) {
         let extraStockTotal = (p.stock !== undefined ? p.stock : ((p.sizes||[]).reduce((s,x)=>s+(x.stock||0),0)));
         let notifyHtml = (extraStockTotal <= 0) ? `<button class="btn-notify" onclick="notifyMeForProduct(${p.id})">🔔 Sotuvga kirsa xabar bering</button>` : '';
-        let inCmp = (window.compareList||[]).includes(p.id);
+        let inCmp = (window.compareList||[]).includes(String(p.id));
         let cmpHtml = `<button class="btn-compare ${inCmp?'active':''}" data-id="${p.id}" onclick="toggleCompare(${p.id}, event)" style="width:100%; margin-bottom:8px;">⚖️ ${inCmp?'Taqqoslashdan chiqarish':'Taqqoslashga qoʻshish (2 ta belgilang)'}</button>`;
         extra.innerHTML = cmpHtml + notifyHtml;
     }
@@ -15837,7 +15851,7 @@ window.toggleCompare = (productId, e) => {
         if (window.compareList.length >= 2) window.compareList.shift();
         window.compareList.push(pid);
         _hap('light');
-        showToast(window.compareList.length === 1 ? "1/2 tanlandi — yana bitta bosing" : "Tayyor! Pastdagi dumaloq tugmani bosing", "success");
+        showToast(window.compareList.length === 1 ? "1/2 tanlandi — yana bitta bosing" : "Tayyor! Animatsiyali tarozi tugmasini bosing", "success");
     }
     updateCompareBar();
     updateCompareBtnStates();
@@ -15851,7 +15865,7 @@ window.updateCompareBar = () => {
     }
     if (window.compareList.length < 2) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
     bar.classList.add('show');
-    bar.innerHTML = '<div class="cmp-fab" onclick="openCompareModal()"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z"/></svg><span class="cmp-fab-badge">2</span></div>';
+    bar.innerHTML = '<button type="button" class="cmp-fab" onclick="openCompareModal()" aria-label="Tanlangan 2 ta tovarni taqqoslash"><span class="cmp-fab-ring" aria-hidden="true"></span><svg class="cmp-scale" viewBox="0 0 48 48" aria-hidden="true"><path class="cmp-scale-stand" d="M22 13h4v24h8v4H14v-4h8V13Z"/><circle class="cmp-scale-crown" cx="24" cy="10" r="4"/><g class="cmp-scale-beam"><path d="M9 15h30"/><path d="M24 10v5"/><g class="cmp-scale-pan cmp-scale-pan-left"><path d="M12 15 7 27M12 15l5 12"/><path d="M5 27c.5 4 3.2 6 7 6s6.5-2 7-6H5Z"/></g><g class="cmp-scale-pan cmp-scale-pan-right"><path d="m36 15-5 12m5-12 5 12"/><path d="M29 27c.5 4 3.2 6 7 6s6.5-2 7-6H29Z"/></g></g></svg><span class="cmp-fab-badge">2</span><span class="cmp-fab-label">Taqqoslash</span></button>';
 };
 window.updateCompareBtnStates = () => {
     document.querySelectorAll('.btn-compare, .btn-compare-card').forEach(btn => {
@@ -28746,12 +28760,18 @@ html.lite #aiChatModal .sg-ring { animation: none !important; opacity: .5 !impor
     if (!S.uid) { showToast('Iltimos, avval tizimga kiring', 'warning'); return; }
     if (!DB()) { showToast("Bazaga ulanilmadi — internetni tekshiring", 'warning'); return; }
 
+    window._shogirdReturnFocus = document.activeElement;
     m.style.display = 'flex';
     m.classList.remove('hist-open');
     try { activeModal = 'aiChatModal'; } catch (e) { window.activeModal = 'aiChatModal'; }
     document.body.style.overflow = 'hidden';
     try { window.history.pushState({ modal: 'aiChatModal' }, ''); } catch (e) {}
     try { if (tg && tg.BackButton) tg.BackButton.show(); } catch (e) {}
+    (window.requestAnimationFrame || function (fn) { fn(); })(function () {
+      var firstControl = m.querySelector('.sg-x');
+      if (!firstControl) return;
+      try { firstControl.focus({ preventScroll: true }); } catch (e) { firstControl.focus(); }
+    });
 
     watchStatus();
 
@@ -28820,6 +28840,13 @@ html.lite #aiChatModal .sg-ring { animation: none !important; opacity: .5 !impor
     if (m && m.style.display === 'none') {
       if (S.statRef) { try { S.statRef.off('value'); } catch (e) {} S.statRef = null; }
       S.busy = false;
+      var returnFocus = window._shogirdReturnFocus;
+      window._shogirdReturnFocus = null;
+      if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') {
+        (window.requestAnimationFrame || function (fn) { fn(); })(function () {
+          try { returnFocus.focus({ preventScroll: true }); } catch (e) { returnFocus.focus(); }
+        });
+      }
     }
   });
 })();
@@ -29195,6 +29222,624 @@ html:not([data-theme="light"]) .bnr-block {
 }
 .bnr-sw.on .bnr-sw-el { background: var(--gold-gradient); }
 .bnr-sw.on .bnr-sw-el i { transform: translateX(18px); }
+</style>
+
+<!-- ================================================================
+     AVTO A1 PREMIUM PRODUCT + FLOATING ACTIONS — 2026.23
+     Mahsulot tafsiloti, Taqqoslash va Shogird uchun yagona vizual til.
+     ================================================================ -->
+<style id="avto-a1-product-actions-v2">
+:root {
+    --a1-gold: #d8b64c;
+    --a1-gold-bright: #f4da75;
+    --a1-gold-deep: #8f6b12;
+    --a1-panel: #111216;
+    --a1-panel-soft: #17181d;
+    --a1-line: rgba(230, 197, 96, .18);
+    --a1-ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+/* ——— Mahsulot oynasi: sokin, qimmat ko‘rinadigan avtomobil estetikasi ——— */
+html body #productModal {
+    background:
+        radial-gradient(110% 48% at 50% -8%, rgba(216, 182, 76, .08), transparent 62%),
+        #090a0c !important;
+    color: #f5f3ec;
+    scrollbar-width: none;
+}
+html body #productModal::-webkit-scrollbar { display: none; }
+html body #productModal > .pm-img-header,
+html body #productModal > .pm-info-section,
+html body #productModal > .pm-sticky-bar {
+    width: min(100%, 720px) !important;
+    margin-inline: auto !important;
+    box-sizing: border-box;
+}
+html body #productModal .pm-img-header {
+    height: clamp(330px, 52vh, 440px) !important;
+    min-height: 330px;
+    flex: 0 0 auto;
+    overflow: hidden;
+    isolation: isolate;
+    background:
+        radial-gradient(circle at 50% 46%, rgba(255,255,255,.96) 0 31%, rgba(238,239,241,.96) 72%, rgba(218,220,224,.98) 100%) !important;
+    border: 0 !important;
+    border-bottom: 1px solid rgba(216,182,76,.22) !important;
+    border-radius: 0 0 34px 34px !important;
+    box-shadow: 0 22px 54px rgba(0,0,0,.42) !important;
+}
+html body #productModal .pm-img-header::before {
+    content: '';
+    position: absolute;
+    inset: auto 10% -44px;
+    height: 84px;
+    border-radius: 50%;
+    background: rgba(216,182,76,.13);
+    filter: blur(30px);
+    pointer-events: none;
+}
+html body #productModal .pm-slider-container,
+html body #productModal .pm-slider { height: 100% !important; }
+html body #productModal .pm-slider img {
+    padding: clamp(32px, 8vw, 54px) !important;
+    filter: drop-shadow(0 20px 20px rgba(0,0,0,.16));
+}
+html body #productModal .pm-close-btn,
+html body #productModal .pm-edit-icon {
+    top: calc(16px + var(--safe-top, 0px)) !important;
+    width: 44px !important;
+    height: 44px !important;
+    border: 1px solid rgba(255,255,255,.16) !important;
+    background: rgba(9,10,12,.78) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,.20) !important;
+    backdrop-filter: blur(10px) saturate(130%) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(130%) !important;
+}
+html body #productModal .pm-close-btn { left: 16px !important; font-size: 0 !important; }
+html body #productModal .pm-close-btn::before {
+    content: '×';
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 300;
+}
+html body #productModal .pm-edit-icon { right: 16px !important; }
+html body #productModal .pm-slider-dots { bottom: 16px !important; gap: 6px !important; }
+html body #productModal .pm-dot {
+    width: 6px !important;
+    height: 6px !important;
+    background: rgba(19,20,23,.25) !important;
+}
+html body #productModal .pm-dot.active {
+    width: 24px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(90deg, var(--a1-gold-bright), var(--a1-gold-deep)) !important;
+    box-shadow: 0 2px 8px rgba(143,107,18,.28);
+}
+html body #productModal .pmz-tip {
+    right: 14px !important;
+    bottom: 12px !important;
+    padding: 7px 10px !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    background: rgba(9,10,12,.70) !important;
+    color: rgba(255,255,255,.86) !important;
+    border-radius: 999px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: .1px;
+}
+
+html body #productModal .pm-info-section {
+    padding: 28px 20px 34px !important;
+}
+.pm-product-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    color: #bca45d;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 850;
+    letter-spacing: 1.8px;
+}
+.pm-product-eyebrow > span {
+    width: 18px;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--a1-gold-bright), var(--a1-gold-deep));
+    box-shadow: 0 0 10px rgba(216,182,76,.36);
+}
+html body #productModal .pm-title {
+    margin: 0 0 14px !important;
+    color: #f7f5ef !important;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size: clamp(23px, 6vw, 30px) !important;
+    line-height: 1.17 !important;
+    font-weight: 850 !important;
+    letter-spacing: -.55px !important;
+    text-wrap: balance;
+}
+.pm-meta-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 28px;
+    margin-bottom: 16px;
+}
+html body #productModal .pm-code,
+html body #productModal .pm-unit-badge,
+html body #productModal #pm-origin > * {
+    display: inline-flex !important;
+    align-items: center;
+    width: auto;
+    min-height: 28px;
+    box-sizing: border-box;
+    margin: 0 !important;
+    padding: 6px 10px !important;
+    border: 1px solid var(--a1-line) !important;
+    border-radius: 999px !important;
+    background: rgba(216,182,76,.07) !important;
+    color: #d7bf78 !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    font-weight: 800 !important;
+    letter-spacing: .25px !important;
+}
+html body #productModal .pm-code[style*="display: none"] { display: none !important; }
+html body #productModal #pm-origin { margin: 0 !important; }
+html body #productModal #pm-origin[style*="display: none"] { display: none !important; }
+
+.pm-purchase-card,
+.pm-description-card {
+    position: relative;
+    margin-bottom: 12px;
+    padding: 15px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.075);
+    border-radius: 18px;
+    background:
+        linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.018)),
+        var(--a1-panel);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.14);
+}
+.pm-purchase-card::before,
+.pm-description-card::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 2px;
+    background: linear-gradient(180deg, transparent, rgba(216,182,76,.65), transparent);
+}
+.pm-card-caption {
+    margin-bottom: 11px;
+    color: #817d73;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 850;
+    letter-spacing: 1.25px;
+    text-transform: uppercase;
+}
+html body #productModal .pm-stock-info {
+    margin: 0 !important;
+    color: #e5e1d7 !important;
+    font-size: 13px !important;
+    line-height: 1.45;
+}
+html body #productModal #dynamic-stock-info,
+html body #productModal .pm-stock-info > span {
+    display: flex;
+    align-items: center;
+    min-height: 22px;
+    margin-bottom: 10px;
+}
+html body #productModal #pm-stock > div:not(#dynamic-stock-info) {
+    margin-top: 13px !important;
+    padding-top: 13px;
+    border-top: 1px solid rgba(255,255,255,.07);
+}
+html body #productModal #pm-stock p {
+    margin: 0 0 9px !important;
+    color: #969187 !important;
+    font-size: 11px !important;
+    line-height: 1.3;
+    font-weight: 750 !important;
+    letter-spacing: .15px;
+}
+html body #productModal #pm-size-options,
+html body #productModal #pm-car-options {
+    display: flex !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+}
+html body #productModal .pm-size-btn,
+html body #productModal .pm-car-btn {
+    min-height: 39px;
+    padding: 9px 14px !important;
+    border: 1px solid rgba(255,255,255,.10) !important;
+    border-radius: 11px !important;
+    background: rgba(255,255,255,.035) !important;
+    color: #c8c4bb !important;
+    font: 750 12px/1 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    box-shadow: none !important;
+    transition: transform .16s ease, border-color .18s ease, background .18s ease !important;
+}
+html body #productModal .pm-size-btn.selected,
+html body #productModal .pm-car-btn.selected {
+    border-color: rgba(230,197,96,.72) !important;
+    background: linear-gradient(145deg, rgba(216,182,76,.20), rgba(143,107,18,.12)) !important;
+    color: #f1d77e !important;
+    box-shadow: inset 0 0 0 1px rgba(216,182,76,.10), 0 5px 16px rgba(143,107,18,.12) !important;
+}
+html body #productModal .pm-size-btn:active,
+html body #productModal .pm-car-btn:active { transform: scale(.95) !important; }
+
+html body #productModal .pm-description-card { padding-bottom: 16px; }
+html body #productModal .pm-desc {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: #a9a69f !important;
+    font-size: 13.5px !important;
+    line-height: 1.68 !important;
+    letter-spacing: .02px;
+}
+html body #productModal .pm-trust {
+    margin: 14px 0 22px !important;
+    padding: 13px 6px !important;
+    border: 1px solid rgba(216,182,76,.13) !important;
+    border-radius: 18px !important;
+    background: linear-gradient(145deg, rgba(216,182,76,.055), rgba(255,255,255,.018)) !important;
+    box-shadow: none !important;
+}
+html body #productModal .pm-trust-item {
+    color: #d0ccc2 !important;
+    font-size: 10.5px !important;
+    font-weight: 700 !important;
+}
+html body #productModal .pm-trust-ic {
+    width: 32px !important;
+    height: 32px !important;
+    border-color: rgba(216,182,76,.22) !important;
+    background: rgba(216,182,76,.075) !important;
+}
+html body #productModal #pm-review-section {
+    margin-top: 24px !important;
+}
+html body #productModal #pm-extra-actions { margin: 12px 0 20px !important; }
+html body #productModal .btn-compare,
+html body #productModal .btn-notify {
+    min-height: 46px;
+    border-radius: 14px !important;
+    border-color: rgba(216,182,76,.22) !important;
+    background: rgba(216,182,76,.065) !important;
+    color: #dbc475 !important;
+    font-size: 12px !important;
+    letter-spacing: .1px;
+}
+
+/* Pastki sotib olish paneli: narx, CTA va flash xabari tartibli gridda */
+html body #productModal .pm-sticky-bar {
+    position: sticky !important;
+    bottom: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 42%) !important;
+    align-items: center !important;
+    gap: 10px 14px !important;
+    padding: 13px 16px calc(13px + env(safe-area-inset-bottom, 0px)) !important;
+    border: 1px solid rgba(216,182,76,.13) !important;
+    border-bottom: 0 !important;
+    border-radius: 22px 22px 0 0 !important;
+    background: rgba(14,15,18,.95) !important;
+    box-shadow: 0 -16px 42px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.035) !important;
+    backdrop-filter: blur(16px) saturate(125%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(125%) !important;
+}
+html body #productModal .pm-sticky-price-wrap {
+    min-width: 0;
+    gap: 2px;
+}
+html body #productModal .pm-sticky-label {
+    margin: 0 !important;
+    color: #77746c !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    letter-spacing: 1.25px !important;
+}
+html body #productModal .pm-sticky-price {
+    display: block;
+    overflow: hidden;
+    color: #e3c65f !important;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size: clamp(20px, 5.6vw, 27px) !important;
+    line-height: 1.1 !important;
+    font-weight: 900 !important;
+    letter-spacing: -.6px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-shadow: 0 4px 18px rgba(216,182,76,.16) !important;
+}
+html body #productModal .pm-sticky-btn {
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 16px !important;
+    border: 1px solid rgba(255,237,151,.35) !important;
+    border-radius: 15px !important;
+    background: linear-gradient(135deg, #f2d774 0%, #d4ae37 53%, #a57b13 100%) !important;
+    color: #12100a !important;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size: 13px !important;
+    line-height: 1.2;
+    font-weight: 900 !important;
+    letter-spacing: -.1px;
+    box-shadow: 0 9px 24px rgba(166,124,20,.26), inset 0 1px 0 rgba(255,255,255,.45) !important;
+}
+html body #productModal .pm-sticky-btn::after {
+    content: '›';
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 20px;
+    line-height: 0;
+    vertical-align: -2px;
+    transition: transform .18s ease;
+}
+html body #productModal .pm-sticky-btn:active::after { transform: translateX(3px); }
+html body #productModal .pm-sticky-btn:disabled::after { display: none; }
+html body #productModal .pm-flash-cd {
+    grid-column: 1 / -1;
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: flex-start;
+    margin: 0 !important;
+    padding: 8px 10px !important;
+    border-radius: 10px !important;
+    background: rgba(255,69,58,.075) !important;
+    border-color: rgba(255,94,82,.22) !important;
+    color: #f7887e !important;
+    font-size: 10.5px !important;
+    line-height: 1.25;
+}
+
+/* ——— Taqqoslash: Shogird ustida, jonli adolat tarozisi ——— */
+html body #compare-bar {
+    right: 16px !important;
+    bottom: calc(180px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+    z-index: 1490 !important;
+}
+html body #compare-bar.show { animation: a1FabEnter .42s var(--a1-ease) both !important; }
+html body #compare-bar .cmp-fab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    width: 144px;
+    height: 58px;
+    padding: 0 15px 0 11px;
+    overflow: visible;
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid rgba(229,197,97,.42);
+    border-radius: 18px;
+    background: linear-gradient(145deg, rgba(31,32,37,.98), rgba(11,12,15,.99));
+    color: #ecd273;
+    box-shadow: 0 14px 34px rgba(0,0,0,.46), 0 0 0 1px rgba(216,182,76,.07), inset 0 1px 0 rgba(255,255,255,.07);
+    cursor: pointer;
+    transform: translateZ(0);
+    transition: transform .16s ease, border-color .2s ease, box-shadow .2s ease;
+}
+html body #compare-bar .cmp-fab:active {
+    transform: scale(.95) translateZ(0) !important;
+    box-shadow: 0 7px 18px rgba(0,0,0,.42) !important;
+}
+.cmp-fab-ring {
+    position: absolute;
+    inset: 5px auto 5px 5px;
+    width: 46px;
+    border: 1px solid rgba(216,182,76,.17);
+    border-radius: 14px;
+    background: radial-gradient(circle, rgba(216,182,76,.10), transparent 68%);
+}
+.cmp-scale {
+    position: relative;
+    z-index: 1;
+    width: 40px !important;
+    height: 40px !important;
+    overflow: visible;
+}
+.cmp-scale-stand,
+.cmp-scale-crown { fill: #c9a83f; }
+.cmp-scale-beam {
+    fill: none;
+    stroke: #f1d671;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transform-origin: 24px 15px;
+}
+.cmp-fab-label {
+    position: relative;
+    z-index: 1;
+    color: #eee7d4;
+    font: 800 11px/1 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: .1px;
+}
+html body #compare-bar .cmp-fab-badge {
+    top: -7px !important;
+    right: -6px !important;
+    width: 22px !important;
+    height: 22px !important;
+    border: 2px solid #0c0d10 !important;
+    background: linear-gradient(145deg, #f6da73, #ae8115) !important;
+    color: #12100a !important;
+    box-shadow: 0 5px 12px rgba(0,0,0,.35);
+}
+
+/* ——— Shogird: A1 monogrammali sokin premium yordamchi ——— */
+html body .ai-luxury-btn {
+    right: 16px !important;
+    bottom: calc(110px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+    z-index: 1490 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    width: 116px !important;
+    height: 56px !important;
+    box-sizing: border-box;
+    padding: 0 13px 0 9px !important;
+    border: 1px solid rgba(216,182,76,.36) !important;
+    border-radius: 18px !important;
+    background: linear-gradient(145deg, rgba(29,30,35,.98), rgba(10,11,14,.99)) !important;
+    color: #f4e7b8 !important;
+    box-shadow: 0 14px 34px rgba(0,0,0,.48), 0 0 0 1px rgba(216,182,76,.06), inset 0 1px 0 rgba(255,255,255,.07) !important;
+    cursor: pointer;
+    overflow: visible;
+    outline: none;
+    animation: none !important;
+}
+html body .ai-luxury-btn:focus-visible {
+    outline: 2px solid var(--a1-gold-bright) !important;
+    outline-offset: 3px;
+}
+html body .ai-luxury-btn > .shogird-orbit {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    display: block !important;
+    width: 38px !important;
+    height: 38px;
+    margin: 0 !important;
+    box-sizing: border-box;
+    border: 1px solid rgba(216,182,76,.18);
+    border-top-color: rgba(244,218,117,.85);
+    border-radius: 13px;
+    background: radial-gradient(circle, rgba(216,182,76,.12), transparent 68%);
+}
+html body .ai-luxury-btn > .shogird-mark {
+    position: relative;
+    z-index: 1;
+    display: grid !important;
+    place-items: center;
+    flex: 0 0 38px;
+    width: 38px !important;
+    height: 38px;
+    margin: 0 !important;
+}
+.shogird-mark svg { width: 32px; height: 32px; overflow: visible; }
+.shogird-bubble {
+    fill: rgba(216,182,76,.10);
+    stroke: #d4b44b;
+    stroke-width: 1.5;
+}
+.shogird-a1 { fill: #f1d66f; }
+html body .ai-luxury-btn > .shogird-label {
+    display: inline !important;
+    margin: 0 !important;
+    color: #eee7d4 !important;
+    font: 850 11px/1 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    letter-spacing: .25px;
+    text-transform: uppercase;
+}
+html body .ai-luxury-btn:active { transform: scale(.95) translateZ(0) !important; }
+html body .ai-luxury-btn.ai-hidden { transform: translateY(145%) translateX(0) !important; }
+
+@keyframes a1FabEnter {
+    from { opacity: 0; transform: translateY(18px) scale(.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes a1Balance {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+}
+@keyframes a1Orbit {
+    to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: no-preference) {
+    #compare-bar.show .cmp-scale-beam { animation: a1Balance 2.2s ease-in-out infinite; }
+    .ai-luxury-btn:not(.ai-hidden) .shogird-orbit { animation: a1Orbit 8s linear infinite; }
+}
+
+/* Yorug‘ mavzuda ham oq plastik emas, iliq premium ko‘rinish */
+html[data-theme="light"] body #productModal {
+    background: radial-gradient(100% 44% at 50% 0%, rgba(160,120,30,.08), transparent 62%), #f4efe5 !important;
+    color: #211d14;
+}
+html[data-theme="light"] body #productModal .pm-title { color: #211d14 !important; }
+html[data-theme="light"] body #productModal .pm-info-section { color: #211d14; }
+html[data-theme="light"] body #productModal .pm-purchase-card,
+html[data-theme="light"] body #productModal .pm-description-card {
+    border-color: rgba(120,91,28,.13);
+    background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(250,244,230,.92)), #fffaf0;
+    box-shadow: 0 10px 26px rgba(92,67,18,.07);
+}
+html[data-theme="light"] body #productModal .pm-card-caption { color: #95825b; }
+html[data-theme="light"] body #productModal .pm-stock-info { color: #494235 !important; }
+html[data-theme="light"] body #productModal .pm-desc { color: #655c4b !important; }
+html[data-theme="light"] body #productModal .pm-size-btn,
+html[data-theme="light"] body #productModal .pm-car-btn {
+    border-color: rgba(120,91,28,.15) !important;
+    background: rgba(120,91,28,.04) !important;
+    color: #65593e !important;
+}
+html[data-theme="light"] body #productModal .pm-size-btn.selected,
+html[data-theme="light"] body #productModal .pm-car-btn.selected {
+    border-color: rgba(143,107,18,.55) !important;
+    background: rgba(216,182,76,.16) !important;
+    color: #74570f !important;
+}
+html[data-theme="light"] body #productModal .pm-trust {
+    background: rgba(255,255,255,.65) !important;
+    border-color: rgba(120,91,28,.12) !important;
+}
+html[data-theme="light"] body #productModal .pm-trust-item { color: #514a3c !important; }
+html[data-theme="light"] body #productModal .pm-sticky-bar {
+    background: rgba(255,252,245,.96) !important;
+    border-color: rgba(120,91,28,.14) !important;
+    box-shadow: 0 -15px 38px rgba(92,67,18,.12) !important;
+}
+html[data-theme="light"] body #productModal .pm-sticky-price { color: #8a6815 !important; }
+html[data-theme="light"] body #productModal .pm-flash-cd { background: rgba(216,57,43,.06) !important; }
+html[data-theme="light"] body #productModal .pm-code,
+html[data-theme="light"] body #productModal .pm-unit-badge,
+html[data-theme="light"] body #productModal #pm-origin > * {
+    background: rgba(122,88,13,.08) !important;
+    border-color: rgba(122,88,13,.24) !important;
+    color: #644909 !important;
+}
+html[data-theme="light"] body #productModal .btn-compare,
+html[data-theme="light"] body #productModal .btn-notify {
+    background: rgba(122,88,13,.07) !important;
+    border-color: rgba(122,88,13,.25) !important;
+    color: #5c4308 !important;
+}
+
+/* Lite/reduced-motion: bezak saqlanadi, doimiy harakat va qimmat blur yo‘q */
+html.lite body #productModal .pm-img-header::before { filter: none; opacity: .25; }
+html.lite body #productModal .pm-sticky-bar,
+html.lite body #productModal .pm-close-btn,
+html.lite body #productModal .pm-edit-icon {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+html.lite body #compare-bar .cmp-scale-beam,
+html.lite body #compare-bar.show,
+html.lite body #compare-bar .cmp-scale-beam,
+html.lite body .ai-luxury-btn .shogird-orbit { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    #compare-bar.show,
+    #compare-bar .cmp-scale-beam,
+    .ai-luxury-btn .shogird-orbit { animation: none !important; }
+}
+@media (max-width: 370px) {
+    html body #productModal .pm-info-section { padding-inline: 16px !important; }
+    html body #productModal .pm-sticky-bar { grid-template-columns: minmax(0,1fr) 142px !important; padding-inline: 12px !important; }
+    html body #productModal .pm-sticky-btn { padding-inline: 10px !important; font-size: 12px !important; }
+    html body .ai-luxury-btn { width: 108px !important; }
+}
 </style>
 
 <script id="banner-admin-2026-js">
