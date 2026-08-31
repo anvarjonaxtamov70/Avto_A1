@@ -16946,9 +16946,10 @@ document.addEventListener('click', function (e) {
     /* ----------------------- Sozlamalar ----------------------- */
     var LS_KEY = 'avto_phase2';
     // 💳 CASHBACK ULUSHI — mijoz DARAJASIGA bog'liq (2026.09):
-    //      Oddiy mijoz — 0.8%      VIP mijoz — 2%
+    //      Oddiy mijoz — 0.8%      VIP mijoz — 1%
     //    Ilgari bu bitta 1% edi va daraja umuman ta'sir qilmasdi
     //    (`VIP.cashbackMultiplier()` yozilgan, lekin chaqirilmagan).
+    //    Haqiqiy qiymatlar `VIP.TIERS[].rate` da — bu yerda faqat zaxira.
     var CASHBACK_RATE = 0.008;    // zaxira/standart ulush (VIP qatlami yuklanmasa)
 
     /** Joriy mijoz uchun HAQIQIY ulush. VIP qatlami bo'lmasa — standart. */
@@ -16963,7 +16964,7 @@ document.addEventListener('click', function (e) {
      *
      *  ⚠️ NEGA MUHIM: cashback yetkazilganda beriladi, ya'ni xariddan
      *  kunlar keyin. Agar o'sha paytdagi darajaga qarab hisoblasak,
-     *  to'lov vaqtida «2% qaytadi» deb ko'rsatib, keyin 0.8% berib
+     *  to'lov vaqtida «1% qaytadi» deb ko'rsatib, keyin 0.8% berib
      *  qo'yishimiz mumkin edi. Endi va'da qilingan ulush buyurtmaga
      *  yoziladi (`cbRate`) va aynan o'sha qo'llanadi. */
     function rateForOrder(o) {
@@ -21071,10 +21072,10 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
      * va hech qanday imtiyoz bermasdi.
      *
      * ENDI:
-     *   • 4 pog'ona (Bronza / Kumush / Oltin / Platina) — xarid va summa bo'yicha
+     *   • ikki daraja (Oddiy mijoz / VIP mijoz) — FAQAT xarid summasi bo'yicha
      *   • profilda jonli karta: daraja, progress, keyingi darajaga qancha qolgani
-     *   • HAQIQIY imtiyozlar: bepul yetkazish chegarasi pasayadi, cashback
-     *     ko'paytiruvchisi, ustuvor buyurtma belgisi
+     *   • HAQIQIY imtiyozlar (aynan ikkitasi, ikkalasi ham kodda qo'llanadi):
+     *     bepul yetkazish chegarasi pasayadi va cashback ulushi oshadi
      *   • `users/{uid}/profile/vip` ga YOZILADI -> admin ro'yxatida ko'rinadi,
      *     segment bo'yicha filtr ishlaydi, bot ham o'qiy oladi
      *   • daraja ko'tarilganda tabrik + Telegram xabari (bir marta)
@@ -21094,8 +21095,15 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
      *
      * ENDI: ikki daraja, HAQIQIY va faqat SUMMA bo'yicha:
      *   Oddiy mijoz — bepul yetkazish 3 mln so'mdan, cashback 0.8%
-     *   VIP mijoz   — bepul yetkazish 2.4 mln so'mdan, cashback 2%
+     *   VIP mijoz   — bepul yetkazish 2.4 mln so'mdan, cashback 1%
      *                 (umumiy xaridi 3 mln so'mga yetganda)
+     *
+     * ⚠️ 2026.08 — VIP cashback 2% dan 1% ga tushirildi va «Ustuvor xizmat»
+     *   imtiyozi OLIB TASHLANDI. Sabab: «ustuvor xizmat» hech qanday kodda
+     *   qo'llanmagan — mijozga bajarilmaydigan va'da berilardi (bu ilgari
+     *   `cashbackX`/`discount` bilan bo'lgan xatoning aynan o'zi).
+     *   Endi darajaning FAQAT ikkita haqiqiy imtiyozi bor:
+     *   bepul yetkazish chegarasi va cashback ulushi.
      *
      * `rate` — HAQIQATDA qo'llanadigan cashback ulushi (Phase2 o'qiydi).
      */
@@ -21114,7 +21122,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             grad: 'linear-gradient(145deg,#F0D060,#C9A84C 45%,#96720A)', c1: '#F0D060',
             ink: '#2a2000', glow: 'rgba(201,168,76,.34)',
             soft: 'linear-gradient(160deg,rgba(201,168,76,.18),rgba(0,0,0,.3))',
-            freeDelivery: 2400000, rate: 0.02
+            freeDelivery: 2400000, rate: 0.01
         }
     ];
     var TIER_BY_ID = {};
@@ -21172,7 +21180,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         var s = VIP.state;
         return (s && s.tier) ? s.tier.freeDelivery : 3000000;
     };
-    /** 💳 HAQIQIY cashback ulushi (Oddiy 0.008 / VIP 0.02).
+    /** 💳 HAQIQIY cashback ulushi (Oddiy 0.008 / VIP 0.01).
      *
      *  ⚠️ Ilgari bu yerda `cashbackMultiplier()` bor edi va u HECH KIM
      *  tomonidan chaqirilmagan — ya'ni daraja cashback'ga umuman ta'sir
@@ -21181,7 +21189,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         var s = VIP.state;
         return (s && s.tier && typeof s.tier.rate === 'number') ? s.tier.rate : 0.008;
     };
-    /** Foiz ko'rinishida: 0.008 -> "0.8", 0.02 -> "2" (ortiqcha nol yo'q). */
+    /** Foiz ko'rinishida: 0.008 -> "0.8", 0.01 -> "1" (ortiqcha nol yo'q). */
     VIP.ratePct = function (tier) {
         var r = (tier && typeof tier.rate === 'number') ? tier.rate : VIP.cashbackRate();
         return String(+(r * 100).toFixed(2));
@@ -21253,7 +21261,6 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                 '<div class="vipc-perks">' +
                     perkHTML('\uD83D\uDE9A', 'Shahar bo\u2018ylab bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan", true) +
                     perkHTML('\uD83C\uDF81', 'Cashback ' + VIP.ratePct(t) + '%', true) +
-                    perkHTML('\u26A1', s.isVip ? 'Ustuvor xizmat' : 'Ustuvor xizmat: VIP dan', s.isVip) +
                 '</div>' +
             '</div>';
 
