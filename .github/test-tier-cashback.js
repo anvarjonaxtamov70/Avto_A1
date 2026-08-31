@@ -171,7 +171,7 @@ t('xo\'jayin so\'ragan aniq qiymatlar', () => {
   const [ord, vip] = VIP.TIERS;
   eq(ord.rate, 0.008, 'oddiy cashback');
   eq(ord.freeDelivery, 3000000, 'oddiy bepul yetkazish');
-  eq(vip.rate, 0.02, 'VIP cashback');
+  eq(vip.rate, 0.01, 'VIP cashback');
   eq(vip.freeDelivery, 2400000, 'VIP bepul yetkazish');
   eq(vip.minSpent, 3000000, 'VIP chegarasi');
 });
@@ -257,7 +257,7 @@ t('cashbackRate darajaga qarab o\'zgaradi', () => {
   VIP.state = VIP.compute([]);
   eq(VIP.cashbackRate(), 0.008, 'oddiy mijoz');
   VIP.state = VIP.compute(orders(3000000));
-  eq(VIP.cashbackRate(), 0.02, 'VIP mijoz');
+  eq(VIP.cashbackRate(), 0.01, 'VIP mijoz');
 });
 
 t('holat yo\'q bo\'lsa — xavfsiz standart (0.8%)', () => {
@@ -267,7 +267,7 @@ t('holat yo\'q bo\'lsa — xavfsiz standart (0.8%)', () => {
 
 t('ratePct chiroyli foiz qaytaradi (ortiqcha nol yo\'q)', () => {
   eq(VIP.ratePct(VIP.TIERS[0]), '0.8');
-  eq(VIP.ratePct(VIP.TIERS[1]), '2');
+  eq(VIP.ratePct(VIP.TIERS[1]), '1');
 });
 
 t('bepul yetkazish chegarasi darajaga qarab', () => {
@@ -295,17 +295,17 @@ function earned(payable, isVip) {
 t('oddiy mijoz, 500 000 so\'m -> 4 000 so\'m (0.8%)', () => {
   eq(earned(500000, false), 4000);
 });
-t('VIP mijoz, 500 000 so\'m -> 10 000 so\'m (2%)', () => {
-  eq(earned(500000, true), 10000);
+t('VIP mijoz, 500 000 so\'m -> 5 000 so\'m (1%)', () => {
+  eq(earned(500000, true), 5000);
 });
 t('oddiy mijoz, 2 400 000 so\'m -> 19 200 so\'m', () => {
   eq(earned(2400000, false), 19200);
 });
-t('VIP mijoz, 2 400 000 so\'m -> 48 000 so\'m', () => {
-  eq(earned(2400000, true), 48000);
+t('VIP mijoz, 2 400 000 so\'m -> 24 000 so\'m', () => {
+  eq(earned(2400000, true), 24000);
 });
-t('VIP oddiydan 2.5 barobar ko\'p oladi', () => {
-  eq(earned(1000000, true) / earned(1000000, false), 2.5);
+t('VIP oddiydan 1.25 barobar ko\'p oladi', () => {
+  eq(earned(1000000, true) / earned(1000000, false), 1.25);
 });
 
 /* ================================================================ *
@@ -314,11 +314,31 @@ t('VIP oddiydan 2.5 barobar ko\'p oladi', () => {
 console.log('\n=== 5) Kod matni tekshiruvlari ===');
 
 t('cashback buyurtmada SAQLANGAN ulush bilan beriladi', () => {
-  // To'lovda «2% qaytadi» deb ko'rsatib, keyin 0.8% berib qo'ymaslik uchun
+  // To'lovda «1% qaytadi» deb ko'rsatib, keyin 0.8% berib qo'ymaslik uchun
   ok(HTML.indexOf('rateForOrder') !== -1, 'rateForOrder funksiyasi yo\'q');
   ok(HTML.indexOf('cbRate: cbRate') !== -1, 'buyurtmaga cbRate yozilmaydi');
   ok(HTML.indexOf('cashbackBaseOf(o) * rateForOrder(o)') !== -1,
     'cashback eski qat\'iy ulush bilan hisoblanyapti');
+});
+
+t('«Ustuvor xizmat» va\'dasi OLIB TASHLANGAN', () => {
+  // Bu imtiyoz hech qanday kodda qo'llanmagan — mijozga bajarilmaydigan
+  // va'da berilardi (`cashbackX`/`discount` xatosining aynan o'zi).
+  // Darajaning imtiyozi FAQAT ikkita: bepul yetkazish va cashback.
+  //
+  // ⚠️ Tekshiruv IZOHLARDA emas, KODDA olib boriladi: «Ustuvor xizmat»
+  // iborasi izohda tarixiy sabab sifatida qolishi mumkin, lekin
+  // `perkHTML(...)` chaqiruvlari orasida bo'lmasligi kerak.
+  const calls = LAYER_SRC.split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.indexOf("perkHTML('") === 0);
+  eq(calls.length, 2, 'kartada aynan 2 ta imtiyoz bo\'lishi kerak');
+  calls.forEach((c) => {
+    ok(c.indexOf('Ustuvor') === -1, '«Ustuvor» imtiyozi qaytib kelgan: ' + c);
+    ok(c.indexOf('\\u26A1') === -1, 'chaqmoq imtiyozi qaytib kelgan: ' + c);
+  });
+  ok(calls[0].indexOf('freeDelivery') !== -1, '1-imtiyoz bepul yetkazish emas');
+  ok(calls[1].indexOf('Cashback') !== -1, '2-imtiyoz cashback emas');
 });
 
 t('to\'lov oynasida «sizga qaytadi» bloki bor', () => {
