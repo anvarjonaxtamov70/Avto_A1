@@ -6011,7 +6011,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         { slug: 'uaz-hunter', name: 'Hunter', chip: 'Hunter' }
       ] }
   ];
-  window.CATALOG_TREE = CATALOG_TREE;
+  window.CATALOG_TREE = (window.CATALOG_TREE && window.CATALOG_TREE.length) ? window.CATALOG_TREE : CATALOG_TREE;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
@@ -6019,23 +6019,28 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     });
   }
 
-  // slug -> ko'rinadigan nom (product/compare ekranlari uchun yagona manba)
-  var CAR = {};
-  CATALOG_TREE.forEach(function (b) {
-    b.models.forEach(function (m) { CAR[m.slug] = m.carName || m.name; });
-  });
-  window.CAR_NAMES = CAR;
+  // slug -> ko'rinadigan nom — TREE dan qayta quriladi (marka/model o'zgarganda yangilanadi)
+  function rebuildCarNames(TREE) {
+    var CAR = {};
+    (TREE || []).forEach(function (b) {
+      (b.models || []).forEach(function (m) { CAR[m.slug] = m.carName || m.name; });
+    });
+    window.CAR_NAMES = CAR;
+  }
+  rebuildCarNames(window.CATALOG_TREE);
 
   var CHEVRON = '<div class="luxury-model-arrow"><svg class="uic" aria-hidden="true"><use href="#i-chevron"></use></svg></div>';
 
   function buildCatalog() {
     var ca = document.getElementById('content-area');
     if (!ca) return;
+    var TREE = (window.CATALOG_TREE && window.CATALOG_TREE.length) ? window.CATALOG_TREE : CATALOG_TREE;
+    rebuildCarNames(TREE);
 
     // 1) Brend kartalari
     var bw = document.getElementById('brand-cards-wrap');
     if (bw) {
-      bw.innerHTML = CATALOG_TREE.map(function (b) {
+      bw.innerHTML = TREE.map(function (b) {
         return '<div class="neon-brand-card" role="button" tabindex="0" onclick="showSection(\'' + b.modelsSection + '\')">' +
           '<div class="neon-logo" style="width: 55px; height: 55px;"><img src="' + esc(b.logo) + '" alt="' + esc(b.title) + '"></div>' +
           '<div class="pay-info" style="margin-left: 15px;">' +
@@ -6046,7 +6051,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     }
 
     // 2) Model ro'yxatlari (#<brand>-models) + mahsulot gridlari (#<slug>-parts)
-    CATALOG_TREE.forEach(function (b) {
+    TREE.forEach(function (b) {
       var ms = document.getElementById(b.modelsSection);
       if (!ms) {
         ms = document.createElement('div');
@@ -6074,7 +6079,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     });
 
     // 3) Admin kategoriya chip'lari (add + edit modallar)
-    var chipsHTML = CATALOG_TREE.map(function (b) {
+    var chipsHTML = TREE.map(function (b) {
       return '<div class="apx-sub" style="font-size:12px; color:var(--text-muted); font-weight:bold; margin:12px 0 8px;">' + esc(b.chipGroup) + '</div>' +
         '<div style="display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px dashed rgba(255,255,255,0.05);">' +
         b.models.map(function (m) {
@@ -6814,9 +6819,104 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <span class="ap2-tile-tx"><b>Bannerlar</b><i>Bosh sahifa slayderi</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
+        <div class="ap2-tile" style="--ac:#c9a84c" onclick="BrandManager.open()" role="button" tabindex="0">
+            <span class="ap2-tile-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"/><path d="M5 11h14a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z"/><circle class="ap2-live-part" cx="7.5" cy="14" r="1"/><circle class="ap2-live-part" cx="16.5" cy="14" r="1"/></svg>
+            </span>
+            <span class="ap2-tile-tx"><b>Markalar</b><i>Brend, model va emblema</i></span>
+            <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </div>
     </div>
 </div>
     
+   
+<!-- ══════════════════════════════════════════════════════════════════
+     🚗 MARKA / MODEL BOSHQARUVI (admin) — katalog CATALOG_TREE ni
+     Firebase 'catalog' tugunidan boshqaradi. Marka/model qo'shish,
+     emblema rasm yuklash. Dizayn do'konning admin uslubiga mos.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal-standard" id="brandManagerModal">
+    <div class="modal-header">
+        <h2 style="color: var(--luxury-gold); margin:0;"><svg class="uic" aria-hidden="true"><use href="#i-car"></use></svg> Markalar</h2>
+        <button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button>
+    </div>
+    <div style="padding: 16px 16px 10px;">
+        <p style="font-size:12px; color:var(--text-muted); line-height:1.55; margin:0 0 14px;">
+            Bu yerdan mashina <b>markalari</b> (bo'limlar) va ularning <b>modellarini</b> qo'shasiz,
+            har biriga <b>emblema</b> rasm yuklaysiz. O'zgarishlar katalogda darhol ko'rinadi.
+        </p>
+        <button class="btn-checkout" onclick="BrandManager.openBrandEdit(null)"
+            style="width:100%; border-radius:16px; padding:15px; font-size:15px; margin-bottom:16px; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span style="font-size:20px; line-height:1;">＋</span> Yangi marka qo'shish
+        </button>
+        <div id="bm-list"></div>
+    </div>
+</div>
+
+<div class="modal-standard" id="brandEditModal">
+    <div class="modal-header">
+        <h2 id="bm-edit-title" style="color: var(--luxury-gold); margin:0;">Yangi marka</h2>
+        <button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button>
+    </div>
+    <div style="padding: 20px;">
+        <!-- EMBLEMA -->
+        <div class="admin-form-group">
+            <div class="apx-head">
+                <div class="apx-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></div>
+                <div class="apx-tx"><b>Emblema</b><span>Kichik, sifatli logo (PNG shaffof yaxshi)</span></div>
+            </div>
+            <div class="apx-upload" style="margin-bottom:12px; position:relative;">
+                <div class="apx-up-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/></svg></div>
+                <div class="apx-up-t" id="bm-logo-uptext">Emblema rasm yuklash</div>
+                <div class="apx-up-s">Rasm tanlang — avtomatik link olinadi</div>
+                <input type="file" id="bm-logo-file" accept="image/png,image/jpeg,image/jpg,image/webp,image/heic,image/heif" onchange="BrandManager.uploadLogo(event)" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:10;">
+            </div>
+            <div id="bm-logo-preview" style="display:flex; justify-content:center; margin-bottom:10px;"></div>
+            <div class="admin-input-wrap" style="margin-bottom:0;">
+                <input type="text" id="bm-logo-url" class="admin-input" placeholder="Yoki emblema linki (ixtiyoriy)" oninput="BrandManager.renderLogoPreview()">
+            </div>
+        </div>
+
+        <!-- MARKA NOMI -->
+        <div class="admin-form-group">
+            <div class="apx-head">
+                <div class="apx-ic" style="color:#0a84ff;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7l-5 5 5 5"/><path d="M5 5v14"/></svg></div>
+                <div class="apx-tx"><b>Marka</b><span>Nomi va qisqa izohi</span></div>
+            </div>
+            <div class="admin-input-wrap">
+                <input type="text" id="bm-title" class="admin-input" placeholder="Marka nomi (mas: BYD)">
+            </div>
+            <div class="admin-input-wrap" style="margin-bottom:0;">
+                <input type="text" id="bm-sub" class="admin-input" placeholder="Izoh (mas: Chazor, Song va boshqalar)">
+            </div>
+        </div>
+
+        <!-- MODELLAR -->
+        <div class="admin-form-group" style="padding-bottom:8px;">
+            <div class="apx-head">
+                <div class="apx-ic" style="color:#30d158;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>
+                <div class="apx-tx"><b>Modellar</b><span>Har bir model — katalogда alohida bo'lim</span></div>
+            </div>
+            <div id="bm-models"></div>
+            <button type="button" onclick="BrandManager.addModelRow()"
+                style="width:100%; padding:12px; background:rgba(212,175,55,0.15); color:var(--luxury-gold); border:1px dashed var(--luxury-gold); border-radius:12px; cursor:pointer; font-weight:800; margin-top:6px;">
+                ＋ Model qo'shish
+            </button>
+        </div>
+
+        <button type="button" id="bm-delete-btn" onclick="BrandManager.deleteBrand()"
+            style="width:100%; background:rgba(255,69,58,0.06); color:#ff453a; border:1px dashed rgba(255,69,58,0.4); padding:14px; border-radius:14px; font-weight:700; cursor:pointer; margin-top:8px; display:none;">
+            🗑 Markani o'chirish
+        </button>
+    </div>
+    <div class="sticky-admin-footer">
+        <button class="btn-checkout" onclick="BrandManager.saveBrand()" style="width:100%; border-radius:16px; padding:16px; font-size:15px;">
+            Saqlash
+        </button>
+    </div>
+</div>
+
+
    <div class="modal-standard" id="addProductModal" style="z-index: 3000; display: none; padding: 0;">
     <div class="modal-header" style="padding: 20px 20px 15px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 0;">
         <h2 style="color: var(--luxury-gold); margin: 0; font-size: 22px;"><svg class="uic" aria-hidden="true"><use href="#i-plus"></use></svg>Yangi Tovar</h2>
@@ -31157,6 +31257,326 @@ html.lite body .ai-luxury-btn .shogird-orbit { animation: none !important; }
     }
 })();
 </script>
+
+<style>
+  #bm-list .bm-brand-row { display:flex; align-items:center; gap:14px; padding:13px 14px; margin-bottom:10px; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); border-radius:16px; cursor:pointer; transition: transform .16s ease, border-color .2s ease, background .2s ease; }
+  #bm-list .bm-brand-row:active { transform: scale(.98); }
+  @media (hover:hover){ #bm-list .bm-brand-row:hover { border-color: rgba(212,175,55,0.4); background:rgba(212,175,55,0.06); } }
+  #bm-list .bm-logo { width:46px; height:46px; border-radius:12px; object-fit:contain; background:rgba(255,255,255,0.06); padding:5px; flex-shrink:0; }
+  #bm-list .bm-logo-empty { width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(212,175,55,0.12); color:var(--luxury-gold); font-weight:800; font-size:18px; flex-shrink:0; }
+  #bm-models .bm-model-row .admin-input { margin-bottom:0 !important; }
+</style>
+<script>
+(function () {
+  'use strict';
+  if (window.BrandManager) return;
+
+  function fb() { return (window.firebase && firebase.database) ? firebase.database() : null; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+  function toast(msg, type) { try { if (typeof showToast === 'function') showToast(msg, type || 'success'); } catch (e) {} }
+  function slugify(s) {
+    return String(s || '').toLowerCase().trim()
+      .replace(/['’`]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40);
+  }
+
+  // ---- Firebase <-> TREE konvertatsiya ----
+  function fbToTree(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    var arr = Object.keys(obj).map(function (k) {
+      var b = obj[k] || {};
+      var key = b.brand || k;
+      var models = [];
+      if (b.models && typeof b.models === 'object') {
+        models = Object.keys(b.models).map(function (ms) {
+          var m = b.models[ms] || {};
+          return { slug: ms, name: m.name || ms, chip: m.chip || m.name || ms, carName: m.carName, order: (m.order != null ? m.order : 999) };
+        }).sort(function (a, b) { return a.order - b.order; });
+      }
+      return {
+        brand: key, title: b.title || key, sub: b.sub || '', logo: b.logo || '',
+        modelsSection: key + '-models',
+        modelsTitle: b.modelsTitle || ((b.title || key) + ' modellari'),
+        chipGroup: b.chipGroup || (b.title || key),
+        order: (b.order != null ? b.order : 999),
+        models: models
+      };
+    }).sort(function (a, b) { return a.order - b.order; });
+    return arr.length ? arr : null;
+  }
+  function treeToFb(tree) {
+    var obj = {};
+    (tree || []).forEach(function (b, bi) {
+      var models = {};
+      (b.models || []).forEach(function (m, mi) {
+        models[m.slug] = { name: m.name, chip: m.chip || m.name, order: mi };
+        if (m.carName) models[m.slug].carName = m.carName;
+      });
+      obj[b.brand] = {
+        brand: b.brand, title: b.title, sub: b.sub || '', logo: b.logo || '',
+        modelsTitle: b.modelsTitle || (b.title + ' modellari'),
+        chipGroup: b.chipGroup || b.title, order: bi, models: models
+      };
+    });
+    return obj;
+  }
+
+  function currentTree() {
+    return (window.CATALOG_TREE && window.CATALOG_TREE.length) ? window.CATALOG_TREE : [];
+  }
+  function allSlugs(tree) {
+    var s = {};
+    (tree || []).forEach(function (b) { (b.models || []).forEach(function (m) { s[m.slug] = true; }); });
+    return s;
+  }
+  function allBrandKeys(tree) {
+    var s = {};
+    (tree || []).forEach(function (b) { s[b.brand] = true; });
+    return s;
+  }
+  function uniqueKey(base, taken) {
+    base = base || 'x';
+    var k = base, i = 2;
+    while (taken[k]) { k = base + '-' + i; i++; }
+    return k;
+  }
+
+  var editingKey = null; // null = yangi marka
+
+  // ---- Ro'yxat ----
+  function renderList() {
+    var box = document.getElementById('bm-list');
+    if (!box) return;
+    var tree = currentTree();
+    if (!tree.length) { box.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Hali marka yo\'q. "Yangi marka" bilan qo\'shing.</p>'; return; }
+    box.innerHTML = tree.map(function (b) {
+      var logo = b.logo
+        ? '<img class="bm-logo" src="' + esc(b.logo) + '" alt="" onerror="this.style.display=\'none\'">'
+        : '<div class="bm-logo-empty">' + esc((b.title || '?').charAt(0).toUpperCase()) + '</div>';
+      var cnt = (b.models || []).length;
+      return '<div class="bm-brand-row" role="button" tabindex="0" onclick="BrandManager.openBrandEdit(\'' + esc(b.brand) + '\')">' +
+        logo +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-weight:800; color:#fff; font-size:15px;">' + esc(b.title) + '</div>' +
+          '<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">' + cnt + ' ta model</div>' +
+        '</div>' +
+        '<div style="color:var(--text-muted); font-size:20px;">›</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // ---- Model qatori ----
+  function modelRowHTML(name, chip, slug) {
+    return '<div class="bm-model-row" data-slug="' + esc(slug || '') + '" style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">' +
+      '<input type="text" class="admin-input bm-m-name" placeholder="Model nomi (mas: Cobalt)" value="' + esc(name || '') + '" style="flex:2;">' +
+      '<input type="text" class="admin-input bm-m-chip" placeholder="Qisqa" value="' + esc(chip || '') + '" style="flex:1;">' +
+      '<button type="button" onclick="this.closest(\'.bm-model-row\').remove()" style="background:rgba(255,69,58,0.2); color:#ff453a; border:1px solid rgba(255,69,58,0.5); border-radius:10px; padding:0 14px; height:46px; cursor:pointer; font-weight:bold; font-size:16px; flex-shrink:0;">×</button>' +
+    '</div>';
+  }
+
+  var BrandManager = {
+    open: function () {
+      renderList();
+      if (typeof openModal === 'function') openModal('brandManagerModal');
+    },
+
+    openBrandEdit: function (brandKey) {
+      editingKey = brandKey || null;
+      var tree = currentTree();
+      var b = brandKey ? tree.filter(function (x) { return x.brand === brandKey; })[0] : null;
+
+      var titleEl = document.getElementById('bm-edit-title');
+      if (titleEl) titleEl.textContent = b ? ('Tahrirlash: ' + b.title) : 'Yangi marka';
+      var t = document.getElementById('bm-title'); if (t) t.value = b ? (b.title || '') : '';
+      var s = document.getElementById('bm-sub'); if (s) s.value = b ? (b.sub || '') : '';
+      var lu = document.getElementById('bm-logo-url'); if (lu) lu.value = b ? (b.logo || '') : '';
+      var upt = document.getElementById('bm-logo-uptext'); if (upt) upt.textContent = 'Emblema rasm yuklash';
+      this.renderLogoPreview();
+
+      var mb = document.getElementById('bm-models');
+      if (mb) {
+        if (b && b.models && b.models.length) {
+          mb.innerHTML = b.models.map(function (m) { return modelRowHTML(m.name, m.chip, m.slug); }).join('');
+        } else {
+          mb.innerHTML = modelRowHTML('', '', '');
+        }
+      }
+      var del = document.getElementById('bm-delete-btn');
+      if (del) del.style.display = b ? 'block' : 'none';
+
+      if (typeof openModal === 'function') openModal('brandEditModal');
+    },
+
+    addModelRow: function () {
+      var mb = document.getElementById('bm-models');
+      if (mb) mb.insertAdjacentHTML('beforeend', modelRowHTML('', '', ''));
+    },
+
+    renderLogoPreview: function () {
+      var url = (document.getElementById('bm-logo-url') || {}).value || '';
+      var box = document.getElementById('bm-logo-preview');
+      if (!box) return;
+      box.innerHTML = url
+        ? '<img src="' + esc(url) + '" alt="" style="width:76px; height:76px; object-fit:contain; background:rgba(255,255,255,0.06); border:1px solid var(--glass-border); border-radius:16px; padding:8px;" onerror="this.style.display=\'none\'">'
+        : '';
+    },
+
+    uploadLogo: function (event) {
+      var file = event.target && event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      if (typeof uploadFileWithProgress !== 'function') { toast('Yuklash moduli topilmadi', 'warning'); return; }
+      var upt = document.getElementById('bm-logo-uptext');
+      if (upt) upt.textContent = 'Yuklanmoqda… 0%';
+      uploadFileWithProgress(file, function (pct) { if (upt) upt.textContent = 'Yuklanmoqda… ' + pct + '%'; })
+        .then(function (url) {
+          var lu = document.getElementById('bm-logo-url'); if (lu) lu.value = url;
+          if (upt) upt.textContent = '✅ Emblema yuklandi';
+          BrandManager.renderLogoPreview();
+          toast('Emblema yuklandi', 'success');
+        })
+        .catch(function (err) {
+          if (upt) upt.textContent = 'Emblema rasm yuklash';
+          toast((err && err.message) ? err.message : 'Yuklash xatosi', 'warning');
+        });
+    },
+
+    saveBrand: function () {
+      var title = ((document.getElementById('bm-title') || {}).value || '').trim();
+      var sub = ((document.getElementById('bm-sub') || {}).value || '').trim();
+      var logo = ((document.getElementById('bm-logo-url') || {}).value || '').trim();
+      if (!title) { toast('Marka nomini kiriting', 'warning'); return; }
+
+      // Klon (JSON deep copy) — yozish muvaffaqiyatli bo'lmaguncha jonli TREE ga tegmaymiz
+      var tree = JSON.parse(JSON.stringify(currentTree()));
+      var takenBrandKeys = allBrandKeys(tree);
+      var takenSlugs = allSlugs(tree);
+
+      var brandKey = editingKey;
+      if (!brandKey) {
+        // Yangi marka — noyob kalit
+        delete takenBrandKeys[slugify(title)];
+        brandKey = uniqueKey(slugify(title) || 'marka', allBrandKeys(tree));
+      }
+
+      // Model qatorlarini o'qiymiz
+      var rows = Array.prototype.slice.call(document.querySelectorAll('#bm-models .bm-model-row'));
+      var models = [];
+      var seen = {};
+      for (var i = 0; i < rows.length; i++) {
+        var nm = (rows[i].querySelector('.bm-m-name').value || '').trim();
+        if (!nm) continue; // bo'sh qatorni tashlab yuboramiz
+        var chip = (rows[i].querySelector('.bm-m-chip').value || '').trim() || nm;
+        var slug = (rows[i].getAttribute('data-slug') || '').trim();
+        if (!slug) {
+          // Yangi model — brandKey asosida noyob slug
+          var base = brandKey + '-' + (slugify(nm) || 'model');
+          slug = uniqueKey(base, mergeTaken(takenSlugs, seen));
+        }
+        if (seen[slug]) continue; // dublikatni o'tkazib yuboramiz
+        seen[slug] = true;
+        models.push({ slug: slug, name: nm, chip: chip });
+      }
+      if (!models.length) { toast('Kamida 1 ta model kiriting', 'warning'); return; }
+
+      var brandObj = {
+        brand: brandKey, title: title, sub: sub, logo: logo,
+        modelsSection: brandKey + '-models',
+        modelsTitle: title + ' modellari',
+        chipGroup: title,
+        models: models
+      };
+
+      // Klonga qo'shamiz/almashtiramiz
+      var idx = -1;
+      for (var j = 0; j < tree.length; j++) { if (tree[j].brand === brandKey) { idx = j; break; } }
+      if (idx >= 0) { brandObj.order = idx; tree[idx] = brandObj; }
+      else { brandObj.order = tree.length; tree.push(brandObj); }
+
+      var database = fb();
+      if (!database) { toast('Internetni tekshiring', 'warning'); return; }
+
+      database.ref('catalog').set(treeToFb(tree))
+        .then(function () {
+          toast('✅ Saqlandi', 'success');
+          // Listener ham yangilaydi; darhol ko'rsatish uchun mahalliy ham qo'llaymiz
+          window.CATALOG_TREE = tree;
+          if (window.buildCatalog) window.buildCatalog();
+          try { if (typeof renderProducts === 'function') renderProducts(); } catch (e) {}
+          renderList();
+          if (typeof closeModal === 'function') closeModal();
+        })
+        .catch(function (err) {
+          if (err && (err.code === 'PERMISSION_DENIED' || /permission/i.test(err.message || ''))) {
+            toast('Ruxsat yo\'q — Firebase qoidalarini joriy qiling (deploy-rules)', 'warning');
+          } else {
+            toast('Saqlashda xato. Qayta urinib ko\'ring.', 'warning');
+          }
+        });
+    },
+
+    deleteBrand: function () {
+      if (!editingKey) return;
+      var doDelete = function () {
+        var tree = JSON.parse(JSON.stringify(currentTree())).filter(function (b) { return b.brand !== editingKey; });
+        var database = fb();
+        if (!database) { toast('Internetni tekshiring', 'warning'); return; }
+        database.ref('catalog').set(treeToFb(tree))
+          .then(function () {
+            toast('Marka o\'chirildi', 'success');
+            window.CATALOG_TREE = tree;
+            if (window.buildCatalog) window.buildCatalog();
+            try { if (typeof renderProducts === 'function') renderProducts(); } catch (e) {}
+            renderList();
+            if (typeof closeModal === 'function') closeModal();
+          })
+          .catch(function (err) {
+            if (err && (err.code === 'PERMISSION_DENIED' || /permission/i.test(err.message || ''))) {
+              toast('Ruxsat yo\'q — Firebase qoidalarini joriy qiling', 'warning');
+            } else { toast('O\'chirishda xato', 'warning'); }
+          });
+      };
+      try {
+        if (window.tg && tg.showConfirm) {
+          tg.showConfirm('Bu markani va uning modellarini katalogdan o\'chirasizmi? (Tovarlar bazada qoladi)', function (ok) { if (ok) doDelete(); });
+        } else if (confirm('Bu markani o\'chirasizmi?')) { doDelete(); }
+      } catch (e) { doDelete(); }
+    }
+  };
+
+  function mergeTaken(a, b) { var o = {}; for (var k in a) o[k] = true; for (var j in b) o[j] = true; return o; }
+
+  window.BrandManager = BrandManager;
+
+  // ---- Firebase 'catalog' listener: admin o'zgartirsa hammada darhol yangilanadi ----
+  function startCatalogListener() {
+    var database = fb();
+    if (!database) { setTimeout(startCatalogListener, 500); return; }
+    try {
+      database.ref('catalog').on('value', function (snap) {
+        try {
+          var t = fbToTree(snap.val());
+          if (t && t.length) {
+            window.CATALOG_TREE = t;
+            if (window.buildCatalog) window.buildCatalog();
+            try { if (typeof renderProducts === 'function') renderProducts(); } catch (e) {}
+          }
+        } catch (e) {}
+      }, function (err) {
+        // Ruxsat yo'q yoki tarmoq — SEED (hardcoded CATALOG_TREE) bilan davom etamiz.
+      });
+    } catch (e) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startCatalogListener);
+  } else {
+    startCatalogListener();
+  }
+})();
+</script>
+
 </body>
 </html>
 
