@@ -4965,15 +4965,52 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         @keyframes ap2Sheen      { 0% { transform: translateX(-130%) skewX(-18deg); } 100% { transform: translateX(360%) skewX(-18deg); } }
         @keyframes ap2Pop        { 0% { transform: scale(0.9); } 55% { transform: scale(1.06); } 100% { transform: scale(1); } }
         @keyframes ap2Bolt       { 0%,72%,100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); } 78% { transform: scale(1.18) rotate(-4deg); filter: drop-shadow(0 0 6px currentColor); } 84% { transform: scale(.94) rotate(3deg); } }
-        @keyframes ap2Parcel     { 0%,82%,100% { transform: translateY(0); } 88% { transform: translateY(-4px) rotate(-3deg); } 94% { transform: translateY(0) rotate(2deg); } }
-        @keyframes ap2Bars       { 0%,76%,100% { transform: scaleY(1); } 84% { transform: scaleY(.78); } 92% { transform: scaleY(1.08); } }
-        @keyframes ap2Warehouse  { 0%,78%,100% { transform: translateX(0); } 86% { transform: translateX(3px); } 93% { transform: translateX(-2px); } }
-        @keyframes ap2Discount   { 0%,78%,100% { transform: rotate(0); } 85% { transform: rotate(-8deg) scale(1.05); } 92% { transform: rotate(6deg); } }
-        @keyframes ap2People     { 0%,78%,100% { transform: scale(1); } 86% { transform: scale(1.09); } 93% { transform: scale(.97); } }
-        @keyframes ap2Megaphone  { 0%,78%,100% { transform: rotate(0) translateX(0); } 85% { transform: rotate(-7deg) translateX(2px); } 92% { transform: rotate(5deg); } }
-        @keyframes ap2Draft      { 0%,80%,100% { transform: translateY(0) rotate(0); } 87% { transform: translateY(-3px) rotate(4deg); } 94% { transform: rotate(-2deg); } }
-        @keyframes ap2Story      { 0%,76%,100% { transform: scale(1); opacity: 1; } 84% { transform: scale(1.10); opacity: .72; } 92% { transform: scale(.98); opacity: 1; } }
-        @keyframes ap2Banner     { 0%,78%,100% { transform: translateX(0); } 85% { transform: translateX(-3px); } 92% { transform: translateX(3px); } }
+
+        /* Har ikonkaning korpusi statik; faqat mazmunli ichki mexanizmi harakatlanadi. */
+        @keyframes ap2ParcelLid {
+            0%, 66%, 100% { transform: translateY(0) scaleY(1); }
+            76%, 85% { transform: translateY(-2.2px) scaleY(.72); }
+            92% { transform: translateY(-.35px) scaleY(.96); }
+        }
+        @keyframes ap2BarGrow {
+            0%, 14%, 100% { transform: scaleY(.4); opacity: .62; }
+            42%, 76% { transform: scaleY(1); opacity: 1; }
+        }
+        @keyframes ap2ShutterOpen {
+            0%, 64%, 100% { transform: scaleY(1); }
+            75%, 86% { transform: scaleY(.16); }
+            94% { transform: scaleY(.84); }
+        }
+        @keyframes ap2PercentPulse {
+            0%, 24%, 100% { transform: scale(1); opacity: 1; }
+            46% { transform: scale(.68); opacity: .46; }
+            66% { transform: scale(1.18); opacity: 1; }
+            78% { transform: scale(1); }
+        }
+        @keyframes ap2CustomerJoin {
+            0%, 62%, 100% { transform: translateX(0); opacity: 1; }
+            70% { transform: translateX(3px); opacity: 0; }
+            79% { transform: translateX(3px); opacity: 0; }
+            91% { transform: translateX(-.6px); opacity: 1; }
+        }
+        @keyframes ap2SignalWave {
+            0%, 48% { stroke-dashoffset: 1; opacity: 0; }
+            66% { opacity: .95; }
+            88%, 100% { stroke-dashoffset: 0; opacity: 0; }
+        }
+        @keyframes ap2WriteLine {
+            0%, 18% { stroke-dashoffset: 1; opacity: .28; }
+            52%, 84%, 100% { stroke-dashoffset: 0; opacity: 1; }
+        }
+        @keyframes ap2StoryOrbit {
+            to { transform: rotate(360deg); stroke-dashoffset: -13.2; }
+        }
+        @keyframes ap2BannerScene {
+            0%, 62%, 100% { transform: translateX(0); }
+            73% { transform: translateX(-1.5px); }
+            84% { transform: translateX(1.2px); }
+            94% { transform: translateX(0); }
+        }
 
         /* ——— Sarlavha ——— */
         #adminModal .ap2-header { align-items: flex-start; margin-bottom: 20px; }
@@ -5078,7 +5115,15 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             border: 1px solid rgba(127,127,127,.18);
             border: 1px solid color-mix(in srgb, var(--ac) 34%, transparent);
         }
-        #adminModal .ap2-tile-ic svg { width: 23px; height: 23px; }
+        #adminModal .ap2-tile-ic svg { width: 23px; height: 23px; overflow: visible; }
+        #adminModal .ap2-live-part { transform-box: fill-box; transform-origin: center; }
+        #adminModal .ap2-parcel-lid { transform-origin: center bottom; }
+        #adminModal .ap2-stat-bar { transform-origin: center bottom; }
+        #adminModal .ap2-warehouse-door { transform-origin: center top; }
+        #adminModal .ap2-signal-wave,
+        #adminModal .ap2-draft-line { stroke-dasharray: 1; stroke-dashoffset: 0; }
+        #adminModal .ap2-signal-wave { opacity: .36; }
+        #adminModal .ap2-story-ring { transform-origin: center; }
         #adminModal .ap2-tile-tx { flex: 1 1 auto; min-width: 0; }
         #adminModal .ap2-tile-tx b { display: block; font-size: 14.5px; font-weight: 700; color: var(--text-main); }
         #adminModal .ap2-tile-tx i { display: block; font-style: normal; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
@@ -5100,15 +5145,24 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             #adminModal .ap2-tile:nth-child(8){ animation-delay:.47s; }
             #adminModal .ap2-tile:nth-child(9){ animation-delay:.52s; }
             #adminModal .ap2-auth-bolt { animation: ap2Bolt 4.2s ease-in-out infinite; }
-            #adminModal .ap2-tile:nth-child(1) .ap2-tile-ic svg { animation: ap2Parcel 5.1s ease-in-out .2s infinite; }
-            #adminModal .ap2-tile:nth-child(2) .ap2-tile-ic svg { animation: ap2Bars 4.8s ease-in-out .5s infinite; transform-origin: center bottom; }
-            #adminModal .ap2-tile:nth-child(3) .ap2-tile-ic svg { animation: ap2Warehouse 5.3s ease-in-out .8s infinite; }
-            #adminModal .ap2-tile:nth-child(4) .ap2-tile-ic svg { animation: ap2Discount 5s ease-in-out 1.1s infinite; }
-            #adminModal .ap2-tile:nth-child(5) .ap2-tile-ic svg { animation: ap2People 5.2s ease-in-out 1.4s infinite; }
-            #adminModal .ap2-tile:nth-child(6) .ap2-tile-ic svg { animation: ap2Megaphone 4.9s ease-in-out 1.7s infinite; }
-            #adminModal .ap2-tile:nth-child(7) .ap2-tile-ic svg { animation: ap2Draft 5.4s ease-in-out 2s infinite; }
-            #adminModal .ap2-tile:nth-child(8) .ap2-tile-ic svg { animation: ap2Story 4.7s ease-in-out 2.3s infinite; }
-            #adminModal .ap2-tile:nth-child(9) .ap2-tile-ic svg { animation: ap2Banner 5.1s ease-in-out 2.6s infinite; }
+            #adminModal .ap2-parcel-lid { animation: ap2ParcelLid 4.4s ease-in-out .2s infinite; }
+            #adminModal .ap2-stat-bar { animation: ap2BarGrow 2.8s cubic-bezier(.35,.05,.25,1) infinite; }
+            #adminModal .ap2-stat-bar:nth-child(2) { animation-delay: -.95s; }
+            #adminModal .ap2-stat-bar:nth-child(3) { animation-delay: -1.85s; }
+            #adminModal .ap2-warehouse-door { animation: ap2ShutterOpen 4.6s ease-in-out .7s infinite; }
+            #adminModal .ap2-percent-dot-a { animation: ap2PercentPulse 2.5s ease-in-out infinite; }
+            #adminModal .ap2-percent-dot-b { animation: ap2PercentPulse 2.5s ease-in-out -1.25s infinite; }
+            #adminModal .ap2-customer-secondary { animation: ap2CustomerJoin 4.5s cubic-bezier(.3,.05,.2,1) 1.1s infinite; }
+            #adminModal .ap2-signal-wave { animation: ap2SignalWave 2.4s ease-out infinite; }
+            #adminModal .ap2-signal-wave-far { animation-delay: .22s; }
+            #adminModal .ap2-draft-line { animation: ap2WriteLine 3.7s ease-in-out infinite; }
+            #adminModal .ap2-draft-line-b { animation-delay: .45s; }
+            #adminModal .ap2-story-ring { animation: ap2StoryOrbit 3.8s linear infinite; }
+            #adminModal .ap2-banner-scene { animation: ap2BannerScene 4.2s ease-in-out 1.7s infinite; }
+        }
+        html.lite #adminModal .ap2-live-part { animation: none !important; }
+        @media (prefers-reduced-motion: reduce) {
+            #adminModal .ap2-live-part { animation: none !important; }
         }
 
         /* ============================================================
@@ -6685,49 +6739,49 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     <div class="ap2-grid">
         <div class="ap2-tile" style="--ac:#3a8dff" onclick="openAdminOrders()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><g class="ap2-live-part ap2-parcel-lid"><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="12" x2="12" y2="7"/></g><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
             </span>
             <span class="ap2-tile-tx"><b>Buyurtmalar</b><i>Barcha xaridlar</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
         <div class="ap2-tile" style="--ac:#34c759" onclick="openAdminStats()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect class="ap2-live-part ap2-stat-bar" x="5" y="14" width="2.4" height="6" rx="1.2"/><rect class="ap2-live-part ap2-stat-bar" x="10.8" y="4" width="2.4" height="16" rx="1.2"/><rect class="ap2-live-part ap2-stat-bar" x="16.6" y="10" width="2.4" height="10" rx="1.2"/></svg>
             </span>
             <span class="ap2-tile-tx"><b>Statistika</b><i>Savdo va hisobot</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
         <div class="ap2-tile" style="--ac:#d4af37" onclick="openAdminInventory()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-6h6v6"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><g class="ap2-live-part ap2-warehouse-door"><path d="M9 21v-6h6v6"/><line x1="9" y1="17.2" x2="15" y2="17.2"/><line x1="9" y1="19.2" x2="15" y2="19.2"/></g></svg>
             </span>
             <span class="ap2-tile-tx"><b>Ombor</b><i>Zaxira nazorati</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
         <div class="ap2-tile" style="--ac:#ff453a" onclick="openBulkDiscount()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="5" x2="5" y2="19"/><circle class="ap2-live-part ap2-percent-dot-a" cx="6.5" cy="6.5" r="2.5"/><circle class="ap2-live-part ap2-percent-dot-b" cx="17.5" cy="17.5" r="2.5"/></svg>
             </span>
             <span class="ap2-tile-tx"><b>Ommaviy aksiya</b><i>Bir necha tovarga chegirma</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
         <div class="ap2-tile" style="--ac:#ff9f0a" onclick="openAdminCustomers()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><g class="ap2-live-part ap2-customer-secondary"><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></g></svg>
             </span>
             <span class="ap2-tile-tx"><b>Mijozlar</b><i>Foydalanuvchilar bazasi</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
         <div class="ap2-tile" style="--ac:#0a84ff" onclick="openBroadcastModal()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.78-1.6"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5l13-4v11L3 14v-3.5z"/><path d="M11.2 16.4a3 3 0 1 1-5.65-1.55"/><path class="ap2-live-part ap2-signal-wave" pathLength="1" d="M18.2 9.2c1.2 1.2 1.2 4.4 0 5.6"/><path class="ap2-live-part ap2-signal-wave ap2-signal-wave-far" pathLength="1" d="M20.4 6.7c2.4 2.5 2.4 8.1 0 10.6"/></svg>
             </span>
             <span class="ap2-tile-tx"><b>Xabar yuborish</b><i>Hammaga ommaviy</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
         <div class="ap2-tile" style="--ac:#a855f7" onclick="openAdminDrafts()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line class="ap2-live-part ap2-draft-line" pathLength="1" x1="8" y1="13" x2="16" y2="13"/><line class="ap2-live-part ap2-draft-line ap2-draft-line-b" pathLength="1" x1="8" y1="17" x2="16" y2="17"/></svg>
             </span>
             <span class="ap2-tile-tx"><b>Qoralamalar</b><i>Rasmsiz tovarlar</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
@@ -6735,7 +6789,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         <!-- 📸 STORIES — mini app ichidan storis qo'shish va boshqarish -->
         <div class="ap2-tile" style="--ac:#ff2d92" onclick="AvtoStories.openAdmin()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" stroke-dasharray="4 2.6"/><circle cx="12" cy="12" r="4.2"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle class="ap2-live-part ap2-story-ring" cx="12" cy="12" r="9" stroke-dasharray="4 2.6"/><circle cx="12" cy="12" r="4.2"/></svg>
             </span>
             <span class="ap2-tile-tx"><b>Stories</b><i>Qo'shish va boshqarish</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
@@ -6743,7 +6797,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         <!-- 🖼 BANNERLAR — bosh sahifadagi slayderni admin o'zi boshqaradi -->
         <div class="ap2-tile" style="--ac:#00c7be" onclick="AvtoBanners.openAdmin()" role="button" tabindex="0">
             <span class="ap2-tile-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><circle cx="8" cy="10" r="1.6"/><path d="M21.5 16l-5.2-5.2L7 19"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="3"/><g class="ap2-live-part ap2-banner-scene"><circle cx="8" cy="10" r="1.6"/><path d="M21.5 16l-5.2-5.2L7 19"/></g></svg>
             </span>
             <span class="ap2-tile-tx"><b>Bannerlar</b><i>Bosh sahifa slayderi</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
