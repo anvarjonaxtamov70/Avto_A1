@@ -12044,145 +12044,222 @@ window.animateValue = (id, end) => {
 window.openAdminStats = () => {
     document.getElementById('adminModal').style.display = 'none';
     let sM = document.getElementById('adminStatsModal');
-    sM.style.display = 'flex'; 
-    activeModal = 'adminStatsModal'; 
+    sM.style.display = 'flex';
+    activeModal = 'adminStatsModal';
     window.history.pushState({ modal: 'adminStatsModal' }, "");
-    
+
     let c = document.getElementById('admin-stats-content');
-    
-    // ⏳ 1. Yuklanish animatsiyasi chiziladi
     c.innerHTML = '<p style="text-align:center; margin-top:30px;"><span class="hourglass" style="transform:scale(0.5); display:inline-block;"></span><br><span style="color:var(--luxury-gold); font-size:12px; margin-top:10px; display:block;">Hisob-kitob qilinmoqda...</span></p>';
-    
-    // 🧠 2. Firebase'dan barcha ma'lumotlarni o'qib (qisqa muddatli kesh bilan), hisoblash boshlanadi
+
     window._getUsersSnap().then((s) => {
-        let totalRevenue = 0, todayRevenue = 0, totalCustomers = 0; 
-        let productSales = {};
-        let deliveredOrders = 0, returningCustomers = 0; // #28: sotuvlar soni va qaytgan mijozlar
-        let regionStats = {};                            // #28: hududlar bo'yicha taqsimot
-        let todayDate = new Date().toLocaleDateString('uz-UZ');
-        let dailyData = {}; let weeklyData = {}; let monthlyData = {};
-        
-        for (let i = 29; i >= 0; i--) { 
-            let d = new Date(); d.setDate(d.getDate() - i); 
-            dailyData[d.toLocaleDateString('uz-UZ')] = 0; 
-        }
-        let monthNames = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek'];
-        monthNames.forEach(m => monthlyData[m] = 0);
-
-        if (s.exists()) {
-            let us = s.val(); 
-            totalCustomers = Object.keys(us).length;
-            
-            for (let uid in us) {
-                if (!us[uid].orders) continue;
-                let _region = (us[uid].profile && us[uid].profile.address) ? us[uid].profile.address : "Noma'lum";
-                let _userDelivered = 0;
-                let ords = Array.isArray(us[uid].orders) ? us[uid].orders : Object.values(us[uid].orders);
-                ords.forEach(o => {
-                    if (!o || !o.total) return; 
-                    let amount = o.total || 0;
-                    
-                    if (o.status === 'yetkazildi') {
-                        totalRevenue += amount; deliveredOrders++; _userDelivered++;
-                        if (o.date === todayDate) todayRevenue += amount;
-                        if (o.date && dailyData.hasOwnProperty(o.date)) dailyData[o.date] += amount;
-                        if (o.date) { 
-                            let parts = o.date.split('.'); 
-                            if (parts.length >= 2) { 
-                                let mIdx = parseInt(parts[1]) - 1; 
-                                if (mIdx >= 0 && mIdx < 12) monthlyData[monthNames[mIdx]] += amount; 
-                            } 
-                        }
-                    }
-                    
-                    if (o.items && o.status !== 'bekor_qilingan') { 
-                        for (let pid in o.items) { 
-                            let baseId = pid.split('||')[0]; 
-                            productSales[baseId] = (productSales[baseId] || 0) + (parseInt(o.items[pid]) || 0); 
-                        } 
-                    }
-                });
-                if (_userDelivered > 1) returningCustomers++;                                  // #28
-                if (_userDelivered > 0) regionStats[_region] = (regionStats[_region] || 0) + _userDelivered; // #28
-            }
-        }
-        
-        let topProducts = Object.keys(productSales).map(id => ({ id, count: productSales[id] })).sort((a, b) => b.count - a.count).slice(0, 5);
-        let topHtml = topProducts.map((tp, i) => {
-            let p = productsDB.find(x => x.id == tp.id); 
-            let pName = p ? p.name : "O'chirilgan tovar"; 
-            let medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
-            return `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:rgba(255,255,255,0.04); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);"><span style="font-size:13px;">${medals[i]} ${pName}</span><span style="color:var(--luxury-gold); font-weight:800; font-size:13px;">${tp.count} ta</span></div>`;
-        }).join('');
-        
-        if (!topHtml) topHtml = "<p style='color:gray;font-size:13px;text-align:center;'>Hali sotilmagan.</p>";
-
-        // #28: o'rtacha chek + hududlar bo'yicha taqsimot (Top 5)
-        let avgCheck = deliveredOrders ? Math.round(totalRevenue / deliveredOrders) : 0;
-        let _esc = (typeof escHtml === 'function') ? escHtml : (function (x) { return x; });
-        let topRegions = Object.keys(regionStats).map(r => ({ r: r, c: regionStats[r] })).sort((a, b) => b.c - a.c).slice(0, 5);
-        let regionHtml = topRegions.map(x => `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:rgba(255,255,255,0.04); padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.05);"><span style="font-size:12px;">📍 ${_esc(x.r)}</span><span style="color:var(--luxury-gold); font-weight:800; font-size:12px;">${x.c} ta</span></div>`).join('');
-        if (!regionHtml) regionHtml = "<p style='color:gray;font-size:12px;text-align:center;'>Ma'lumot yo'q.</p>";
-
-        // 🎨 3. Hamma narsa tayyor bo'lgach, ekranga chiziladi
-        c.innerHTML = `
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:15px;">
-                <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
-                    <div style="font-size:22px; margin-bottom:5px;">📈</div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi savdo</div>
-                    <div id="admin-today-rev" style="font-size:14px; font-weight:800; color:#34c759; margin-top:5px;">0 so'm</div>
-                </div>
-                <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
-                    <div style="font-size:22px; margin-bottom:5px;">👥</div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami Mijozlar</div>
-                    <div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${totalCustomers} kishi</div>
-                </div>
-            </div>
-            <div class="luxury-card" style="padding:20px; display:block; margin-bottom:20px; text-align:center; border:1px solid rgba(212,175,55,0.3);">
-                <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy savdo (tushum)</div>
-                <div id="admin-total-rev" style="font-size:26px; font-weight:800; color:var(--luxury-gold);">0 so'm</div>
-                <div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilganlar)</div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-                <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
-                    <div style="font-size:22px; margin-bottom:5px;">🧾</div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">O'rtacha chek</div>
-                    <div style="font-size:14px; font-weight:800; color:#fff; margin-top:5px;">${avgCheck.toLocaleString()} so'm</div>
-                </div>
-                <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
-                    <div style="font-size:22px; margin-bottom:5px;">📦</div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami sotuvlar</div>
-                    <div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${deliveredOrders} ta</div>
-                </div>
-            </div>
-            <div class="luxury-card" style="padding:14px 16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <span style="font-size:12px; color:var(--text-muted);">🔁 Qaytgan mijozlar (2+ xarid)</span>
-                <span style="font-size:16px; font-weight:800; color:#34c759;">${returningCustomers} kishi</span>
-            </div>
-            <h3 style="font-size:15px; margin-bottom:12px; color:white;"><svg class="uic" aria-hidden="true"><use href="#i-map"></use></svg>Hududlar bo'yicha (Top 5)</h3>
-            ${regionHtml}
-            <div style="height:18px;"></div>
-            <h3 style="font-size:15px; margin-bottom:12px; color:white;"><svg class="uic" aria-hidden="true"><use href="#i-award"></use></svg>Xit Savdolar (Top 5)</h3>
-            ${topHtml}
-        `;
-        
-        // 🔄 Narxlar noldan tepaga qarab silliq aylanish animatsiyasi
-        setTimeout(() => {
-            if(window.animateValue) {
-                window.animateValue('admin-today-rev', todayRevenue);
-                window.animateValue('admin-total-rev', totalRevenue);
-            }
-        }, 100);
-
-        // 📊 Chart (Grafik) ni yoqish
-        let chartSection = document.getElementById('admin-chart-section');
-        if (chartSection) {
-            chartSection.style.display = 'block'; 
-            window._chartData = { daily: dailyData, monthly: monthlyData };
-            setTimeout(() => loadChart('daily', document.querySelector('#admin-chart-section button')), 300);
-        }
+        window._statsUsers = s.exists() ? s.val() : {};
+        window._renderStats();
     });
 };
+
+// 📅 DAVR FILTRI — holati localStorage'da saqlanadi (mode: all | days | reset).
+window._statsFilter = (function () {
+    try { var r = JSON.parse(localStorage.getItem('avto_stats_filter') || 'null'); if (r && r.mode) return r; } catch (e) {}
+    return { mode: 'all', days: 7, resetAt: 0 };
+})();
+function _saveStatsFilter() { try { localStorage.setItem('avto_stats_filter', JSON.stringify(window._statsFilter)); } catch (e) {} }
+
+// Tanlangan davr uchun quyi chegara (ms). null => hamma vaqt.
+function _statsCutoff() {
+    var f = window._statsFilter || { mode: 'all' };
+    var d;
+    if (f.mode === 'reset' && f.resetAt) { d = new Date(f.resetAt); d.setHours(0, 0, 0, 0); return d.getTime(); }
+    if (f.mode === 'days') { d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (Math.max(1, f.days) - 1)); return d.getTime(); }
+    return null;
+}
+// Buyurtma sanasi ("kk.oo.yyyy") -> yarim tun ms.
+function _orderDateMs(o) {
+    if (!o || !o.date) return NaN;
+    // Ajratkich turli bo'lishi mumkin: "kk.oo.yyyy" (brauzer), "kk/oo/yyyy", "yyyy-oo-kk"
+    var p = String(o.date).split(/[.\/\-\s]+/).filter(Boolean);
+    if (p.length < 3) return NaN;
+    var day, mon, yr;
+    if (p[0].length === 4) { yr = parseInt(p[0], 10); mon = parseInt(p[1], 10); day = parseInt(p[2], 10); }
+    else { day = parseInt(p[0], 10); mon = parseInt(p[1], 10); yr = parseInt(p[2], 10); }
+    if (!yr || !mon || !day) return NaN;
+    var dt = new Date(yr, mon - 1, day);
+    dt.setHours(0, 0, 0, 0);
+    return dt.getTime();
+}
+function _statsPeriodLabel() {
+    var f = window._statsFilter || { mode: 'all' };
+    if (f.mode === 'reset') return 'Yangidan (bugundan beri)';
+    if (f.mode === 'days') return f.days === 1 ? 'Bugun' : ("So'nggi " + f.days + ' kun');
+    return 'Barcha vaqt';
+}
+window._setStatsPeriod = function (mode, days) {
+    window._statsFilter = window._statsFilter || {};
+    window._statsFilter.mode = mode;
+    if (days) window._statsFilter.days = days;
+    _saveStatsFilter();
+    if (typeof window._hap === 'function') window._hap('selection');
+    window._renderStats();
+};
+window._customStatsDays = function (v) {
+    var n = parseInt(v, 10);
+    if (!n || n < 1) return;
+    window._statsFilter = window._statsFilter || {};
+    window._statsFilter.mode = 'days';
+    window._statsFilter.days = n;
+    _saveStatsFilter();
+    window._renderStats();
+};
+window._resetStatsCounter = function () {
+    var doIt = function () {
+        window._statsFilter = { mode: 'reset', days: (window._statsFilter && window._statsFilter.days) || 7, resetAt: Date.now() };
+        _saveStatsFilter();
+        window._renderStats();
+        if (typeof showToast === 'function') showToast('✅ Hisob bugundan yangidan boshlandi', 'success');
+        if (typeof window._hap === 'function') window._hap('success');
+    };
+    try {
+        if (window.tg && tg.showConfirm) tg.showConfirm("Statistikani 0 dan boshlaymizmi? Bugundan oldingi savdolar hisobga olinmaydi (ma'lumot o'chmaydi).", function (ok) { if (ok) doIt(); });
+        else if (confirm('Statistikani 0 dan boshlaymizmi?')) doIt();
+    } catch (e) { doIt(); }
+};
+
+window._renderStats = () => {
+    let c = document.getElementById('admin-stats-content');
+    if (!c) return;
+    let us = window._statsUsers || {};
+    let cutoff = _statsCutoff();
+
+    let totalRevenue = 0, todayRevenue = 0, totalCustomers = 0;
+    let productSales = {};
+    let deliveredOrders = 0, returningCustomers = 0;
+    let regionStats = {};
+    let todayDate = new Date().toLocaleDateString('uz-UZ');
+    let dailyData = {}; let monthlyData = {};
+    for (let i = 29; i >= 0; i--) { let d = new Date(); d.setDate(d.getDate() - i); dailyData[d.toLocaleDateString('uz-UZ')] = 0; }
+    let monthNames = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
+    monthNames.forEach(m => monthlyData[m] = 0);
+
+    totalCustomers = Object.keys(us).length;
+    for (let uid in us) {
+        if (!us[uid].orders) continue;
+        let _region = (us[uid].profile && us[uid].profile.address) ? us[uid].profile.address : "Noma'lum";
+        let _userDelivered = 0;
+        let ords = Array.isArray(us[uid].orders) ? us[uid].orders : Object.values(us[uid].orders);
+        ords.forEach(o => {
+            if (!o || !o.total) return;
+            let amount = o.total || 0;
+            let inRange = (cutoff === null);
+            if (!inRange) { let oms = _orderDateMs(o); inRange = !isNaN(oms) && oms >= cutoff; }
+
+            if (o.status === 'yetkazildi') {
+                // Grafik uchun — HAR DOIM to'liq (davr filtriga bog'liq emas)
+                if (o.date && dailyData.hasOwnProperty(o.date)) dailyData[o.date] += amount;
+                if (o.date) { let parts = o.date.split('.'); if (parts.length >= 2) { let mIdx = parseInt(parts[1]) - 1; if (mIdx >= 0 && mIdx < 12) monthlyData[monthNames[mIdx]] += amount; } }
+                if (o.date === todayDate) todayRevenue += amount;
+                // Davr bo'yicha yig'indi
+                if (inRange) { totalRevenue += amount; deliveredOrders++; _userDelivered++; }
+            }
+            if (o.items && o.status !== 'bekor_qilingan' && inRange) {
+                for (let pid in o.items) { let baseId = pid.split('||')[0]; productSales[baseId] = (productSales[baseId] || 0) + (parseInt(o.items[pid]) || 0); }
+            }
+        });
+        if (_userDelivered > 1) returningCustomers++;
+        if (_userDelivered > 0) regionStats[_region] = (regionStats[_region] || 0) + _userDelivered;
+    }
+
+    let topProducts = Object.keys(productSales).map(id => ({ id, count: productSales[id] })).sort((a, b) => b.count - a.count).slice(0, 5);
+    let topHtml = topProducts.map((tp, i) => {
+        let p = productsDB.find(x => x.id == tp.id);
+        let pName = p ? p.name : "O'chirilgan tovar";
+        let medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+        return `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:rgba(255,255,255,0.04); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);"><span style="font-size:13px;">${medals[i]} ${pName}</span><span style="color:var(--luxury-gold); font-weight:800; font-size:13px;">${tp.count} ta</span></div>`;
+    }).join('');
+    if (!topHtml) topHtml = "<p style='color:gray;font-size:13px;text-align:center;'>Bu davrda sotuv yo'q.</p>";
+
+    let avgCheck = deliveredOrders ? Math.round(totalRevenue / deliveredOrders) : 0;
+    let _esc = (typeof escHtml === 'function') ? escHtml : (function (x) { return x; });
+    let topRegions = Object.keys(regionStats).map(r => ({ r: r, c: regionStats[r] })).sort((a, b) => b.c - a.c).slice(0, 5);
+    let regionHtml = topRegions.map(x => `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:rgba(255,255,255,0.04); padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.05);"><span style="font-size:12px;">📍 ${_esc(x.r)}</span><span style="color:var(--luxury-gold); font-weight:800; font-size:12px;">${x.c} ta</span></div>`).join('');
+    if (!regionHtml) regionHtml = "<p style='color:gray;font-size:12px;text-align:center;'>Ma'lumot yo'q.</p>";
+
+    // 📅 DAVR PANELI (chiplar + 0 dan boshlash + ixtiyoriy kun)
+    let f = window._statsFilter || { mode: 'all' };
+    let isDays = f.mode === 'days';
+    let chip = (label, active, onclick) => `<span role="button" tabindex="0" onclick="${onclick}" style="padding:8px 13px; border-radius:11px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; transition:.15s; border:1px solid ${active ? 'var(--luxury-gold)' : 'var(--glass-border)'}; background:${active ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.04)'}; color:${active ? 'var(--luxury-gold)' : 'var(--text-muted)'};">${label}</span>`;
+    let periodBar =
+        `<div style="display:flex; gap:8px; overflow-x:auto; padding:2px 2px 10px; -webkit-overflow-scrolling:touch; scrollbar-width:none;">` +
+            chip('Bugun', isDays && f.days === 1, "window._setStatsPeriod('days',1)") +
+            chip('5 kun', isDays && f.days === 5, "window._setStatsPeriod('days',5)") +
+            chip('7 kun', isDays && f.days === 7, "window._setStatsPeriod('days',7)") +
+            chip('30 kun', isDays && f.days === 30, "window._setStatsPeriod('days',30)") +
+            chip('Hammasi', f.mode === 'all', "window._setStatsPeriod('all')") +
+            chip(f.mode === 'reset' ? '🔄 Yangidan ✓' : '🔄 0 dan boshlash', f.mode === 'reset', "window._resetStatsCounter()") +
+        `</div>` +
+        `<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">` +
+            `<input type="number" inputmode="numeric" min="1" placeholder="Necha kun?" value="${isDays && ![1,5,7,30].includes(f.days) ? f.days : ''}" onchange="window._customStatsDays(this.value)" class="admin-input" style="flex:1; padding:11px 13px; margin:0;">` +
+            `<span style="font-size:11px; color:var(--text-muted); white-space:nowrap;">ixtiyoriy davr</span>` +
+        `</div>` +
+        (f.mode === 'reset' && f.resetAt
+            ? `<div style="font-size:11.5px; color:#34c759; margin-bottom:12px; padding:9px 12px; background:rgba(52,199,89,0.08); border:1px solid rgba(52,199,89,0.25); border-radius:11px; line-height:1.5;">🔄 <b>${new Date(f.resetAt).toLocaleDateString('uz-UZ')}</b> dan beri yangidan hisoblanmoqda. <span onclick="window._setStatsPeriod('all')" style="color:var(--luxury-gold); cursor:pointer; text-decoration:underline;">Bekor</span></div>`
+            : '') +
+        `<div style="font-size:11px; color:var(--text-muted); margin-bottom:14px; padding:0 2px;">Ko'rsatilmoqda: <b style="color:#fff;">${_statsPeriodLabel()}</b></div>`;
+
+    c.innerHTML = periodBar + `
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:15px;">
+            <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                <div style="font-size:22px; margin-bottom:5px;">📈</div>
+                <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi savdo</div>
+                <div id="admin-today-rev" style="font-size:14px; font-weight:800; color:#34c759; margin-top:5px;">0 so'm</div>
+            </div>
+            <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                <div style="font-size:22px; margin-bottom:5px;">👥</div>
+                <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami Mijozlar</div>
+                <div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${totalCustomers} kishi</div>
+            </div>
+        </div>
+        <div class="luxury-card" style="padding:20px; display:block; margin-bottom:20px; text-align:center; border:1px solid rgba(212,175,55,0.3);">
+            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Savdo (tushum) · ${_statsPeriodLabel()}</div>
+            <div id="admin-total-rev" style="font-size:26px; font-weight:800; color:var(--luxury-gold);">0 so'm</div>
+            <div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilganlar)</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+            <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                <div style="font-size:22px; margin-bottom:5px;">🧾</div>
+                <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">O'rtacha chek</div>
+                <div style="font-size:14px; font-weight:800; color:#fff; margin-top:5px;">${avgCheck.toLocaleString()} so'm</div>
+            </div>
+            <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                <div style="font-size:22px; margin-bottom:5px;">📦</div>
+                <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami sotuvlar</div>
+                <div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${deliveredOrders} ta</div>
+            </div>
+        </div>
+        <div class="luxury-card" style="padding:14px 16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <span style="font-size:12px; color:var(--text-muted);">🔁 Qaytgan mijozlar (2+ xarid)</span>
+            <span style="font-size:16px; font-weight:800; color:#34c759;">${returningCustomers} kishi</span>
+        </div>
+        <h3 style="font-size:15px; margin-bottom:12px; color:white;"><svg class="uic" aria-hidden="true"><use href="#i-map"></use></svg>Hududlar bo'yicha (Top 5)</h3>
+        ${regionHtml}
+        <div style="height:18px;"></div>
+        <h3 style="font-size:15px; margin-bottom:12px; color:white;"><svg class="uic" aria-hidden="true"><use href="#i-award"></use></svg>Xit Savdolar (Top 5)</h3>
+        ${topHtml}
+    `;
+
+    setTimeout(() => {
+        if (window.animateValue) {
+            window.animateValue('admin-today-rev', todayRevenue);
+            window.animateValue('admin-total-rev', totalRevenue);
+        }
+    }, 100);
+
+    let chartSection = document.getElementById('admin-chart-section');
+    if (chartSection) {
+        chartSection.style.display = 'block';
+        window._chartData = { daily: dailyData, monthly: monthlyData };
+        setTimeout(() => loadChart('daily', document.querySelector('#admin-chart-section button')), 300);
+    }
+};
+
 window.loadChart = (type, btnEl) => {
     document.querySelectorAll('#admin-chart-section button').forEach(b => { b.style.borderColor = 'var(--glass-border)'; b.style.background = 'rgba(255,255,255,0.05)'; b.style.color = 'var(--text-muted)'; });
     if (btnEl) { btnEl.style.borderColor = 'var(--luxury-gold)'; btnEl.style.background = 'rgba(212,175,55,0.2)'; btnEl.style.color = 'var(--luxury-gold)'; }
