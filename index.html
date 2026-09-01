@@ -10462,7 +10462,14 @@ async function changeOrderStatus(uid, orderId, newStatus) {
             return;
         }
         if (!_resp.ok || !_data || !_data.ok) {
-            showToast("Holat saqlanmadi — qayta urinib ko'ring", "warning");
+            // 🩺 Serverning ANIQ sababini ko'rsatamiz (ilgari umumiy xabar edi —
+            //    admin sababidan bexabar qolardi). Masalan: "faqat admin" (Worker
+            //    admin ro'yxati), "buyurtma topilmadi" (eski buyurtma markaziy
+            //    orders/ da yo'q), yoki auth xatosi.
+            var _emsg = (_data && _data.error) ? String(_data.error)
+                        : ("server javobi " + (_resp ? _resp.status : '?'));
+            showToast("Holat saqlanmadi: " + _emsg, "warning");
+            try { if (window._dwarn) window._dwarn('[order-status] xato:', _resp && _resp.status, _data); } catch (e) {}
             return;
         }
 
