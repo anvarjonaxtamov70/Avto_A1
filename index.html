@@ -25480,6 +25480,11 @@ html[data-theme="light"] select.pf-car-select option { color: #111; }
             if (r) { try { r.set(val); } catch (e) {} }
         }
         if (typeof window.renderMyCar === 'function') window.renderMyCar();
+        // 🔧 Bosh sahifadagi «Mashinamga mos» yorlig'ini DARHOL yangilaymiz.
+        //    Ilgari faqat window.saveMyCar wrap'i sync qilardi, lekin «Mening
+        //    mashinam» oynasi ichki saveCar ni chaqiradi — shuning uchun yangi
+        //    tanlangan mashina yorliqda ko'rinmasdi (eski qolib ketardi).
+        try { if (window._syncMyCarShortcut) window._syncMyCarShortcut(true); } catch (e) {}
         return val;
     }
     window.saveMyCar = saveCar;
@@ -26873,15 +26878,22 @@ html body .flying-img.mo-fly {
     align-items: center; gap: 12px; transition: .2s ease;
     -webkit-tap-highlight-color: transparent;
   }
-  #mycar-shortcut.show { display: flex; }
+  #mycar-shortcut.show { display: flex; animation: mcsIn .42s cubic-bezier(.22,.61,.36,1), mcsGlow 2.8s ease-in-out .5s infinite; }
   #mycar-shortcut:active { transform: scale(0.985); }
+  @keyframes mcsIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes mcsGlow { 0%, 100% { box-shadow: 0 0 0 rgba(212,175,55,0); border-color: rgba(212,175,55,0.3); } 50% { box-shadow: 0 0 18px rgba(212,175,55,0.22); border-color: rgba(212,175,55,0.55); } }
+  @keyframes mcsArrow { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+  #mycar-shortcut .mcs-go { animation: mcsArrow 1.6s ease-in-out infinite; }
+  html.lite #mycar-shortcut.show, .pf-weak #mycar-shortcut.show { animation: none !important; }
+  html.lite #mycar-shortcut .mcs-go { animation: none !important; }
+  @media (prefers-reduced-motion: reduce) { #mycar-shortcut.show, #mycar-shortcut .mcs-go { animation: none !important; } }
   #mycar-shortcut .mcs-ic {
     width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%;
     background: rgba(212,175,55,0.16); display: flex;
     align-items: center; justify-content: center;
   }
   #mycar-shortcut .mcs-ic svg { width: 21px; height: 21px; fill: var(--luxury-gold); }
-  #mycar-shortcut .mcs-tx { flex: 1; min-width: 0; }
+  #mycar-shortcut .mcs-tx { flex: 1; min-width: 0; text-align: center; }
   #mycar-shortcut .mcs-tx b {
     display: block; font-size: 14px; font-weight: 800; color: var(--text-main);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
