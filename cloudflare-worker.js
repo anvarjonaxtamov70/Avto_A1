@@ -2038,6 +2038,26 @@ async function publishStatusProjections(ctx, token, uid, orderId, orderKey, orde
   return processed;
 }
 
+// 🔧 ESKI BUYURTMANI TOPISH — markaziy orders/ da bo'lmasa (yangi tizimdan
+//    oldingi buyurtma), mijozning users/{uid}/orders proyeksiyasidan tiklash uchun.
+async function findUserOrderProjection(ctx, token, uid, orderId) {
+  try {
+    const direct = await rtdbGet(ctx.dbUrl, "users/" + uid + "/orders/" + orderId, token);
+    if (direct && typeof direct === "object" && (String(direct.id) === orderId || direct.id == null)) {
+      return direct;
+    }
+    const all = await rtdbGet(ctx.dbUrl, "users/" + uid + "/orders", token);
+    if (all && typeof all === "object") {
+      const keys = Object.keys(all);
+      for (let i = 0; i < keys.length; i++) {
+        const v = all[keys[i]];
+        if (v && typeof v === "object" && String(v.id) === orderId) return v;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
 async function handleOrderStatus(request, env) {
   let claimed = false;
   try {
@@ -2054,7 +2074,21 @@ async function handleOrderStatus(request, env) {
     const token = await getAccessToken(env);
     const orderKey = uid + "_" + orderId;
     const orderPath = "orders/" + orderKey;
-    const order = await rtdbGet(ctx.dbUrl, orderPath, token);
+    let order = await rtdbGet(ctx.dbUrl, orderPath, token);
+    if (!order) {
+      // ⭐ ESKI BUYURTMA: markaziy orders/ da yo'q, lekin users/{uid}/orders da bor.
+      //    Uni bir marta markaziy registrga ko'chiramiz (backfill), so'ng odatdagidek
+      //    holat mashinasi ishlaydi. Shunda eski buyurtmalarni ham qabul qilish mumkin.
+      const projected = await findUserOrderProjection(ctx, token, uid, orderId);
+      if (projected) {
+        order = projected;
+        if (order.uid == null) order.uid = uid;
+        if (order.id == null) order.id = orderId;
+        if (String(order.uid) === uid && String(order.id) === orderId) {
+          try { await rtdbPut(ctx.dbUrl, orderPath, order, token); } catch (_) {}
+        }
+      }
+    }
     if (!order || String(order.uid) !== uid || String(order.id) !== orderId) throw httpError(404, "buyurtma topilmadi");
 
     const owner = randomOwnerToken();
