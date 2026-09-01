@@ -25313,16 +25313,40 @@ html[data-theme="light"] select.pf-car-select option { color: #111; }
     }
 
     /** `<option>` lar (markalar bo'yicha guruhlangan). */
+    // 🚗 Mashina ro'yxati — KATALOGdan olinadi (admin qo'shgan YANGI markalar ham
+    //    shu yerda avtomatik chiqadi). CATALOG_TREE bo'sh bo'lsa — eski
+    //    MY_CAR_BRANDS zaxira sifatida ishlatiladi. Qiymat = model SLUG'i
+    //    (katalog kategoriyasi bilan bir xil — moslik/filtr to'g'ri ishlaydi).
+    function catalogCarList() {
+        var tree = (window.CATALOG_TREE && window.CATALOG_TREE.length) ? window.CATALOG_TREE : null;
+        var arr = [];
+        if (tree) {
+            tree.forEach(function (b) {
+                (b.models || []).forEach(function (m) {
+                    if (m && m.slug) arr.push({ brand: b.title || b.brand, slug: m.slug, name: m.name || m.slug, img: m.img || '' });
+                });
+            });
+        }
+        if (arr.length) return arr;
+        Object.keys(window.MY_CAR_BRANDS).forEach(function (key) {
+            var br = window.MY_CAR_BRANDS[key];
+            br.models.forEach(function (m) { arr.push({ brand: br.label, slug: key + '-' + m, name: m, img: '' }); });
+        });
+        return arr;
+    }
+    window._catalogCarList = catalogCarList;
+
     window.myCarOptionsHTML = function (selected) {
         var sel = String(selected || '');
         var h = '<option value=""' + (sel ? '' : ' selected') + '>-- Tanlang --</option>';
-        Object.keys(window.MY_CAR_BRANDS).forEach(function (key) {
-            var br = window.MY_CAR_BRANDS[key];
-            h += '<optgroup label="' + esc(br.label) + '">';
-            br.models.forEach(function (m) {
-                var v = key + '-' + m;
-                h += '<option value="' + esc(v) + '"' + (v === sel ? ' selected' : '') + '>' +
-                     esc(br.label + ' ' + m) + '</option>';
+        var list = catalogCarList();
+        var groups = {}, order = [];
+        list.forEach(function (it) { if (!groups[it.brand]) { groups[it.brand] = []; order.push(it.brand); } groups[it.brand].push(it); });
+        order.forEach(function (bt) {
+            h += '<optgroup label="' + esc(bt) + '">';
+            groups[bt].forEach(function (it) {
+                h += '<option value="' + esc(it.slug) + '"' + (it.slug === sel ? ' selected' : '') + '>' +
+                     esc(bt + ' ' + it.name) + '</option>';
             });
             h += '</optgroup>';
         });
@@ -25338,6 +25362,17 @@ html[data-theme="light"] select.pf-car-select option { color: #111; }
     window.myCarLabel = function (val) {
         var v = String(val || '').trim();
         if (!v) return '';
+        // 1) Katalogdan slug bo'yicha (yangi format — masalan "bmw-m5-f90")
+        var tree = window.CATALOG_TREE;
+        if (tree && tree.length) {
+            for (var t = 0; t < tree.length; t++) {
+                var ms = tree[t].models || [];
+                for (var j = 0; j < ms.length; j++) {
+                    if (ms[j].slug === v) return ((tree[t].title || tree[t].brand) + ' ' + (ms[j].name || ms[j].slug)).trim();
+                }
+            }
+        }
+        // 2) Eski format: "chevy-Cobalt"
         var i = v.indexOf('-');
         if (i < 0) return v;
         var key = v.slice(0, i);
@@ -25425,21 +25460,22 @@ html[data-theme="light"] select.pf-car-select option { color: #111; }
                 : '';
         }
         if (!listBox) return;
+        var list = catalogCarList();
         var rows = [];
-        Object.keys(window.MY_CAR_BRANDS).forEach(function (key) {
-            var br = window.MY_CAR_BRANDS[key];
-            br.models.forEach(function (mdl) {
-                var label = br.label + ' ' + mdl;
-                if (q && label.toLowerCase().indexOf(q) === -1) return;
-                var val = key + '-' + mdl;
-                var jsv = esc(val).replace(/'/g, "\\'");
-                var active = (val === cur) ? ' mycar-row-active' : '';
-                rows.push('<div class="mycar-row' + active + '" role="button" tabindex="0" onclick="saveMyCarChoice(\'' + jsv + '\')">' +
-                    '<span class="mycar-model">' + esc(mdl) + '</span>' +
-                    '<span class="mycar-brand">' + esc(br.label) + '</span>' +
-                    (val === cur ? '<span class="mycar-check">\u2713</span>' : '') +
-                    '</div>');
-            });
+        list.forEach(function (it) {
+            var label = it.brand + ' ' + it.name;
+            if (q && label.toLowerCase().indexOf(q) === -1) return;
+            var jsv = esc(it.slug).replace(/'/g, "\\'");
+            var active = (it.slug === cur) ? ' mycar-row-active' : '';
+            var thumb = it.img
+                ? '<img src="' + esc(it.img) + '" alt="" style="width:40px;height:40px;border-radius:9px;object-fit:cover;background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);flex-shrink:0;" onerror="this.style.display=\'none\'">'
+                : '';
+            rows.push('<div class="mycar-row' + active + '" role="button" tabindex="0" onclick="saveMyCarChoice(\'' + jsv + '\')">' +
+                thumb +
+                '<span class="mycar-model">' + esc(it.name) + '</span>' +
+                '<span class="mycar-brand">' + esc(it.brand) + '</span>' +
+                (it.slug === cur ? '<span class="mycar-check">\u2713</span>' : '') +
+                '</div>');
         });
         listBox.innerHTML = rows.length ? rows.join('')
             : '<p style="text-align:center;color:var(--text-muted);padding:20px;">Topilmadi \u2014 boshqacha yozib ko\'ring</p>';
