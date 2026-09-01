@@ -7216,6 +7216,46 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 </div>
 
 
+<style>
+  /* 📋 BUYURTMANI YIG'ISH (PICKING) EKRANI */
+  #adminOrderPickModal .pick-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
+  #adminOrderPickModal .pick-code { font-size:20px; font-weight:900; color:#fff; letter-spacing:.5px; }
+  #adminOrderPickModal .pick-sub { font-size:12.5px; color:var(--text-muted); margin-bottom:14px; }
+  .pick-progress-wrap { background:rgba(255,255,255,0.06); border-radius:12px; height:10px; overflow:hidden; margin-bottom:8px; }
+  .pick-progress-bar { height:100%; width:0; border-radius:12px; background:linear-gradient(90deg,#F0D060,#C9A84C); transition:width .38s cubic-bezier(.22,.61,.36,1); box-shadow:0 0 12px rgba(212,175,55,0.45); }
+  #pick-count { font-size:12px; font-weight:800; color:var(--luxury-gold); margin-bottom:14px; display:block; text-align:center; }
+  .pick-row { display:flex; align-items:center; gap:12px; padding:12px; margin-bottom:10px; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); border-radius:16px; cursor:pointer; transition:transform .15s ease, background .25s ease, border-color .25s ease, opacity .25s ease; }
+  .pick-row:active { transform:scale(.985); }
+  .pick-row .od-item-img { width:56px; height:56px; min-width:56px; }
+  .pick-row .pick-check { width:30px; height:30px; min-width:30px; border-radius:50%; border:2px solid var(--glass-border); display:flex; align-items:center; justify-content:center; color:#000; transition:.25s ease; }
+  .pick-row.picked { background:rgba(52,199,89,0.10); border-color:rgba(52,199,89,0.45); }
+  .pick-row.picked .pick-check { background:#30d158; border-color:#30d158; }
+  .pick-row.picked .od-item-name { text-decoration:line-through; opacity:.6; }
+  .pick-row.picked .od-item-img { opacity:.7; }
+  .pick-check svg { width:17px; height:17px; }
+  .pick-row.picked .pick-check svg { animation:pickPop .34s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pickPop { 0%{transform:scale(0);} 60%{transform:scale(1.25);} 100%{transform:scale(1);} }
+  #pick-all-btn { width:100%; padding:15px; border-radius:16px; font-size:15px; font-weight:800; cursor:pointer; margin:6px 0 16px; border:1px solid rgba(212,175,55,0.5); background:rgba(212,175,55,0.14); color:var(--luxury-gold); transition:transform .15s ease, background .2s ease; }
+  #pick-all-btn:active { transform:scale(.97); background:rgba(212,175,55,0.22); }
+  .pick-open-btn { width:100%; padding:12px; margin-bottom:15px; border-radius:14px; font-size:13px; font-weight:800; cursor:pointer; border:1px dashed rgba(212,175,55,0.45); background:rgba(212,175,55,0.07); color:var(--luxury-gold); display:flex; align-items:center; justify-content:center; gap:6px; transition:transform .15s ease, background .2s ease; }
+  .pick-open-btn:active { transform:scale(.98); background:rgba(212,175,55,0.14); }
+  #pick-actions button { transition:transform .12s ease, box-shadow .2s ease, filter .2s ease; }
+  #pick-actions button:active { transform:scale(.95); }
+  @media (hover:hover){ #pick-actions button:hover { filter:brightness(1.1); } .pick-open-btn:hover { background:rgba(212,175,55,0.13); } }
+  html.lite .pick-row.picked .pick-check svg { animation:none !important; }
+  @media (prefers-reduced-motion: reduce){ .pick-row.picked .pick-check svg { animation:none !important; } .pick-progress-bar { transition:none; } }
+</style>
+<div class="modal-standard" id="adminOrderPickModal" style="z-index: 3600;">
+    <div class="modal-header"><h2 style="color: var(--luxury-gold);"><svg class="uic" aria-hidden="true"><use href="#i-box"></use></svg>Yig'ish</h2><button class="close-btn" aria-label="Yopish" style="font-size:24px;" onclick="closeModal()">←</button></div>
+    <div class="pick-head"><span class="pick-code" id="pick-title">#</span><span id="pick-status-slot"></span></div>
+    <div class="pick-sub" id="pick-sub"></div>
+    <div class="pick-progress-wrap"><div class="pick-progress-bar" id="pick-bar"></div></div>
+    <span id="pick-count"></span>
+    <button id="pick-all-btn" onclick="window._pickToggleAll()">✅ Hammasi yig'ildi</button>
+    <div id="pick-list"></div>
+    <div id="pick-actions" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:18px;"></div>
+</div>
+
 <div class="modal-standard" id="adminStatsModal">
     <div class="modal-header"><h2 style="color: #34c759;"><svg class="uic" aria-hidden="true"><use href="#i-chart"></use></svg>Statistika</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-stats-content" style="padding-bottom: 20px;">
@@ -10603,6 +10643,16 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 else document.getElementById(current).style.display = 'none';
     
                 // 1. Admin Chatdan -> Buyurtmalarga qaytish
+                if (current === 'adminOrderPickModal') {
+                    // 📋 Yig'ish oynasidan orqaga -> buyurtmalar ro'yxatiga
+                    activeModal = 'adminOrdersModal';
+                    _reshowModal('adminOrdersModal');
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = [];
+                    updateBtns();
+                    return;
+                }
+
                 if (current === 'adminChatModal') {
                     // ⚡ Listenerni uzamiz (xotira oqishi bo'lmasligi uchun)
                     if (window._adminChatRef) { try { window._adminChatRef.off('value'); window._adminChatRef = null; } catch(e){} }
@@ -11957,6 +12007,8 @@ window.renderAdminOrdersUI = (ordersArr) => {
 
             ${itemsHtml}
 
+            <button class="pick-open-btn" onclick="openAdminOrderPick('${o.uI}', '${o.id}')">${window._pickBadge ? window._pickBadge(o) : "📋 Mahsulotlarni yig'ish"}</button>
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; background: rgba(212,175,55,0.05); padding: 12px 15px; border-radius: 14px; border: 1px solid rgba(212,175,55,0.2);">
                 <span style="font-size: 12px; color: var(--luxury-gold); text-transform: uppercase; font-weight: 800; opacity: 0.8;">Jami Summa</span>
                 <span style="font-size: 20px; font-weight: 900; color: var(--luxury-gold);">${(Number(o.total)||0).toLocaleString()} so'm</span>
@@ -11980,6 +12032,144 @@ window.renderAdminOrdersUI = (ordersArr) => {
     box.innerHTML = html;
 };
     
+// ==========================================================================
+// 📋 ADMIN: BUYURTMANI "YIG'ISH" (PICKING CHECKLIST)
+//   Har bir mahsulotni RASMI bilan ko'rib, galochka qo'yib yig'iladi
+//   ("bunisi olindi, endi bunisi"). Holat localStorage'da (avto_pick_<code>)
+//   — admin qurilmasida saqlanadi (baza server-owned, tegilmaydi).
+// ==========================================================================
+function _pickLines(o) {
+    var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
+    var lines = [];
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        o.itemDetails.forEach(function (it) {
+            var p = pdb.find(function (x) { return x.id == it.id; });
+            var img = p ? (p.img || p.image || '') : '';
+            var size = (it.size && it.size !== 'Universal') ? it.size : '';
+            lines.push({ key: String(it.id) + '||' + size, name: it.name || '', size: size, qty: it.qty || 1, img: img });
+        });
+    } else {
+        for (var fid in (o && o.items ? o.items : {})) {
+            var parts = String(fid).split('||');
+            var baseId = parts[0];
+            var co = parts[1] ? parts[1].replace(/_dot_/g, '.') : '';
+            var p2 = pdb.find(function (x) { return x.id == baseId; });
+            if (!p2) continue;
+            var size2 = (co && co !== 'Universal') ? co : '';
+            lines.push({ key: baseId + '||' + size2, name: p2.name, size: size2, qty: o.items[fid], img: p2.img || p2.image || '' });
+        }
+    }
+    return lines;
+}
+
+window._pickBadge = function (o) {
+    try {
+        var key = 'avto_pick_' + (o.code || o.id);
+        var st = JSON.parse(localStorage.getItem(key) || '{}');
+        var lines = _pickLines(o);
+        var total = lines.length;
+        var done = lines.filter(function (l) { return st[l.key]; }).length;
+        if (done > 0 && total > 0) {
+            return (done === total ? "\u2705 Yig'ildi " : "\uD83D\uDCCB Yig'ish ") + done + '/' + total;
+        }
+    } catch (e) {}
+    return "\uD83D\uDCCB Mahsulotlarni yig'ish";
+};
+
+window.openAdminOrderPick = function (uid, orderId) {
+    var o = (window.allFetchedOrders || []).find(function (x) { return String(x.uI) === String(uid) && String(x.id) === String(orderId); });
+    if (!o) { if (typeof showToast === 'function') showToast('Buyurtma topilmadi', 'warning'); return; }
+    window._pickOrder = o;
+    window._pickKey = 'avto_pick_' + (o.code || o.id);
+    try { window._pickState = JSON.parse(localStorage.getItem(window._pickKey) || '{}'); } catch (e) { window._pickState = {}; }
+
+    document.getElementById('adminOrdersModal').style.display = 'none';
+    var m = document.getElementById('adminOrderPickModal');
+    m.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    activeModal = 'adminOrderPickModal';
+    window.history.pushState({ modal: 'adminOrderPickModal' }, "");
+    try { tg.BackButton.show(); } catch (e) {}
+    updateBtns();
+    window._renderPick();
+};
+
+var _PICK_CHK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
+window._renderPick = function () {
+    var o = window._pickOrder;
+    if (!o) return;
+    var lines = _pickLines(o);
+    var st = window._pickState || {};
+    var total = lines.length;
+    var done = lines.filter(function (l) { return st[l.key]; }).length;
+    var pct = total ? Math.round(done / total * 100) : 0;
+
+    var tEl = document.getElementById('pick-title'); if (tEl) tEl.innerHTML = '#' + escHtml(o.code || o.id);
+    var sEl = document.getElementById('pick-sub'); if (sEl) sEl.innerHTML = escHtml(o.customerName || o.uN || 'Mijoz') + ' \u00B7 ' + total + ' ta mahsulot';
+    var ssEl = document.getElementById('pick-status-slot'); if (ssEl) ssEl.innerHTML = getStatusHTML(o.status || 'kutilmoqda');
+
+    var listEl = document.getElementById('pick-list');
+    if (listEl) {
+        listEl.innerHTML = lines.map(function (l, i) {
+            var checked = !!st[l.key];
+            var imgTag = l.img
+                ? '<img class="od-item-img" src="' + _thumb(l.img, 160) + '" data-full="' + (l.img || '').replace(/"/g, '&quot;') + '" loading="lazy" decoding="async" onerror="window._imgFallback(this)">'
+                : '<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text-muted);">\uD83D\uDCE6</div>';
+            return '<div class="pick-row' + (checked ? ' picked' : '') + '" role="button" tabindex="0" onclick="window._togglePick(' + i + ')">' +
+                imgTag +
+                '<div class="od-item-info"><div class="od-item-name">' + escHtml(l.name) + (l.size ? ' <span class="od-car-opt">[' + escHtml(l.size) + ']</span>' : '') + '</div>' +
+                '<div class="od-item-meta"><span class="od-item-qty">' + l.qty + ' dona</span></div></div>' +
+                '<span class="pick-check">' + (checked ? _PICK_CHK : '') + '</span>' +
+                '</div>';
+        }).join('') || '<p style="text-align:center;color:var(--text-muted);padding:20px;">Mahsulot yo\'q</p>';
+    }
+
+    var bar = document.getElementById('pick-bar'); if (bar) bar.style.width = pct + '%';
+    var cnt = document.getElementById('pick-count'); if (cnt) cnt.innerHTML = done + ' / ' + total + " yig'ildi";
+    var allBtn = document.getElementById('pick-all-btn');
+    if (allBtn) allBtn.innerHTML = (total > 0 && done === total) ? "\u21A9\uFE0F Belgilashni bekor qilish" : "\u2705 Hammasi yig'ildi";
+    var act = document.getElementById('pick-actions'); if (act) act.innerHTML = _pickActionBtns(o);
+};
+
+window._togglePick = function (idx) {
+    var o = window._pickOrder; if (!o) return;
+    var lines = _pickLines(o); var l = lines[idx]; if (!l) return;
+    var st = window._pickState || {};
+    st[l.key] = !st[l.key];
+    window._pickState = st;
+    try { localStorage.setItem(window._pickKey, JSON.stringify(st)); } catch (e) {}
+    try { if (window._hap) window._hap(st[l.key] ? 'success' : 'light'); } catch (e) {}
+    window._renderPick();
+};
+
+window._pickToggleAll = function () {
+    var o = window._pickOrder; if (!o) return;
+    var lines = _pickLines(o); var st = window._pickState || {};
+    var allDone = lines.length > 0 && lines.every(function (l) { return st[l.key]; });
+    lines.forEach(function (l) { st[l.key] = !allDone; });
+    window._pickState = st;
+    try { localStorage.setItem(window._pickKey, JSON.stringify(st)); } catch (e) {}
+    try { if (window._hap) window._hap(allDone ? 'light' : 'success'); } catch (e) {}
+    window._renderPick();
+};
+
+function _pickActionBtns(o) {
+    var uid = o.uI, id = o.id, a = '';
+    if (o.status === 'kutilmoqda' || !o.status) a = '<button style="background:rgba(0,122,255,0.15);color:#007aff;border:1px solid rgba(0,122,255,0.3);padding:14px;border-radius:14px;flex:1;font-weight:800;font-size:14px;cursor:pointer;" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'qabul\')">\u2705 Qabul qilish</button>';
+    else if (o.status === 'qabul') a = '<button style="background:rgba(255,149,0,0.15);color:#ff9500;border:1px solid rgba(255,149,0,0.3);padding:14px;border-radius:14px;flex:1;font-weight:800;font-size:14px;cursor:pointer;" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'yolda\')">\uD83D\uDE9A Yo\'lga chiqarish</button>';
+    else if (o.status === 'yolda') a = '<button style="background:rgba(52,199,89,0.15);color:#30d158;border:1px solid rgba(52,199,89,0.3);padding:14px;border-radius:14px;flex:1;font-weight:800;font-size:14px;cursor:pointer;" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'yetkazildi\')">\uD83C\uDFC1 Yetkazildi</button>';
+    var cancel = '';
+    if (o.status !== 'bekor_qilingan' && o.status !== 'yetkazildi') cancel = '<button style="background:rgba(255,69,58,0.05);color:#ff453a;border:1px dashed rgba(255,69,58,0.3);padding:14px;border-radius:14px;flex:0.6;font-weight:800;font-size:14px;cursor:pointer;" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'bekor_qilingan\')">Bekor</button>';
+    return a + cancel;
+}
+
+window._pickStatus = function (uid, id, status) {
+    // Pick oynasini yopamiz (orders ro'yxatiga qaytadi), keyin holatni o'zgartiramiz.
+    try { window.history.back(); } catch (e) {}
+    setTimeout(function () { try { changeOrderStatus(uid, id, status); } catch (e) {} }, 280);
+};
+
 // ===================================================
 // 1. TAKRORIY BUYURTMA (REPEAT ORDER)
 // ===================================================
