@@ -1,180 +1,114 @@
 # Avto_A1 botini Oracle Cloud'da BEPUL va 24/7 ishlatish
 
-Bu qo'llanma botni o'z kompyuteringizdan **Oracle Cloud "Always Free"** serveriga ko'chiradi.
-Shundan keyin bot **uzluksiz** (kompyuteringiz o'chsa ham) ishlaydi va **bepul** bo'ladi.
+Oracle Cloud "Always Free" serveri **uxlamaydi** va Render'dagi kabi **oylik kvota tugab to'xtamaydi**.
+O'rnatish bitta skript bilan bo'ladi (`bot/oracle_setup.sh`) — u har qadamni tekshiradi va
+xato bo'lsa nima qilishni aniq aytadi.
 
-> ⚠️ **ENG MUHIM QOIDA:** bot faqat **bitta joyda** ishlashi mumkin. Serverda ishga
-> tushirgandan keyin **kompyuteringizdagi (VS Code) nusxasini to'xtating** (terminalda
-> `Ctrl+C`), aks holda Telegram `409 Conflict` xatosini beradi.
-
----
-
-## 0-QADAM: Nima kerak
-
-- Oracle Cloud akkaunti (ro'yxatdan o'tishda karta so'raydi — pul yechilmaydi, faqat tasdiqlash uchun).
-- `.env` faylidagi qiymatlar (BOT_TOKEN, GROQ_API_KEY, ...).
-- `serviceAccount.json` fayli (Firebase Console'dan).
+> ⚠️ **ENG MUHIM QOIDA:** bot faqat **bitta joyda** ishlashi mumkin. Oracle'da yoqqandan keyin
+> **Render'dagi xizmatni O'CHIRING** (Render → `avto-a1-bot` → Settings → **Delete Service**).
+> Hozir u to'xtatilgan, lekin keyingi oy kvota yangilanganda **o'zi yonib qoladi** va ikki
+> nusxa `409 Conflict` beradi — bot jim qoladi.
 
 ---
 
-## 1-QADAM: Oracle Cloud'da bepul server (VM) yaratish
+## 1. Oracle akkaunt va server (≈15 daqiqa, bir marta)
 
-1. https://www.oracle.com/cloud/free/ ga kiring va ro'yxatdan o'ting.
-2. Konsolda: **Menu → Compute → Instances → Create Instance**.
-3. Sozlamalar:
-   - **Image:** Canonical **Ubuntu** (22.04 yoki 24.04).
-   - **Shape:** "Always Free eligible" deb belgilangan shaklni tanlang
-     (masalan **Ampere (ARM) VM.Standard.A1.Flex** — 1 OCPU / 6 GB RAM bemalol yetadi,
-     yoki AMD **VM.Standard.E2.1.Micro**).
-   - **SSH keys:** "Generate a key pair for me" ni tanlab, **private key**'ni
-     yuklab oling (masalan `ssh-key.key`) — bu serverga kirish kaliti.
-4. **Create** bosing. Bir-ikki daqiqada server tayyor bo'ladi.
-5. Server sahifasidan **Public IP address** ni nusxalang (masalan `123.45.67.89`).
+1. https://www.oracle.com/cloud/free/ — ro'yxatdan o'ting (karta so'raydi, faqat tasdiqlash uchun).
+   **Home region**ni yaqinroq tanlang (masalan Frankfurt) — keyin o'zgartirib bo'lmaydi.
+2. **Tavsiya (muhim):** Billing → **Upgrade to Pay As You Go**.
+   - Always Free resurslar baribir **bepul** qoladi, faqat limitdan oshsa to'lov bo'ladi.
+   - Bepul akkauntda Oracle **"bo'sh turgan"** serverni (7 kun CPU < 20%) qaytarib olishi mumkin —
+     bot kam yuk ishlatgani uchun bu xavf bor. PAYG'da bu muammo va "Out of capacity" xatosi kamayadi.
+   - Xavfsizlik uchun: Billing → **Budgets** → $1 lik byudjet ogohlantirishini qo'ying.
+3. **Compute → Instances → Create instance:**
+   - **Image:** Canonical **Ubuntu 24.04**
+   - **Shape:** **Ampere VM.Standard.A1.Flex**, 1 OCPU / 6 GB (Always Free).
+     "Out of host capacity" chiqsa — boshqa Availability Domain'ni tanlang yoki
+     **VM.Standard.E2.1.Micro** (AMD, 1 GB) ni oling — skript unga swap qo'shadi, bot bemalol ishlaydi.
+   - **SSH keys:** "Generate a key pair for me" → **private key**ni yuklab oling (`ssh-key.key`).
+4. **Create** → server sahifasidan **Public IP address**ni nusxalang.
 
-### Telegram uchun portni ochish (ixtiyoriy, polling uchun shart emas)
-Bot **long polling** ishlatadi — kiruvchi port kerak emas, shuning uchun firewall'ni
-o'zgartirish shart emas. (Faqat chiquvchi internet kerak, u doim ochiq.)
+Bot long polling ishlatadi — **port ochish shart emas**.
 
----
+## 2. Serverga kirish
 
-## 2-QADAM: Serverga ulanish (SSH)
-
-Kompyuteringiz terminalida (private key shu papkada turgan bo'lsin):
+Kompyuteringizda (PowerShell yoki terminal), `ssh-key.key` turgan papkada:
 
 ```bash
-# kalit faylga to'g'ri ruxsat berish (Linux/Mac)
-chmod 600 ssh-key.key
-
-# serverga kirish (IP o'rniga o'zingiznikini yozing)
-ssh -i ssh-key.key ubuntu@123.45.67.89
+ssh -i ssh-key.key ubuntu@SERVER_IP
 ```
 
-> Windows'da: PowerShell yoki PuTTY ishlating. PowerShell'da xuddi shu `ssh` buyrug'i ishlaydi.
+> Linux/Mac'da avval: `chmod 600 ssh-key.key`. Windows'da kalit "too open" desa: fayl
+> xususiyatlari → Security → faqat o'zingizga ruxsat qoldiring.
 
----
-
-## 3-QADAM: Serverda dasturlarni o'rnatish
-
-Server ichida (SSH ulangan holda) quyidagilarni ketma-ket yozing:
-
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3 python3-venv python3-pip git
-```
-
----
-
-## 4-QADAM: Kodni yuklab olish
-
-```bash
-cd ~
-git clone https://github.com/anvarjonaxtamov70/Avto_A1.git
-cd Avto_A1/bot
-```
-
-Virtual muhit yaratib, kutubxonalarni o'rnatamiz:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
----
-
-## 5-QADAM: Maxfiy fayllarni joylashtirish (.env va serviceAccount.json)
-
-Bu ikki fayl GitHub'da **yo'q** (maxfiy), shuning uchun ularni qo'lda yaratish kerak.
-
-### 5.1 — `.env`
-```bash
-cp .env.example .env
-nano .env
-```
-`nano` ichida qiymatlarni to'ldiring (kamida `BOT_TOKEN` va `GROQ_API_KEY`).
-Saqlash: `Ctrl+O` → `Enter`, chiqish: `Ctrl+X`.
-
-### 5.2 — `serviceAccount.json`
-Kompyuteringizdagi `serviceAccount.json` ni serverga yuborish — **yangi terminal**
-oching (kompyuteringizda, server emas):
-
-```bash
-scp -i ssh-key.key serviceAccount.json ubuntu@123.45.67.89:~/Avto_A1/bot/
-```
-
-> Muqobil: server ichida `nano serviceAccount.json` ochib, JSON matnini nusxalab qo'ying.
-
----
-
-## 6-QADAM: Sinov uchun ishga tushirish
-
-Server ichida (venv yoqilgan holda):
-```bash
-python bot.py
-```
-"Bot ishga tushdi!" deb yozilsa — ishlayapti. Telegram'da botingizga `/start` yozib tekshiring.
-
-> Endi `Ctrl+C` bilan to'xtating — keyingi qadamda uni **doimiy xizmat** qilamiz.
-> Shuningdek **kompyuteringizdagi botni ham to'xtating** (bitta nusxa qoidasi).
-
----
-
-## 7-QADAM: Botni "hech qachon o'chmaydigan" qilish (systemd)
-
-Repoda tayyor `avto-a1-bot.service` fayli bor. U botni:
-- krash bo'lsa **avtomatik qayta ishga tushiradi**,
-- server qayta yuklansa **o'zi yonadi**.
+## 3. Bitta buyruq bilan o'rnatish
 
 Server ichida:
+
 ```bash
-sudo cp ~/Avto_A1/bot/avto-a1-bot.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now avto-a1-bot
+curl -fsSL https://raw.githubusercontent.com/anvarjonaxtamov70/Avto_A1/main/bot/oracle_setup.sh | bash
 ```
 
-Tekshirish:
+Birinchi marta skript **`.env` bo'sh** deb to'xtaydi — bu normal.
+
+## 4. Maxfiy sozlamalar
+
+**`.env`** — Render → `avto-a1-bot` → **Environment** dagi qiymatlarni ko'chiring:
+
 ```bash
-systemctl status avto-a1-bot      # "active (running)" bo'lishi kerak
-journalctl -u avto-a1-bot -f      # jonli loglar (chiqish: Ctrl+C)
+nano ~/Avto_A1/bot/.env
 ```
 
-Tayyor! Endi SSH'dan chiqib ketsangiz ham (`exit`) bot **24/7 ishlayveradi**.
+Kamida: `BOT_TOKEN`, `GROQ_API_KEY`, `ADMIN_IDS=5105291033,483425630,5302078`.
+Saqlash: `Ctrl+O` → `Enter`, chiqish: `Ctrl+X`.
+
+> `BOT_TOKEN` **Cloudflare Worker'dagi bilan bir xil** bo'lishi shart (tugmalar shu bilan imzolanadi).
+
+**`serviceAccount.json`** — ikki yo'ldan biri:
+- Kompyuteringizdan (yangi terminalda, server emas):
+  `scp -i ssh-key.key serviceAccount.json ubuntu@SERVER_IP:~/Avto_A1/bot/`
+- yoki Render'dagi `SERVICE_ACCOUNT_JSON` qatorini to'liq `.env` ga qo'shing.
+
+## 5. Skriptni qayta ishga tushirish
+
+```bash
+bash ~/Avto_A1/bot/oracle_setup.sh
+```
+
+Oxirida `✅ Bot ishlayapti!` chiqishi kerak. Adminlarga **"🟢 Bot ishga tushdi — Qayerda: Oracle Cloud"**
+xabari keladi. Telegram'da botga `/start` yozib tekshiring.
+
+Skript nimani tekshiradi: Python kutubxonalari, `.env`, `serviceAccount.json` to'g'riligi,
+`BOT_TOKEN` (Telegram'dan so'raydi), xizmat yonganini va **409 (ikki nusxa)** yo'qligini.
+
+## 6. Render'ni o'chirish
+
+Render → `avto-a1-bot` → Settings → **Delete Service**. (Yuqoridagi qoidaga qarang.)
 
 ---
 
-## Kodni yangilaganda (kelajakda)
+## Kod yangilanganda
 
-GitHub'ga yangi o'zgarish chiqsa, serverda:
 ```bash
-cd ~/Avto_A1
-git pull
-cd bot
-source venv/bin/activate
-pip install -r requirements.txt   # yangi kutubxona bo'lsa
-sudo systemctl restart avto-a1-bot
+bash ~/Avto_A1/bot/oracle_update.sh
 ```
-
----
+Yangi kodda sintaksis xatosi bo'lsa — yangilamaydi, bot eski versiyada ishlayveradi.
 
 ## Foydali buyruqlar
 
 | Vazifa | Buyruq |
 |--------|--------|
-| Holatni ko'rish | `systemctl status avto-a1-bot` |
+| Holat | `systemctl status avto-a1-bot` |
 | Jonli loglar | `journalctl -u avto-a1-bot -f` |
-| To'xtatish | `sudo systemctl stop avto-a1-bot` |
-| Ishga tushirish | `sudo systemctl start avto-a1-bot` |
 | Qayta ishga tushirish | `sudo systemctl restart avto-a1-bot` |
-| Avtoyoqishni o'chirish | `sudo systemctl disable avto-a1-bot` |
+| To'xtatish | `sudo systemctl stop avto-a1-bot` |
 
----
+## Muammolar
 
-## Tez-tez uchraydigan muammolar
-
-- **`409 Conflict` xatosi loglarda** → bot ikki joyda ishlayapti. Kompyuteringizdagi
-  (VS Code) nusxasini to'xtating. Faqat server nusxasi qolsin.
-- **Storis yozilmayapti / 401** → `serviceAccount.json` server'da `bot/` papkasida
-  borligini tekshiring.
-- **`ModuleNotFoundError`** → `source venv/bin/activate` qilib, `pip install -r requirements.txt` ni qayta yuriting.
-- **Bot javob bermayapti** → `journalctl -u avto-a1-bot -f` orqali loglarni ko'ring;
-  `BOT_TOKEN` to'g'ri kiritilganini tekshiring.
+| Belgi | Sabab va yechim |
+|-------|-----------------|
+| Loglarda `409 Conflict` | Bot ikki joyda. Render'ni o'chiring, kompyuterdagi nusxani to'xtating. |
+| Storis/buyurtma yozilmayapti, `401` | `serviceAccount.json` yo'q yoki eski — Firebase'dan qayta yuklang. |
+| Tugmalar "Worker eski versiyada" deydi | `cloudflare-worker.js` ni Cloudflare'ga joylang. |
+| Tugmalar "Imzo rad etildi" deydi | Worker va bot `.env` dagi `BOT_TOKEN` bir xil emas. |
+| "Out of host capacity" | Boshqa Availability Domain, E2.1.Micro yoki PAYG (1-bo'lim). |
