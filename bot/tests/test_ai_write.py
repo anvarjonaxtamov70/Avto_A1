@@ -155,15 +155,44 @@ BASE_DATA = {
 }
 
 
-def setup(script=None, data=None):
+class FakeWorker:
+    """Worker /order-status ning soxtasi: holat mashinasini haqiqiydek
+    tekshiradi va mijoz ro'yxatini yangilaydi. Har chaqiruv yoziladi."""
+
+    def __init__(self, fb):
+        self.fb = fb
+        self.calls = []
+        self.fail = None
+
+    async def __call__(self, uid, order_id, status, expected_from, actor):
+        self.calls.append((uid, order_id, status, expected_from, actor))
+        if self.fail:
+            return False, self.fail
+        user = (self.fb.data.get("users") or {}).get(str(uid)) or {}
+        for o in user.get("orders") or []:
+            if o and str(o.get("id")) == str(order_id):
+                cur = str(o.get("status") or "kutilmoqda")
+                if expected_from and cur != expected_from:
+                    return False, f"Holat allaqachon o'zgargan (hozir: {cur})"
+                if status not in ai_agent._ORDER_TRANSITIONS.get(cur, []):
+                    return False, "status o'tishi mumkin emas"
+                o["status"] = status
+                return True, ""
+        return False, "buyurtma topilmadi"
+
+
+def setup(script=None, data=None, worker=True):
     fb = FakeFB(data if data is not None else BASE_DATA)
     groq = FakeGroq(script or [])
+    fw = FakeWorker(fb) if worker else None
     ai_agent.init(
         firebase_get=fb.get, firebase_patch=fb.patch, groq_raw=groq,
         is_owner=lambda uid: int(uid) == OWNER,
         firebase_get_etag=fb.get_etag, firebase_put=fb.put,
         firebase_delete=fb.delete, firebase_query=fb.query,
+        order_status=fw,
     )
+    fb.worker = fw
     return fb, groq
 
 
@@ -414,13 +443,49 @@ def test_order_status_qoriqlari():
     assert call_tool("set_order_status", order_key="111_A-1", status="kutilmoqda")[0]["ok"] is False
 
 
+def test_order_status_holat_mashinasi():
+    """REGRESSIYA: agent ilgari istalgan holatga yozardi (yetkazildi ->
+    kutilmoqda ham). Endi Worker bilan bir xil o'tishlar."""
+    setup()
+    # sakrab o'tish: kutilmoqda -> yetkazildi
+    res, ctx = call_tool("set_order_status", order_key="111_A-1", status="yetkazildi")
+    assert res["ok"] is False and "o'tib bo'lmaydi" in res["error"], res
+    assert not ctx.pending, "taqiqlangan o'tish uchun tasdiq yaratildi"
+    # orqaga: yetkazildi -> qabul
+    data = copy.deepcopy(BASE_DATA)
+    data["users"]["111"]["orders"][0]["status"] = "yetkazildi"
+    setup(data=data)
+    res, _ = call_tool("set_order_status", order_key="111_A-1", status="qabul")
+    assert res["ok"] is False and "o'tib bo'lmaydi" in res["error"], res
+    # qaytarish (yetkazildi -> bekor) RUXSAT, ogohlantirish bilan
+    res, ctx = call_tool("set_order_status", order_key="111_A-1", status="bekor_qilingan")
+    assert res["ok"], res
+    assert "QAYTARISH" in ctx.pending[0]["record"]["warning"]
+    # bekor qilingandan keyin hech qayerga
+    data["users"]["111"]["orders"][0]["status"] = "bekor_qilingan"
+    setup(data=data)
+    res, _ = call_tool("set_order_status", order_key="111_A-1", status="qabul")
+    assert res["ok"] is False
+
+
+def test_order_status_worker_ulanmagan_bolsa_ochadi():
+    """Worker berilmasa agent bazaga O'ZI yozmasligi kerak (ilgari aynan
+    shu yo'l bazani ikkiga bo'lardi)."""
+    fb, _ = setup(worker=False)
+    res, ctx = call_tool("set_order_status", order_key="111_A-1", status="qabul")
+    assert res["ok"] is False and "Worker" in res["error"], res
+    assert not ctx.pending
+
+
 def test_status_qiymati_mini_app_bilan_bir_xil():
     """REGRESSIYA: `yolda` APOSTROFSIZ. index.html `getStatusHTML()` aynan
     shu satrni tekshiradi; apostrof qo'yilsa mijozda holat «Kutilmoqda»
     bo'lib ko'rinib qolardi."""
     assert "yolda" in ai_agent._ORDER_STATUSES
     assert "yo'lda" not in ai_agent._ORDER_STATUSES
-    setup()
+    data = copy.deepcopy(BASE_DATA)
+    data["users"]["111"]["orders"][0]["status"] = "qabul"
+    setup(data=data)
     res, ctx = call_tool("set_order_status", order_key="111_A-1", status="yolda")
     assert res["ok"]
     assert ctx.pending[0]["record"]["plan"][0]["set"] == "yolda"
@@ -589,7 +654,11 @@ def test_flash_bekor_qilinganda_maydonlar_ochiriladi():
     assert "oldPrice" not in p and "flashUntil" not in p, p
 
 
-def test_order_status_ikki_joyga_yoziladi_va_mijozga_xabar():
+def test_order_status_faqat_worker_orqali():
+    """REGRESSIYA: ilgari agent `orders/{uid}_{KOD}` ga yozib SOXTA yozuv
+    yaratardi (haqiqiy kalit `{uid}_{ID}`), asl buyurtma eski holatda
+    qolardi, ombor va cashback yangilanmasdi. Endi bazaga O'ZI yozmaydi —
+    faqat Worker'ni chaqiradi; mijozga xabarni ham Worker yuboradi."""
     fb, _ = setup()
     _res, ctx = call_tool("set_order_status", order_key="111_A-1", status="qabul")
     tok = token_of(ctx)
@@ -597,20 +666,43 @@ def test_order_status_ikki_joyga_yoziladi_va_mijozga_xabar():
     sent = []
 
     async def notifier(uid, status, code, order):
-        sent.append((uid, status, code, (order or {}).get("total")))
+        sent.append((uid, status, code))
 
     ok, msg = run(ai_agent.apply_confirmed(tok, OWNER, notifier=notifier))
     assert ok, msg
-    # 1) mijozning ro'yxati (mijoz shuni ko'radi)
+    # Worker to'g'ri ID, kutilgan oldingi holat va admin bilan chaqirildi
+    assert fb.worker.calls == [("111", "1700000000000", "qabul", "kutilmoqda", OWNER)], fb.worker.calls
+    # Agent bazaga to'g'ridan-to'g'ri buyurtma yozmadi
+    assert "orders" not in fb.data, f"soxta markaziy yozuv yaratildi: {fb.data.get('orders')}"
+    assert not [p for p, *_ in fb.puts if "/orders" in p], fb.puts
+    # Mijozga xabar — Worker'da (bot ham yuborsa dublikat bo'lardi)
+    assert sent == [], sent
+
+
+def test_order_status_worker_rad_etsa_xato_qaytadi():
+    fb, _ = setup()
+    _res, ctx = call_tool("set_order_status", order_key="111_A-1", status="qabul")
+    tok = token_of(ctx)
+    fb.worker.fail = "Holat allaqachon o'zgargan (hozir: ✅ Qabul qilindi)"
+    ok, msg = run(ai_agent.apply_confirmed(tok, OWNER))
+    assert ok is False and "allaqachon" in msg, msg
+
+
+def test_oradan_ozgargan_holat_ustidan_yozilmaydi():
+    """Tasdiq ko'rsatilgandan keyin admin Mini App'dan holatni o'zgartirsa —
+    kartochkadagi eski reja bajarilmasligi kerak (expectedFrom)."""
+    fb, _ = setup()
+    _res, ctx = call_tool("set_order_status", order_key="111_A-1", status="bekor_qilingan")
+    tok = token_of(ctx)
+    fb.data["users"]["111"]["orders"][0]["status"] = "qabul"   # admin qabul qildi
+    ok, msg = run(ai_agent.apply_confirmed(tok, OWNER))
+    assert ok is False and "o'zgargan" in msg, msg
     assert fb.data["users"]["111"]["orders"][0]["status"] == "qabul"
-    # 2) markaziy arxiv (Mini App ham shunga yozadi)
-    assert fb.data["orders"]["111_A-1"]["status"] == "qabul"
-    # 3) mijozga xabar
-    assert sent == [("111", "qabul", "A-1", 500000)], sent
 
 
 def test_yangi_buyurtma_qoshilsa_togri_buyurtma_ozgaradi():
-    """Buyurtmalar `unshift` bilan qo'shiladi — BARCHA indekslar suriladi."""
+    """Buyurtmalar `unshift` bilan qo'shiladi — BARCHA indekslar suriladi.
+    Worker'ga indeks emas, buyurtma ID si yuboriladi."""
     fb, _ = setup()
     _res, ctx = call_tool("set_order_status", order_key="111_A-1", status="qabul")
     tok = token_of(ctx)
@@ -661,23 +753,19 @@ def test_orqaga_ozgarish_yoq_bolsa():
     assert tok is None and "topilmadi" in err
 
 
-def test_orqaga_mijozga_xabar_yubormaydi():
-    """Holat qaytarilganda mijoz «yo'lga chiqdi» dan keyin «qabul qilindi»
-    xabarini olsa chalkashadi."""
+def test_buyurtma_holati_orqaga_qaytarilmaydi():
+    """Holat mashinasi orqaga o'tishni taqiqlaydi (yetkazildi -> kutilmoqda
+    cashback va ombor hisobini buzardi), mijozga xabar esa allaqachon ketgan.
+    `/orqaga` buni tushunarli qilib aytishi kerak, jim "bajarmaslik" emas."""
     fb, _ = setup()
-    _res, ctx = call_tool("set_order_status", order_key="111_A-1", status="yolda")
-    sent = []
+    _res, ctx = call_tool("set_order_status", order_key="111_A-1", status="qabul")
+    ok, _m = run(ai_agent.apply_confirmed(token_of(ctx), OWNER))
+    assert ok
 
-    async def notifier(*a):
-        sent.append(a)
-
-    run(ai_agent.apply_confirmed(token_of(ctx), OWNER, notifier=notifier))
-    assert len(sent) == 1
-
-    tok, _p, _e = run(ai_agent.undo_last(OWNER))
-    run(ai_agent.apply_confirmed(tok, OWNER, notifier=notifier))
-    assert len(sent) == 1, "qaytarishda ham xabar yuborildi"
-    assert fb.data["users"]["111"]["orders"][0]["status"] == "kutilmoqda"
+    tok, _p, err = run(ai_agent.undo_last(OWNER))
+    assert tok is None and "orqaga qaytarib bo'lmaydi" in err, err
+    assert fb.data["users"]["111"]["orders"][0]["status"] == "qabul"
+    assert len(fb.worker.calls) == 1
 
 
 def test_undo_plan_teskarisi():
@@ -685,8 +773,7 @@ def test_undo_plan_teskarisi():
     undo = ai_agent.build_undo_plan(plan)
     assert undo[0]["set"] == {"price": 100} and undo[0]["old"] == {"price": 200}
     st = [{"kind": "order_status", "set": "yolda", "old": "qabul", "notify": True}]
-    u2 = ai_agent.build_undo_plan(st)
-    assert u2[0]["set"] == "qabul" and u2[0]["notify"] is False
+    assert ai_agent.build_undo_plan(st) == [], "buyurtma holati qaytarilmasligi kerak"
 
 
 # =====================================================================

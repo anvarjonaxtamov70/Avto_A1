@@ -62,10 +62,22 @@ jobs:
       - name: Auth qotib qolmasligi sinovi
         run: node .github/test-auth-guard.js
 
+      # 🧾 BUYURTMA OQIMI (Worker) — haqiqiy cloudflare-worker.js soxta
+      # Firebase (ETag/412) va soxta Telegram bilan: barcha adminlarga
+      # tugmali kartochka, dublikatsiz qayta urinish, holat mashinasi, bot
+      # imzosi, mijozning bekor qilishi, qaytarish, eski buyurtmalar.
+      - name: Buyurtma oqimi sinovi (Worker)
+        run: node .github/test-order-flow.js
+
+      # 🧾 Mini App buyurtma qatlami — eskirgan initData, xabar dublikati,
+      # tasdiq oynalari, mijoz bekor qilishi (index.html dan haqiqiy kod).
+      - name: Buyurtma oqimi sinovi (Mini App)
+        run: node .github/test-order-client.js
+
       - name: Python sintaksisi (bot)
         run: |
           python3 -m py_compile bot/bot.py bot/ai_agent.py bot/fb_utils.py \
-                                bot/bulk_import_fixed.py
+                                bot/bulk_import_fixed.py bot/order_ops.py
           echo "✅ Python fayllari sintaktik toza"
 
       # AI agenti sinovlari — Groq va Firebase SOXTA, ya'ni tashqi
@@ -76,3 +88,4 @@ jobs:
           python3 tests/test_ai_agent.py
           python3 tests/test_ai_write.py
           python3 tests/test_owner_mode.py
+          python3 tests/test_order_buttons.py
