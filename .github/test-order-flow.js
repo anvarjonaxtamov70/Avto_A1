@@ -385,6 +385,72 @@ async function main() {
   eq(l2.status, 200, 'eski buyurtmani bekor qilish');
   eq(db.read('products/1/sizes/0/stock'), 3, 'eski "92_dot_5" razmeri to\'g\'ri tiklandi (1 -> 3)');
 
+  // ===== 7b) Eski buyurtma — pul xavfsizligi (review topilmalari) =====
+  console.log('▶ 7b) eski buyurtma: cashback ikki marta qaytmasligi');
+  const lg = baseData();
+  lg.users[CUSTOMER].orders = [
+    // eski oqimda bekor qilingan, cashback eski mijoz kodi tomonidan QAYTARILGAN
+    { id: 1700000000010, code: 'A1-C1', status: 'bekor_qilingan', total: 100000, cashbackUsed: 20000, items: { '1||Universal': 1 } },
+    // eski oqimda yetkazilgan (cashback eski kod bilan berilgan)
+    { id: 1700000000011, code: 'A1-D1', status: 'yetkazildi', total: 100000, items: { '1||Universal': 1 } },
+    // eski "kutilmoqda" (aslida berilgan bo'lishi mumkin)
+    { id: 1700000000012, code: 'A1-K1', status: 'kutilmoqda', total: 50000, items: { '3': 2, '1||Gazel Biznes': 1 } },
+  ];
+  lg.users[CUSTOMER].phase2 = { cashbackTotal: 5000, cashbackSpent: 20000, cashbackRefunded: 20000 };
+  resetWorld(lg);
+  const dupCust = await setStatus(CUSTOMER, CUSTOMER, '1700000000010', 'bekor_qilingan');
+  eq(dupCust.status, 403, 'mijoz eski buyurtmani bekor qila olmaydi');
+  tgCalls = [];
+  const dupAdm = await setStatus(ADMINS[0], CUSTOMER, '1700000000010', 'bekor_qilingan');
+  ok(dupAdm.status === 200 && dupAdm.data.duplicate === true, 'eski bekor buyurtmaga takror — duplicate');
+  const acct = db.read('loyalty_accounts/' + CUSTOMER);
+  ok(!acct || !acct.refunded || acct.refunded === 20000, 'cashback IKKINCHI marta qaytarilmadi (refunded=' + (acct && acct.refunded) + ')');
+  eq(tgCalls.length, 0, 'takror — mijozga yana "bekor qilindi" xabari ketmadi');
+  const retLegacy = await setStatus(ADMINS[0], CUSTOMER, '1700000000011', 'bekor_qilingan');
+  eq(retLegacy.status, 409, 'eski oqimda yetkazilgan buyurtmani qaytarish bloklandi');
+  eq(stockOf(0), 5, 'bloklangan qaytarish stokka tegmadi');
+  const selfLegacy = await setStatus(CUSTOMER, CUSTOMER, '1700000000012', 'bekor_qilingan');
+  eq(selfLegacy.status, 403, 'mijoz eski "kutilmoqda" buyurtmani ham bekor qila olmaydi');
+  const admLegacy = await setStatus(ADMINS[0], CUSTOMER, '1700000000012', 'bekor_qilingan');
+  eq(admLegacy.status, 200, 'admin eski buyurtmani bekor qila oladi');
+  eq(stockOf(2), 9, '"||" siz eski kalit ("3") omborga qaytdi (7 -> 9)');
+  eq(stockOf(0), 6, 'razmersiz tovardagi mashina nomi ("1||Gazel Biznes") umumiy stokka qaytdi');
+  const toKut = await setStatus(ADMINS[0], CUSTOMER, '1700000000011', 'kutilmoqda');
+  eq(toKut.status, 409, 'hech qaysi holatdan "kutilmoqda" ga o\'tib bo\'lmaydi');
+
+  // ===== 7c) Mashina modeli tanlangan razmersiz tovar =====
+  console.log('▶ 7c) mashina modeli tanlovi');
+  resetWorld(baseData());
+  const car = await placeOrder(CUSTOMER, [{ id: '1', size: 'Gazel Biznes', qty: 1 }, { id: '1', size: 'Gazel Next', qty: 1 }], 'attempt_car_123');
+  eq(car.status, 201, 'mashina tanlangan oddiy tovar SOTIB OLINADI (ilgari 400 edi)');
+  eq(stockOf(0), 3, 'umumiy stokdan ayirildi (5 -> 3)');
+  const carCard = tgBy('sendMessage').find((c) => String(c.payload.chat_id) === ADMINS[0]);
+  ok(carCard && carCard.payload.text.includes('Gazel Biznes') && carCard.payload.text.includes('Gazel Next'), 'kartochkada mashina modeli ko\'rinadi');
+  eq(Object.keys(car.data.order.items).length, 2, 'ikki mashina — ikki alohida qator');
+  const carCancel = await setStatus(ADMINS[0], CUSTOMER, car.data.order.id, 'bekor_qilingan');
+  ok(carCancel.status === 200 && stockOf(0) === 5, 'bekor qilinganda stok to\'liq qaytdi');
+
+  // ===== 7d) Kartochka HTML'i rad etilsa — oddiy matn =====
+  console.log('▶ 7d) kartochka zaxira yo\'li');
+  resetWorld(baseData());
+  tgFail = (m, p) => (m === 'sendMessage' && p.parse_mode === 'HTML' && ADMINS.includes(String(p.chat_id))
+    ? { status: 400, description: "Bad Request: can't parse entities" } : null);
+  const pf = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_parse_123');
+  const plainCards = tgBy('sendMessage').filter((c) => ADMINS.includes(String(c.payload.chat_id)) && !c.payload.parse_mode);
+  eq(plainCards.length, 3, 'HTML rad etilsa — uchala adminga ODDIY MATN kartochka ketdi');
+  ok(plainCards[0].payload.reply_markup && !/<b>/.test(plainCards[0].payload.text), 'oddiy matnda teg yo\'q, tugmalar bor');
+  ok(db.read('notification_outbox/' + CUSTOMER + '_' + pf.data.order.id).delivered === true, 'yetkazildi');
+  tgFail = null;
+  resetWorld(baseData());
+  const longName = '&'.repeat(100);
+  const lr = await call('/order-commit', { initData: initDataFor(CUSTOMER), attemptId: 'attempt_long_123',
+    items: [{ id: '1', size: '', qty: 1 }],
+    customer: { name: longName, phone: '+998901112233', address: '&'.repeat(300) },
+    delivery: { method: 'courier', address: '&'.repeat(300), note: '&'.repeat(500) }, payment: { method: 'Naqd' } });
+  eq(lr.status, 201, 'juda uzun maydonli buyurtma');
+  const longCards = tgBy('sendMessage').filter((c) => ADMINS.includes(String(c.payload.chat_id)));
+  ok(longCards.length === 3 && longCards.every((c) => c.payload.text.length <= 4096), 'juda uzun kartochka ham yetib bordi (<=4096)');
+
   // ===== 8) O'chirilgan tovar bekor qilishni bloklamaydi =====
   console.log('▶ 8) o\'chirilgan tovar');
   resetWorld(baseData());
@@ -404,6 +470,7 @@ async function main() {
   const key9 = CUSTOMER + '_' + r9.data.order.id;
   const ob9 = db.read('notification_outbox/' + key9);
   ok(ob9.delivered === false && ob9.state === 'retry', 'yetmagan xabar "retry" holatida qoldi');
+  ok(ob9.retryAt > Date.now(), 'keyingi urinish vaqti (retryAt) belgilandi');
   ok(ob9.done['admin_' + ADMINS[0]] === true && !ob9.done['admin_' + ADMINS[2]], 'kimga yetgani alohida belgilandi');
   tgFail = null;
   tgCalls = [];
@@ -414,8 +481,21 @@ async function main() {
   const resent = tgBy('sendMessage').map((c) => String(c.payload.chat_id));
   eq(resent, [ADMINS[2]], 'faqat yetmagan adminga qayta yuborildi (dublikat yo\'q)');
   ok(db.read('notification_outbox/' + key9).delivered === true, 'endi yetkazildi');
+  ok(db.read('notification_outbox/' + key9).retryAt == null, 'yetkazilgach retryAt o\'chdi (watchdog indeksidan chiqdi)');
   const n9b = await call('/order-notify', { outboxKey: key9, botAuth: botAuth('order-notify', ADMINS[0], [key9]) });
   ok(n9b.data.state === 'delivered', 'yetkazilganini qayta yubormaydi');
+  // Ko'p urinishdan keyin voz kechadi (abadiy indeksda qolmaydi)
+  resetWorld(baseData());
+  tgFail = (m, p) => (String(p.chat_id) === ADMINS[1] ? { status: 502, description: 'down' } : null);
+  const r9g = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_giveup_123');
+  const key9g = CUSTOMER + '_' + r9g.data.order.id;
+  for (let i = 0; i < 8; i++) {
+    db.set('notification_outbox/' + key9g + '/leaseUntil', 0);
+    await call('/order-notify', { outboxKey: key9g, botAuth: botAuth('order-notify', ADMINS[0], [key9g]) });
+  }
+  const ob9g = db.read('notification_outbox/' + key9g);
+  ok(ob9g.state === 'gave_up' && ob9g.retryAt == null, '8 urinishdan keyin voz kechildi, retryAt o\'chdi');
+  tgFail = null;
   // Bloklangan mijoz (403) — abadiy qayta urinmaydi
   resetWorld(baseData());
   tgFail = (m, p) => (String(p.chat_id) === CUSTOMER ? { status: 403, description: 'Forbidden: bot was blocked by the user' } : null);

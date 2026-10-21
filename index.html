@@ -10402,7 +10402,7 @@ window._orderDetailLines = function (o) {
     if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
         var lines = '';
         o.itemDetails.forEach(function (it) {
-            var sz = (it.size && it.size !== 'Universal') ? ' (' + it.size + ')' : '';
+            var _opt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || ''); var sz = _opt ? ' (' + _opt + ')' : '';
             var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
             lines += "\n\u25AA\uFE0F " + it.name + sz + " \u2014 " + (it.qty || 0) + " x " +
                 (Number(it.unitPrice) || 0).toLocaleString() + " = " + (Number(line) || 0).toLocaleString() + " so'm";
@@ -11695,7 +11695,7 @@ window.confirmOrder = async (paymentMethod) => {
             var _pay = (order.payable != null) ? order.payable : order.total;
             var _lines = '';
             (order.itemDetails || []).forEach(function (it) {
-                var _co = (it.size && it.size !== 'Universal') ? ' (' + escTg(it.size) + ')' : '';
+                var _cOpt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || ''); var _co = _cOpt ? ' (' + escTg(_cOpt) + ')' : '';
                 _lines += "\n\u25AA\uFE0F " + escTg(it.name) + _co + " \u2014 " + (it.qty || 0) +
                           " x " + (it.unitPrice || 0).toLocaleString() + " = " + (it.lineTotal || 0).toLocaleString() + " so'm";
             });
@@ -11820,7 +11820,7 @@ window._odItemsHTML = function (o) {
         o.itemDetails.forEach(function (it) {
             var p = pdb.find(function (x) { return x.id == it.id; });
             var imgSrc = p ? (p.img || p.image || '') : '';
-            var carOpt = (it.size && it.size !== 'Universal') ? it.size : '';
+            var carOpt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || '');
             var carOptHTML = carOpt ? '<span class="od-car-opt">[' + escHtml(carOpt) + ']</span>' : '';
             var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
             iH += row(imgSrc, escHtml(it.name) + ' ' + carOptHTML, (it.qty || 0), line);
@@ -11967,7 +11967,7 @@ window._adminOrderItemsHTML = function (o) {
     }
     if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
         o.itemDetails.forEach(function (it) {
-            var carOpt = (it.size && it.size !== 'Universal') ? it.size : '';
+            var carOpt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || '');
             var nm = escHtml(it.name) + (carOpt ? ' <span style="color:var(--luxury-gold); font-size:10px;">[' + escHtml(carOpt) + ']</span>' : '');
             var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
             rows += row(nm, (it.qty || 0), line);
@@ -12113,7 +12113,7 @@ function _pickLines(o) {
         o.itemDetails.forEach(function (it) {
             var p = pdb.find(function (x) { return x.id == it.id; });
             var img = p ? (p.img || p.image || '') : '';
-            var size = (it.size && it.size !== 'Universal') ? it.size : '';
+            var size = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || '');
             lines.push({ key: String(it.id) + '||' + size, name: it.name || '', size: size, qty: it.qty || 1, img: img });
         });
     } else {
@@ -12242,11 +12242,26 @@ window._pickStatus = function (uid, id, status) {
 // 1. TAKRORIY BUYURTMA (REPEAT ORDER)
 // ===================================================
 window.reorderItems = () => {
-    let o = myOrders.find(x => x.id === currentOpenOrderId);
-    if (!o || !o.items) return;
+    let o = myOrders.find(x => String(x.id) === String(currentOpenOrderId));
+    if (!o || (!o.items && !Array.isArray(o.itemDetails))) return;
     let addedCount = 0; let outOfStock = [];
 
-    for (let safeId in o.items) {
+    // ⚠️ Server yozgan buyurtmada `items` kalitlari "l_<hash>" — ulardan tovar
+    //    id sini tiklab bo'lmaydi (ilgari "Qayta buyurtma" HECH NARSA qo'shmasdi).
+    //    `itemDetails` (id, razmer/mashina, soni) afzal; eski buyurtmalar — `items`.
+    let srcItems = {};
+    if (Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        o.itemDetails.forEach(function (it) {
+            if (!it || it.id == null) return;
+            let opt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || 'Universal');
+            let k = String(it.id) + '||' + opt;
+            srcItems[k] = (srcItems[k] || 0) + (parseInt(it.qty) || 1);
+        });
+    } else {
+        srcItems = o.items;
+    }
+
+    for (let safeId in srcItems) {
         let parts = String(safeId).split('||');
         let baseId = parts[0];
         let carOpt = parts[1] ? parts[1].replace(/_dot_/g, ".") : "Universal";
@@ -12264,7 +12279,7 @@ window.reorderItems = () => {
         if (stockLeft <= 0) { outOfStock.push(p.name); continue; }
 
         let finalSafeId = baseId + "||" + (carOpt ? carOpt.replace(/\./g, "_dot_") : "Universal");
-        cart[finalSafeId] = (parseInt(cart[finalSafeId]) || 0) + (parseInt(o.items[safeId]) || 1);
+        cart[finalSafeId] = (parseInt(cart[finalSafeId]) || 0) + (parseInt(srcItems[safeId]) || 1);
         addedCount++;
     }
     saveLocalCart(); updateCartBadge();

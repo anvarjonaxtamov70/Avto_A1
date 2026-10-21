@@ -42,14 +42,21 @@ STATUS_LABELS = {
     "bekor_qilingan": "❌ Bekor qilingan",
 }
 
-# Bot ishga tushgan sanadan OLDINGI yetkazilmagan hodisalar (eski oqim
-# davridagi, mijoz brauzeri allaqachon xabar bergan buyurtmalar) qayta
-# yuborilmaydi — aks holda yangilanishdan keyin admin eski buyurtmalar
-# kartochkalari bilan ko'mib tashlanardi.
-WATCHDOG_EPOCH_MS = 1792540800000          # 2026-10-21 00:00 UTC
-WATCHDOG_MIN_AGE_MS = 90 * 1000            # Worker o'zi ulgurishi uchun
-WATCHDOG_MAX_AGE_MS = 24 * 3600 * 1000     # bir sutkadan eskisi — kech
+# Watchdog FAQAT `retryAt` maydoni bor hodisalarni oladi (Firebase indeksi
+# bilan). Bu maydonni faqat YANGI Worker qo'yadi va yetkazilganda / voz
+# kechilganda o'chiradi. Shuning uchun:
+#   • eski oqimdagi (mijoz brauzeri xabar bergan) hodisalar hech qachon
+#     qayta yuborilmaydi — admin eski kartochkalar bilan ko'milmaydi;
+#   • yetkazilmay "osilib" qolgan eski yozuvlar so'rov oynasini to'ldirib,
+#     yangi xatolarni yashirib qo'ymaydi.
 WATCHDOG_MAX_ATTEMPTS = 8
+WATCHDOG_MAX_AGE_MS = 7 * 24 * 3600 * 1000   # bir haftadan eskisi — ma'nosiz
+
+
+def outbox_query_params(now_ms, limit=25):
+    """Watchdog uchun indekslangan RTDB so'rovi (vaqti kelgan hodisalar)."""
+    return {"orderBy": '"retryAt"', "startAt": "1", "endAt": str(int(now_ms)),
+            "limitToFirst": str(int(limit))}
 
 
 def _bot_auth_key(bot_token):
@@ -176,31 +183,29 @@ async def worker_order_notify(worker_url, bot_token, actor, outbox_key, post=Non
     return bool(code == 200 and data.get("ok")), code, data
 
 
-def outbox_keys_to_retry(raw, now_ms, epoch_ms=WATCHDOG_EPOCH_MS):
-    """Watchdog qayta urishi kerak bo'lgan outbox kalitlari (eng eskisi birinchi)."""
+def outbox_keys_to_retry(raw, now_ms):
+    """Watchdog qayta urishi kerak bo'lgan outbox kalitlari (vaqti eng oldin kelgani birinchi)."""
     if not isinstance(raw, dict):
         return []
     picked = []
     for key, ev in raw.items():
-        if not isinstance(ev, dict) or ev.get("delivered") is not False:
+        if not isinstance(ev, dict) or ev.get("delivered") is True:
             continue
         if ev.get("type") not in ("order_created", "order_status"):
             continue
         try:
+            retry_at = int(ev.get("retryAt") or 0)
             created = int(ev.get("createdAt") or 0)
             attempts = int(ev.get("attempts") or 0)
             lease_until = int(ev.get("leaseUntil") or 0)
         except (TypeError, ValueError):
             continue
+        if retry_at <= 0 or retry_at > now_ms:
+            continue
         if attempts >= WATCHDOG_MAX_ATTEMPTS or lease_until > now_ms:
             continue
-        age = now_ms - created
-        if age < WATCHDOG_MIN_AGE_MS or age > WATCHDOG_MAX_AGE_MS:
+        if created and now_ms - created > WATCHDOG_MAX_AGE_MS:
             continue
-        # Eski oqim hodisasi (Worker hech urinmagan va yangilanishdan oldin
-        # yaratilgan) — u davrda xabarni mijoz brauzeri yuborgan.
-        if attempts == 0 and created < epoch_ms:
-            continue
-        picked.append((created, key))
+        picked.append((retry_at, key))
     picked.sort()
     return [k for _, k in picked]

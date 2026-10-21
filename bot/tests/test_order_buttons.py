@@ -112,24 +112,41 @@ def test_worker_xatosi_tushunarli_matn():
 
 
 def test_watchdog_faqat_kerakli_hodisalarni_oladi():
-    now = order_ops.WATCHDOG_EPOCH_MS + 10 * 3600 * 1000
+    """Faqat `retryAt` vaqti kelgan YANGI oqim hodisalari. Eski oqimdagi
+    `delivered:false` yozuvlar (retryAt yo'q) hech qachon olinmaydi —
+    ular ilgari so'rov oynasini to'ldirib, yangi xatolarni yashirardi."""
+    now = 1_800_000_000_000
     m = 60 * 1000
     raw = {
-        "fresh": {"type": "order_created", "delivered": False, "createdAt": now - 10 * 1000},
-        "retry": {"type": "order_created", "delivered": False, "createdAt": now - 5 * m, "attempts": 1},
-        "never": {"type": "order_status", "delivered": False, "createdAt": now - 3 * m},
-        "done": {"type": "order_created", "delivered": True, "createdAt": now - 5 * m},
+        "not_yet": {"type": "order_created", "delivered": False, "createdAt": now - 10 * 1000,
+                    "retryAt": now + 80 * 1000},
+        "retry": {"type": "order_created", "delivered": False, "createdAt": now - 5 * m,
+                  "attempts": 1, "retryAt": now - 2 * m},
+        "never": {"type": "order_status", "delivered": False, "createdAt": now - 3 * m,
+                  "retryAt": now - 1 * m},
+        "legacy_flow": {"type": "order_created", "delivered": False, "createdAt": now - 5 * m},
+        "done": {"type": "order_created", "delivered": True, "createdAt": now - 5 * m, "retryAt": now - m},
         "leased": {"type": "order_created", "delivered": False, "createdAt": now - 5 * m,
-                   "attempts": 1, "leaseUntil": now + 30 * 1000},
-        "gave_up": {"type": "order_created", "delivered": False, "createdAt": now - 5 * m, "attempts": 8},
-        "too_old": {"type": "order_created", "delivered": False, "createdAt": now - 30 * 3600 * 1000, "attempts": 1},
-        "pre_epoch": {"type": "order_created", "delivered": False,
-                      "createdAt": order_ops.WATCHDOG_EPOCH_MS - 3600 * 1000},
-        "customer": {"type": "new_customer", "delivered": False, "createdAt": now - 5 * m},
+                   "attempts": 1, "leaseUntil": now + 30 * 1000, "retryAt": now - m},
+        "gave_up": {"type": "order_created", "delivered": False, "createdAt": now - 5 * m,
+                    "attempts": 8, "retryAt": now - m},
+        "too_old": {"type": "order_created", "delivered": False, "createdAt": now - 8 * 24 * 3600 * 1000,
+                    "attempts": 1, "retryAt": now - m},
+        "customer": {"type": "new_customer", "delivered": False, "createdAt": now - 5 * m, "retryAt": now - m},
         "junk": "x",
     }
     assert order_ops.outbox_keys_to_retry(raw, now) == ["retry", "never"]
     assert order_ops.outbox_keys_to_retry(None, now) == []
+
+
+def test_watchdog_sorovi_indekslangan():
+    p = order_ops.outbox_query_params(1_800_000_000_000)
+    assert p == {"orderBy": '"retryAt"', "startAt": "1", "endAt": "1800000000000",
+                 "limitToFirst": "25"}, p
+    rules = open(os.path.join(ROOT, "database.rules.json"), encoding="utf-8").read()
+    block = rules[rules.index('"notification_outbox"'):]
+    block = block[:block.index("}")]
+    assert '"retryAt"' in block, "database.rules.json da notification_outbox indexOn retryAt yo'q"
 
 
 if __name__ == "__main__":

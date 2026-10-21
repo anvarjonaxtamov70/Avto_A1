@@ -31,6 +31,7 @@ const AUTH = slice('    window._initDataAgeSec = function', '    // 🔐 Auth ka
 const STATUS = slice('// ✅ Tasdiq oynasi', '    function openModal(id) {', 'changeOrderStatus');
 const CHECKOUT = slice('window.confirmOrder = async (paymentMethod) => {', '// 📦 1. VIZUAL KUZATUV', 'confirmOrder');
 const CANCEL = slice('window._renderOrderCancel = function', '// 📦 3. KUZATUV', 'cancelMyOrder');
+const REORDER = slice('window.reorderItems = () => {', '// 2. GRAFIK STATISTIKA', 'reorderItems');
 
 let passed = 0, failed = 0;
 function ok(c, m) { if (c) passed++; else { failed++; console.error('  ❌ ' + m); } }
@@ -84,7 +85,9 @@ function makeCtx(opts) {
   ctx._orderAttemptClear = () => {};
   ctx.allFetchedOrders = opts.allFetchedOrders || [];
   vm.createContext(ctx);
-  vm.runInContext(AUTH + '\n' + STATUS + '\n' + CHECKOUT + '\n' + CANCEL, ctx);
+  ctx.currentOpenOrderId = opts.currentOpenOrderId || null;
+  ctx.closeModal = () => {}; ctx.openModal = () => {};
+  vm.runInContext(AUTH + '\n' + STATUS + '\n' + CHECKOUT + '\n' + CANCEL + '\n' + REORDER.replace(/\/\/ =+\s*$/, ''), ctx);
   return { ctx, calls, elements };
 }
 
@@ -179,6 +182,20 @@ function makeCtx(opts) {
   t = makeCtx({ myOrders: [{ id: 'o7', status: 'yolda' }] });
   await t.ctx.cancelMyOrder('o7');
   ok(t.calls.fetch.length === 0, 'yo\'ldagi buyurtma — so\'rov ham yuborilmaydi');
+
+  // ===== 6) Qayta buyurtma (server yozgan buyurtma) =====
+  console.log('▶ 6) reorderItems');
+  const srv = { id: 'o9', status: 'yetkazildi', items: { l_aaa: 2, l_bbb: 1 },
+    itemDetails: [{ id: '1', size: 'Universal', qty: 2 }, { id: '2', size: '92.5', qty: 1 }, { id: '1', size: 'Universal', carModel: 'Gazel Next', qty: 1 }] };
+  t = makeCtx({ myOrders: [srv], currentOpenOrderId: 'o9' });
+  t.ctx.productsDB.push({ id: 2, name: 'Klapan', price: 5, product_type: 'razmerli', sizes: [{ size: '92.5', stock: 3 }] });
+  t.ctx.productsDB[0].stock = 5;
+  t.ctx.cart = {};
+  vm.runInContext('cart = {};', t.ctx);
+  t.ctx.reorderItems();
+  const cartNow = vm.runInContext('cart', t.ctx);
+  ok(cartNow['1||Universal'] === 2 && cartNow['2||92_dot_5'] === 1 && cartNow['1||Gazel Next'] === 1,
+    'server buyurtmasi savatga to\'g\'ri qayta qo\'shildi (ilgari "l_<hash>" sabab bo\'sh) — ' + JSON.stringify(cartNow));
 
   console.log('\n' + passed + ' ta tekshiruv o\'tdi, ' + failed + ' ta xato');
   if (failed) { console.error('❌ Mini App buyurtma qatlami sinovi MUVAFFAQIYATSIZ'); process.exit(1); }

@@ -62,11 +62,16 @@ tartibi, xabarlar). Mini App, admin tugmalari va AI agenti — hammasi Worker or
 - Bot → Worker so'rovlari `BOT_TOKEN` dan hosil qilingan HMAC imzo bilan
   (`bot/order_ops.py`). Yangi maxfiy kalit kerak emas, faqat ikkala tomonda `BOT_TOKEN` bir xil bo'lsin.
 
-**Joriy qilish tartibi:** 1) `cloudflare-worker.js` ni Cloudflare'ga joylang;
-2) `database.rules.json` ni joriy qiling (`notification_outbox` indeksi);
-3) botni qayta deploy qiling; 4) Mini App (GitHub Pages) — merge'da o'zi.
-Mini App eski Worker bilan ham ishlaydi (xabarni o'zi yuboradi), lekin tugmalar va
-ishonchli xabar faqat yangi Worker bilan.
+**Joriy qilish tartibi (muhim — dublikat xabar bo'lmasligi uchun):**
+1) PR'ni merge qiling — Mini App (GitHub Pages) va bot yangilanadi. Yangi Mini App eski
+   Worker bilan ham ishlaydi: Worker `notify:"server"` demaguncha xabarni o'zi yuboradi
+   (endi barcha adminlarga).
+2) `cloudflare-worker.js` ni Cloudflare'ga joylang — shu daqiqadan xabarlar va tugmalar serverda.
+3) «Deploy Firebase qoidalari» workflow'ini ishga tushiring (`notification_outbox` → `indexOn: retryAt`,
+   bot watchdog'i uchun).
+
+Bot va Worker'dagi `BOT_TOKEN` bir xil, botning `ADMIN_IDS` dagi birinchi ID esa Worker'ning
+`ADMIN_IDS` ida ham bo'lishi shart (watchdog shu nom bilan imzolaydi).
 
 ## O'rnatish
 

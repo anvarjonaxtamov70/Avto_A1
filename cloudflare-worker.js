@@ -75,6 +75,11 @@ const ORDER_TRANSITIONS = {
 // murojaat qiladi — alohida maxfiy kalit sozlash shart emas.
 const BOT_AUTH_MAX_SKEW_SECONDS = 300;
 const ORDER_NOTIFY_LEASE_MS = 60 * 1000;
+// Yetkazilmagan bildirishnoma: birinchi qayta urinish 90 s dan keyin, keyin
+// eksponensial (2, 4, 8 ... daqiqa, ko'pi bilan 30 daq). 8 urinishdan keyin
+// to'xtaydi (`retryAt` o'chiriladi — watchdog indeksidan chiqadi).
+const ORDER_RETRY_FIRST_MS = 90 * 1000;
+const ORDER_RETRY_MAX_ATTEMPTS = 8;
 const ATTEMPT_LEASE_MS = 45 * 1000;
 const STATUS_LEASE_MS = 45 * 1000;
 const JWKS_REFRESH_COOLDOWN_MS = 5 * 1000;
@@ -1304,6 +1309,7 @@ async function buildOrderQuote(ctx, token, uid, intent, payloadHash) {
     const isSized = product.product_type === "razmerli" || sizeEntries.length > 0;
     let size = "Universal";
     let sizeKey = null;
+    let carModel = "";
     let available = Number(product.stock) || 0;
     if (isSized) {
       if (!requested.size || requested.size === "Universal") {
@@ -1315,7 +1321,14 @@ async function buildOrderQuote(ctx, token, uid, intent, payloadHash) {
       sizeKey = sizeHit.key;
       available = Math.max(0, Number(sizeHit.val.stock) || 0);
     } else if (requested.size && requested.size !== "Universal") {
-      throw httpError(400, "bu mahsulotda razmer yo'q", { productId: requested.id });
+      // ⚠️ ILGARI: bu yerda 400 "bu mahsulotda razmer yo'q" qaytarilardi va
+      //    BUTUN buyurtma rad etilardi. Lekin Mini App razmersiz tovar uchun
+      //    "Qaysi mashina uchun?" tanlovini aynan shu maydonda yuboradi
+      //    (`id||Gazel Biznes`). Natijada mashina tanlovi bor har qanday oddiy
+      //    tovarni sotib olib bo'lmasdi — mijoz faqat "Xatolik!" ko'rardi.
+      //    Endi bu MASHINA MODELI sifatida saqlanadi (adminga ko'rinadi), stok
+      //    esa tovarning umumiy qoldig'idan olinadi.
+      carModel = cleanText(requested.size, 40, false);
     }
     const lineTotal = price * requested.qty;
     if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(total + lineTotal)) {
@@ -1327,6 +1340,7 @@ async function buildOrderQuote(ctx, token, uid, intent, payloadHash) {
       id: requested.id,
       name: cleanText(product.name || requested.id, 160, true),
       size,
+      carModel: carModel || undefined,
       qty: requested.qty,
       unitPrice: price,
       lineTotal,
@@ -1484,8 +1498,10 @@ function canonicalMatchesAttempt(order, uid, quote, payloadHash) {
 async function buildCanonicalOrder(identity, intent, quote, payloadHash, cashbackUsed) {
   const orderItems = {};
   for (const item of quote.items) {
-    const encodedKey = "l_" + (await sha256Hex(item.id + "\u0000" + item.size)).slice(0, 40);
-    orderItems[encodedKey] = item.qty;
+    // Bir tovar ikki xil mashina uchun olinsa qatorlar ustma-ust tushmasin.
+    const encodedKey = "l_" + (await sha256Hex(item.id + "\u0000" + item.size +
+      (item.carModel ? "\u0000" + item.carModel : ""))).slice(0, 40);
+    orderItems[encodedKey] = (orderItems[encodedKey] || 0) + item.qty;
   }
   return {
     id: quote.orderId,
@@ -1613,7 +1629,13 @@ async function reconcileCommittedOrder(ctx, token, identity, intent, payloadHash
   await rtdbCreateIfNull(
     ctx.dbUrl,
     "notification_outbox/" + orderKey,
-    { type: "order_created", uid: identity.uid, orderKey, orderId: quote.orderId, createdAt: Date.now(), delivered: false },
+    {
+      type: "order_created", uid: identity.uid, orderKey, orderId: quote.orderId,
+      createdAt: Date.now(), delivered: false,
+      // Bot watchdog FAQAT `retryAt` bor hodisalarni ko'radi (indekslangan).
+      // Worker darhol yuboradi; ulgurmasa 90 s dan keyin bot qayta uradi.
+      retryAt: Date.now() + ORDER_RETRY_FIRST_MS,
+    },
     token,
     (value) => !!value && value.type === "order_created" && value.uid === identity.uid &&
       value.orderKey === orderKey && String(value.orderId) === String(quote.orderId)
@@ -1799,16 +1821,20 @@ async function resolveOrderStockItems(ctx, token, order) {
   } else {
     const rawItems = order.items && typeof order.items === "object" ? order.items : {};
     sourceItems = Object.keys(rawItems).map((key, index) => {
+      // Eski savat kalitlari: "id" (addToCart(id) — razmersiz), "id||razmer"
+      // yoki "id||<mashina modeli>". Eski Mini App razmerdagi nuqtani "_dot_"
+      // qilib saqlagan ("92_dot_5").
       const separator = key.indexOf("||");
-      if (separator <= 0) retryableInventoryConflict("buyurtma mahsulotlarini tiklab bo'lmaydi", { itemKey: key });
-      // Eski Mini App razmerdagi nuqtani "_dot_" qilib saqlagan ("92_dot_5").
-      let legacySize = key.slice(separator + 2).split("_dot_").join(".");
+      const id = separator > 0 ? key.slice(0, separator) : key;
+      if (!id) retryableInventoryConflict("buyurtma mahsulotlarini tiklab bo'lmaydi", { itemKey: key });
+      let legacySize = separator > 0 ? key.slice(separator + 2).split("_dot_").join(".") : "";
       if (!legacySize || legacySize === "undefined") legacySize = "Universal";
       return {
         lineKey: "legacy_" + index,
-        id: key.slice(0, separator),
+        id,
         size: legacySize,
         qty: Number(rawItems[key]),
+        legacy: true,
       };
     });
   }
@@ -1850,7 +1876,12 @@ async function resolveOrderStockItems(ctx, token, order) {
     const sizeEntries = toEntries(productHit.val.sizes);
     const isSized = productHit.val.product_type === "razmerli" || sizeEntries.length > 0;
     let sizeKey = null;
-    if (size !== "Universal") {
+    let effectiveSize = size;
+    if (item.legacy === true && !isSized && size !== "Universal") {
+      // Eski kalitdagi "razmer" aslida mashina modeli (razmersiz tovar) —
+      // umumiy stokka qaytariladi.
+      effectiveSize = "Universal";
+    } else if (size !== "Universal") {
       const sizeMatches = sizeEntries.filter((entry) => String(entry.val.size) === size);
       if (sizeMatches.length !== 1) {
         skip("razmer topilmadi");
@@ -1865,7 +1896,7 @@ async function resolveOrderStockItems(ctx, token, order) {
       lineKey,
       id,
       name: String(productHit.val.name || item.name || id),
-      size,
+      size: effectiveSize,
       qty,
       productKey: productHit.key,
       sizeKey,
@@ -2089,9 +2120,13 @@ async function adoptLegacyOrder(ctx, token, uid, orderId) {
     payable,
     cbRate,
     legacyAdopted: true,
+    // Ko'chirish paytidagi holat. Bu holatgacha bo'lgan cashback/ombor amallarini
+    // ESKI mijoz kodi bajargan — server ularni qayta bajarmasligi SHART.
+    legacyStatus: status,
     legacyUserKey: hit.key,
     adoptedAt: Date.now(),
   };
+  delete adopted.statusUpdatedAt;
   const created = await rtdbCreateIfNull(
     ctx.dbUrl,
     "orders/" + uid + "_" + orderId,
@@ -2126,6 +2161,7 @@ async function publishStatusProjections(ctx, token, uid, orderId, orderKey, orde
     {
       type: "order_status", uid, orderKey, orderId, from: fromStatus, status: targetStatus,
       createdAt: Date.now(), delivered: false, transitionVersion,
+      retryAt: Date.now() + ORDER_RETRY_FIRST_MS,
       by: (actor && actor.role) || "admin",
       byUid: (actor && actor.uid) || null,
       byName: (actor && actor.name) || null,
@@ -2179,6 +2215,28 @@ async function handleOrderStatus(request, env, execCtx) {
     if (!order || String(order.uid) !== uid || String(order.id) !== orderId) throw httpError(404, "buyurtma topilmadi");
 
     const canonicalStatus = String(order.status || "kutilmoqda");
+    // Hech qaysi holatdan "kutilmoqda" ga o'tib bo'lmaydi.
+    if (status === "kutilmoqda") {
+      throw httpError(409, "status o'tishi mumkin emas", { from: canonicalStatus, to: status });
+    }
+    // 🧓 ESKI (ko'chirilgan) buyurtma: uning holati, cashback va ombor amallari
+    //    eski mijoz kodida bajarilgan va server ularni ko'rmagan. Shu sababli:
+    //    • mijoz uni o'zi bekor qila olmaydi (holat yolg'on "kutilmoqda" bo'lishi
+    //      mumkin — tovar aslida berilgan);
+    //    • eski oqimda yetkazilgan buyurtmani "qaytarish" bloklanadi (berilgan
+    //      cashbackni server bilmaydi — qaytarib ololmaydi, faqat ishlatilganini
+    //      yana qaytarib yuborardi);
+    //    • server hali tegmagan eski buyurtmaga takroriy so'rov hech qanday
+    //      cashback/xabar amalini bajarmaydi (pastda).
+    const legacyUntouched = order.legacyAdopted === true && order.statusUpdatedAt == null;
+    if (!isAdmin && order.legacyAdopted === true) {
+      throw httpError(403, "eski buyurtmani bekor qilish uchun do'kon bilan bog'laning");
+    }
+    if (legacyUntouched && canonicalStatus === "yetkazildi" && status === "bekor_qilingan") {
+      throw httpError(409, "eski (yangilanishdan oldingi) yetkazilgan buyurtmani qaytarib bo'lmaydi — ombor va cashbackni qo'lda to'g'rilang", {
+        currentStatus: canonicalStatus,
+      });
+    }
     if (expectedFrom && canonicalStatus !== expectedFrom && canonicalStatus !== status) {
       throw httpError(409, "holat allaqachon o'zgargan", { currentStatus: canonicalStatus });
     }
@@ -2193,6 +2251,11 @@ async function handleOrderStatus(request, env, execCtx) {
       ctx, token, orderKey, String(order.status || "kutilmoqda"), status, owner
     );
     if (claim.already) {
+      if (legacyUntouched) {
+        // Eski oqimda allaqachon shu holatga o'tgan — cashback/xabar QAYTA
+        // bajarilmaydi (aks holda ishlatilgan cashback ikkinchi marta qaytardi).
+        return json({ ok: true, duplicate: true, orderKey, status, notify: "server" });
+      }
       const last = claim.state.lastTransition && claim.state.lastTransition.target === status
         ? claim.state.lastTransition
         : { from: status, transitionVersion: Number(claim.state.version) || 0 };
@@ -2370,7 +2433,8 @@ function orderItemLines(order) {
   const lines = [];
   for (const it of items) {
     if (!it || typeof it !== "object") continue;
-    const size = it.size && it.size !== "Universal" ? " (" + escapeTelegramHtml(it.size) + ")" : "";
+    const opt = it.size && it.size !== "Universal" ? it.size : (it.carModel || "");
+    const size = opt ? " (" + escapeTelegramHtml(opt) + ")" : "";
     const qty = Number(it.qty) || 0;
     const unit = Number(it.unitPrice) || 0;
     const line = it.lineTotal != null ? Number(it.lineTotal) || 0 : unit * qty;
@@ -2442,9 +2506,34 @@ function orderAdminCardText(order, event) {
     lines.push("🔄 <i>Oxirgi o'zgarish: " + escapeTelegramHtml(ORDER_STATUS_LABELS[event.status] || event.status) +
       " — " + verb + ", " + who + "</i>");
   }
-  let text = lines.join(NL);
-  if (text.length > 4000) text = text.slice(0, 3990) + "…";
-  return text;
+  // ⚠️ Bu yerda kesilmaydi: HTML ni o'rtasidan kesish teg/entity'ni buzadi va
+  //    Telegram butun xabarni rad etadi. Uzun bo'lsa `adminCardSend` oddiy
+  //    matnga o'tadi.
+  return lines.join(NL);
+}
+
+function htmlToPlain(text) {
+  return String(text || "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&amp;/g, "&");
+}
+
+// Kartochkani yuboradi/tahrirlaydi. HTML rad etilsa (parse xatosi, juda uzun)
+// — OLDDIY MATN bilan qayta uradi. Yangi buyurtma xabari hech qachon shu
+// sabab bilan yo'qolmasligi kerak.
+async function adminCardSend(env, method, base, card, keyboard) {
+  const tooLong = card.length > 4096;
+  if (!tooLong) {
+    const res = await telegramCall(env, method, {
+      ...base, text: card, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: keyboard,
+    });
+    if (res.ok || !res.permanent || !/parse|entit|too long|tag/i.test(res.error)) return res;
+  }
+  let plain = htmlToPlain(card);
+  if (plain.length > 4000) plain = plain.slice(0, 3990) + "…";
+  return await telegramCall(env, method, {
+    ...base, text: plain, disable_web_page_preview: true, reply_markup: keyboard,
+  });
 }
 
 const CUSTOMER_ORDER_TEXTS = {
@@ -2535,7 +2624,14 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
   const now = Date.now();
   const claim = await rtdbEtagMutate(ctx.dbUrl, path, token, (cur) => {
     if (!cur || (cur.type !== "order_created" && cur.type !== "order_status")) return { abort: true, result: { state: "missing" } };
-    if (cur.delivered === true) return { abort: true, result: { state: "delivered" } };
+    if (cur.delivered === true) {
+      if (cur.retryAt != null) {
+        const fixed = cloneJson(cur);
+        delete fixed.retryAt;
+        return { value: fixed, result: { state: "delivered" } };
+      }
+      return { abort: true, result: { state: "delivered" } };
+    }
     if (Number(cur.leaseUntil) > now) return { abort: true, result: { state: "busy" } };
     const next = cloneJson(cur);
     next.lease = lease;
@@ -2580,10 +2676,7 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
           const key = "admin_" + adminId;
           if (done[key]) continue;
           if (msgs[adminId]) { done[key] = true; continue; }
-          const res = await telegramCall(env, "sendMessage", {
-            chat_id: adminId, text: card, parse_mode: "HTML",
-            disable_web_page_preview: true, reply_markup: keyboard,
-          });
+          const res = await adminCardSend(env, "sendMessage", { chat_id: adminId }, card, keyboard);
           if (res.ok && res.result && res.result.message_id != null) {
             msgs[adminId] = res.result.message_id;
             await rtdbPatch(ctx.dbUrl, "order_tg/" + event.orderKey + "/msgs", { [adminId]: res.result.message_id }, token);
@@ -2607,10 +2700,8 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
           if (done[key]) continue;
           let res;
           if (msgs[adminId]) {
-            res = await telegramCall(env, "editMessageText", {
-              chat_id: adminId, message_id: msgs[adminId], text: card, parse_mode: "HTML",
-              disable_web_page_preview: true, reply_markup: keyboard,
-            });
+            res = await adminCardSend(env, "editMessageText",
+              { chat_id: adminId, message_id: msgs[adminId] }, card, keyboard);
             if (!res.ok && /not modified/i.test(res.error)) res = { ok: true };
           } else {
             // Kartochkasi yo'q (eski buyurtma) — tahrirlanadigan narsa yo'q.
@@ -2661,8 +2752,18 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
     const next = cloneJson(cur);
     next.done = done;
     next.delivered = !retry;
-    next.state = retry ? "retry" : "sent";
     next.leaseUntil = 0;
+    const attempts = Number(next.attempts) || 0;
+    if (!retry) {
+      next.state = "sent";
+      delete next.retryAt;
+    } else if (attempts >= ORDER_RETRY_MAX_ATTEMPTS) {
+      next.state = "gave_up";
+      delete next.retryAt;
+    } else {
+      next.state = "retry";
+      next.retryAt = finishedAt + Math.min(30 * 60 * 1000, 60 * 1000 * Math.pow(2, attempts));
+    }
     next.lastError = errors.length ? errors.join("; ").slice(0, 500) : null;
     next.finishedAt = finishedAt;
     return { value: next, result: null };

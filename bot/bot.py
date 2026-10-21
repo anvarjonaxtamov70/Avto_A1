@@ -3389,18 +3389,24 @@ async def order_outbox_watchdog():
 
     Odatda Worker xabarni buyurtma yozilgan zahoti yuboradi. Lekin Telegram
     vaqtincha javob bermasa yoki Worker fon vazifasi uzilib qolsa, hodisa
-    `notification_outbox` da `delivered:false` bo'lib qoladi. Ilgari bunday
+    `notification_outbox` da `retryAt` (keyingi urinish vaqti) bilan qoladi. Ilgari bunday
     buyurtma haqida admin HECH QACHON bilmasdi. Endi bot daqiqada bir
     tekshiradi va Worker /order-notify ga qayta yuborishni so'raydi (Worker
     faqat yetmagan qabul qiluvchilarga yuboradi — dublikat bo'lmaydi).
     """
     await asyncio.sleep(30)
     warned_old_worker = False
+    warned_no_index = False
     while True:
         try:
-            raw = await firebase_query("notification_outbox", {
-                "orderBy": '"delivered"', "equalTo": "false", "limitToFirst": "50"})
-            keys = order_ops.outbox_keys_to_retry(raw, int(time.time() * 1000))
+            now_ms = int(time.time() * 1000)
+            raw = await firebase_query("notification_outbox",
+                                       order_ops.outbox_query_params(now_ms))
+            if raw is None and not warned_no_index:
+                warned_no_index = True
+                logging.error("notification_outbox so'rovi ishlamadi — database.rules.json "
+                              "(indexOn: retryAt) joriy qilinganmi?")
+            keys = order_ops.outbox_keys_to_retry(raw, now_ms)
             for key in keys[:10]:
                 ok, http_status, data = await order_ops.worker_order_notify(
                     WORKER_URL, API_TOKEN, ADMIN_ID, key)
