@@ -7203,6 +7203,153 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     <div id="bd-list"></div>
 </div>
 
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   📦 ADMIN BUYURTMALAR — iOS uslubidagi nozik dizayn (faqat ko'rinish).
+   Mantiq/handlerlar o'zgarmagan; barcha klasslar `ao-` prefiksli.
+   ═══════════════════════════════════════════════════════════════════ */
+#adminOrdersModal, #adminOrderPickModal {
+    --ao-bg2: #1c1c1e; --ao-sep: rgba(84,84,88,.38);
+    --ao-tx: #f5f5f7; --ao-tx2: rgba(235,235,245,.62); --ao-tx3: rgba(235,235,245,.3);
+    --ao-fill: rgba(118,118,128,.24); --ao-fill2: rgba(118,118,128,.14);
+    --ao-blue: #0a84ff; --ao-green: #30d158; --ao-orange: #ff9f0a; --ao-yellow: #ffd60a; --ao-red: #ff453a; --ao-gray: #8e8e93;
+    --ao-ease: cubic-bezier(.32,.72,0,1); --ao-spring: cubic-bezier(.34,1.4,.64,1);
+}
+html[data-theme="light"] #adminOrdersModal, html[data-theme="light"] #adminOrderPickModal {
+    --ao-bg2: #ffffff; --ao-sep: rgba(60,60,67,.14);
+    --ao-tx: #1c1c1e; --ao-tx2: rgba(60,60,67,.64); --ao-tx3: rgba(60,60,67,.3);
+    --ao-fill: rgba(118,118,128,.14); --ao-fill2: rgba(118,118,128,.08);
+    --ao-blue: #007aff; --ao-green: #248a3d; --ao-orange: #c76a00; --ao-yellow: #a37800; --ao-red: #d70015;
+}
+#admin-orders-list, #adminOrderPickModal #pick-actions {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+
+/* — Filtr chiplari (segment) — */
+.ao-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 16px; margin: 0 -2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.ao-chips::-webkit-scrollbar { display: none; }
+.ao-chip {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
+    border: 0; border-radius: 999px; background: var(--ao-fill2); color: var(--ao-tx2);
+    font-family: inherit; font-size: 13.5px; font-weight: 500; letter-spacing: -.1px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color .3s var(--ao-ease), color .3s var(--ao-ease), transform .35s var(--ao-spring);
+}
+.ao-chip:active { transform: scale(.94); transition-duration: .08s; }
+.ao-chip.is-active { background: var(--ao-tx); color: var(--ao-bg2); font-weight: 600; }
+.ao-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: 0 0 7px; }
+.ao-cnt { font-size: 12px; font-weight: 600; opacity: .55; font-variant-numeric: tabular-nums; }
+.ao-cnt:empty { display: none; }
+
+/* — Karta — */
+.ao-card {
+    background: var(--ao-bg2); border-radius: 22px; padding: 16px 16px 14px; margin-bottom: 14px;
+    border: .5px solid var(--ao-sep); color: var(--ao-tx);
+    box-shadow: 0 1px 0 rgba(255,255,255,.035) inset, 0 12px 32px -18px rgba(0,0,0,.65);
+}
+html[data-theme="light"] .ao-card { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 10px 28px -16px rgba(60,40,0,.18); }
+.ao-anim .ao-card { animation: aoIn .55s var(--ao-ease) both; animation-delay: calc(min(var(--i), 8) * 45ms); }
+@keyframes aoIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+
+.ao-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ao-code { font-size: 17px; font-weight: 600; letter-spacing: -.2px; font-variant-numeric: tabular-nums; color: var(--ao-tx); }
+.ao-when { font-size: 12.5px; color: var(--ao-tx2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+/* Holat belgisi — yumshoq "tinted" kapsula */
+.ao-card, .ao-st-kutilmoqda { --sc: var(--ao-yellow); }
+.ao-st-qabul { --sc: var(--ao-blue); } .ao-st-yolda { --sc: var(--ao-orange); }
+.ao-st-yetkazildi { --sc: var(--ao-green); } .ao-st-bekor_qilingan { --sc: var(--ao-red); }
+#adminOrdersModal .ao-card .status-badge, #adminOrderPickModal .ao-pick-status .status-badge {
+    display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 5px 10px 5px 8px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.2;
+    background: rgba(128,128,128,.16) !important;
+    background: color-mix(in srgb, var(--sc) 15%, transparent) !important;
+    color: var(--sc) !important; box-shadow: none !important; border: 0 !important;
+}
+#adminOrdersModal .ao-card .status-badge svg, #adminOrderPickModal .ao-pick-status .status-badge svg { width: 13px; height: 13px; }
+
+/* Mijoz — iOS "inset grouped" ro'yxat */
+.ao-group { margin-top: 14px; background: var(--ao-fill2); border-radius: 14px; overflow: hidden; }
+.ao-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px; color: var(--ao-tx); text-decoration: none; font-size: 15px; -webkit-tap-highlight-color: transparent; transition: background-color .2s; }
+.ao-row + .ao-row::before { content: ""; position: absolute; top: 0; left: 52px; right: 0; height: .5px; background: var(--ao-sep); }
+.ao-ic { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 8px; display: grid; place-items: center; background: var(--ic); color: #fff; }
+.ao-ic svg { width: 16px; height: 16px; }
+.ao-row-tx { flex: 1; min-width: 0; line-height: 1.35; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; overflow-wrap: anywhere; }
+.ao-name .ao-row-tx { font-weight: 500; }
+.ao-link .ao-row-tx { color: var(--ao-blue); font-variant-numeric: tabular-nums; }
+.ao-link:active { background: var(--ao-fill); }
+.ao-addr .ao-row-tx { font-size: 13.5px; color: var(--ao-tx2); }
+.ao-chev { color: var(--ao-tx3); font-size: 22px; line-height: 1; font-weight: 300; }
+
+/* Mahsulotlar */
+.ao-items { margin-top: 16px; }
+.ao-sec { font-size: 12px; font-weight: 600; color: var(--ao-tx2); text-transform: uppercase; letter-spacing: .5px; padding: 0 4px 4px; }
+.ao-item { display: flex; align-items: baseline; gap: 10px; padding: 10px 4px; font-size: 14.5px; color: var(--ao-tx); border-bottom: .5px solid var(--ao-sep); }
+.ao-item:last-child { border-bottom: 0; }
+.ao-item-nm { flex: 1; min-width: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.ao-opt { color: var(--ao-tx2); font-size: 12.5px; margin-left: 4px; }
+.ao-item-q { font-size: 13px; color: var(--ao-tx2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ao-item-p { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Yig'ish qatori (mavjud .pick-open-btn ustidan) */
+#adminOrdersModal .ao-card .pick-open-btn {
+    width: 100%; margin: 12px 0 0; display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+    min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: var(--ao-fill2);
+    color: var(--ao-tx); font-family: inherit; font-size: 15px; font-weight: 500; text-align: left;
+    transition: background-color .2s, transform .35s var(--ao-spring);
+}
+#adminOrdersModal .ao-card .pick-open-btn:active { transform: scale(.98); background: var(--ao-fill); transition-duration: .08s; }
+.ao-pick-tx { flex: 1; font-variant-numeric: tabular-nums; }
+.ao-pick.is-done .ao-pick-tx { color: var(--ao-green); font-weight: 600; }
+.ao-pick.is-part .ao-pick-tx { color: var(--ao-orange); font-weight: 600; }
+
+/* Jami */
+.ao-total { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 16px 4px 14px; }
+.ao-total > span { font-size: 14px; color: var(--ao-tx2); }
+.ao-total b { font-size: 22px; font-weight: 700; letter-spacing: -.5px; color: var(--ao-tx); font-variant-numeric: tabular-nums; }
+.ao-total small { font-size: 14px; font-weight: 500; color: var(--ao-tx2); margin-left: 3px; letter-spacing: 0; }
+
+/* Tugmalar */
+.ao-actions { display: flex; flex-direction: column; gap: 8px; }
+.ao-actions-sub { display: flex; gap: 8px; }
+.ao-actions > .ao-btn { flex: 0 0 auto; width: 100%; }
+.ao-btn {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 46px; padding: 0 14px;
+    border: 0; border-radius: 14px; font-family: inherit; font-size: 15px; font-weight: 600; letter-spacing: -.15px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; white-space: nowrap;
+    transition: transform .4s var(--ao-spring), filter .2s, background-color .25s, opacity .2s;
+}
+.ao-btn svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.ao-btn:active { transform: scale(.96); transition-duration: .08s; }
+.ao-primary { height: 50px; font-size: 16px; background: var(--c); color: #fff; box-shadow: 0 8px 20px -12px var(--c); }
+.ao-primary:active { filter: brightness(.92); }
+.ao-ghost { background: var(--ao-fill); color: var(--ao-tx); }
+.ao-danger { background: rgba(255,69,58,.12); color: var(--ao-red); }
+html[data-theme="light"] .ao-danger { background: rgba(215,0,21,.08); }
+.ao-chat.has-unread { color: var(--ao-blue); }
+.ao-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: #ff3b30; color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; animation: aoPop .45s var(--ao-spring) both; }
+@keyframes aoPop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (hover: hover) { .ao-btn:hover, .ao-chip:hover { filter: brightness(1.08); } #adminOrdersModal .ao-card .pick-open-btn:hover { background: var(--ao-fill); } }
+
+/* Bo'sh holat va yuklanish */
+.ao-empty { text-align: center; padding: 60px 20px; color: var(--ao-tx2); font-size: 14px; }
+.ao-empty-ic { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 20px; background: var(--ao-fill2); display: grid; place-items: center; color: var(--ao-tx2); }
+.ao-empty-ic svg { width: 30px; height: 30px; }
+.ao-empty b { display: block; font-size: 17px; font-weight: 600; color: var(--ao-tx); margin-bottom: 4px; }
+.ao-more { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 0 28px; color: var(--ao-tx2); font-size: 13px; }
+.ao-spin { width: 16px; height: 16px; box-sizing: border-box; border: 2px solid var(--ao-fill); border-top-color: var(--ao-tx2); border-radius: 50%; animation: aoSpin .8s linear infinite; }
+@keyframes aoSpin { to { transform: rotate(360deg); } }
+
+/* Yig'ish oynasidagi pastki tugmalar */
+#adminOrderPickModal #pick-actions .ao-btn { min-width: 120px; }
+
+html.lite .ao-card, html.lite .ao-badge, html.lite .ao-spin { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    .ao-card, .ao-badge { animation: none !important; }
+    .ao-btn, .ao-chip, #adminOrdersModal .ao-card .pick-open-btn { transition: none !important; }
+}
+</style>
 <div class="modal-standard" id="adminOrdersModal">
     <div class="modal-header"><h2 style="color: var(--primary-blue);"><svg class="uic" aria-hidden="true"><use href="#i-list"></use></svg>Buyurtmalar</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
     <div id="admin-orders-list"></div>
@@ -10334,6 +10481,22 @@ window.openAdminChat = (uid, orderId) => {
         });
     }
     
+
+// 🎛 ADMIN buyurtma filtrlari — iOS uslubidagi chiplar (faqat ko'rinish).
+window._aoFilterBar = function () {
+    var F = [['barchasi','Barchasi','var(--ao-gray)'],['kutilmoqda','Kutilmoqda','var(--ao-yellow)'],['qabul','Qabul','var(--ao-blue)'],['yolda',"Yo'lda",'var(--ao-orange)'],['yetkazildi','Yetkazildi','var(--ao-green)'],['bekor_qilingan','Bekor','var(--ao-red)']];
+    return '<div class="ao-chips" role="tablist">' + F.map(function (f, i) {
+        return '<button type="button" role="tab" aria-selected="' + (i === 0) + '" class="ao-chip' + (i === 0 ? ' is-active' : '') + '" style="--c:' + f[2] + '" onclick="filterAdminOrders(\'' + f[0] + '\', this)">' +
+            '<i class="ao-dot"></i><span>' + f[1] + '</span><b class="ao-cnt" data-cnt="' + f[0] + '"></b></button>';
+    }).join('') + '</div>';
+};
+window._aoUpdateCounts = function () {
+    var all = window.allFetchedOrders || [], c = { barchasi: all.length };
+    all.forEach(function (o) { var k = o.status || 'kutilmoqda'; c[k] = (c[k] || 0) + 1; });
+    document.querySelectorAll('#adminOrdersModal .ao-cnt').forEach(function (el) {
+        var n = c[el.getAttribute('data-cnt')] || 0; el.textContent = n ? n : '';
+    });
+};
   function openAdminOrders() { 
     document.getElementById('adminModal').style.display = 'none'; 
     let aM = document.getElementById('adminOrdersModal'); 
@@ -10344,17 +10507,8 @@ window.openAdminChat = (uid, orderId) => {
     
     aM.querySelector('.modal-header h2').innerHTML = '📦 Buyurtmalar';
     
-    // ZAMONAVIY CHIP TUGMALAR DIZAYNI
-   // ZAMONAVIY "GRID" (SETKA) DIZAYNI
     c.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px;">
-            <button onclick="filterAdminOrders('barchasi', this)" style="background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.2); padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">Barchasi</button>
-            <button onclick="filterAdminOrders('kutilmoqda', this)" style="background:var(--card-bg); color:#ffcc00; border:1px solid #ffcc00; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">⏳ Kutilmoqda</button>
-            <button onclick="filterAdminOrders('qabul', this)" style="background:var(--card-bg); color:#007aff; border:1px solid #007aff; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">✅ Qabul</button>
-            <button onclick="filterAdminOrders('yolda', this)" style="background:var(--card-bg); color:#ff9500; border:1px solid #ff9500; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">🚚 Yo'lda</button>
-            <button onclick="filterAdminOrders('yetkazildi', this)" style="background:var(--card-bg); color:#34c759; border:1px solid #34c759; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">🏁 Yetkazildi</button>
-            <button onclick="filterAdminOrders('bekor_qilingan', this)" style="background:var(--card-bg); color:#ff453a; border:1px solid #ff453a; padding:8px 4px; border-radius:8px; font-size:11px; cursor:pointer; font-weight:600; text-align:center; box-sizing:border-box; transition:0.2s;">❌ Bekor</button>
-        </div>
+        ${window._aoFilterBar()}
         <div id="admin-orders-render-box">${window._skel(6)}</div>
     `;
 
@@ -11062,14 +11216,7 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
     aM.querySelector('.modal-header h2').innerHTML = `📦 ${escHtml(customerName)} buyurtmalari`;
 
     c.innerHTML = `
-        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; justify-content: center;">
-            <button onclick="filterAdminOrders('barchasi', this)" style="background:rgba(255,255,255,0.05); color:var(--text-main); border:1px solid var(--glass-border); padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">Barchasi</button>
-            <button onclick="filterAdminOrders('kutilmoqda', this)" style="background:rgba(255, 204, 0, 0.15); color:#ffcc00; border:1px solid #ffcc00; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">⏳ Kutilmoqda</button>
-            <button onclick="filterAdminOrders('qabul', this)" style="background:rgba(0, 122, 255, 0.15); color:#007aff; border:1px solid #007aff; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">✅ Qabul</button>
-            <button onclick="filterAdminOrders('yolda', this)" style="background:rgba(255, 149, 0, 0.15); color:#ff9500; border:1px solid #ff9500; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🚚 Yo'lda</button>
-            <button onclick="filterAdminOrders('yetkazildi', this)" style="background:rgba(52, 199, 89, 0.15); color:#34c759; border:1px solid #34c759; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">🏁 Yetkazildi</button>
-            <button onclick="filterAdminOrders('bekor_qilingan', this)" style="background:rgba(255, 69, 58, 0.15); color:#ff453a; border:1px solid #ff453a; padding:8px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600;">❌ Bekor qilingan</button>
-        </div>
+        ${window._aoFilterBar()}
         <div id="admin-orders-render-box">${window._skel(6)}</div>
     `;
 
@@ -11100,17 +11247,16 @@ window.lastOrdersRef = null;
 window.filterAdminOrders = (status, btnElement) => {
     if(!window.allFetchedOrders) return;
 
-    const buttons = document.querySelectorAll('#adminOrdersModal button');
-    buttons.forEach(btn => {
-        btn.style.transform = 'scale(1)';
-        btn.style.boxShadow = 'none';
-        btn.style.borderWidth = '1px';
+    document.querySelectorAll('#adminOrdersModal .ao-chip').forEach(btn => {
+        btn.classList.remove('is-active');
+        btn.setAttribute('aria-selected', 'false');
     });
 
     if(btnElement) {
-        btnElement.style.transform = 'scale(1.1)';
-        btnElement.style.boxShadow = '0 0 15px rgba(255,255,255,0.2)';
-        btnElement.style.borderWidth = '2px';
+        btnElement.classList.add('is-active');
+        btnElement.setAttribute('aria-selected', 'true');
+        try { btnElement.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+        try { if (window._hap) window._hap('selection'); } catch (e) {}
     }
 
     if(status === 'barchasi') {
@@ -11961,14 +12107,14 @@ window._adminOrderItemsHTML = function (o) {
     var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
     var rows = '';
     function row(nameHTML, qty, sum) {
-        return '<div style="display:flex; justify-content:space-between; font-size: 12px; margin-bottom: 8px; color: #d1d1d6; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 6px;">' +
-            '<span style="flex:1; line-height: 1.4;">▪️ ' + nameHTML + ' <b style="color:#fff; margin-left:5px;">x' + qty + '</b></span>' +
-            '<span style="color:var(--luxury-gold); font-weight:bold; white-space:nowrap; margin-left: 10px;">' + (Number(sum) || 0).toLocaleString() + ' s</span></div>';
+        return '<div class="ao-item"><span class="ao-item-nm">' + nameHTML + '</span>' +
+            '<span class="ao-item-q">\u00D7' + qty + '</span>' +
+            '<span class="ao-item-p">' + (Number(sum) || 0).toLocaleString() + ' s</span></div>';
     }
     if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
         o.itemDetails.forEach(function (it) {
             var carOpt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || '');
-            var nm = escHtml(it.name) + (carOpt ? ' <span style="color:var(--luxury-gold); font-size:10px;">[' + escHtml(carOpt) + ']</span>' : '');
+            var nm = escHtml(it.name) + (carOpt ? '<span class="ao-opt">' + escHtml(carOpt) + '</span>' : '');
             var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
             rows += row(nm, (it.qty || 0), line);
         });
@@ -11981,32 +12127,54 @@ window._adminOrderItemsHTML = function (o) {
         var p = pdb.find(function (x) { return x.id == baseId; });
         if (!p) continue;
         var co = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
-        var nm2 = escHtml(p.name) + ((co && co !== "Universal") ? ' <span style="color:var(--luxury-gold); font-size:10px;">[' + escHtml(co) + ']</span>' : '');
+        var nm2 = escHtml(p.name) + ((co && co !== "Universal") ? '<span class="ao-opt">' + escHtml(co) + '</span>' : '');
         rows += row(nm2, o.items[pid], (p.price * o.items[pid]));
     }
     return rows;
 };
 
 // =====================================
-// 📦 ADMIN: BUYURTMALAR RO'YXATI (ULTRA PREMIUM DIZAYN)
+// 📦 ADMIN: BUYURTMALAR RO'YXATI (iOS USLUBIDAGI DIZAYN)
+//   Faqat ko'rinish yangilangan — handlerlar, holat oqimi, paginatsiya,
+//   VIP slot va yig'ish tugmasi avvalgidek.
 // =====================================
+window._AOI = {
+    user: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2.2c-3.6 0-8 1.8-8 4.6V21h16v-2.2c0-2.8-4.4-4.6-8-4.6z"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg>',
+    pin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
+    chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L3 21l1.5-5A8.5 8.5 0 1 1 21 12z"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+    truck: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4h13v12H1zM14 9h4l4 4v3h-8z"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>',
+    flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+    xmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>',
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg>'
+};
+
 window.renderAdminOrdersUI = (ordersArr) => {
     let box = document.getElementById('admin-orders-render-box');
     if(!box) return;
+    const I = window._AOI;
 
-    if (window.lastOrdersRef !== ordersArr) {
+    // Yangi ro'yxat (filtr / qayta ochish) bo'lsagina kirish animatsiyasi —
+    // paginatsiyada (pastga yuklash) kartalar qayta "sakramaydi".
+    let isFresh = window.lastOrdersRef !== ordersArr;
+    if (isFresh) {
         window.adminOrdersLimit = 20;
         window.lastOrdersRef = ordersArr;
     }
+    box.classList.toggle('ao-anim', isFresh);
+    try { window._aoUpdateCounts && window._aoUpdateCounts(); } catch (e) {}
 
     if(ordersArr.length === 0) { 
-        box.innerHTML = '<div style="text-align:center; padding: 40px; color:gray;"><div style="font-size:40px; margin-bottom:10px; opacity:0.5;">📭</div>Buyurtmalar topilmadi.</div>'; 
+        box.innerHTML = '<div class="ao-empty"><div class="ao-empty-ic">' + I.box + '</div><b>Buyurtmalar topilmadi</b>Bu bo\'limda hozircha buyurtma yo\'q.</div>'; 
         return; 
     }
     
     let visibleOrders = ordersArr.slice(0, window.adminOrdersLimit);
     
-    let html = visibleOrders.map(o => {
+    let html = visibleOrders.map((o, idx) => {
         let unreadCount = 0;
         if (o.messages) {
             for (let i = o.messages.length - 1; i >= 0; i--) {
@@ -12014,87 +12182,79 @@ window.renderAdminOrdersUI = (ordersArr) => {
                 if (o.messages[i].sender === 'mijoz') unreadCount++;
             }
         }
-        
-        // Chat tugmasi dizayni
-        let chatBtnText = unreadCount > 0 
-            ? `💬 Chat <span style="background: white; color: var(--accent-red); padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 5px; font-weight: 900;">${unreadCount}</span>` 
-            : `💬 Chat`;
+        let st = o.status || 'kutilmoqda';
 
-        let dName = o.customerName || o.uN || 'Ismsiz mijoz';
-        let dPhone = o.customerPhone || o.uP || 'Raqamsiz';
-        let dAddr = o.customerAddress && o.customerAddress !== "Kiritilmagan" ? o.customerAddress : '';
+        let dName = escHtml(o.customerName || o.uN || 'Ismsiz mijoz');
+        let dPhoneRaw = String(o.customerPhone || o.uP || 'Raqamsiz');
+        let dPhone = escHtml(dPhoneRaw);
+        let dAddr = o.customerAddress && o.customerAddress !== "Kiritilmagan" ? escHtml(o.customerAddress) : '';
+        let when = [o.date, o.time].filter(Boolean).map(escHtml).join(' \u00B7 ');
 
-        // Xarid qilingan tovarlarni chiroyli ro'yxat qilish — SERVER itemDetails afzal.
+        // Mahsulotlar — SERVER itemDetails afzal.
         let itemsHtml = '';
         var _admRows = window._adminOrderItemsHTML(o);
         if (_admRows) {
-            itemsHtml = `<div style="background: rgba(0,0,0,0.3); border-radius: 14px; padding: 12px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.03); box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">` + _admRows + `</div>`;
+            let n = (_admRows.match(/class="ao-item"/g) || []).length;
+            itemsHtml = `<div class="ao-items"><div class="ao-sec">Mahsulotlar \u00B7 ${n} ta</div>${_admRows}</div>`;
         }
 
-        // Holatga qarab aqlli tugmalar yasash
+        // Yig'ish holati (matndagi emoji o'rniga ikonka + rang)
+        let pickRaw = window._pickBadge ? window._pickBadge(o) : "\uD83D\uDCCB Mahsulotlarni yig'ish";
+        let pickCls = pickRaw.indexOf('\u2705') === 0 ? ' is-done' : (/\d+\/\d+/.test(pickRaw) ? ' is-part' : '');
+        let pickTx = pickRaw.replace(/^\S+\s+/, '');
+
+        // Holatga qarab asosiy tugma (oqim o'zgarmagan)
         let actionBtns = '';
         if (o.status === 'kutilmoqda' || !o.status) {
-            actionBtns = `<button style="background: rgba(0,122,255,0.15); color: #007aff; border: 1px solid rgba(0,122,255,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'qabul')">✅ Qabul qilish</button>`;
+            actionBtns = `<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-blue)" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'qabul')">${I.check}Qabul qilish</button>`;
         } else if (o.status === 'qabul') {
-            actionBtns = `<button style="background: rgba(255,149,0,0.15); color: #ff9500; border: 1px solid rgba(255,149,0,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'yolda')">🚚 Yo'lga chiqarish</button>`;
+            actionBtns = `<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-orange)" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'yolda')">${I.truck}Yo'lga chiqarish</button>`;
         } else if (o.status === 'yolda') {
-            actionBtns = `<button style="background: rgba(52,199,89,0.15); color: #30d158; border: 1px solid rgba(52,199,89,0.3); padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'yetkazildi')">🏁 Yetkazildi</button>`;
+            actionBtns = `<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-green)" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'yetkazildi')">${I.flag}Yetkazildi</button>`;
         }
         
         let cancelBtn = '';
         if (o.status !== 'bekor_qilingan' && o.status !== 'yetkazildi') {
-            cancelBtn = `<button style="background: rgba(255,69,58,0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.3); padding: 12px; border-radius: 12px; flex: 0.5; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'bekor_qilingan')">Bekor</button>`;
+            cancelBtn = `<button type="button" class="ao-btn ao-danger" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'bekor_qilingan')">${I.xmark}Bekor qilish</button>`;
         } else if (o.status === 'yetkazildi') {
             // ↩️ QAYTARISH: mijoz tovarni qaytardi — stok va cashback server tomonida tiklanadi.
-            cancelBtn = `<button style="background: rgba(255,69,58,0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.3); padding: 12px; border-radius: 12px; flex: 0.6; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'bekor_qilingan')">↩️ Qaytarish</button>`;
+            cancelBtn = `<button type="button" class="ao-btn ao-danger" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'bekor_qilingan')">${I.undo}Qaytarish</button>`;
         }
 
+        let chatBtn = `<button type="button" class="ao-btn ao-ghost ao-chat${unreadCount > 0 ? ' has-unread' : ''}" onclick="openAdminChat('${o.uI}', '${o.id}')">${I.chat}Chat${unreadCount > 0 ? `<span class="ao-badge">${unreadCount}</span>` : ''}</button>`;
+
         return `
-        <div class="luxury-card" style="margin-bottom: 20px; padding: 20px; display: block; border: 1px solid rgba(255,255,255,0.08); background: linear-gradient(145deg, #1c1c1e 0%, #121212 100%); border-radius: 22px; box-shadow: 0 8px 25px rgba(0,0,0,0.4);">
-            
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
-                <div style="font-size: 16px; font-weight: 900; color: #fff; letter-spacing: 0.5px;">#${o.code||o.id}</div>
-                ${getStatusHTML(o.status||'kutilmoqda')}
-            </div>
-            
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
-                <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #fff; flex-wrap: wrap;">
-                    <span style="background: rgba(255,255,255,0.05); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid rgba(255,255,255,0.05);">👤</span>
-                    ${dName}<!-- 👑 VIP daraja belgisi shu bo'sh joyga qo'yiladi (fayl oxiridagi qatlam to'ldiradi) --><span class="cst-vip-slot" data-order-uid="${o.uI || ''}"></span>
+        <article class="ao-card ao-st-${escHtml(st)}" style="--i:${idx}">
+            <header class="ao-head">
+                <div>
+                    <div class="ao-code">#${escHtml(o.code || o.id)}</div>
+                    ${when ? `<div class="ao-when">${when}</div>` : ''}
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600;">
-                    <span style="background: rgba(0,122,255,0.1); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid rgba(0,122,255,0.2);">📞</span>
-                    <a href="tel:${dPhone.replace(/\s+/g, '')}" style="color: var(--primary-blue); text-decoration: none; letter-spacing: 0.5px;">${dPhone}</a>
-                </div>
-                ${dAddr ? `
-                <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: #a1a1a6; font-weight: 500;">
-                    <span style="background: rgba(255,255,255,0.05); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.05);">📍</span>
-                    <span style="margin-top: 6px; line-height: 1.5;">${dAddr}</span>
-                </div>` : ''}
+                ${getStatusHTML(st)}
+            </header>
+
+            <div class="ao-group">
+                <div class="ao-row ao-name"><span class="ao-ic" style="--ic:var(--ao-gray)">${I.user}</span><span class="ao-row-tx">${dName}<!-- 👑 VIP daraja belgisi shu bo'sh joyga qo'yiladi (fayl oxiridagi qatlam to'ldiradi) --><span class="cst-vip-slot" data-order-uid="${o.uI || ''}"></span></span></div>
+                <a class="ao-row ao-link" href="tel:${escHtml(dPhoneRaw.replace(/\s+/g, ''))}"><span class="ao-ic" style="--ic:#34c759">${I.phone}</span><span class="ao-row-tx">${dPhone}</span><span class="ao-chev">\u203A</span></a>
+                ${dAddr ? `<div class="ao-row ao-addr"><span class="ao-ic" style="--ic:#ff9500">${I.pin}</span><span class="ao-row-tx">${dAddr}</span></div>` : ''}
             </div>
 
             ${itemsHtml}
 
-            <button class="pick-open-btn" onclick="openAdminOrderPick('${o.uI}', '${o.id}')">${window._pickBadge ? window._pickBadge(o) : "📋 Mahsulotlarni yig'ish"}</button>
+            <button type="button" class="pick-open-btn ao-pick${pickCls}" onclick="openAdminOrderPick('${o.uI}', '${o.id}')"><span class="ao-ic" style="--ic:#5e5ce6">${I.list}</span><span class="ao-pick-tx">${pickTx}</span><span class="ao-chev">\u203A</span></button>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; background: rgba(212,175,55,0.05); padding: 12px 15px; border-radius: 14px; border: 1px solid rgba(212,175,55,0.2);">
-                <span style="font-size: 12px; color: var(--luxury-gold); text-transform: uppercase; font-weight: 800; opacity: 0.8;">Jami Summa</span>
-                <span style="font-size: 20px; font-weight: 900; color: var(--luxury-gold);">${(Number(o.total)||0).toLocaleString()} so'm</span>
-            </div>
+            <div class="ao-total"><span>Jami</span><b>${(Number(o.total)||0).toLocaleString()}<small>so'm</small></b></div>
             
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button style="background: ${unreadCount > 0 ? 'var(--accent-red)' : 'rgba(255,255,255,0.08)'}; color: #fff; border: 1px solid ${unreadCount > 0 ? 'var(--accent-red)' : 'rgba(255,255,255,0.1)'}; padding: 12px; border-radius: 12px; flex: 1; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: ${unreadCount > 0 ? '0 4px 15px rgba(255,69,58,0.4)' : 'none'};" onclick="openAdminChat('${o.uI}', '${o.id}')">
-                    ${chatBtnText}
-                </button>
+            <div class="ao-actions">
                 ${actionBtns}
-                ${cancelBtn}
+                <div class="ao-actions-sub">${chatBtn}${cancelBtn}</div>
             </div>
-        </div>
+        </article>
         `;
     }).join(''); 
         
     if (window.adminOrdersLimit < ordersArr.length) {
-        html += `<div style="text-align:center; padding: 15px 0 30px; color: var(--luxury-gold); font-size: 12px; font-weight: bold; opacity: 0.7;">Pastga tushganda yana yuklanmoqda... ⏳</div>`;
+        html += `<div class="ao-more"><span class="ao-spin"></span>Yana yuklanmoqda\u2026</div>`;
     }
     
     box.innerHTML = html;
@@ -12175,7 +12335,7 @@ window._renderPick = function () {
 
     var tEl = document.getElementById('pick-title'); if (tEl) tEl.innerHTML = '#' + escHtml(o.code || o.id);
     var sEl = document.getElementById('pick-sub'); if (sEl) sEl.innerHTML = escHtml(o.customerName || o.uN || 'Mijoz') + ' \u00B7 ' + total + ' ta mahsulot';
-    var ssEl = document.getElementById('pick-status-slot'); if (ssEl) ssEl.innerHTML = getStatusHTML(o.status || 'kutilmoqda');
+    var ssEl = document.getElementById('pick-status-slot'); if (ssEl) { ssEl.className = 'ao-pick-status ao-st-' + (o.status || 'kutilmoqda'); ssEl.innerHTML = getStatusHTML(o.status || 'kutilmoqda'); }
 
     var listEl = document.getElementById('pick-list');
     if (listEl) {
@@ -12223,12 +12383,12 @@ window._pickToggleAll = function () {
 };
 
 function _pickActionBtns(o) {
-    var uid = o.uI, id = o.id, a = '';
-    if (o.status === 'kutilmoqda' || !o.status) a = '<button style="background:rgba(0,122,255,0.15);color:#007aff;border:1px solid rgba(0,122,255,0.3);padding:14px;border-radius:14px;flex:1;font-weight:800;font-size:14px;cursor:pointer;" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'qabul\')">\u2705 Qabul qilish</button>';
-    else if (o.status === 'qabul') a = '<button style="background:rgba(255,149,0,0.15);color:#ff9500;border:1px solid rgba(255,149,0,0.3);padding:14px;border-radius:14px;flex:1;font-weight:800;font-size:14px;cursor:pointer;" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'yolda\')">\uD83D\uDE9A Yo\'lga chiqarish</button>';
-    else if (o.status === 'yolda') a = '<button style="background:rgba(52,199,89,0.15);color:#30d158;border:1px solid rgba(52,199,89,0.3);padding:14px;border-radius:14px;flex:1;font-weight:800;font-size:14px;cursor:pointer;" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'yetkazildi\')">\uD83C\uDFC1 Yetkazildi</button>';
+    var uid = o.uI, id = o.id, a = '', I = window._AOI || {};
+    if (o.status === 'kutilmoqda' || !o.status) a = '<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-blue)" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'qabul\')">' + (I.check || '') + 'Qabul qilish</button>';
+    else if (o.status === 'qabul') a = '<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-orange)" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'yolda\')">' + (I.truck || '') + 'Yo\'lga chiqarish</button>';
+    else if (o.status === 'yolda') a = '<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-green)" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'yetkazildi\')">' + (I.flag || '') + 'Yetkazildi</button>';
     var cancel = '';
-    if (o.status !== 'bekor_qilingan' && o.status !== 'yetkazildi') cancel = '<button style="background:rgba(255,69,58,0.05);color:#ff453a;border:1px dashed rgba(255,69,58,0.3);padding:14px;border-radius:14px;flex:0.6;font-weight:800;font-size:14px;cursor:pointer;" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'bekor_qilingan\')">Bekor</button>';
+    if (o.status !== 'bekor_qilingan' && o.status !== 'yetkazildi') cancel = '<button type="button" class="ao-btn ao-danger" style="flex:0.6" onclick="window._pickStatus(\'' + uid + '\',\'' + id + '\',\'bekor_qilingan\')">Bekor</button>';
     return a + cancel;
 }
 
