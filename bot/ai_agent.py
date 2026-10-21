@@ -126,7 +126,7 @@ class AgentDeps:
 
     def __init__(self, firebase_get, firebase_patch, groq_raw, is_owner,
                  firebase_get_etag=None, firebase_put=None,
-                 firebase_delete=None, firebase_query=None):
+                 firebase_delete=None, firebase_query=None, order_status=None):
         self.firebase_get = firebase_get      # async (path) -> dict|list|None
         self.firebase_patch = firebase_patch  # async (path, data) -> bool
         self.groq_raw = groq_raw              # async (messages, tools=..., ...) -> message|None
@@ -137,6 +137,11 @@ class AgentDeps:
         self.firebase_put = firebase_put            # async (path, data, etag) -> (ok, status)
         self.firebase_delete = firebase_delete      # async (path) -> bool
         self.firebase_query = firebase_query        # async (path, params) -> dict|None
+        # async (uid, order_id, status, expected_from, actor) -> (ok, xato_matni)
+        # Buyurtma holatini Worker orqali o'zgartiradi (stok qaytarish, cashback,
+        # mijoz va adminlarga xabar — hammasi o'sha yerda). Berilmasa buyurtma
+        # holatini o'zgartirish O'CHADI (bazani ikkiga bo'lib yubormaslik uchun).
+        self.order_status = order_status
 
     def can_write(self):
         """Yozish uchun kerakli hamma narsa berilganmi."""
@@ -148,7 +153,7 @@ _deps = None
 
 def init(firebase_get, firebase_patch, groq_raw, is_owner,
          firebase_get_etag=None, firebase_put=None,
-         firebase_delete=None, firebase_query=None):
+         firebase_delete=None, firebase_query=None, order_status=None):
     """bot.py `main()` ichidan bir marta chaqiriladi."""
     global _deps
     _load_config()   # .env allaqachon yuklangan — endi sozlamalarni o'qish xavfsiz
@@ -156,7 +161,8 @@ def init(firebase_get, firebase_patch, groq_raw, is_owner,
                       firebase_get_etag=firebase_get_etag,
                       firebase_put=firebase_put,
                       firebase_delete=firebase_delete,
-                      firebase_query=firebase_query)
+                      firebase_query=firebase_query,
+                      order_status=order_status)
     logging.info(
         "AI agent: %s | vositalar: %d o'qish + %d yozish | aylanish: %d | "
         "yozish %s",
@@ -621,6 +627,9 @@ async def _t_sales_report(ctx, period="30d", top_limit=10):
 #    matn «Yo'lga chiqdi» bo'lsa ham). Apostrof qo'yilsa mijozning buyurtma
 #    ro'yxatida holat «Kutilmoqda» bo'lib ko'rinib qoladi.
 _ORDER_STATUSES = ["kutilmoqda", "qabul", "yolda", "yetkazildi", "bekor_qilingan"]
+# Ruxsat etilgan o'tishlar — Worker (cloudflare-worker.js ORDER_TRANSITIONS)
+# bilan bitta manbadan.
+from order_ops import ORDER_TRANSITIONS as _ORDER_TRANSITIONS  # noqa: E402
 
 # Mijozga yuboriladigan xabar kaliti (bot.py dagi TEXTS bilan bir xil).
 _STATUS_MSG_KEY = {
@@ -1243,6 +1252,18 @@ async def _t_set_order_status(ctx, order_key=None, status=None):
     old_status = str(target.get("status") or "kutilmoqda")
     if old_status == new_status:
         return _err(f"holat allaqachon «{_STATUS_LABEL.get(new_status, new_status)}»")
+    # Holat mashinasi (Worker bilan bir xil): orqaga yoki sakrab o'tib bo'lmaydi.
+    # Ilgari agent istalgan holatga yozardi (masalan yetkazildi -> kutilmoqda) —
+    # cashback va ombor hisobi buzilardi.
+    allowed = _ORDER_TRANSITIONS.get(old_status, [])
+    if new_status not in allowed:
+        ok_list = ", ".join(_STATUS_LABEL.get(s, s) for s in allowed) or "hech qaysi"
+        return _err(f"«{_STATUS_LABEL.get(old_status, old_status)}» holatidan "
+                    f"«{_STATUS_LABEL.get(new_status, new_status)}» ga o'tib bo'lmaydi. "
+                    f"Mumkin: {ok_list}")
+    if ctx.deps.order_status is None:
+        return _err("buyurtma holatini o'zgartirish ulanmagan (Worker). "
+                    "Mini App'dagi «Buyurtmalar» bo'limidan foydalaning.")
 
     prof = await ctx.node(f"users/{uid}/profile")
     cname = ""
@@ -1250,9 +1271,13 @@ async def _t_set_order_status(ctx, order_key=None, status=None):
         cname = str(prof.get("name") or "").strip()
 
     warning = ""
-    if new_status == "bekor_qilingan":
-        warning = ("Buyurtma bekor qilinadi. Mijozga xabar boradi va berilgan "
-                   "cashback qaytarib olinadi.")
+    if new_status == "bekor_qilingan" and old_status == "yetkazildi":
+        warning = ("QAYTARISH: tovarlar omborga qaytadi, berilgan cashback qaytarib "
+                   "olinadi, mijozga xabar boradi. Bu amalni qaytarib bo'lmaydi.")
+    elif new_status == "bekor_qilingan":
+        warning = ("Buyurtma bekor qilinadi: tovarlar omborga qaytadi, ishlatilgan "
+                   "cashback mijozga qaytariladi, mijozga xabar boradi. "
+                   "Bu amalni qaytarib bo'lmaydi.")
     elif new_status == "yetkazildi":
         warning = "Yetkazildi belgilansa — mijozga cashback va kafolat beriladi."
 
@@ -1692,7 +1717,7 @@ async def pending_janitor(deps, every_sec=600):
 # =====================================================================
 #  REJANI BAJARISH
 # =====================================================================
-async def apply_plan(deps, plan, notifier=None, verify=True):
+async def apply_plan(deps, plan, notifier=None, verify=True, actor=None):
     """Rejani bajaradi. `(muvaffaqiyatli_soni, xatolar, natijalar)` qaytaradi.
 
     verify=True bo'lsa — yozishdan OLDIN joriy qiymat rejadagi `old` bilan
@@ -1714,7 +1739,7 @@ async def apply_plan(deps, plan, notifier=None, verify=True):
             elif kind == "product_size":
                 ok, err = await _apply_product_size(deps, item, verify)
             elif kind == "order_status":
-                ok, err = await _apply_order_status(deps, item, verify, notifier)
+                ok, err = await _apply_order_status(deps, item, verify, notifier, actor)
             else:
                 ok, err = False, f"noma'lum reja turi: {kind}"
         except Exception as e:
@@ -1817,53 +1842,39 @@ async def _apply_product_size(deps, item, verify):
     return ok, err
 
 
-async def _apply_order_status(deps, item, verify, notifier):
+async def _apply_order_status(deps, item, verify, notifier, actor=None):
+    """Buyurtma holatini Worker /order-status orqali o'zgartiradi.
+
+    ⚠️ ILGARI (xato): agent `users/{uid}/orders` ga o'zi yozardi, keyin
+       markaziy yozuvni `orders/{uid}_{KOD}` ga yamardi. Haqiqiy kalit esa
+       `orders/{uid}_{ID}` — natijada bazada faqat `{status}` dan iborat
+       SOXTA yozuv paydo bo'lar, asl buyurtma eski holatda qolar, Mini
+       App'dagi keyingi tugma 409 berar, bekor qilinganda tovar omborga
+       QAYTMAS, cashback hisoblanmasdi.
+    ENDI: bitta yo'l — Worker. U holat mashinasini tekshiradi, ombor va
+       cashbackni to'g'rilaydi, mijozga va adminlarga xabar yuboradi
+       (shuning uchun `notifier` bu yerda chaqirilmaydi — dublikat bo'lardi).
+    """
+    if deps.order_status is None:
+        return False, "buyurtma holatini o'zgartirish ulanmagan (Worker)"
     uid = str(item.get("uid") or "")
     order_id = item.get("order_id")
     new_status = str(item.get("set") or "")
     old_status = item.get("old")
-    saved = {}
-
-    def mutate(cur):
-        if verify:
-            have = str(cur.get("status") or "kutilmoqda")
-            if old_status is not None and have != str(old_status):
-                raise ValueError(f"holat allaqachon «{have}» ga o'zgargan. Yozilmadi.")
-        cur["status"] = new_status
-        saved.update(cur)
-        return cur
-
-    ok, err, _prev = await atomic_update_by_id(
-        deps, f"users/{uid}/orders", order_id, mutate)
-    if not ok:
-        return False, err
-
-    # 🔄 Markaziy arxivni ham yangilaymiz. Mini App aynan shunday qiladi
-    #    (`orders/<uid>_<kod>/status`). Ikkisi ajralib ketmasligi kerak.
-    #    Bu ikkilamchi yozuv: muvaffaqiyatsiz bo'lsa asosiy o'zgarishni
-    #    bekor qilmaymiz (mini app ham `.catch()` bilan shunday qiladi).
-    code = str(item.get("code") or order_id)
-    try:
-        await deps.firebase_patch(f"orders/{uid}_{code}", {"status": new_status})
-    except Exception as e:
-        logging.warning("Markaziy buyurtma holati yangilanmadi: %s", e)
-
-    # 📩 Mijozga xabar (undo'da yuborilmaydi — item['notify'] False bo'ladi)
-    if notifier and item.get("notify") and _STATUS_MSG_KEY.get(new_status):
-        try:
-            await notifier(uid, new_status, code, saved)
-        except Exception as e:
-            logging.warning("Mijozga xabar yuborilmadi: %s", e)
-
-    return True, ""
+    if not uid or order_id in (None, ""):
+        return False, "buyurtma manzili noto'g'ri"
+    expected = str(old_status) if (verify and old_status is not None) else ""
+    ok, err = await deps.order_status(uid, str(order_id), new_status, expected, actor)
+    return bool(ok), ("" if ok else (err or "Worker rad etdi"))
 
 
 def build_undo_plan(plan):
     """Rejani teskarisiga aylantiradi (`set` <-> `old`).
 
-    Buyurtma holati qaytarilganda mijozga xabar YUBORILMAYDI: u
-    «yo'lga chiqdi» dan keyin «qabul qilindi» xabarini olsa
-    chalkashadi. Xo'jayin xohlasa o'zi yozadi.
+    Buyurtma holati QAYTARILMAYDI: holat mashinasi orqaga o'tishni
+    taqiqlaydi (yetkazildi -> kutilmoqda cashback va ombor hisobini
+    buzardi), mijozga esa xabar allaqachon ketgan. Xato bo'lsa — buyurtmani
+    bekor qilish (u ham tasdiq bilan) to'g'ri yo'l.
     """
     out = []
     for item in plan or []:
@@ -1872,13 +1883,11 @@ def build_undo_plan(plan):
         if kind == "product":
             rev["set"] = dict(item.get("old") or {})
             rev["old"] = dict(item.get("set") or {})
-        elif kind in ("product_size", "order_status"):
+        elif kind == "product_size":
             rev["set"] = item.get("old")
             rev["old"] = item.get("set")
         else:
             continue
-        if kind == "order_status":
-            rev["notify"] = False
         # Qaytarishda `old` tekshiruvi ham teskari bo'ladi va aynan shu
         # bizga kerak: agar oradan kimsa qiymatni yana o'zgartirgan bo'lsa,
         # qaytarish BAJARILMAYDI (jimgina ustidan yozib ketmaydi).
@@ -2086,7 +2095,8 @@ async def apply_confirmed(token, user_id, notifier=None):
         await drop_pending(deps, token)
         return False, "Amal tafsiloti o'qilmadi — qaytadan so'rang."
 
-    done, errors, _results = await apply_plan(deps, plan, notifier=notifier, verify=True)
+    done, errors, _results = await apply_plan(deps, plan, notifier=notifier, verify=True,
+                                              actor=user_id)
 
     # 📝 Audit — oldingi qiymatlar bilan. `/orqaga` aynan shundan o'qiydi.
     if done:
@@ -2155,6 +2165,11 @@ async def undo_last(user_id):
     plan = [v for _, v in fb_items(rec.get("plan")) if isinstance(v, dict)]
     undo = build_undo_plan(plan)
     if not undo:
+        if any(str(p.get("kind")) == "order_status" for p in plan):
+            return None, "", ("Buyurtma holatini orqaga qaytarib bo'lmaydi — mijozga xabar "
+                              "allaqachon ketgan va holat faqat oldinga yuradi.\n\n"
+                              "<i>Xato bo'lsa buyurtmani bekor qiling (u ham tasdiq "
+                              "bilan bajariladi).</i>")
         return None, "", "Bu o'zgarishni avtomatik qaytarib bo'lmaydi."
 
     token, prec = await store_pending(

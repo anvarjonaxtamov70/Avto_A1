@@ -10,6 +10,13 @@
 //                   (inviter) bonusni SERVER (admin huquqi) bilan yozadi.
 //                   Mijoz xavfsiz qoidalarda boshqa user tuguniga yoza
 //                   olmagani uchun shu endpoint kerak. Idempotent.
+//  5) "/order-commit" — buyurtmani yozadi; "/order-status" — holatni
+//                   o'zgartiradi (admin, bot yoki mijozning o'zi bekor qilishi).
+//                   Ikkalasi ham Telegram xabarlarini SERVERDA yuboradi:
+//                   BARCHA adminlarga tugmali kartochka (holat o'zgarsa
+//                   tahrirlanadi), mijozga o'z tilida xabar.
+//  6) "/order-notify" — bot watchdog: yetkazilmay qolgan bildirishnomani
+//                   qayta yuborish (faqat bot HMAC imzosi bilan).
 //  4) "/stock-commit" — Ombor zaxirasini SERVERDA kamaytiradi: mahsulot
 //                   `id` bo'yicha topiladi (indeks bo'yicha emas), `stock >= qty`
 //                   tekshiriladi va atomik `increment` bilan yoziladi.
@@ -24,6 +31,7 @@
 //     CUSTOMER_REGISTRATION_RATE_LIMIT (anonymous IP uchun soatlik limit, standart 20)
 //     FIREBASE_DB_URL  (mas: "https://avtoa1shop-default-rtdb.firebaseio.com")
 //     REFERRAL_BONUS   (mas: "20000")
+//     SHOP_PHONE       (mijozga "bekor qilindi" xabaridagi telefon, standart "+998 88 289 30 30")
 //
 //  ESLATMA: bu faylda atayin backslash-n belgisi ishlatilmagan
 //  (ba'zi nusxalash vositalari uni buzadi). Newline kerak joyda
@@ -52,13 +60,21 @@ const TELEGRAM_INIT_MAX_AGE = 60 * 60;
 const CLOCK_SKEW_SECONDS = 300;
 const MAX_JSON_BYTES = 64 * 1024;
 const ORDER_STATUSES = ["kutilmoqda", "qabul", "yolda", "yetkazildi", "bekor_qilingan"];
+// yetkazildi -> bekor_qilingan = QAYTARISH (mijoz tovarni qaytardi). Stok
+// tiklanadi, berilgan cashback qaytarib olinadi, ishlatilgani qaytariladi
+// (applyStatusLoyalty / restockOrderOnce buni allaqachon to'g'ri qiladi).
+// Mijozning o'zi faqat "kutilmoqda" buyurtmani bekor qila oladi (pastda).
 const ORDER_TRANSITIONS = {
   kutilmoqda: ["qabul", "bekor_qilingan"],
   qabul: ["yolda", "bekor_qilingan"],
   yolda: ["yetkazildi", "bekor_qilingan"],
-  yetkazildi: [],
+  yetkazildi: ["bekor_qilingan"],
   bekor_qilingan: [],
 };
+// Bot (Python) Worker'ga BOT_TOKEN dan hosil qilingan HMAC imzo bilan
+// murojaat qiladi — alohida maxfiy kalit sozlash shart emas.
+const BOT_AUTH_MAX_SKEW_SECONDS = 300;
+const ORDER_NOTIFY_LEASE_MS = 60 * 1000;
 const ATTEMPT_LEASE_MS = 45 * 1000;
 const STATUS_LEASE_MS = 45 * 1000;
 const JWKS_REFRESH_COOLDOWN_MS = 5 * 1000;
@@ -370,7 +386,9 @@ async function handleUploadStream(request, env, initData) {
 }
 
 export default {
-  async fetch(request, env) {
+  // execCtx — Cloudflare ExecutionContext (waitUntil). Telegram xabarlari
+  // javobdan KEYIN ham yuborilishi uchun kerak (mijoz ilovani yopsa ham).
+  async fetch(request, env, execCtx) {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: cors });
     }
@@ -492,8 +510,9 @@ export default {
 
     // All protected JSON APIs use the same verified identity. Named routes are
     // dispatched explicitly so an unknown path can never fall through to Telegram.
-    if (path === "/order-commit") return handleOrderCommit(request, env);
-    if (path === "/order-status") return handleOrderStatus(request, env);
+    if (path === "/order-commit") return handleOrderCommit(request, env, execCtx);
+    if (path === "/order-status") return handleOrderStatus(request, env, execCtx);
+    if (path === "/order-notify") return handleOrderNotify(request, env);
     if (path === "/customer-register") return handleCustomerRegister(request, env);
     if (path === "/referral") return handleReferralSecure(request, env);
     if (path === "/referral-qualify") return handleReferralQualifySecure(request, env);
@@ -1607,7 +1626,7 @@ async function reconcileCommittedOrder(ctx, token, identity, intent, payloadHash
   );
 }
 
-async function handleOrderCommit(request, env) {
+async function handleOrderCommit(request, env, execCtx) {
   let claimed = false;
   try {
     const body = await readJsonBody(request);
@@ -1621,7 +1640,9 @@ async function handleOrderCommit(request, env) {
     let existing = await rtdbGet(ctx.dbUrl, attemptPath, token);
     if (existing) {
       if (existing.payloadHash !== payloadHash) throw httpError(409, "attemptId boshqa payload bilan ishlatilgan");
-      if (existing.state === "committed" && existing.result) return json(existing.result);
+      if (existing.state === "committed" && existing.result) {
+        return await committedOrderResponse(execCtx, env, existing.orderKey, existing.result, 200);
+      }
       if (existing.state === "rejected") throw httpError(409, existing.error || "buyurtma rad etilgan", { shortages: existing.shortages || [] });
       if (existing.quote) {
         const canonical = await rtdbGet(ctx.dbUrl, "orders/" + existing.quote.orderKey, token);
@@ -1629,7 +1650,7 @@ async function handleOrderCommit(request, env) {
           const reconciled = await reconcileCommittedOrder(
             ctx, token, identity, intent, payloadHash, existing.quote, canonical, attemptPath
           );
-          return json(reconciled);
+          return await committedOrderResponse(execCtx, env, existing.quote.orderKey, reconciled, 200);
         }
       }
     }
@@ -1640,7 +1661,9 @@ async function handleOrderCommit(request, env) {
     existing = await claimOrderAttempt(
       ctx, token, attemptPath, identity.uid, intent.attemptId, payloadHash, quote, owner
     );
-    if (existing.state === "committed" && existing.result) return json(existing.result);
+    if (existing.state === "committed" && existing.result) {
+      return await committedOrderResponse(execCtx, env, existing.orderKey, existing.result, 200);
+    }
     if (existing.state === "rejected") throw httpError(409, existing.error || "buyurtma rad etilgan", { shortages: existing.shortages || [] });
     if (existing.busy || existing.owner !== owner) {
       throw httpError(503, "attempt bajarilmoqda; ayni attemptId bilan qayta urinib ko'ring", { retryable: true });
@@ -1653,7 +1676,7 @@ async function handleOrderCommit(request, env) {
       const reconciled = await reconcileCommittedOrder(
         ctx, token, identity, intent, payloadHash, quote, canonicalBeforeReserve, attemptPath
       );
-      return json(reconciled);
+      return await committedOrderResponse(execCtx, env, quote.orderKey, reconciled, 200);
     }
 
     const stock = await reserveQuoteItems(
@@ -1695,7 +1718,7 @@ async function handleOrderCommit(request, env) {
     const resultBody = await reconcileCommittedOrder(
       ctx, token, identity, intent, payloadHash, quote, canonicalOrder, attemptPath
     );
-    return json(resultBody, canonicalCommit.created ? 201 : 200);
+    return await committedOrderResponse(execCtx, env, quote.orderKey, resultBody, canonicalCommit.created ? 201 : 200);
   } catch (err) {
     const definitiveStockRejection = claimed && err && err.status === 409 &&
       err.extra && Array.isArray(err.extra.shortages);
@@ -1778,17 +1801,27 @@ async function resolveOrderStockItems(ctx, token, order) {
     sourceItems = Object.keys(rawItems).map((key, index) => {
       const separator = key.indexOf("||");
       if (separator <= 0) retryableInventoryConflict("buyurtma mahsulotlarini tiklab bo'lmaydi", { itemKey: key });
+      // Eski Mini App razmerdagi nuqtani "_dot_" qilib saqlagan ("92_dot_5").
+      let legacySize = key.slice(separator + 2).split("_dot_").join(".");
+      if (!legacySize || legacySize === "undefined") legacySize = "Universal";
       return {
         lineKey: "legacy_" + index,
         id: key.slice(0, separator),
-        size: key.slice(separator + 2) || "Universal",
-        qty: rawItems[key],
+        size: legacySize,
+        qty: Number(rawItems[key]),
       };
     });
   }
   if (!sourceItems.length) retryableInventoryConflict("buyurtmada tiklanadigan mahsulot yo'q");
 
+  // ⚠️ Tiklab bo'lmaydigan qator (mahsulot o'chirilgan, razmer olib tashlangan)
+  //    ilgari BEKOR QILISHNI butunlay bloklardi: har urinishda 409 qaytardi va
+  //    buyurtma abadiy "ochiq" qolardi. Endi bunday qator O'TKAZIB yuboriladi
+  //    (o'chirilgan tovarni omborga qaytarib bo'lmaydi) va `skipped` ro'yxatida
+  //    adminga ko'rsatiladi. Noaniq holat (bir id — bir nechta tovar) ham
+  //    xavfli taxmin o'rniga o'tkazib yuboriladi.
   const out = [];
+  out.skipped = [];
   const lineKeys = new Set();
   for (let index = 0; index < sourceItems.length; index++) {
     const item = sourceItems[index];
@@ -1803,25 +1836,30 @@ async function resolveOrderStockItems(ctx, token, order) {
     }
     lineKeys.add(lineKey);
 
+    const skip = (reason) => out.skipped.push({ id, size, qty, name: String(item.name || id), reason });
     const idMatches = products.filter((entry) => String(entry.val.id) === id);
-    if (idMatches.length !== 1) {
-      retryableInventoryConflict("mahsulot id bo'yicha topilmadi", { productId: id });
-    }
     const storedProduct = item.productKey != null
       ? products.find((entry) => entry.key === String(item.productKey))
       : null;
-    const productHit = storedProduct && String(storedProduct.val.id) === id ? storedProduct : idMatches[0];
+    const storedOk = !!storedProduct && String(storedProduct.val.id) === id;
+    if (!storedOk && idMatches.length !== 1) {
+      skip(idMatches.length ? "noaniq mahsulot" : "mahsulot o'chirilgan");
+      continue;
+    }
+    const productHit = storedOk ? storedProduct : idMatches[0];
     const sizeEntries = toEntries(productHit.val.sizes);
     const isSized = productHit.val.product_type === "razmerli" || sizeEntries.length > 0;
     let sizeKey = null;
     if (size !== "Universal") {
       const sizeMatches = sizeEntries.filter((entry) => String(entry.val.size) === size);
       if (sizeMatches.length !== 1) {
-        retryableInventoryConflict("mahsulot razmeri topilmadi", { productId: id, size });
+        skip("razmer topilmadi");
+        continue;
       }
       sizeKey = sizeMatches[0].key;
     } else if (isSized) {
-      retryableInventoryConflict("razmerli mahsulot razmeri yo'q", { productId: id });
+      skip("razmer ko'rsatilmagan");
+      continue;
     }
     out.push({
       lineKey,
@@ -1994,20 +2032,77 @@ async function completeStatusTransition(ctx, token, orderKey, owner, pending, ta
   return result.result;
 }
 
-async function reconcileUserOrderStatus(ctx, token, uid, orderId, fromStatus, targetStatus) {
-  await rtdbEtagMutate(ctx.dbUrl, "users/" + uid + "/orders/" + orderId, token, (current) => {
-    if (!current) return { abort: true, result: null };
-    const status = String(current.status || "kutilmoqda");
-    if (status === targetStatus) return { abort: true, result: current };
-    if (status !== fromStatus) return { abort: true, result: current };
-    const next = cloneJson(current);
-    next.status = targetStatus;
-    next.statusUpdatedAt = Date.now();
-    return { value: next, result: next };
-  });
+async function reconcileUserOrderStatus(ctx, token, uid, orderId, fromStatus, targetStatus, userKey) {
+  const mutateAt = async (key) => {
+    const res = await rtdbEtagMutate(ctx.dbUrl, "users/" + uid + "/orders/" + key, token, (current) => {
+      // Kalit boshqa buyurtmaga tegishli bo'lsa (eski MASSIV indekslari) — tegmaymiz.
+      if (!current || typeof current !== "object" || String(current.id) !== String(orderId)) {
+        return { abort: true, result: { found: false } };
+      }
+      const status = String(current.status || "kutilmoqda");
+      if (status === targetStatus) return { abort: true, result: { found: true } };
+      if (status !== fromStatus) return { abort: true, result: { found: true } };
+      const next = cloneJson(current);
+      next.status = targetStatus;
+      next.statusUpdatedAt = Date.now();
+      return { value: next, result: { found: true } };
+    });
+    return !!(res.result && res.result.found);
+  };
+  if (await mutateAt(orderId)) return;
+  // Eski (legacy) buyurtma: `users/{uid}/orders` massiv bo'lgan, kalit = indeks.
+  if (userKey != null && String(userKey) !== String(orderId) && await mutateAt(String(userKey))) return;
+  const all = toEntries(await rtdbGet(ctx.dbUrl, "users/" + uid + "/orders", token));
+  const hit = all.find((entry) => String(entry.val.id) === String(orderId));
+  if (hit && hit.key !== String(orderId) && hit.key !== String(userKey)) await mutateAt(hit.key);
 }
 
-async function publishStatusProjections(ctx, token, uid, orderId, orderKey, order, fromStatus, targetStatus, transitionVersion) {
+// Eski (server-authoritative davridan OLDINGI) buyurtma faqat
+// `users/{uid}/orders` da bo'ladi — markaziy `orders/` yozuvi yo'q. Ilgari
+// bunday buyurtmaning holatini o'zgartirib bo'lmasdi (doim 404). Endi u bir
+// marta markaziy yozuvga "ko'chiriladi" va keyin odatdagi holat mashinasi,
+// stok qaytarish va cashback bilan ishlaydi.
+async function adoptLegacyOrder(ctx, token, uid, orderId) {
+  const all = toEntries(await rtdbGet(ctx.dbUrl, "users/" + uid + "/orders", token));
+  const hit = all.find((entry) => String(entry.val.id) === String(orderId));
+  if (!hit) return null;
+  const legacy = cloneJson(hit.val);
+  // Yangi (Worker yozgan) buyurtmaning markaziy yozuvi yo'qolgan bo'lsa —
+  // bu ko'chirish emas, ma'lumot buzilishi. Taxmin qilmaymiz.
+  if (legacy.payloadHash) return null;
+  delete legacy.messages;
+  const status = ORDER_STATUSES.includes(String(legacy.status)) ? String(legacy.status) : "kutilmoqda";
+  const total = Math.max(0, Math.round(Number(legacy.total) || 0));
+  const cashbackUsed = Math.min(total, Math.max(0, Math.round(Number(legacy.cashbackUsed) || 0)));
+  const payable = legacy.payable != null && Number.isFinite(Number(legacy.payable))
+    ? Math.max(0, Math.round(Number(legacy.payable)))
+    : total - cashbackUsed;
+  const cbRate = Number(legacy.cbRate) > 0 && Number(legacy.cbRate) < 1 ? Number(legacy.cbRate) : 0.008;
+  const adopted = {
+    ...legacy,
+    id: String(orderId),
+    uid,
+    code: String(legacy.code || orderId),
+    status,
+    total,
+    cashbackUsed,
+    payable,
+    cbRate,
+    legacyAdopted: true,
+    legacyUserKey: hit.key,
+    adoptedAt: Date.now(),
+  };
+  const created = await rtdbCreateIfNull(
+    ctx.dbUrl,
+    "orders/" + uid + "_" + orderId,
+    adopted,
+    token,
+    (value) => value && String(value.uid) === uid && String(value.id) === String(orderId)
+  );
+  return created.value;
+}
+
+async function publishStatusProjections(ctx, token, uid, orderId, orderKey, order, fromStatus, targetStatus, transitionVersion, actor) {
   const loyalty = await applyStatusLoyalty(ctx, token, uid, order, targetStatus);
   const processed = {
     st: targetStatus,
@@ -2015,7 +2110,7 @@ async function publishStatusProjections(ctx, token, uid, orderId, orderKey, orde
     ur: targetStatus === "bekor_qilingan" ? Math.max(0, Number(loyalty.operation.cashbackRefund) || 0) : 0,
     rv: targetStatus === "bekor_qilingan" ? Math.max(0, Number(loyalty.operation.earnedReversal) || 0) : 0,
   };
-  await reconcileUserOrderStatus(ctx, token, uid, orderId, fromStatus, targetStatus);
+  await reconcileUserOrderStatus(ctx, token, uid, orderId, fromStatus, targetStatus, order.legacyUserKey);
   await writeLoyaltyProjection(ctx, token, uid, loyalty.account);
   await rtdbCreateIfNull(
     ctx.dbUrl,
@@ -2031,31 +2126,67 @@ async function publishStatusProjections(ctx, token, uid, orderId, orderKey, orde
     {
       type: "order_status", uid, orderKey, orderId, from: fromStatus, status: targetStatus,
       createdAt: Date.now(), delivered: false, transitionVersion,
+      by: (actor && actor.role) || "admin",
+      byUid: (actor && actor.uid) || null,
+      byName: (actor && actor.name) || null,
     },
     token,
     (value) => value && value.status === targetStatus && Number(value.transitionVersion) === Number(transitionVersion)
   );
-  return processed;
+  return { ...processed, outboxKey };
 }
 
-async function handleOrderStatus(request, env) {
+async function handleOrderStatus(request, env, execCtx) {
   let claimed = false;
   try {
     const body = await readJsonBody(request);
-    const identity = await authenticateBody(body, env);
-    if (!getAdminIds(env).includes(identity.uid)) throw httpError(403, "faqat admin");
     const uid = requireSafeUid(cleanText(body.uid, 128, true), 400);
     const orderId = cleanText(body.orderId, 80, true);
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(orderId)) throw httpError(400, "uid yoki orderId noto'g'ri");
     const status = cleanText(body.status, 32, true);
     if (!ORDER_STATUSES.includes(status)) throw httpError(400, "status noto'g'ri");
+    // expectedFrom (ixtiyoriy): "faqat hozirgi holat shu bo'lsa o'zgartir".
+    // AI agenti tasdiq kartochkasidagi holat eskirgan bo'lsa yozmasligi uchun.
+    const expectedFrom = body.expectedFrom == null || body.expectedFrom === ""
+      ? ""
+      : cleanText(body.expectedFrom, 32, true);
+    if (expectedFrom && !ORDER_STATUSES.includes(expectedFrom)) throw httpError(400, "expectedFrom noto'g'ri");
+
+    const identity = body.botAuth != null
+      ? await verifyBotAuth(body, env, "order-status", [uid, orderId, status, expectedFrom])
+      : await authenticateBody(body, env);
+    const isAdmin = getAdminIds(env).includes(identity.uid);
+    // 👤 Mijoz FAQAT o'zining, hali qabul qilinmagan buyurtmasini bekor qila oladi.
+    if (!isAdmin) {
+      if (identity.uid !== uid) throw httpError(403, "faqat admin");
+      if (status !== "bekor_qilingan") throw httpError(403, "mijoz faqat bekor qila oladi");
+    }
+    const actor = {
+      role: isAdmin ? "admin" : "customer",
+      uid: identity.uid,
+      name: identity.claims && typeof identity.claims === "object"
+        ? cleanText(String(identity.claims.first_name || identity.claims.name || ""), 64, false) || null
+        : null,
+      via: identity.source,
+    };
 
     const ctx = getDbContext(env);
     const token = await getAccessToken(env);
     const orderKey = uid + "_" + orderId;
     const orderPath = "orders/" + orderKey;
-    const order = await rtdbGet(ctx.dbUrl, orderPath, token);
+    let order = await rtdbGet(ctx.dbUrl, orderPath, token);
+    if (!order) order = await adoptLegacyOrder(ctx, token, uid, orderId);
     if (!order || String(order.uid) !== uid || String(order.id) !== orderId) throw httpError(404, "buyurtma topilmadi");
+
+    const canonicalStatus = String(order.status || "kutilmoqda");
+    if (expectedFrom && canonicalStatus !== expectedFrom && canonicalStatus !== status) {
+      throw httpError(409, "holat allaqachon o'zgargan", { currentStatus: canonicalStatus });
+    }
+    if (!isAdmin && canonicalStatus !== "kutilmoqda" && canonicalStatus !== status) {
+      throw httpError(409, "buyurtma allaqachon qabul qilingan — bekor qilish uchun do'kon bilan bog'laning", {
+        currentStatus: canonicalStatus,
+      });
+    }
 
     const owner = randomOwnerToken();
     const claim = await claimOrderStatus(
@@ -2073,9 +2204,11 @@ async function handleOrderStatus(request, env) {
         }
       }
       const processed = await publishStatusProjections(
-        ctx, token, uid, orderId, orderKey, order, last.from, status, last.transitionVersion
+        ctx, token, uid, orderId, orderKey, order, last.from, status, last.transitionVersion, actor
       );
-      return json({ ok: true, duplicate: true, orderKey, status, sideEffects: processed });
+      const dupNotify = scheduleOrderOutbox(execCtx, env, processed.outboxKey);
+      if (dupNotify) await dupNotify;
+      return json({ ok: true, duplicate: true, orderKey, status, sideEffects: processed, notify: "server" });
     }
     claimed = true;
     const state = claim.state;
@@ -2100,13 +2233,486 @@ async function handleOrderStatus(request, env) {
       }
     }
     const processed = await publishStatusProjections(
-      ctx, token, uid, orderId, orderKey, order, originalStatus, status, pending.transitionVersion
+      ctx, token, uid, orderId, orderKey, order, originalStatus, status, pending.transitionVersion, actor
     );
-    return json({ ok: true, orderKey, from: originalStatus, status, sideEffects: processed });
+    const notifyTask = scheduleOrderOutbox(execCtx, env, processed.outboxKey);
+    if (notifyTask) await notifyTask;
+    const restockSkipped = (stockItems && stockItems.skipped) || [];
+    return json({
+      ok: true, orderKey, from: originalStatus, status, sideEffects: processed,
+      notify: "server",
+      restockSkipped: restockSkipped.length ? restockSkipped : undefined,
+    });
   } catch (err) {
     if (claimed && (!err || !Number.isInteger(err.status) || err.status >= 500)) {
       return errorResponse(httpError(503, "status qisman bajarildi; ayni so'rovni qayta yuboring", { retryable: true }));
     }
+    return errorResponse(err);
+  }
+}
+
+// =====================================================================
+//  🔐 BOT -> WORKER IMZOSI (HMAC)
+//  Bot (bot/bot.py) admin tugmalarini va AI agentini shu yo'l bilan
+//  bajaradi. Kalit BOT_TOKEN dan hosil qilinadi (ikkalasida ham bor),
+//  ya'ni yangi maxfiy sozlama kerak emas. Imzo: marshrut, vaqt, admin
+//  (actor) va BARCHA muhim maydonlarni qamraydi — birini o'zgartirsa
+//  imzo buziladi. Vaqt oynasi 5 daqiqa; oyna ichidagi takror ham xavfsiz,
+//  chunki holat o'zgarishi va xabar yuborish idempotent.
+// =====================================================================
+async function botAuthKey(env) {
+  if (!env.BOT_TOKEN) throw httpError(500, "BOT_TOKEN sozlanmagan");
+  return new Uint8Array(await crypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode("avto-a1-bot-auth|" + env.BOT_TOKEN)
+  ));
+}
+
+function botAuthMessage(route, ts, actor, fields) {
+  return ["a1bot", route, String(ts), String(actor)].concat((fields || []).map((f) => String(f == null ? "" : f))).join("|");
+}
+
+async function signBotAuth(env, route, ts, actor, fields) {
+  const key = await botAuthKey(env);
+  return toHex(await hmacSha256(key, new TextEncoder().encode(botAuthMessage(route, ts, actor, fields))));
+}
+
+async function verifyBotAuth(body, env, route, fields) {
+  const auth = body.botAuth;
+  if (!auth || typeof auth !== "object" || Array.isArray(auth)) throw httpError(401, "botAuth noto'g'ri");
+  const ts = Number(auth.ts);
+  const actor = String(auth.actor == null ? "" : auth.actor);
+  const sig = String(auth.sig || "");
+  if (!Number.isSafeInteger(ts) || !/^[1-9]\d{0,19}$/.test(actor) || !/^[0-9a-f]{64}$/.test(sig)) {
+    throw httpError(401, "botAuth noto'g'ri");
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - ts) > BOT_AUTH_MAX_SKEW_SECONDS) throw httpError(401, "botAuth eskirgan");
+  const expected = await signBotAuth(env, route, ts, actor, fields);
+  if (!constantTimeEqual(expected, sig)) throw httpError(401, "botAuth imzosi mos kelmadi");
+  if (!getAdminIds(env).includes(actor)) throw httpError(403, "faqat admin");
+  return { uid: actor, source: "bot", claims: null };
+}
+
+// =====================================================================
+//  📨 BUYURTMA BILDIRISHNOMALARI — SERVERDA (ishonchli)
+//  Ilgari adminga xabarni MIJOZNING brauzeri yuborardi: natija
+//  tekshirilmasdi, ilova 6 soniyada yopilardi va internet sekin bo'lsa
+//  buyurtma bazada bor-u, admin bexabar qolardi. Faqat ADMIN_IDS[0]
+//  olardi, tugmalar yo'q edi.
+//
+//  Endi: Worker buyurtmani yozgach `notification_outbox/<kalit>` ni
+//  shu yerda yetkazadi —
+//    • BARCHA adminlarga tugmali kartochka (✅ Qabul / 🚚 / 🏁 / ❌);
+//    • mijozga o'z tilida tasdiq;
+//    • holat o'zgarsa — har bir adminning kartochkasi YANGILANADI
+//      (holat + keyingi tugmalar), mijozga xabar boradi;
+//    • har bir qabul qiluvchi alohida belgilanadi (`done`), shuning uchun
+//      qayta urinish faqat yetmaganlarga yuboradi (dublikat yo'q);
+//    • yetkazilmagan hodisani bot (`order_outbox_watchdog`) /order-notify
+//      orqali qayta uradi.
+// =====================================================================
+const ORDER_STATUS_LABELS = {
+  kutilmoqda: "⏳ Kutilmoqda",
+  qabul: "✅ Qabul qilindi",
+  yolda: "🚚 Yo'lda",
+  yetkazildi: "🏁 Yetkazildi",
+  bekor_qilingan: "❌ Bekor qilingan",
+};
+// callback_data 64 baytdan oshmasligi uchun holat 1 harf bilan kodlanadi.
+const ORDER_STATUS_CODES = { qabul: "q", yolda: "y", yetkazildi: "d", bekor_qilingan: "x" };
+
+function fmtSomW(value) {
+  const n = Math.round(Number(value) || 0);
+  const neg = n < 0;
+  const digits = String(Math.abs(n));
+  let out = "";
+  for (let i = 0; i < digits.length; i++) {
+    if (i && (digits.length - i) % 3 === 0) out += " ";
+    out += digits[i];
+  }
+  return (neg ? "-" : "") + out;
+}
+
+function isTelegramChatId(value) {
+  return /^-?[1-9]\d{0,19}$/.test(String(value == null ? "" : value));
+}
+
+async function orderShortKey(orderKey) {
+  return (await sha256Hex("order-tg|" + orderKey)).slice(0, 20);
+}
+
+// Admin kartochkasidagi tugmalar — holatga qarab FAQAT ruxsat etilgan o'tishlar.
+// ⚠️ bot/bot.py dagi `order_admin_keyboard` bilan AYNAN bir xil bo'lishi shart
+//    (sinovlar ikkalasini ham bitta kutilgan natija bilan tekshiradi).
+function orderAdminKeyboard(status, short) {
+  const rows = [];
+  if (status === "kutilmoqda") rows.push([{ text: "✅ Qabul qilish", callback_data: "ord:q:" + short }]);
+  if (status === "qabul") rows.push([{ text: "🚚 Yo'lga chiqdi", callback_data: "ord:y:" + short }]);
+  if (status === "yolda") rows.push([{ text: "🏁 Yetkazildi", callback_data: "ord:d:" + short }]);
+  if (status === "kutilmoqda" || status === "qabul" || status === "yolda") {
+    rows.push([{ text: "❌ Bekor qilish", callback_data: "ordc:x:" + short }]);
+  }
+  if (status === "yetkazildi") rows.push([{ text: "↩️ Qaytarildi (bekor)", callback_data: "ordc:x:" + short }]);
+  return { inline_keyboard: rows };
+}
+
+function orderDeliveryLabel(method) {
+  const m = String(method || "").toLowerCase();
+  if (m === "courier") return "Kuryer";
+  if (m === "bts") return "BTS pochta";
+  if (m === "pickup") return "Olib ketish";
+  return "Yetkazib berish";
+}
+
+function orderItemLines(order) {
+  const NL = String.fromCharCode(10);
+  const items = Array.isArray(order.itemDetails) ? order.itemDetails : [];
+  const lines = [];
+  for (const it of items) {
+    if (!it || typeof it !== "object") continue;
+    const size = it.size && it.size !== "Universal" ? " (" + escapeTelegramHtml(it.size) + ")" : "";
+    const qty = Number(it.qty) || 0;
+    const unit = Number(it.unitPrice) || 0;
+    const line = it.lineTotal != null ? Number(it.lineTotal) || 0 : unit * qty;
+    lines.push("▪️ " + escapeTelegramHtml(it.name || it.id || "Mahsulot") + size + " — " + qty + " x " +
+      fmtSomW(unit) + " = " + fmtSomW(line) + " so'm");
+  }
+  if (!lines.length && order.items && typeof order.items === "object") {
+    // Eski buyurtma: faqat {"id||razmer": soni} xaritasi bor.
+    for (const key of Object.keys(order.items)) {
+      if (key.indexOf("l_") === 0) continue;
+      const sep = key.indexOf("||");
+      const id = sep > 0 ? key.slice(0, sep) : key;
+      const size = sep > 0 ? key.slice(sep + 2).split("_dot_").join(".") : "";
+      const sizeTxt = size && size !== "Universal" && size !== "undefined" ? " (" + escapeTelegramHtml(size) + ")" : "";
+      lines.push("▪️ ID " + escapeTelegramHtml(id) + sizeTxt + " — " + (Number(order.items[key]) || 0) + " ta");
+    }
+  }
+  return lines.join(NL);
+}
+
+function orderAdminCardText(order, event) {
+  const NL = String.fromCharCode(10);
+  const status = String(order.status || "kutilmoqda");
+  const code = escapeTelegramHtml(order.code || order.id || "");
+  const head = status === "kutilmoqda"
+    ? "🆕 <b>YANGI BUYURTMA: #" + code + "</b>"
+    : "🧾 <b>BUYURTMA: #" + code + "</b>";
+  const delivery = order.delivery && typeof order.delivery === "object" ? order.delivery : {};
+  const lines = [head, "📌 <b>Holat:</b> " + (ORDER_STATUS_LABELS[status] || escapeTelegramHtml(status)), ""];
+  lines.push("👤 <b>Ism:</b> " + escapeTelegramHtml(order.customerName || "Ismsiz mijoz"));
+  lines.push("📞 <b>Telefon:</b> " + (order.customerPhone
+    ? "<code>" + escapeTelegramHtml(order.customerPhone) + "</code>"
+    : "<i>kiritilmagan</i>"));
+  if (order.customerUsername) lines.push("💬 <b>Telegram:</b> @" + escapeTelegramHtml(order.customerUsername));
+  lines.push("📍 <b>Manzil:</b> " + escapeTelegramHtml(order.customerAddress || delivery.address || "kiritilmagan"));
+  if (order.deliveryMapLink || delivery.mapLink) {
+    const link = String(order.deliveryMapLink || delivery.mapLink);
+    if (/^https:\/\//.test(link)) {
+      lines.push("🗺 <a href=\"" + escapeTelegramHtml(link).split("\"").join("&quot;") + "\">Xaritada ochish</a>");
+    }
+  }
+  lines.push("🚚 <b>Yetkazish:</b> " + orderDeliveryLabel(order.deliveryMethod || delivery.method));
+  if (delivery.note) lines.push("📝 <b>Izoh:</b> " + escapeTelegramHtml(delivery.note));
+  const pay = order.payment && typeof order.payment === "object" ? order.payment.method : order.paymentMethod;
+  if (pay) lines.push("💳 <b>To'lov:</b> " + escapeTelegramHtml(pay));
+  lines.push("🆔 <b>Mijoz ID:</b> <code>" + escapeTelegramHtml(order.uid || "") + "</code>");
+  if (order.date || order.time) lines.push("🕒 " + escapeTelegramHtml([order.date, order.time].filter(Boolean).join(" ")));
+  lines.push("");
+  lines.push("🛒 <b>Mahsulotlar:</b>");
+  let items = orderItemLines(order);
+  if (items.length > 2600) {
+    items = items.slice(0, 2600);
+    items = items.slice(0, items.lastIndexOf(NL) > 0 ? items.lastIndexOf(NL) : items.length) + NL + "… (ro'yxat qisqartirildi)";
+  }
+  lines.push(items || "<i>tafsilot yo'q</i>");
+  lines.push("");
+  lines.push("💰 <b>Jami:</b> " + fmtSomW(order.total) + " so'm");
+  const cb = Number(order.cashbackUsed) || 0;
+  if (cb > 0) {
+    lines.push("🎁 <b>Cashback:</b> −" + fmtSomW(cb) + " so'm");
+    lines.push("💵 <b>TO'LANADI:</b> " + fmtSomW(order.payable != null ? order.payable : (Number(order.total) || 0) - cb) + " so'm");
+  }
+  if (event && event.type === "order_status") {
+    const who = event.by === "customer"
+      ? "mijozning o'zi"
+      : "admin" + (event.byName ? " (" + escapeTelegramHtml(event.byName) + ")" : "");
+    const verb = event.from === "yetkazildi" && event.status === "bekor_qilingan" ? "qaytarildi" : "o'zgartirildi";
+    lines.push("");
+    lines.push("🔄 <i>Oxirgi o'zgarish: " + escapeTelegramHtml(ORDER_STATUS_LABELS[event.status] || event.status) +
+      " — " + verb + ", " + who + "</i>");
+  }
+  let text = lines.join(NL);
+  if (text.length > 4000) text = text.slice(0, 3990) + "…";
+  return text;
+}
+
+const CUSTOMER_ORDER_TEXTS = {
+  uz: {
+    created: "✅ Buyurtmangiz qabul qilindi!{NL}🆔 Kod: #{code}{detail}{NL}{NL}🙏 Rahmat! Holat o'zgarganda shu yerda xabar beramiz.",
+    qabul: "✅ #{code} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!{detail}{NL}{NL}🙏 Tez orada keyingi bosqich haqida xabar beramiz.",
+    yolda: "🚚 #{code} raqamli buyurtmangiz yo'lga chiqdi!{detail}{NL}{NL}📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.",
+    yetkazildi: "🏁 #{code} raqamli buyurtmangiz yetkazib berildi.{detail}{NL}{NL}🙏 Xaridingiz uchun rahmat! Yana kutamiz.",
+    bekor_qilingan: "❌ #{code} raqamli buyurtmangiz bekor qilindi.{NL}{NL}Savollaringiz bo'lsa biz bilan bog'laning: {phone}",
+    returned: "↩️ #{code} raqamli buyurtmangiz qaytarildi deb belgilandi.{NL}{NL}Savollaringiz bo'lsa biz bilan bog'laning: {phone}",
+    self_cancel: "❌ #{code} raqamli buyurtmangizni bekor qildingiz.{NL}{NL}Fikringiz o'zgarsa — do'konda qaytadan buyurtma bering.",
+    total: "💰 Jami: {sum} so'm",
+    payable: "💵 To'lanadi: {sum} so'm",
+    cashback: "🎁 Cashback: −{sum} so'm",
+  },
+  ru: {
+    created: "✅ Ваш заказ принят!{NL}🆔 Код: #{code}{detail}{NL}{NL}🙏 Спасибо! Сообщим здесь, когда статус изменится.",
+    qabul: "✅ Ваш заказ #{code} принят и готовится!{detail}{NL}{NL}🙏 Скоро сообщим о следующем этапе.",
+    yolda: "🚚 Ваш заказ #{code} в пути!{detail}{NL}{NL}📦 Скоро доставим по адресу, держите телефон под рукой.",
+    yetkazildi: "🏁 Ваш заказ #{code} доставлен.{detail}{NL}{NL}🙏 Спасибо за покупку! Ждём вас снова.",
+    bekor_qilingan: "❌ Ваш заказ #{code} отменён.{NL}{NL}По вопросам свяжитесь с нами: {phone}",
+    returned: "↩️ Ваш заказ #{code} отмечен как возвращённый.{NL}{NL}По вопросам свяжитесь с нами: {phone}",
+    self_cancel: "❌ Вы отменили заказ #{code}.{NL}{NL}Передумаете — оформите заказ в магазине заново.",
+    total: "💰 Итого: {sum} сум",
+    payable: "💵 К оплате: {sum} сум",
+    cashback: "🎁 Кэшбэк: −{sum} сум",
+  },
+};
+
+function customerOrderText(lang, key, order, env, withItems) {
+  const NL = String.fromCharCode(10);
+  const t = CUSTOMER_ORDER_TEXTS[lang === "ru" ? "ru" : "uz"];
+  const fill = (tpl, vars) => String(tpl).replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? String(vars[k]) : m));
+  let detail = "";
+  if (withItems) {
+    const items = orderItemLines(order).replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&amp;/g, "&");
+    if (items) detail += NL + NL + "🛒" + NL + items.slice(0, 2500);
+  }
+  if (Number(order.total) > 0) {
+    detail += NL + NL + fill(t.total, { sum: fmtSomW(order.total) });
+    const cb = Number(order.cashbackUsed) || 0;
+    if (cb > 0) {
+      detail += NL + fill(t.cashback, { sum: fmtSomW(cb) });
+      detail += NL + fill(t.payable, { sum: fmtSomW(order.payable != null ? order.payable : Number(order.total) - cb) });
+    }
+  }
+  return fill(t[key], {
+    NL,
+    code: String(order.code || order.id || ""),
+    detail,
+    phone: String((env && env.SHOP_PHONE) || "+998 88 289 30 30"),
+  });
+}
+
+async function telegramCall(env, method, payload) {
+  try {
+    const response = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/" + method, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    let data = null;
+    try { data = await response.json(); } catch (_) {}
+    if (response.ok && data && data.ok === true) return { ok: true, result: data.result };
+    const error = data && data.description ? String(data.description).slice(0, 200) : "HTTP " + response.status;
+    // 400/403 — qayta urinish yordam bermaydi (chat yo'q, bot bloklangan, xabar
+    // o'chirilgan). 429/5xx — vaqtinchalik, keyinroq qayta uriladi.
+    return { ok: false, permanent: response.status === 400 || response.status === 403, error };
+  } catch (err) {
+    return { ok: false, permanent: false, error: String((err && err.message) || "tarmoq xatosi").slice(0, 200) };
+  }
+}
+
+async function customerLang(ctx, token, uid) {
+  try {
+    const lang = await rtdbGet(ctx.dbUrl, "users/" + uid + "/profile/lang", token);
+    return lang === "ru" ? "ru" : "uz";
+  } catch (_) {
+    return "uz";
+  }
+}
+
+async function deliverOrderOutbox(ctx, token, env, outboxKey) {
+  if (!env.BOT_TOKEN) return { state: "unconfigured" };
+  if (!/^[A-Za-z0-9_-]{1,260}$/.test(String(outboxKey || ""))) throw httpError(400, "outboxKey noto'g'ri");
+  const path = "notification_outbox/" + outboxKey;
+  const lease = randomOwnerToken();
+  const now = Date.now();
+  const claim = await rtdbEtagMutate(ctx.dbUrl, path, token, (cur) => {
+    if (!cur || (cur.type !== "order_created" && cur.type !== "order_status")) return { abort: true, result: { state: "missing" } };
+    if (cur.delivered === true) return { abort: true, result: { state: "delivered" } };
+    if (Number(cur.leaseUntil) > now) return { abort: true, result: { state: "busy" } };
+    const next = cloneJson(cur);
+    next.lease = lease;
+    next.leaseUntil = now + ORDER_NOTIFY_LEASE_MS;
+    next.attempts = (Number(cur.attempts) || 0) + 1;
+    next.state = "sending";
+    return { value: next, result: { state: "claimed", event: next } };
+  });
+  if (!claim.result || claim.result.state !== "claimed") return claim.result || { state: "unknown" };
+  const event = claim.result.event;
+  const done = event.done && typeof event.done === "object" ? cloneJson(event.done) : {};
+  const errors = [];
+  let retry = false;
+  const record = (key, res) => {
+    if (res.ok) done[key] = true;
+    else if (res.permanent) done[key] = "err: " + res.error;
+    else { retry = true; errors.push(key + ": " + res.error); }
+  };
+
+  try {
+    const order = await rtdbGet(ctx.dbUrl, "orders/" + event.orderKey, token);
+    if (!order || typeof order !== "object") {
+      done.order = "err: buyurtma topilmadi";
+    } else {
+      const short = await orderShortKey(event.orderKey);
+      await rtdbCreateIfNull(
+        ctx.dbUrl, "order_tg_index/" + short,
+        { orderKey: event.orderKey, uid: String(order.uid), orderId: String(order.id) },
+        token,
+        (v) => v && v.orderKey === event.orderKey
+      );
+      const tgState = (await rtdbGet(ctx.dbUrl, "order_tg/" + event.orderKey, token)) || {};
+      const msgs = tgState.msgs && typeof tgState.msgs === "object" ? { ...tgState.msgs } : {};
+      const status = String(order.status || "kutilmoqda");
+      const card = orderAdminCardText(order, event);
+      const keyboard = orderAdminKeyboard(status, short);
+      const admins = getAdminIds(env).filter(isTelegramChatId);
+      const uid = String(order.uid || event.uid || "");
+
+      if (event.type === "order_created") {
+        for (const adminId of admins) {
+          const key = "admin_" + adminId;
+          if (done[key]) continue;
+          if (msgs[adminId]) { done[key] = true; continue; }
+          const res = await telegramCall(env, "sendMessage", {
+            chat_id: adminId, text: card, parse_mode: "HTML",
+            disable_web_page_preview: true, reply_markup: keyboard,
+          });
+          if (res.ok && res.result && res.result.message_id != null) {
+            msgs[adminId] = res.result.message_id;
+            await rtdbPatch(ctx.dbUrl, "order_tg/" + event.orderKey + "/msgs", { [adminId]: res.result.message_id }, token);
+          }
+          record(key, res);
+        }
+        if (!done.customer) {
+          if (!isTelegramChatId(uid)) done.customer = "skip";
+          else {
+            const lang = await customerLang(ctx, token, uid);
+            record("customer", await telegramCall(env, "sendMessage", {
+              chat_id: uid, text: customerOrderText(lang, "created", order, env, true),
+            }));
+          }
+        }
+      } else {
+        // Holat o'zgardi: har bir admin kartochkasini yangilaymiz (joriy holat +
+        // keyingi tugmalar). Tahrir ovozsiz — admin chatida tartib saqlanadi.
+        for (const adminId of admins) {
+          const key = "card_" + adminId;
+          if (done[key]) continue;
+          let res;
+          if (msgs[adminId]) {
+            res = await telegramCall(env, "editMessageText", {
+              chat_id: adminId, message_id: msgs[adminId], text: card, parse_mode: "HTML",
+              disable_web_page_preview: true, reply_markup: keyboard,
+            });
+            if (!res.ok && /not modified/i.test(res.error)) res = { ok: true };
+          } else {
+            // Kartochkasi yo'q (eski buyurtma) — tahrirlanadigan narsa yo'q.
+            res = { ok: true };
+          }
+          record(key, res);
+        }
+        if (event.by === "customer") {
+          // Mijoz o'zi bekor qildi — kartochka tahriri ovozsiz, shuning uchun
+          // har bir adminga alohida (ovozli) xabar.
+          const NL = String.fromCharCode(10);
+          const alert = "⚠️ <b>Mijoz buyurtmani bekor qildi</b>" + NL + NL +
+            "🧾 #" + escapeTelegramHtml(order.code || order.id) + NL +
+            "👤 " + escapeTelegramHtml(order.customerName || "Mijoz") +
+            (order.customerPhone ? NL + "📞 <code>" + escapeTelegramHtml(order.customerPhone) + "</code>" : "") + NL +
+            "💰 " + fmtSomW(order.total) + " so'm" + NL + NL + "<i>Tovarlar omborga qaytarildi.</i>";
+          for (const adminId of admins) {
+            const key = "alert_" + adminId;
+            if (done[key]) continue;
+            const payload = { chat_id: adminId, text: alert, parse_mode: "HTML" };
+            if (msgs[adminId]) payload.reply_parameters = { message_id: msgs[adminId], allow_sending_without_reply: true };
+            record(key, await telegramCall(env, "sendMessage", payload));
+          }
+        }
+        if (!done.customer) {
+          const target = String(event.status || "");
+          let key = target;
+          if (target === "bekor_qilingan" && event.by === "customer") key = "self_cancel";
+          else if (target === "bekor_qilingan" && event.from === "yetkazildi") key = "returned";
+          if (!isTelegramChatId(uid) || !CUSTOMER_ORDER_TEXTS.uz[key] || target === "kutilmoqda") done.customer = "skip";
+          else {
+            const lang = await customerLang(ctx, token, uid);
+            record("customer", await telegramCall(env, "sendMessage", {
+              chat_id: uid, text: customerOrderText(lang, key, order, env, target === "qabul"),
+            }));
+          }
+        }
+      }
+    }
+  } catch (err) {
+    retry = true;
+    errors.push(String((err && err.message) || "xato").slice(0, 200));
+  }
+
+  const finishedAt = Date.now();
+  await rtdbEtagMutate(ctx.dbUrl, path, token, (cur) => {
+    if (!cur || cur.lease !== lease) return { abort: true, result: null };
+    const next = cloneJson(cur);
+    next.done = done;
+    next.delivered = !retry;
+    next.state = retry ? "retry" : "sent";
+    next.leaseUntil = 0;
+    next.lastError = errors.length ? errors.join("; ").slice(0, 500) : null;
+    next.finishedAt = finishedAt;
+    return { value: next, result: null };
+  });
+  return { state: retry ? "retry" : "sent", errors };
+}
+
+// Javobni kutdirmaslik uchun xabarlar `waitUntil` bilan fonda yuboriladi
+// (mijoz ilovani darhol yopsa ham Worker ishni oxiriga yetkazadi).
+// execCtx bo'lmasa (sinov muhiti) — promise qaytariladi va chaqiruvchi kutadi.
+function scheduleOrderOutbox(execCtx, env, outboxKey) {
+  if (!outboxKey) return null;
+  const task = (async () => {
+    try {
+      const ctx = getDbContext(env);
+      const token = await getAccessToken(env);
+      await deliverOrderOutbox(ctx, token, env, outboxKey);
+    } catch (_) {
+      // Bot watchdog yetkazilmagan hodisani keyinroq qayta uradi.
+    }
+  })();
+  if (execCtx && typeof execCtx.waitUntil === "function") {
+    execCtx.waitUntil(task);
+    return null;
+  }
+  return task;
+}
+
+async function committedOrderResponse(execCtx, env, orderKey, resultBody, status) {
+  const order = resultBody && resultBody.order;
+  const key = orderKey || (order && order.uid != null && order.id != null ? String(order.uid) + "_" + String(order.id) : "");
+  const task = scheduleOrderOutbox(execCtx, env, key);
+  if (task) await task;
+  // notify:"server" — Mini App'ga "adminga xabarni MEN yubordim" signali
+  // (eski Worker bilan moslik: bu maydon bo'lmasa ilova o'zi yuboradi).
+  return json({ ...resultBody, notify: "server" }, status);
+}
+
+// Bot watchdog: yetkazilmay qolgan buyurtma hodisasini qayta yuborish.
+async function handleOrderNotify(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const outboxKey = cleanText(body.outboxKey, 260, true);
+    if (!/^[A-Za-z0-9_-]{1,260}$/.test(outboxKey)) throw httpError(400, "outboxKey noto'g'ri");
+    await verifyBotAuth(body, env, "order-notify", [outboxKey]);
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const result = await deliverOrderOutbox(ctx, token, env, outboxKey);
+    return json({ ok: true, ...result });
+  } catch (err) {
     return errorResponse(err);
   }
 }

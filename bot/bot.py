@@ -63,6 +63,8 @@ from fb_utils import (GENERIC_VALUES as _GENERIC_VALUES,
 # 🤖 Xo'jayin AI agenti (tool calling). Sozlamalarini `init()` ichida
 #    o'qiydi, shuning uchun import tartibi muhim emas.
 import ai_agent
+# 🧾 Buyurtma tugmalari va Worker bilan imzolangan aloqa (sof modul).
+import order_ops
 
 # =====================================================================
 # SOZLAMALAR (.env dan)
@@ -2401,53 +2403,12 @@ async def story_categories_command(message: types.Message):
     await message.answer(story_categories_text(), parse_mode="HTML")
 
 
-@dp.message(F.web_app_data)
-async def handle_webapp_data(message: types.Message):
-    # #1: faqat adminlar holat o'zgartira oladi. Aks holda istalgan foydalanuvchi
-    # Mini App orqali 'edit_status' yuborib, bot nomidan boshqa odamlarga soxta
-    # xabar jo'natishi mumkin edi (spam/aldash vektori).
-    if message.from_user.id not in ADMIN_IDS:
-        return
-    try:
-        data = json.loads(message.web_app_data.data)
-        if data.get("action") == "edit_status":
-            uid = data.get("user_id")
-            order_id = data.get("order_id")
-            new_status = data.get("new_status")
-            status_text = {
-                "qabul": "QABUL QILINDI", "yolda": "YO'LGA CHIQDI",
-                "yetkazildi": "YETKAZIB BERILDI", "bekor_qilingan": "BEKOR QILINDI",
-            }
-            await message.answer(
-                f"<b>#{esc(order_id)}</b> holati: {esc(status_text.get(new_status, str(new_status).upper()))}",
-                parse_mode="HTML",
-            )
-            mijozga_xabar = {
-                "qabul": "order_qabul",
-                "yolda": "order_yolda",
-                "yetkazildi": "order_yetkazildi",
-                "bekor_qilingan": "order_bekor_qilingan",
-            }.get(new_status)
-            if mijozga_xabar and uid and str(uid) != "Noma'lum":
-                try:
-                    # Markaziy buyurtmadan jami summani olib, xabarni boyitamiz.
-                    detail = ""
-                    try:
-                        central = await firebase_get(f"orders/{uid}_{order_id}")
-                        if isinstance(central, dict) and central.get("total"):
-                            total_txt = f"{int(float(central['total'])):,}".replace(",", " ")
-                            detail = f"\n\n💰 Jami: {total_txt} so'm"
-                    except Exception:
-                        pass
-                    cust_lang = await get_user_lang(int(uid))
-                    await bot.send_message(
-                        chat_id=int(uid),
-                        text=t(cust_lang, mijozga_xabar, code=order_id, detail=detail),
-                    )
-                except Exception as e:
-                    logging.error(f"Mijozga xabar xatosi: {e}")
-    except Exception as e:
-        logging.error(f"WebApp data xato: {e}")
+# (O'CHIRILDI: `handle_webapp_data` / "edit_status". U HECH QACHON ishlamasdi:
+#  Mini App `Telegram.WebApp.sendData` ni chaqirmaydi, bot esa ilovani inline
+#  tugma orqali ochadi — u yerda `sendData` umuman ishlamaydi. Buyurtma holati
+#  endi Worker /order-status orqali o'zgaradi va xabarlarni Worker yuboradi;
+#  adminlar kartochkadagi tugmalardan foydalanadi — pastdagi
+#  `order_button_callback` ga qarang.)
 
 
 # =====================================================================
@@ -3302,6 +3263,161 @@ async def _append_to_card(msg, result_text):
             logging.error(f"Natija xabari yuborilmadi: {e}")
 
 
+# =====================================================================
+# 🧾 BUYURTMA KARTOCHKASI TUGMALARI (✅ Qabul / 🚚 / 🏁 / ❌ / ↩️)
+# ---------------------------------------------------------------------
+# Yangi buyurtma kelganda Worker BARCHA adminlarga tugmali kartochka
+# yuboradi. Tugma bosilganda bot holatni Worker /order-status orqali
+# o'zgartiradi (imzolangan so'rov). Stok qaytarish, cashback, mijozga
+# xabar va BARCHA adminlarning kartochkalarini yangilash — Worker'da,
+# ya'ni Mini App'dan o'zgartirilgandagi bilan AYNAN bir xil natija.
+#
+# Bekor qilish / qaytarish — ikki bosqichli (tasodifiy bosishdan himoya).
+# =====================================================================
+def _kb(markup_dict):
+    """order_ops dagi dict klaviaturani aiogram obyektiga aylantiradi."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=b["text"], callback_data=b["callback_data"]) for b in row]
+        for row in (markup_dict or {}).get("inline_keyboard", [])
+    ])
+
+
+async def _order_index(short):
+    idx = await firebase_get(f"order_tg_index/{short}")
+    if not isinstance(idx, dict) or not idx.get("uid") or not idx.get("orderId"):
+        return None
+    return idx
+
+
+async def _refresh_order_card_keyboard(call, idx, short):
+    """Kartochka tugmalarini bazadagi JORIY holatga moslaydi."""
+    order = await firebase_get(f"orders/{idx.get('orderKey') or (str(idx['uid']) + '_' + str(idx['orderId']))}")
+    status = str((order or {}).get("status") or "kutilmoqda") if isinstance(order, dict) else None
+    if status is None:
+        return None
+    try:
+        await call.message.edit_reply_markup(
+            reply_markup=_kb(order_ops.order_admin_keyboard(status, short)))
+    except Exception:
+        pass   # "message is not modified" — tugmalar allaqachon to'g'ri
+    return status
+
+
+@dp.callback_query(F.data.startswith(("ord:", "ordc:", "ordb:")))
+async def order_button_callback(call: types.CallbackQuery):
+    # 🔒 Ruxsat KODDA: tugma faqat admin chatida bo'ladi, lekin callback'ni
+    #    qo'lda yasash mumkin. Worker ham actor'ni qayta tekshiradi.
+    if call.from_user.id not in ADMIN_IDS:
+        await call.answer("Bu tugma faqat adminlar uchun.", show_alert=True)
+        return
+    action, code, short = order_ops.parse_order_callback(call.data)
+    if not action:
+        await call.answer("Tugma eskirgan.", show_alert=True)
+        return
+    idx = await _order_index(short)
+    if idx is None:
+        await call.answer("Buyurtma topilmadi (o'chirilgan bo'lishi mumkin).", show_alert=True)
+        return
+
+    if action == "back":
+        await _refresh_order_card_keyboard(call, idx, short)
+        await call.answer()
+        return
+
+    if action == "confirm":
+        order = await firebase_get(f"orders/{idx.get('orderKey')}")
+        cur = str((order or {}).get("status") or "kutilmoqda") if isinstance(order, dict) else None
+        if cur == "bekor_qilingan":
+            await _refresh_order_card_keyboard(call, idx, short)
+            await call.answer("Bu buyurtma allaqachon bekor qilingan.", show_alert=True)
+            return
+        try:
+            await call.message.edit_reply_markup(
+                reply_markup=_kb(order_ops.order_confirm_keyboard(code, short, cur)))
+        except Exception:
+            pass
+        await call.answer("Tasdiqlang: bu amalni qaytarib bo'lmaydi.")
+        return
+
+    status = order_ops.STATUS_FROM_CODE[code]
+    ok, http_status, data = await order_ops.worker_order_status(
+        WORKER_URL, API_TOKEN, call.from_user.id, idx["uid"], idx["orderId"], status)
+    if ok:
+        label = order_ops.STATUS_LABELS.get(status, status)
+        note = " (allaqachon shunday edi)" if data.get("duplicate") else ""
+        try:
+            await call.answer(f"{label}{note}")
+        except Exception:
+            pass
+        # Kartochkani Worker yangilaydi (barcha adminlarda). Fon vazifasi
+        # kechiksa ham shu admin darhol to'g'ri tugmalarni ko'rsin:
+        await _refresh_order_card_keyboard(call, idx, short)
+        skipped = data.get("restockSkipped") or []
+        if skipped:
+            names = ", ".join(esc(str(s.get("name") or s.get("id"))) for s in skipped[:10])
+            await bot.send_message(
+                chat_id=call.message.chat.id,
+                text=("⚠️ <b>Ba'zi tovarlar omborga qaytarilmadi</b> (katalogdan "
+                      f"o'chirilgan yoki razmeri o'zgargan): {names}.\n"
+                      "<i>Kerak bo'lsa qoldiqni qo'lda to'g'rilang.</i>"),
+                parse_mode="HTML")
+        return
+
+    msg = order_ops.status_error_text(http_status, data)
+    logging.warning("Buyurtma tugmasi xatosi (%s): %s %s", call.data, http_status, data)
+    await _refresh_order_card_keyboard(call, idx, short)
+    try:
+        await call.answer(msg[:190], show_alert=True)
+    except Exception:
+        await bot.send_message(chat_id=call.message.chat.id, text=f"❌ {msg}")
+
+
+async def agent_order_status(uid, order_id, status, expected_from, actor):
+    """AI agenti uchun: holatni Worker orqali o'zgartirish. `(ok, xato_matni)`."""
+    ok, http_status, data = await order_ops.worker_order_status(
+        WORKER_URL, API_TOKEN, actor or ADMIN_ID, uid, order_id, status, expected_from)
+    if ok:
+        return True, ""
+    return False, order_ops.status_error_text(http_status, data)
+
+
+ORDER_WATCHDOG_INTERVAL = int(os.getenv("ORDER_WATCHDOG_INTERVAL", "60"))
+
+
+async def order_outbox_watchdog():
+    """Yetkazilmay qolgan buyurtma bildirishnomalarini qayta uradi.
+
+    Odatda Worker xabarni buyurtma yozilgan zahoti yuboradi. Lekin Telegram
+    vaqtincha javob bermasa yoki Worker fon vazifasi uzilib qolsa, hodisa
+    `notification_outbox` da `delivered:false` bo'lib qoladi. Ilgari bunday
+    buyurtma haqida admin HECH QACHON bilmasdi. Endi bot daqiqada bir
+    tekshiradi va Worker /order-notify ga qayta yuborishni so'raydi (Worker
+    faqat yetmagan qabul qiluvchilarga yuboradi — dublikat bo'lmaydi).
+    """
+    await asyncio.sleep(30)
+    warned_old_worker = False
+    while True:
+        try:
+            raw = await firebase_query("notification_outbox", {
+                "orderBy": '"delivered"', "equalTo": "false", "limitToFirst": "50"})
+            keys = order_ops.outbox_keys_to_retry(raw, int(time.time() * 1000))
+            for key in keys[:10]:
+                ok, http_status, data = await order_ops.worker_order_notify(
+                    WORKER_URL, API_TOKEN, ADMIN_ID, key)
+                if http_status == 404 and not data.get("ok"):
+                    if not warned_old_worker:
+                        warned_old_worker = True
+                        logging.error("Worker /order-notify topilmadi — cloudflare-worker.js "
+                                      "ni Cloudflare'ga qayta joylang.")
+                    break
+                if not ok:
+                    logging.warning("Bildirishnoma qayta yuborilmadi (%s): %s %s",
+                                    key, http_status, data)
+        except Exception as e:
+            logging.warning("Buyurtma watchdog xatosi: %s", e)
+        await asyncio.sleep(max(15, ORDER_WATCHDOG_INTERVAL))
+
+
 # (/orqaga buyrug'i YUQORIDA, `unknown_command` dan OLDIN ro'yxatga olingan —
 #  aiogram handlerlarni e'lon tartibida sinaydi, shu sababli tartib muhim.)
 
@@ -3699,7 +3815,11 @@ async def main():
         # Yozish uchun (tasdiqlangan o'zgarishlar): ETag bilan atomik yozish.
         firebase_get_etag=firebase_get_etag, firebase_put=firebase_put,
         firebase_delete=firebase_delete, firebase_query=firebase_query,
+        # Buyurtma holati FAQAT Worker orqali (stok, cashback, xabarlar u yerda).
+        order_status=agent_order_status,
     )
+    # Yetkazilmay qolgan buyurtma bildirishnomalarini qayta urish.
+    asyncio.create_task(order_outbox_watchdog())
     # Muddati o'tgan tasdiqlarni tozalab turuvchi fon vazifasi — aks holda
     # `pending_actions` tuguni bosilmagan tugmalar bilan to'lib borardi.
     asyncio.create_task(ai_agent.pending_janitor(agent_deps))

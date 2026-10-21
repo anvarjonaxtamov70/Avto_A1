@@ -46,6 +46,28 @@ Shu bilan birga:
   tugatib qo'ymaydi. Sozlash: `RL_AI_MAX`, `RL_AI_WINDOW`, `RL_PHOTO_MAX`,
   `RL_PHOTO_WINDOW`. Adminlarga cheklov qo'llanmaydi.
 
+## Buyurtmalar: kartochka va tugmalar
+
+Buyurtma holatini **faqat Cloudflare Worker** o'zgartiradi (ombor, cashback, holat
+tartibi, xabarlar). Mini App, admin tugmalari va AI agenti — hammasi Worker orqali.
+
+- **Yangi buyurtma** → Worker **barcha adminlarga** kartochka yuboradi:
+  `✅ Qabul qilish` → `🚚 Yo'lga chiqdi` → `🏁 Yetkazildi`, har bosqichda `❌ Bekor qilish`,
+  yetkazilgandan keyin `↩️ Qaytarildi`. Bekor qilish/qaytarish ikki bosqichli (tasdiq).
+- Holat qayerdan o'zgarmasin (tugma, Mini App, AI), **hamma adminlarning kartochkasi
+  yangilanadi**, mijozga o'z tilida (uz/ru) xabar boradi.
+- Mijoz **qabul qilinmagan** buyurtmani Mini App'da o'zi bekor qila oladi — adminlarga ogohlantirish keladi.
+- Telegram vaqtincha ishlamasa, bot (`order_outbox_watchdog`) daqiqada bir qayta uradi,
+  faqat yetmagan qabul qiluvchilarga yuboradi (dublikat bo'lmaydi).
+- Bot → Worker so'rovlari `BOT_TOKEN` dan hosil qilingan HMAC imzo bilan
+  (`bot/order_ops.py`). Yangi maxfiy kalit kerak emas, faqat ikkala tomonda `BOT_TOKEN` bir xil bo'lsin.
+
+**Joriy qilish tartibi:** 1) `cloudflare-worker.js` ni Cloudflare'ga joylang;
+2) `database.rules.json` ni joriy qiling (`notification_outbox` indeksi);
+3) botni qayta deploy qiling; 4) Mini App (GitHub Pages) — merge'da o'zi.
+Mini App eski Worker bilan ham ishlaydi (xabarni o'zi yuboradi), lekin tugmalar va
+ishonchli xabar faqat yangi Worker bilan.
+
 ## O'rnatish
 
 ```bash

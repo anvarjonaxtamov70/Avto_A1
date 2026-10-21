@@ -6215,6 +6215,8 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     <button class="btn-checkout" onclick="reorderItems()" style="background: linear-gradient(135deg, #F0D060 0%, #C9A84C 45%, #96720A 100%); color: #000; border: none; width: 100%; padding: 16px; border-radius: 14px; font-weight: 800; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
         🔄 Qayta buyurtma berish
     </button>
+    <!-- ❌ Mijoz o'zi bekor qilishi — faqat "kutilmoqda" holatida ko'rinadi (window._renderOrderCancel) -->
+    <div id="od-cancel-box"></div>
 </div>
     <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
         <h3 style="font-size: 15px; margin-bottom: 10px; color: var(--luxury-gold);"><svg class="uic" aria-hidden="true"><use href="#i-chat"></use></svg>Buyurtma muhokamasi</h3>
@@ -7783,13 +7785,60 @@ document.addEventListener('touchmove', function(e) {
     //    Brauzer/APK — Firebase anonim foydalanuvchisining ID tokeni.
     //    Worker /order-commit, /order-status, / (proxy) va boshqalar shu
     //    kredentialni talab qiladi (yangi database.rules.json + Worker).
-    window._authCred = async function () {
-        try { if (typeof tg !== 'undefined' && tg.initData) return { initData: tg.initData }; } catch (e) {}
+    // ⏱ Telegram initData Worker'da faqat 1 soat qabul qilinadi
+    //    (TELEGRAM_INIT_MAX_AGE). Ilova uzoq ochiq tursa (masalan admin
+    //    kun bo'yi ochib qo'ysa) initData eskiradi va HAR buyurtma / holat
+    //    o'zgarishi "initData eskirgan" (401) bilan yiqilardi. Firebase
+    //    idToken esa SDK tomonidan avtomatik yangilanadi — eskirgan
+    //    initData o'rniga shuni yuboramiz.
+    window._initDataAgeSec = function () {
+        try {
+            if (typeof tg === 'undefined' || !tg.initData) return Infinity;
+            var ad = parseInt(new URLSearchParams(tg.initData).get('auth_date') || '0', 10);
+            if (!ad) return Infinity;
+            return Math.floor(Date.now() / 1000) - ad;
+        } catch (e) { return Infinity; }
+    };
+    window._authCred = async function (opts) {
+        var preferToken = !!(opts && opts.preferToken);
+        var hasInit = false;
+        try { hasInit = (typeof tg !== 'undefined' && !!tg.initData); } catch (e) {}
+        var fresh = hasInit && window._initDataAgeSec() < 50 * 60;
+        if (hasInit && fresh && !preferToken) return { initData: tg.initData };
         try {
             var u = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null;
-            if (u) return { idToken: await u.getIdToken() };
+            if (u) return { idToken: await u.getIdToken(preferToken) };
         } catch (e) {}
+        // Token yo'q — hech bo'lmasa initData (Worker aniq sababini aytadi).
+        if (hasInit) return { initData: tg.initData };
         return null;
+    };
+    // 🛰 Worker'ga xavfsiz POST: kredential qo'shadi; 401 bo'lsa (eskirgan
+    //    initData / muddati o'tgan token) BIR MARTA yangi Firebase idToken
+    //    bilan qayta uradi. { resp, data } qaytaradi; tarmoq xatosida throw.
+    window._workerPost = async function (path, body) {
+        try { if (window._ensureAuth) await window._ensureAuth(); } catch (e) {}
+        var send = async function (cred) {
+            var b = Object.assign({}, body || {});
+            delete b.initData; delete b.idToken;
+            if (cred && cred.initData) b.initData = cred.initData;
+            else if (cred && cred.idToken) b.idToken = cred.idToken;
+            var resp = await fetch(TG_PROXY + path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(b)
+            });
+            var data = await resp.json().catch(function () { return null; });
+            return { resp: resp, data: data, cred: cred };
+        };
+        var cred = await window._authCred();
+        if (!cred) return { resp: { ok: false, status: 401 }, data: { ok: false, error: 'auth' }, cred: null };
+        var r = await send(cred);
+        if (r.resp.status === 401) {
+            var again = await window._authCred({ preferToken: true });
+            if (again && again.idToken) r = await send(again);
+        }
+        return r;
     };
     // 🔐 Auth kafolati: Worker chaqiruvi / DB yozuvidan OLDIN chaqiriladi.
     //    Telegram — custom token (window._authReady kutiladi).
@@ -8484,7 +8533,7 @@ const Haptics = {
         });
     }
 
-    function generateOrderCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let res = 'A1-'; for(let i=0; i<5; i++) res += chars.charAt(Math.floor(Math.random() * chars.length)); return res; }
+    // (generateOrderCode o'chirildi — buyurtma kodini endi SERVER beradi.)
 
     // =====================================================================
     // #5 / #6 — MARKAZIY 'orders' TUGUNI + ADMIN O'QISH KESHI
@@ -9960,99 +10009,11 @@ window.clearAppCache = () => {
         }
     }
 
-    async function confirmOrder(paymentMethod) {
-        const loadingOverlay = document.getElementById('order-loading-overlay'); 
-        loadingOverlay.classList.add('active');
-        let newOrderCode = generateOrderCode(); 
-        
-        let addressText = myProfile.address ? `\n📍 <b>Manzil:</b> ${escTg(myProfile.address)}` : "";
-        let adminText = `🆕 <b>YANGI BUYURTMA: #${newOrderCode}</b>\n\n👤 <b>Ism:</b> ${escTg(myProfile.name)}\n📞 <b>Telefon:</b> ${escTg(myProfile.phone)}${addressText}\n🆔 <b>ID:</b> <code>${escTg(currentUser || 'Noma\'lum')}</code>\n💳 <b>To'lov turi:</b> ${escTg(paymentMethod)}\n\n🛒 <b>Mahsulotlar:</b>\n`;
-        let total = 0; 
-        let savedItems = {};
-        let lowStockAlerts = ""; 
-        let stockChanges = [];
-        
-        for (let fullId in cart) { 
-            let [baseId, carOpt] = fullId.split('||');
-            let p = productsDB.find(x => x.id == baseId); 
-            if (p) { 
-                let sum = p.price * cart[fullId]; 
-                let dName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${escTg(p.name)} (${escTg(carOpt)})` : escTg(p.name);
-                adminText += `▪️ ${dName}\n   ➖ ${cart[fullId]} ta x ${p.price.toLocaleString()} = ${sum.toLocaleString()} so'm\n`; 
-                total += sum; 
-                savedItems[fullId] = cart[fullId]; 
-                
-                let pIdx = productsDB.indexOf(p);
-                if (p.product_type === 'razmerli' && p.sizes) {
-                    let sIdx = p.sizes.findIndex(s => s.size === carOpt);
-                    if (sIdx !== -1) {
-                        let _orig = (parseInt(p.sizes[sIdx].stock) || 0);
-                        p.sizes[sIdx].stock = (_orig - cart[fullId]) < 0 ? 0 : (_orig - cart[fullId]);
-                        stockChanges.push({ idx: pIdx, sizeIdx: sIdx, qty: cart[fullId], fallback: _orig });
-                        if (p.sizes[sIdx].stock <= 3) {
-                            lowStockAlerts += `\n⚠️ <b>${escTg(p.name)} (Razmer: ${escTg(carOpt)})</b>: atigi ${p.sizes[sIdx].stock} ta qoldi!`;
-                        }
-                    }
-                    p.stock = p.sizes.reduce((sum, s) => sum + (parseInt(s.stock) || 0), 0);
-                } else {
-                    let _orig = (p.stock !== undefined ? (parseInt(p.stock) || 0) : 10);
-                    p.stock = (_orig - cart[fullId]) < 0 ? 0 : (_orig - cart[fullId]);
-                    stockChanges.push({ idx: pIdx, qty: cart[fullId], fallback: _orig });
-                    if (p.stock <= 3) {
-                        lowStockAlerts += `\n⚠️ <b>${escTg(p.name)}</b>: atigi ${p.stock} ta qoldi!`;
-                    }
-                }
-            } 
-        }
-        adminText += `\n💰 <b>Jami:</b> ${total.toLocaleString()} so'm`;
-        
-        try {
-            const res = await tgProxySend({ chat_id: ADMIN_ID, text: adminText, parse_mode: "HTML" });
-            
-            if (res.ok) {
-                _decrementStock(stockChanges);
-                if (lowStockAlerts !== "") {
-                    let alertMsg = `🚨 <b>DIQQAT: ZAXIRA TUGAMOQDA!</b>\nShu buyurtmadan keyin omborda ba'zi tovarlar kam qoldi:${lowStockAlerts}`;
-                    tgProxySend({ chat_id: ADMIN_ID, text: alertMsg, parse_mode: "HTML" });
-                }
-                if(currentUser) { 
-                    var _cSum = window._orderItemsSummary(savedItems);
-                    var _cDetail = _cSum.lines
-                        ? ("\n\n🛒 Buyurtma tarkibi:" + _cSum.lines + "\n\n💰 Jami: " + total.toLocaleString() + " so'm")
-                        : ("\n\n💰 Jami: " + total.toLocaleString() + " so'm");
-                    tgProxySend({ chat_id: currentUser, text: `✅ Hurmatli ${myProfile.name}, #${newOrderCode} raqamli buyurtmangiz qabul qilindi!${_cDetail}\n💳 To'lov turi: ${paymentMethod}\n\n🙏 Rahmat! Holat o'zgarganda sizga shu yerda xabar beramiz.` }); 
-                }
-                myOrders.unshift({ id: Date.now(), code: newOrderCode, date: new Date().toLocaleDateString('uz-UZ'), time: new Date().toLocaleTimeString('uz-UZ'), items: savedItems, total: total, status: 'kutilmoqda' }); 
-                saveLocalOrders(); cart = {}; saveLocalCart(); updateCartBadge();
-                window.myOrders = myOrders;
-                // #5: markaziy 'orders' tuguniga ham yozamiz (izolyatsiya — buyurtma oqimiga ta'sir qilmaydi)
-                try { window._mirrorOrderToCentral(myOrders[0], { uid: currentUser, name: myProfile.name, phone: myProfile.phone, address: myProfile.address }); } catch(e){}
-                // 🎁 Cashback + kafolat — VA Firebase yozuvi tugashini KUTAMIZ (tg.close oldidan)
-                var _p2flush = Promise.resolve();
-                try { if (window.Phase2) _p2flush = window.Phase2.onOrderPlaced(myOrders[0], window.productsDB || productsDB) || Promise.resolve(); } catch(e){ _dwarn('[Phase2] onOrderPlaced xato:', e); }
-                loadingOverlay.classList.remove('active'); 
-                showToast("Qabul qilindi!");
-                // Cashback Firebase'ga yozilib bo'lgach (yoki eng ko'pi 3.5s) ilovani yopamiz —
-                // shunda Telegramda cashback yo'qolmaydi. Konfetti uchun ham vaqt qoladi.
-                var _closed = false;
-                var _doClose = function () {
-                    if (_closed) return; _closed = true;
-                    try { if(paymentMethod === 'Karta') tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch(e){}
-                    try { tg.close(); } catch(e){}
-                };
-                Promise.race([
-                    _p2flush.then(function(){ return new Promise(function(r){ setTimeout(r, 1800); }); }),
-                    new Promise(function(r){ setTimeout(r, 3500); })  // xavfsizlik chegarasi
-                ]).then(_doClose);
-            } else {
-                loadingOverlay.classList.remove('active');
-                showToast("Xatolik! Adminga xabar bering.", "warning");
-            }
-        } catch (err) { 
-            loadingOverlay.classList.remove('active'); 
-            showToast("Internetni tekshiring", "warning"); 
-        }
-    }
+    // (O'CHIRILDI: eski `confirmOrder` — u brauzerda stokni o'zi kamaytirar va
+    //  adminga faqat ADMIN_IDS[0] ga xabar yuborardi. Pastdagi
+    //  `window.confirmOrder` (server-authoritative, Worker /order-commit) uni
+    //  baribir almashtirib qo'yardi, ya'ni bu kod hech qachon ishlamasdi, lekin
+    //  o'qiganni chalg'itardi.)
 
     function renderMyOrders() { let c = document.getElementById('orders-list-container'); if (myOrders.length === 0) { c.innerHTML = window._emptyState({ icon: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>', title: "Buyurtmalar yo'q", desc: "Hali buyurtma bermagansiz. Birinchi buyurtmangizni hoziroq bering!", btnText: "Xarid qilish", btnAction: "closeModal(); showCatalog()" }); return; } c.innerHTML = myOrders.map(o => `<div class="luxury-card" style="margin-bottom: 15px; padding: 15px; display: block;" onclick="openOrderDetails('${o.id}')"><div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;"><span style="font-size:12px; color:var(--text-muted)">📅 ${o.date} | ${o.time}</span>${getStatusHTML(o.status || 'kutilmoqda')}</div><div style="font-weight: 800; font-size: 15px; color: var(--luxury-gold); margin-bottom: 5px;">Buyurtma: #${o.code || o.id}</div><div style="color:white; font-size:16px; font-weight:800; margin-top:5px;">${(Number(o.total)||0).toLocaleString()} so'm</div></div>`).join(''); }
 
@@ -10421,21 +10382,41 @@ window.openAdminChat = (uid, orderId) => {
     }); 
 }
     
-async function changeOrderStatus(uid, orderId, newStatus) {
-        // 🔒 SERVER-AUTHORITATIVE: holat Worker /order-status orqali o'zgaradi
-        //    (admin initData/idToken bilan). Mijoz brauzeri users/{uid}/orders yoki
-        //    markaziy orders/.../status ni ENDI YOZMAYDI (yangi database.rules.json).
-        //    Server ikkalasini ham (+ stok qaytarish, cashback) yangilaydi;
-        //    on('value') listener ro'yxatni o'zi yangilaydi.
-        var _cred = null;
-        try { if (window._ensureAuth) await window._ensureAuth(); } catch (e) {}
-        try { _cred = window._authCred ? await window._authCred() : null; } catch (e) { _cred = null; }
-        if (!_cred || !(_cred.initData || _cred.idToken)) {
-            showToast("Xavfsiz ulanish kerak", "warning");
-            return;
-        }
+// ✅ Tasdiq oynasi (Telegram'da tg.showConfirm, brauzerda window.confirm).
+window._a1Confirm = function (text) {
+    return new Promise(function (resolve) {
+        try {
+            if (typeof tg !== 'undefined' && tg.showConfirm && tg.isVersionAtLeast && tg.isVersionAtLeast('6.2')) {
+                tg.showConfirm(text, function (ok) { resolve(!!ok); });
+                return;
+            }
+        } catch (e) {}
+        try { resolve(window.confirm(text)); } catch (e) { resolve(false); }
+    });
+};
 
-        // Telegram xabari uchun buyurtma tafsilotlari (best-effort, mahalliy keshdan).
+// 🧾 Buyurtma tarkibi matni — SERVER `itemDetails` afzal (yangi buyurtmalarda
+//    `items` kalitlari "l_<hash>" — ulardan nom tiklab bo'lmaydi; ilgari shu
+//    sabab mijoz xabarida tovarlar ro'yxati BO'SH chiqardi).
+window._orderDetailLines = function (o) {
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        var lines = '';
+        o.itemDetails.forEach(function (it) {
+            var sz = (it.size && it.size !== 'Universal') ? ' (' + it.size + ')' : '';
+            var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
+            lines += "\n\u25AA\uFE0F " + it.name + sz + " \u2014 " + (it.qty || 0) + " x " +
+                (Number(it.unitPrice) || 0).toLocaleString() + " = " + (Number(line) || 0).toLocaleString() + " so'm";
+        });
+        return { lines: lines, total: Number(o.total) || 0 };
+    }
+    return window._orderItemsSummary((o && o.items) || {});
+};
+
+async function changeOrderStatus(uid, orderId, newStatus) {
+        // 🔒 SERVER-AUTHORITATIVE: holat Worker /order-status orqali o'zgaradi.
+        //    Server ikkala yozuvni (+ stok qaytarish, cashback) yangilaydi va
+        //    YANGI Worker mijozga hamda BARCHA adminlarga xabarni o'zi yuboradi
+        //    (bot'dagi kartochkalar ham yangilanadi).
         var _ord = null, oldStatus = null, displayCode = orderId;
         try {
             (window.allFetchedOrders || []).some(function (o) {
@@ -10443,39 +10424,45 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 return false;
             });
         } catch (e) {}
-        if (_ord) { oldStatus = _ord.status; displayCode = _ord.code || orderId; }
+        if (_ord) { oldStatus = _ord.status || 'kutilmoqda'; displayCode = _ord.code || orderId; }
 
-        var _statusBody = { uid: String(uid), orderId: String(orderId), status: newStatus };
-        if (_cred.initData) _statusBody.initData = _cred.initData;
-        else if (_cred.idToken) _statusBody.idToken = _cred.idToken;
+        // ⚠️ Qaytarib bo'lmaydigan amallar — tasdiq so'raymiz (tasodifiy bosish).
+        if (newStatus === 'bekor_qilingan') {
+            var _q = (oldStatus === 'yetkazildi')
+                ? ("#" + displayCode + " QAYTARILDI deb belgilansinmi?\n\nTovarlar omborga qaytadi, berilgan cashback qaytarib olinadi. Bu amalni qaytarib bo'lmaydi.")
+                : ("#" + displayCode + " bekor qilinsinmi?\n\nTovarlar omborga qaytadi, mijozga xabar boradi. Bu amalni qaytarib bo'lmaydi.");
+            if (!(await window._a1Confirm(_q))) return;
+        }
 
         var _resp, _data;
         try {
-            _resp = await fetch(TG_PROXY + '/order-status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(_statusBody)
-            });
-            _data = await _resp.json().catch(function () { return null; });
+            var _wp = await window._workerPost('/order-status', { uid: String(uid), orderId: String(orderId), status: newStatus });
+            _resp = _wp.resp; _data = _wp.data;
         } catch (e) {
             showToast("Holat saqlanmadi — internetni tekshiring", "warning");
             return;
         }
         if (!_resp.ok || !_data || !_data.ok) {
-            // 🩺 Serverning ANIQ sababini ko'rsatamiz (ilgari umumiy xabar edi —
-            //    admin sababidan bexabar qolardi). Masalan: "faqat admin" (Worker
-            //    admin ro'yxati), "buyurtma topilmadi" (eski buyurtma markaziy
-            //    orders/ da yo'q), yoki auth xatosi.
+            // 🩺 Serverning ANIQ sababini ko'rsatamiz.
             var _emsg = (_data && _data.error) ? String(_data.error)
                         : ("server javobi " + (_resp ? _resp.status : '?'));
+            if (_data && _data.retryable) _emsg = "boshqa o'zgarish bajarilmoqda — birozdan keyin qayta bosing";
             showToast("Holat saqlanmadi: " + _emsg, "warning");
             try { if (window._dwarn) window._dwarn('[order-status] xato:', _resp && _resp.status, _data); } catch (e) {}
+            // Ro'yxat eskirgan bo'lishi mumkin (boshqa admin/bot o'zgartirgan) — yangilaymiz.
+            if (_resp && _resp.status === 409) { try { window._invalidateUsersCache(); openAdminOrders(); } catch (e) {} }
             return;
         }
 
-        showToast("Holat o'zgartirildi!");
+        showToast(_data.duplicate ? "Holat allaqachon shunday edi" : "Holat o'zgartirildi!");
+        if (Array.isArray(_data.restockSkipped) && _data.restockSkipped.length) {
+            var _sk = _data.restockSkipped.map(function (x) { return '• ' + (x.name || x.id) + (x.size && x.size !== 'Universal' ? ' (' + x.size + ')' : ''); }).join('\n');
+            try {
+                var _skTxt = "Bu tovarlar omborga QAYTARILMADI (katalogdan o'chirilgan yoki razmeri o'zgargan):\n\n" + _sk + "\n\nKerak bo'lsa qoldiqni qo'lda to'g'rilang.";
+                if (typeof tg !== 'undefined' && tg.showAlert) tg.showAlert(_skTxt); else alert(_skTxt);
+            } catch (e) {}
+        }
         window._invalidateUsersCache();
-        // Server users/{uid}/orders + markaziy orders ni yangiladi; ro'yxatni qayta ochamiz.
         let hTitle = document.querySelector('#adminOrdersModal .modal-header h2').innerText;
         if (hTitle === '📦 Buyurtmalar') {
             openAdminOrders();
@@ -10483,46 +10470,40 @@ async function changeOrderStatus(uid, orderId, newStatus) {
             openCustomerSpecificOrders(uid, hTitle.replace('📦 ', '').replace(' buyurtmalari', ''));
         }
 
-        // 📨 TELEGRAM XABARLARI — SERVER TASDIQLAGANDAN KEYIN (dublikat bo'lmasa).
-        if (!_data.duplicate) {
-            let statusText = "";
-            let mijozMsg = "";
-
-            // 🧾 Buyurtma tarkibi + jami summa (mijoz xabarini boyitadi)
-            let _sum = window._orderItemsSummary((_ord && _ord.items) || {});
-            let _ordTotal = (_ord && _ord.total) || _sum.total;
-            let _detail = _sum.lines
-                ? ("\n\n🛒 Buyurtma tarkibi:" + _sum.lines + "\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm")
-                : (_ordTotal ? ("\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm") : "");
-
-            if (newStatus === "qabul") {
-                statusText = "✅ QABUL QILINDI";
-                mijozMsg = `✅ #${displayCode} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!${_detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.`;
-            } else if (newStatus === "yolda") {
-                statusText = "🚚 YO'LGA CHIQDI";
-                mijozMsg = `🚚 #${displayCode} raqamli buyurtmangiz yo'lga chiqdi!${_detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.`;
-            } else if (newStatus === "yetkazildi") {
-                statusText = "🏁 YETKAZIB BERILDI";
-                mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz yetkazib berildi.${_detail}\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.`;
-            } else if (newStatus === "bekor_qilingan") {
-                statusText = "❌ BEKOR QILINDI";
-                mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30`;
+        // 📨 Yangi Worker xabarlarni O'ZI yuboradi (notify:"server").
+        //    Eski Worker bilan moslik: maydon bo'lmasa brauzer yuboradi.
+        if (_data.notify === 'server' || _data.duplicate) return;
+        let statusText = "";
+        let mijozMsg = "";
+        let _sum = window._orderDetailLines(_ord || {});
+        let _ordTotal = (_ord && _ord.total) || _sum.total;
+        let _detail = _sum.lines
+            ? ("\n\n🛒 Buyurtma tarkibi:" + _sum.lines + "\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm")
+            : (_ordTotal ? ("\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm") : "");
+        if (newStatus === "qabul") {
+            statusText = "✅ QABUL QILINDI";
+            mijozMsg = `✅ #${displayCode} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!${_detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.`;
+        } else if (newStatus === "yolda") {
+            statusText = "🚚 YO'LGA CHIQDI";
+            mijozMsg = `🚚 #${displayCode} raqamli buyurtmangiz yo'lga chiqdi!\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.`;
+        } else if (newStatus === "yetkazildi") {
+            statusText = "🏁 YETKAZIB BERILDI";
+            mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz yetkazib berildi.\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.`;
+        } else if (newStatus === "bekor_qilingan") {
+            statusText = (oldStatus === 'yetkazildi') ? "↩️ QAYTARILDI" : "❌ BEKOR QILINDI";
+            mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30`;
+        }
+        let adminMsg = `🔄 <b>Buyurtma holati o'zgardi</b>\n\n🆔 Buyurtma: <b>#${escTg(displayCode)}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
+        try {
+            for (var _i = 0; _i < ADMIN_IDS.length; _i++) {
+                if (String(ADMIN_IDS[_i]) === String(currentUser)) continue;
+                try { await tgProxySend({ chat_id: ADMIN_IDS[_i], text: adminMsg, parse_mode: "HTML" }); } catch (e) {}
             }
-
-            // ADMINGA SMS DA HAM QISQA KOD ISHLATILADI
-            let adminMsg = `🔄 <b>Diqqat!</b> WebApp orqali buyurtma holati o'zgardi.\n\n🆔 Buyurtma: <b>#${escTg(displayCode)}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
-
-            try {
-                // 1. ADMINGA SMS
-                await tgProxySend({ chat_id: ADMIN_ID, text: adminMsg, parse_mode: "HTML" });
-
-                // 2. MIJOZGA SMS
-                if (uid && uid !== "Noma'lum" && mijozMsg !== "") {
-                    await tgProxySend({ chat_id: uid, text: mijozMsg });
-                }
-            } catch(e) {
-                showToast("Xato: SMS jo'natilmadi!", "warning");
+            if (uid && uid !== "Noma'lum" && /^\d+$/.test(String(uid)) && mijozMsg !== "") {
+                await tgProxySend({ chat_id: uid, text: mijozMsg });
             }
+        } catch(e) {
+            showToast("Xato: SMS jo'natilmadi!", "warning");
         }
     }
     function openModal(id) {
@@ -11536,6 +11517,7 @@ window.confirmOrder = async (paymentMethod) => {
         window.lastOrderTime = now;
 
         // 🔑 XAVFSIZ ULANISH — Worker /order-commit auth (initData yoki idToken) talab qiladi.
+        //    (Haqiqiy kredential `_workerPost` ichida olinadi va 401 da yangilanadi.)
         try { if (window._ensureAuth) await window._ensureAuth(); } catch (e) {}
         var _cred = null;
         try { _cred = window._authCred ? await window._authCred() : null; } catch (e) { _cred = null; }
@@ -11614,18 +11596,15 @@ window.confirmOrder = async (paymentMethod) => {
             payment: { method: paymentMethod },
             cashbackRequested: cashbackRequested
         };
-        if (_cred.initData) _body.initData = _cred.initData;
-        else if (_cred.idToken) _body.idToken = _cred.idToken;
 
         // 🛡 SERVERDA ATOMIK: stok band qilinadi, buyurtma yoziladi, cashback hisoblanadi.
+        //    Eskirgan initData (ilova 1 soatdan ko'p ochiq) — 401 bo'lsa idToken bilan
+        //    qayta uriladi (ayni attemptId => server dublikat yaratmaydi).
         var resp, data;
         try {
-            resp = await fetch(TG_PROXY + '/order-commit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(_body)
-            });
-            data = await resp.json().catch(function () { return null; });
+            var _wp = await window._workerPost('/order-commit', _body);
+            resp = _wp.resp;
+            data = _wp.data;
         } catch (e) {
             _hideLoader(false);
             try { showToast("Xatolik! Internetni tekshiring.", "warning"); } catch (e2) {}
@@ -11653,10 +11632,15 @@ window.confirmOrder = async (paymentMethod) => {
             return { ok: false, reason: 'stock', shortages: _short };
         }
 
-        // ❌ Boshqa xato (tarmoq/server)
+        // ❌ Boshqa xato (tarmoq/server) — serverning ANIQ sababini ko'rsatamiz.
         if (!resp.ok || !data || !data.ok || !data.committed || !data.order) {
             _hideLoader(false);
-            try { showToast("Xatolik! Qayta urinib ko'ring.", "warning"); } catch (e) {}
+            var _why = (data && data.error) ? String(data.error) : '';
+            var _txt = "Xatolik! Qayta urinib ko'ring.";
+            if (resp && resp.status === 401) _txt = "Ulanish eskirdi — ilovani yopib qayta oching.";
+            else if (data && data.retryable) _txt = "Server band — bir necha soniyadan keyin qayta bosing.";
+            else if (_why) _txt = "Buyurtma o'tmadi: " + _why;
+            try { showToast(_txt, "warning"); } catch (e) {}
             window.lastOrderTime = 0;
             return { ok: false, reason: 'error' };
         }
@@ -11700,8 +11684,13 @@ window.confirmOrder = async (paymentMethod) => {
             window.myOrders = myOrders;
         } catch (e) {}
 
-        // 📨 Telegram xabarlari — commitdan KEYIN, best-effort (muvaffaqiyatga ta'sir qilmaydi).
-        try {
+        // 📨 Telegram xabarlari.
+        //    YANGI Worker (data.notify === "server") adminlarga tugmali kartochkani va
+        //    mijozga tasdiqni O'ZI yuboradi — ishonchli, ilova yopilsa ham. Bu yerda
+        //    yuborsak dublikat bo'lardi.
+        //    ESKI Worker (maydon yo'q) — moslik uchun brauzer yuboradi (endi BARCHA
+        //    adminlarga; ilgari faqat ADMIN_IDS[0] olardi).
+        if (data.notify !== 'server') try {
             var _cb = order.cashbackUsed || 0;
             var _pay = (order.payable != null) ? order.payable : order.total;
             var _lines = '';
@@ -11726,7 +11715,9 @@ window.confirmOrder = async (paymentMethod) => {
                 var _vipTag = (window.VIP && window.VIP.orderTag) ? window.VIP.orderTag() : '';
                 if (_vipTag) _adminText += "\n\n" + escTg(_vipTag);
             } catch (e) {}
-            tgProxySend({ chat_id: ADMIN_ID, text: _adminText, parse_mode: "HTML" });
+            ADMIN_IDS.forEach(function (aid) {
+                try { tgProxySend({ chat_id: aid, text: _adminText, parse_mode: "HTML" }); } catch (e) {}
+            });
             if (currentUser) {
                 tgProxySend({ chat_id: currentUser, text: "\u2705 Buyurtmangiz qabul qilindi!\n\uD83C\uDD94 Kod: #" + (order.code || '') +
                     (_cb > 0 ? "\n\uD83C\uDF81 Cashback: \u2212" + _cb.toLocaleString() + " so'm\n\uD83D\uDCB5 To'lanadi: " + _pay.toLocaleString() + " so'm" : '') +
@@ -11867,10 +11858,75 @@ window.openOrderDetails = (id) => {
     
     document.getElementById('od-items').innerHTML = window._odItemsHTML(o);
     document.getElementById('od-total').innerText = "Jami: " + (Number(o.total) || 0).toLocaleString() + " so'm";
+    try { window._renderOrderCancel(o); } catch (e) {}
     
     // CHAT FUNKSIYASI SHU YERDA CHAQIRILADI (Yo'qolib ketmaydi)
     if(typeof renderChatMessages === 'function') renderChatMessages();
     openModal('orderDetailModal'); 
+};
+
+// ==========================================
+// ❌ MIJOZ BUYURTMANI O'ZI BEKOR QILADI
+//    Ilgari bunday imkoniyat umuman yo'q edi — mijoz faqat adminga yozib
+//    so'rashi mumkin edi. Endi do'kon hali QABUL QILMAGAN ("kutilmoqda")
+//    buyurtmani mijozning o'zi bekor qila oladi. Server (Worker) buni qayta
+//    tekshiradi: faqat o'z buyurtmasi va faqat "kutilmoqda" holatida.
+//    Tovarlar omborga, ishlatilgan cashback mijozga qaytadi; adminlarga
+//    ogohlantirish boradi.
+// ==========================================
+window._renderOrderCancel = function (o) {
+    var box = document.getElementById('od-cancel-box');
+    if (!box) return;
+    var st = String((o && o.status) || 'kutilmoqda');
+    if (!o || st !== 'kutilmoqda' || !o.id) { box.innerHTML = ''; return; }
+    box.innerHTML = '<button id="od-cancel-btn" onclick="cancelMyOrder(\'' + escHtml(String(o.id)) + '\')" ' +
+        'style="margin-top:10px; width:100%; padding:14px; border-radius:14px; background:rgba(255,69,58,0.08); ' +
+        'color:#ff453a; border:1px dashed rgba(255,69,58,0.4); font-weight:800; font-size:14px; cursor:pointer;">' +
+        '❌ Buyurtmani bekor qilish</button>' +
+        '<div style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:6px;">' +
+        'Do\'kon buyurtmani qabul qilgunga qadar bekor qilish mumkin.</div>';
+};
+
+window.cancelMyOrder = async function (orderId) {
+    var o = (window.myOrders || myOrders || []).find(function (x) { return x && String(x.id) === String(orderId); });
+    if (!o) return;
+    if (String(o.status || 'kutilmoqda') !== 'kutilmoqda') {
+        showToast("Buyurtma allaqachon qabul qilingan — do'kon bilan bog'laning", "warning");
+        return;
+    }
+    if (!currentUser) { showToast("Xavfsiz ulanish kerak", "warning"); return; }
+    var ok = await window._a1Confirm("#" + (o.code || o.id) + " buyurtmasini bekor qilasizmi?\n\nBu amalni qaytarib bo'lmaydi.");
+    if (!ok) return;
+    var btn = document.getElementById('od-cancel-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerText = '⏳ Bekor qilinmoqda...'; }
+    var r;
+    try {
+        r = await window._workerPost('/order-status', { uid: String(currentUser), orderId: String(o.id), status: 'bekor_qilingan' });
+    } catch (e) {
+        showToast("Internetni tekshiring", "warning");
+        try { window._renderOrderCancel(o); } catch (e2) {}
+        return;
+    }
+    if (r && r.resp && r.resp.ok && r.data && r.data.ok) {
+        o.status = 'bekor_qilingan';
+        showToast("Buyurtma bekor qilindi");
+        try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
+        try { document.getElementById('od-status').innerHTML = getTimelineHTML('bekor_qilingan'); } catch (e) {}
+        try { window._renderOrderCancel(o); } catch (e) {}
+        try { if (typeof renderMyOrders === 'function') renderMyOrders(); } catch (e) {}
+        return;
+    }
+    var err = (r && r.data && r.data.error) ? String(r.data.error) : '';
+    if (r && r.resp && r.resp.status === 409 && r.data && r.data.currentStatus) {
+        o.status = r.data.currentStatus;
+        try { document.getElementById('od-status').innerHTML = getTimelineHTML(o.status); } catch (e) {}
+        showToast("Buyurtma allaqachon qabul qilingan — do'kon bilan bog'laning", "warning");
+    } else if (r && r.resp && r.resp.status === 403) {
+        showToast("Bu buyurtmani bekor qilib bo'lmaydi", "warning");
+    } else {
+        showToast("Bekor qilinmadi" + (err ? ": " + err : ""), "warning");
+    }
+    try { window._renderOrderCancel(o); } catch (e) {}
 };
 
 // ==========================================
@@ -11887,6 +11943,8 @@ window.showTrackedOrder = (o) => {
     document.getElementById('od-total').innerText = "Jami: " + (Number(o.total) || 0).toLocaleString() + " so'm";
     
     if(document.getElementById('od-review-section')) document.getElementById('od-review-section').innerHTML = '';
+    // Kuzatuv (boshqa odamning buyurtmasi bo'lishi mumkin) — bekor qilish tugmasi yo'q.
+    try { var _cbx = document.getElementById('od-cancel-box'); if (_cbx) _cbx.innerHTML = ''; } catch (e) {}
     
     // Agar kuzatuvda ham chat bo'lishini xohlasangiz, shu yerga qo'shdik:
     if(typeof renderChatMessages === 'function') {
@@ -11986,6 +12044,9 @@ window.renderAdminOrdersUI = (ordersArr) => {
         let cancelBtn = '';
         if (o.status !== 'bekor_qilingan' && o.status !== 'yetkazildi') {
             cancelBtn = `<button style="background: rgba(255,69,58,0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.3); padding: 12px; border-radius: 12px; flex: 0.5; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'bekor_qilingan')">Bekor</button>`;
+        } else if (o.status === 'yetkazildi') {
+            // ↩️ QAYTARISH: mijoz tovarni qaytardi — stok va cashback server tomonida tiklanadi.
+            cancelBtn = `<button style="background: rgba(255,69,58,0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.3); padding: 12px; border-radius: 12px; flex: 0.6; font-weight: 700; font-size: 13px; transition: 0.2s; cursor: pointer;" onclick="changeOrderStatus('${o.uI}', '${o.id}', 'bekor_qilingan')">↩️ Qaytarish</button>`;
         }
 
         return `

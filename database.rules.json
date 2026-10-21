@@ -228,6 +228,24 @@
     "notification_outbox": {
       // Bot yuboradigan bildirishnoma navbati va idempotent send-claim.
       // Mijoz/admin client uni ko'ra olmaydi; faqat Worker/bot service-account.
+      // indexOn delivered — bot watchdog yetkazilmagan buyurtma hodisalarini
+      // (orderBy="delivered"&equalTo=false) butun navbatni o'qimasdan topadi.
+      ".read": false,
+      ".write": false,
+      ".indexOn": ["delivered"]
+    },
+
+    "order_tg": {
+      // Buyurtma bo'yicha adminlarga yuborilgan Telegram kartochkalari
+      // (chat_id -> message_id). Holat o'zgarsa Worker ularni tahrirlaydi.
+      // Faqat server.
+      ".read": false,
+      ".write": false
+    },
+
+    "order_tg_index": {
+      // Kartochka tugmasidagi qisqa kalit -> {orderKey, uid, orderId}.
+      // callback_data 64 bayt chegarasiga sig'ishi uchun. Faqat server.
       ".read": false,
       ".write": false
     },
