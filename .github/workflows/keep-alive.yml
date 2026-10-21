@@ -86,7 +86,11 @@ jobs:
           # xizmat yo'q). Natijada workflow ASOSIY bot sog'lom bo'lganda ham
           # doim qizil bo'lib turardi va haqiqiy nosozlik ko'rinmasdi.
           # Ularni deploy qilganingizda KEEP_ALIVE_URLS variable'iga qo'shing.
-          DEFAULT_URLS="https://avto-a1-bot.onrender.com"
+          # ⚠ 2026-10: Avto_A1 boti Oracle Cloud'ga ko'chdi — u UXLAMAYDI va
+          #    ping kerak emas. Render manzili olib tashlandi (xizmat to'xtatilgan,
+          #    workflow har 10 daqiqada behuda qizil bo'lardi). Boshqa uxlaydigan
+          #    bot bo'lsa — KEEP_ALIVE_URLS variable'iga yozing.
+          DEFAULT_URLS=""
 
           if [ -n "${URL_INPUT// /}" ]; then
             URLS="$URL_INPUT"
@@ -97,6 +101,10 @@ jobs:
           else
             URLS="$DEFAULT_URLS"
             echo "Standart manzil ishlatilyapti."
+          fi
+          if [ -z "${URLS// /}" ]; then
+            echo "Ping qilinadigan manzil yo'q (bot Oracle'da 24/7) — o'tkazib yuborildi."
+            exit 0
           fi
 
           ok=0

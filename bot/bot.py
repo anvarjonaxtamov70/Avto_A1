@@ -3723,6 +3723,13 @@ def where_am_i():
     if os.getenv("RENDER_EXTERNAL_URL") or os.getenv("RENDER_SERVICE_NAME"):
         name = os.getenv("RENDER_SERVICE_NAME", "render")
         return f"Render (<code>{esc(name)}</code>) ☁️"
+    # oracle_setup.sh systemd xizmatiga BOT_HOST_LABEL qo'yadi; systemd o'zi
+    # INVOCATION_ID beradi — ikkalasi ham "server" degani (lokal kompyuter emas).
+    label = os.getenv("BOT_HOST_LABEL")
+    if label:
+        return f"{esc(label)} \u2601"
+    if os.getenv("INVOCATION_ID"):
+        return "server (systemd) \u2601"
     if os.getenv("KEEP_ALIVE_URL"):
         return "bulutli server ☁️"
     return "lokal kompyuter (VS Code) 💻"
