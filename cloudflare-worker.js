@@ -2633,6 +2633,17 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
       return { abort: true, result: { state: "delivered" } };
     }
     if (Number(cur.leaseUntil) > now) return { abort: true, result: { state: "busy" } };
+    // Voz kechish qarori FAQAT shu yerda (bot o'zi filtrlamaydi): urinishlar
+    // tugagan yoki hodisa juda eski bo'lsa — retryAt o'chiriladi va hodisa
+    // watchdog indeksidan butunlay chiqadi (oynani abadiy band qilmaydi).
+    if ((Number(cur.attempts) || 0) >= ORDER_RETRY_MAX_ATTEMPTS ||
+        (Number(cur.createdAt) > 0 && now - Number(cur.createdAt) > 7 * 24 * 3600 * 1000)) {
+      const dead = cloneJson(cur);
+      dead.state = "gave_up";
+      delete dead.retryAt;
+      dead.leaseUntil = 0;
+      return { value: dead, result: { state: "gave_up" } };
+    }
     const next = cloneJson(cur);
     next.lease = lease;
     next.leaseUntil = now + ORDER_NOTIFY_LEASE_MS;

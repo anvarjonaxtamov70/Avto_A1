@@ -135,7 +135,11 @@ def test_watchdog_faqat_kerakli_hodisalarni_oladi():
         "customer": {"type": "new_customer", "delivered": False, "createdAt": now - 5 * m, "retryAt": now - m},
         "junk": "x",
     }
-    assert order_ops.outbox_keys_to_retry(raw, now) == ["retry", "never"]
+    # gave_up / too_old ham Worker'ga yuboriladi — u ularni yakunlab, retryAt ni o'chiradi
+    # (bot o'zi tashlab ketsa, ular indeks boshida abadiy qolardi).
+    got = order_ops.outbox_keys_to_retry(raw, now)
+    assert set(got) == {"retry", "never", "gave_up", "too_old"}, got
+    assert got[0] == "retry", got
     assert order_ops.outbox_keys_to_retry(None, now) == []
 
 

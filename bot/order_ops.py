@@ -49,10 +49,6 @@ STATUS_LABELS = {
 #     qayta yuborilmaydi — admin eski kartochkalar bilan ko'milmaydi;
 #   • yetkazilmay "osilib" qolgan eski yozuvlar so'rov oynasini to'ldirib,
 #     yangi xatolarni yashirib qo'ymaydi.
-WATCHDOG_MAX_ATTEMPTS = 8
-WATCHDOG_MAX_AGE_MS = 7 * 24 * 3600 * 1000   # bir haftadan eskisi — ma'nosiz
-
-
 def outbox_query_params(now_ms, limit=25):
     """Watchdog uchun indekslangan RTDB so'rovi (vaqti kelgan hodisalar)."""
     return {"orderBy": '"retryAt"', "startAt": "1", "endAt": str(int(now_ms)),
@@ -195,17 +191,15 @@ def outbox_keys_to_retry(raw, now_ms):
             continue
         try:
             retry_at = int(ev.get("retryAt") or 0)
-            created = int(ev.get("createdAt") or 0)
-            attempts = int(ev.get("attempts") or 0)
             lease_until = int(ev.get("leaseUntil") or 0)
         except (TypeError, ValueError):
             continue
-        if retry_at <= 0 or retry_at > now_ms:
+        if retry_at <= 0 or retry_at > now_ms or lease_until > now_ms:
             continue
-        if attempts >= WATCHDOG_MAX_ATTEMPTS or lease_until > now_ms:
-            continue
-        if created and now_ms - created > WATCHDOG_MAX_AGE_MS:
-            continue
+        # ⚠️ Urinishlar soni / yoshi bo'yicha bu yerda FILTRLAMAYMIZ: voz kechishni
+        #    Worker hal qiladi va `retryAt` ni o'chiradi. Bot o'zi o'tkazib yuborsa,
+        #    yozuv `retryAt` bilan indeks boshida abadiy qolib, yangi xatolarni
+        #    yashirardi.
         picked.append((retry_at, key))
     picked.sort()
     return [k for _, k in picked]

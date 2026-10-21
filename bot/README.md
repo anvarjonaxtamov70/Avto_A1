@@ -66,7 +66,9 @@ tartibi, xabarlar). Mini App, admin tugmalari va AI agenti — hammasi Worker or
 1) PR'ni merge qiling — Mini App (GitHub Pages) va bot yangilanadi. Yangi Mini App eski
    Worker bilan ham ishlaydi: Worker `notify:"server"` demaguncha xabarni o'zi yuboradi
    (endi barcha adminlarga).
-2) `cloudflare-worker.js` ni Cloudflare'ga joylang — shu daqiqadan xabarlar va tugmalar serverda.
+2) **Darhol** `cloudflare-worker.js` ni Cloudflare'ga joylang — shu daqiqadan xabarlar va tugmalar
+   serverda. (1 va 2 orasida AI orqali buyurtma holatini o'zgartirish ishlamaydi — bot
+   "Worker eski versiyada" deb aytadi; Mini App esa bemalol ishlayveradi.)
 3) «Deploy Firebase qoidalari» workflow'ini ishga tushiring (`notification_outbox` → `indexOn: retryAt`,
    bot watchdog'i uchun).
 

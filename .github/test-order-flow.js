@@ -495,6 +495,16 @@ async function main() {
   }
   const ob9g = db.read('notification_outbox/' + key9g);
   ok(ob9g.state === 'gave_up' && ob9g.retryAt == null, '8 urinishdan keyin voz kechildi, retryAt o\'chdi');
+  // Worker 8-urinishda "o'ldirilgan" (attempts=8, retryAt qolgan) — /order-notify uni yakunlaydi
+  db.set('notification_outbox/' + key9g + '/retryAt', Date.now() - 1000);
+  db.set('notification_outbox/' + key9g + '/state', 'sending');
+  const stuck = await call('/order-notify', { outboxKey: key9g, botAuth: botAuth('order-notify', ADMINS[0], [key9g]) });
+  ok(stuck.data.state === 'gave_up' && db.read('notification_outbox/' + key9g + '/retryAt') == null, 'osilib qolgan yozuv indeksdan chiqarildi');
+  // Ikki xil mashina — umumiy stokdan oshib ketmaydi
+  resetWorld(baseData());
+  const over = await placeOrder(CUSTOMER, [{ id: '1', size: 'Gazel Biznes', qty: 3 }, { id: '1', size: 'Gazel Next', qty: 3 }], 'attempt_over_123');
+  ok(over.status === 409 && over.data.error === 'stock', 'ikki mashina birga stokdan oshsa — rad (oversell yo\'q)');
+  eq(stockOf(0), 5, 'rad etilganda stok o\'zgarmadi');
   tgFail = null;
   // Bloklangan mijoz (403) — abadiy qayta urinmaydi
   resetWorld(baseData());
