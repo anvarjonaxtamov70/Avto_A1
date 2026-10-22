@@ -7466,13 +7466,65 @@ html[data-theme="light"] .ao-hero-sum b { background-image: linear-gradient(135d
     -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px);
     border-top: .5px solid var(--ao-sep);
 }
-.ao-dock-sp { height: 22px; flex: 0 0 auto; }
+.ao-dock-sp { height: 96px; flex: 0 0 auto; } /* suzuvchi Chat tugmasi oxirgi qatorni to'smasin */
+.ao-dock.is-empty { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-top: 0; padding: 0; height: 0; pointer-events: none; }
+.ao-dock.is-empty .ao-chatfab { pointer-events: auto; }
+.ao-row-acts { flex-direction: row; }
+.ao-row-acts .ao-danger { flex: 0 0 auto; padding: 0 16px; height: 50px; }
+.ao-row-acts .ao-primary, .ao-row-acts .ao-done-note { flex: 1 1 auto; min-width: 0; }
+.ao-row-acts .ao-done-note { justify-content: flex-start; padding-left: 4px; }
+
+/* 💬 Chat — Shogird uslubidagi kichik suzuvchi tugma (o'ng burchakda, dock ustida) */
+.ao-chatfab {
+    position: absolute; right: 18px; bottom: calc(100% + 14px); z-index: 6;
+    display: flex; align-items: center; gap: 7px; height: 52px; padding: 0 15px 0 8px; box-sizing: border-box;
+    border: 1px solid rgba(216,182,76,.38); border-radius: 18px; cursor: pointer; overflow: visible;
+    background: linear-gradient(145deg, rgba(29,30,35,.98), rgba(10,11,14,.99)); color: #f4e7b8;
+    box-shadow: 0 14px 34px rgba(0,0,0,.48), 0 0 0 1px rgba(216,182,76,.06), inset 0 1px 0 rgba(255,255,255,.07);
+    font-family: inherit; -webkit-tap-highlight-color: transparent;
+    animation: aoFabIn .55s var(--ao-spring) .12s both;
+    transition: transform .45s var(--ao-spring), padding .35s var(--ao-ease), gap .35s var(--ao-ease), opacity .3s;
+}
+.ao-dock.is-empty .ao-chatfab { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+.ao-chatfab:active { transform: scale(.92); transition-duration: .1s; }
+.ao-chatfab:focus-visible { outline: 2px solid #f0d060; outline-offset: 3px; }
+.ao-chatfab-orbit {
+    position: absolute; left: 7px; top: 6px; width: 38px; height: 38px; box-sizing: border-box; border-radius: 13px;
+    border: 1px solid rgba(216,182,76,.18); border-top-color: rgba(244,218,117,.85);
+    background: radial-gradient(circle, rgba(216,182,76,.12), transparent 68%);
+}
+.ao-chatfab-ic { position: relative; z-index: 1; display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px; }
+.ao-chatfab-ic svg { width: 28px; height: 28px; overflow: visible; }
+.ao-chatfab-ic .b { fill: rgba(216,182,76,.10); stroke: #d4b44b; stroke-width: 1.5; }
+.ao-chatfab-ic .d { fill: #f1d66f; }
+.ao-chatfab.has-unread .ao-chatfab-ic .d { animation: aoType 1.3s ease-in-out infinite; }
+.ao-chatfab.has-unread .ao-chatfab-ic .d:nth-of-type(2) { animation-delay: .15s; }
+.ao-chatfab.has-unread .ao-chatfab-ic .d:nth-of-type(3) { animation-delay: .3s; }
+.ao-chatfab-lb {
+    color: #eee7d4; font: 800 11px/1 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: .3px; text-transform: uppercase;
+    max-width: 60px; overflow: hidden; white-space: nowrap; transition: max-width .35s var(--ao-ease), opacity .25s;
+}
+.ao-chatfab .ao-badge { position: absolute; top: -7px; right: -6px; box-shadow: 0 0 0 2px #0c0d10, 0 5px 12px rgba(0,0,0,.35); }
+.ao-chatfab.has-unread { border-color: rgba(240,208,96,.6); }
+.ao-chatfab.has-unread::after {
+    content: ""; position: absolute; inset: -1px; border-radius: 18px; pointer-events: none;
+    animation: aoFabRing 2.4s ease-out infinite;
+}
+/* Skroll paytida — faqat ikonka (yig'iladi), to'xtaganda qayta ochiladi */
+.ao-chatfab.is-mini { padding: 0 6px; gap: 0; }
+.ao-chatfab.is-mini .ao-chatfab-lb { max-width: 0; opacity: 0; }
+.ao-chatfab.is-mini .ao-chatfab-orbit { left: 6px; }
+@keyframes aoFabIn { from { opacity: 0; transform: translateY(16px) scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes aoFabRing { 0% { box-shadow: 0 0 0 0 rgba(240,208,96,.45); } 70%, 100% { box-shadow: 0 0 0 10px rgba(240,208,96,0); } }
+@keyframes aoType { 0%, 60%, 100% { transform: translateY(0); opacity: .75; } 30% { transform: translateY(-2px); opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) { .ao-chatfab-orbit { animation: a1Orbit 8s linear infinite; } }
 .ao-dock .ao-primary { background: var(--c); }
 .ao-dock .ao-primary.is-gold { --c: #c9a84c; color: #1a1405; background: linear-gradient(135deg, #f0d060 0%, #c9a84c 50%, #a8851f 100%); box-shadow: 0 10px 24px -14px rgba(212,175,55,.9); }
 .ao-done-note { display: flex; align-items: center; justify-content: center; gap: 7px; height: 46px; font-size: 14px; font-weight: 500; color: var(--ao-tx2); }
 .ao-done-note svg { width: 17px; height: 17px; color: var(--ao-green); }
 
-html.lite .ao-o, html.lite .ao-day, html.lite .ao-push, html.lite .ao-step.cur i { animation: none !important; }
+html.lite .ao-o, html.lite .ao-day, html.lite .ao-push, html.lite .ao-step.cur i, html.lite .ao-chatfab, html.lite .ao-chatfab *, html.lite .ao-chatfab::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .ao-chatfab, .ao-chatfab *, .ao-chatfab::after { animation: none !important; } .ao-chatfab, .ao-chatfab-lb { transition: none !important; } }
 @media (prefers-reduced-motion: reduce) { .ao-o, .ao-day, .ao-push, .ao-step.cur i { animation: none !important; } .ao-o { transition: none !important; } }
 </style>
 <div class="modal-standard" id="adminOrdersModal">
@@ -12568,12 +12620,34 @@ window._aoRenderDetail = function (animate) {
     else if (st === 'yolda') primary = '<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-green)" onclick="window._aoDetailStatus(' + q + ', \'yetkazildi\')">' + I.flag + 'Yetkazildi</button>';
     else if (st === 'yetkazildi') primary = '<div class="ao-done-note">' + I.check + 'Buyurtma yetkazib berilgan</div>';
     var cancel = '';
-    if (st !== 'bekor_qilingan' && st !== 'yetkazildi') cancel = '<button type="button" class="ao-btn ao-danger" onclick="window._aoDetailStatus(' + q + ', \'bekor_qilingan\')">' + I.xmark + 'Bekor qilish</button>';
+    if (st !== 'bekor_qilingan' && st !== 'yetkazildi') cancel = '<button type="button" class="ao-btn ao-danger" onclick="window._aoDetailStatus(' + q + ', \'bekor_qilingan\')">' + I.xmark + 'Bekor</button>';
     else if (st === 'yetkazildi') cancel = '<button type="button" class="ao-btn ao-danger" onclick="window._aoDetailStatus(' + q + ', \'bekor_qilingan\')">' + I.undo + 'Qaytarish</button>';
-    var chat = '<button type="button" class="ao-btn ao-ghost ao-chat' + (unread > 0 ? ' has-unread' : '') + '" onclick="openAdminChat(' + q + ')">' + I.chat + 'Chat' + (unread > 0 ? '<span class="ao-badge">' + unread + '</span>' : '') + '</button>';
-    var dock = '<div class="ao-dock-sp"></div><div class="ao-dock"><div class="ao-actions">' + primary + '<div class="ao-actions-sub">' + chat + cancel + '</div></div></div>';
+    // 💬 Chat — Shogird kabi ekran burchagidagi kichik suzuvchi tugma (dock ustida).
+    var chat = '<button type="button" class="ao-chatfab' + (unread > 0 ? ' has-unread' : '') + '" aria-label="Mijoz bilan chat' + (unread > 0 ? ', ' + unread + ' ta yangi xabar' : '') + '" onclick="openAdminChat(' + q + ')">' +
+        '<span class="ao-chatfab-orbit" aria-hidden="true"></span>' +
+        '<span class="ao-chatfab-ic" aria-hidden="true"><svg viewBox="0 0 32 32"><path class="b" d="M7.5 6.5h17a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4h-7.2l-5.8 4v-4h-4a4 4 0 0 1-4-4v-9a4 4 0 0 1 4-4Z"/><circle class="d" cx="11.5" cy="15" r="1.6"/><circle class="d" cx="16" cy="15" r="1.6"/><circle class="d" cx="20.5" cy="15" r="1.6"/></svg></span>' +
+        '<span class="ao-chatfab-lb">Chat</span>' +
+        (unread > 0 ? '<span class="ao-badge">' + unread + '</span>' : '') + '</button>';
+    var hasBtns = !!(primary || cancel);
+    var dock = '<div class="ao-dock-sp"></div><div class="ao-dock' + (hasBtns ? '' : ' is-empty') + '">' + chat +
+        (hasBtns ? '<div class="ao-actions"><div class="ao-actions-sub ao-row-acts">' + cancel + primary + '</div></div>' : '') + '</div>';
 
     box.innerHTML = '<div class="' + (animate ? 'ao-push' : '') + '">' + hero + cust + items + pick + pay + notes + '</div>' + dock;
+    window._aoBindFabScroll();
+};
+
+window._aoBindFabScroll = function () {
+    var m = document.getElementById('adminOrderSheetModal');
+    if (!m || m.__aoFab) return;
+    m.__aoFab = true;
+    var t = null;
+    m.addEventListener('scroll', function () {
+        var f = m.querySelector('.ao-chatfab');
+        if (!f) return;
+        if (!f.classList.contains('is-mini')) f.classList.add('is-mini');
+        clearTimeout(t);
+        t = setTimeout(function () { f.classList.remove('is-mini'); }, 650);
+    }, { passive: true });
 };
     
 // ==========================================================================
