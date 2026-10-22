@@ -9844,6 +9844,38 @@ function cardHTML(p) {
     let isFav = wishlist.includes(p.id) ? 'active' : '';
     let heartBtn = `<div class="btn-wishlist ${isFav}" onclick="toggleWishlist(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>`;
     
+    // 🛍 B · BOZOR KARTASI (narx birinchi). Eski kartaga qaytish: window.__bmCards = false
+    if (window.__bmCards !== false) {
+        let _f = (n) => (Math.round(Number(n) || 0)).toLocaleString('ru-RU').replace(/,/g, ' ');
+        let bmOld = (p.oldPrice && Number(p.oldPrice) > Number(p.price)) ? `<s>${_f(p.oldPrice)}</s>` : '';
+        let bmChips = '';
+        if (st <= 0) bmChips += `<i class="bm-chip is-out">Tugagan</i>`;
+        else if (p.badge === 'hot') bmChips += `<i class="bm-chip is-hot">${icon('flame')} Top</i>`;
+        else if (p.badge === 'new') bmChips += `<i class="bm-chip is-new">Yangi</i>`;
+        if (_pct > 0) bmChips += `<i class="bm-chip is-disc">-${_pct}%</i>`;
+        let bmTimer = flashOn ? `<i class="bm-chip is-time">🔥 <span class="flash-cd" data-until="${p.flashUntil}"></span></i>` : '';
+        let bmMeta = _ratingHTML + _stockHTML;
+        if (!bmMeta && st > 0) bmMeta = `<span class="bm-trust">${icon('shield')} Kafolatlangan</span>`;
+        let bmBtn = st > 0
+            ? `<button class="btn-add-cart bm-btn" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 7.2v-.5a4.1 4.1 0 0 1 8.2 0v.5h2.9c.5 0 .9.4.8.9l-1 12.2c-.1 1-.9 1.7-1.8 1.7H7c-.9 0-1.7-.7-1.8-1.7l-1-12.2c0-.5.3-.9.8-.9zm1.7 0h4.8v-.5a2.4 2.4 0 0 0-4.8 0z"/></svg><span>Savatga</span></button>`
+            : `<button class="btn-add-cart bm-btn is-out" disabled><span>Tugadi</span></button>`;
+        return `<div class="luxury-card bm-card${Number(p.price) >= 1000000 ? ' is-long' : ''}" data-pid="${p.id}" onclick="openProduct(${p.id})">
+        <div class="img-wrap" style="${oosStyle}">
+            <img src="${_thumb(p.img, 240)}" loading="lazy" decoding="async" class="card-img-lazy" data-full="${(p.img||'').replace(/"/g,'&quot;')}" onerror="window._imgFallback(this)">
+            ${heartBtn}
+            <div class="btn-compare-card ${(window.compareList||[]).includes(String(p.id))?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash" aria-label="Taqqoslash"><span class="cmp-rock"><svg class="cmp-card-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4" r="1.25" fill="currentColor" stroke="none"/><path d="M12 5.2V19"/><path d="M7.5 19h9"/><path d="M4.5 6.6h15"/><path d="M4.5 6.6L2 11.6h5z"/><path d="M19.5 6.6L17 11.6h5z"/></svg></span></div>
+            ${bmChips ? `<div class="bm-chips">${bmChips}</div>` : ''}
+            ${bmTimer ? `<div class="bm-timer">${bmTimer}</div>` : ''}
+        </div>
+        <div class="info">
+            <div class="bm-pr${bmOld ? ' has-old' : ''}"><b>${_f(p.price)}</b><small>so'm</small>${bmOld}</div>
+            <h4>${mainName}${carHint}</h4>
+            <div class="card-meta">${bmMeta}</div>
+            ${bmBtn}
+        </div>
+    </div>`;
+    }
+
     let cartBtn = '';
     if(st > 0) {
         cartBtn = `
@@ -33828,6 +33860,77 @@ html body #shogird-launcher.ai-luxury-btn .shogird-mark svg { width: 30px !impor
 html body #shogird-launcher.ai-luxury-btn::after { content: ""; position: absolute; right: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: #30d158; box-shadow: 0 0 0 2px #121214; pointer-events: none; }
 html[data-theme="light"] body #shogird-launcher.ai-luxury-btn::after { box-shadow: 0 0 0 2px #fff; }
 @media (max-width: 370px) { html body #shogird-launcher.ai-luxury-btn { width: 54px !important; } }
+</style>
+
+<style id="bm-cards-2026">
+/* ═══════════════════════════════════════════════════════════════════
+   🛍 MAHSULOT KARTASI — B · Bozor kartasi (narx birinchi)
+   Barcha kartalar bir xil balandlikda; «Savatga» tugmasi doim pastda.
+   Eski kartaga qaytish: window.__bmCards = false (yoki shu PR'ni revert)
+   ═══════════════════════════════════════════════════════════════════ */
+:root { --bm-card: #1c1c1e; --bm-sep: rgba(84,84,88,.38); --bm-tx: #f5f5f7; --bm-tx2: rgba(235,235,245,.62); --bm-gold: #e2c46e; --bm-fill: rgba(118,118,128,.24); }
+html[data-theme="light"] { --bm-card: #ffffff; --bm-sep: rgba(60,60,67,.12); --bm-tx: #1c1c1e; --bm-tx2: rgba(60,60,67,.64); --bm-gold: #8a6a14; --bm-fill: rgba(118,118,128,.12); }
+
+html body .luxury-card.bm-card {
+    display: flex !important; flex-direction: column !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 6px !important;
+    border-radius: 22px !important; overflow: hidden !important; background: var(--bm-card) !important; border: .5px solid var(--bm-sep) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 28px -22px rgba(0,0,0,.8) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+}
+html[data-theme="light"] body .luxury-card.bm-card { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 10px 24px -20px rgba(60,40,0,.35) !important; }
+html body .luxury-card.bm-card::before, html body .luxury-card.bm-card::after { display: none !important; }
+
+html body .luxury-card.bm-card .img-wrap { position: relative !important; flex: 0 0 auto !important; width: 100% !important; aspect-ratio: 1 / 1 !important; height: auto !important; margin: 0 !important; padding: 0 !important; border-radius: 17px !important; background: #fff !important; overflow: hidden !important; box-shadow: none !important; border: 0 !important; -webkit-mask-image: none !important; mask-image: none !important; }
+html body .luxury-card.bm-card .img-wrap img { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 0 !important; transform: none !important; }
+html body .luxury-card.bm-card .btn-wishlist { position: absolute !important; top: 7px !important; right: 7px !important; width: 30px !important; height: 30px !important; border-radius: 50% !important; background: rgba(255,255,255,.88) !important; border: 0 !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; box-shadow: 0 2px 6px rgba(0,0,0,.18) !important; z-index: 3 !important; }
+html body .luxury-card.bm-card .btn-wishlist svg { width: 17px !important; height: 17px !important; stroke: #1c1c1e !important; fill: none !important; stroke-width: 2 !important; }
+html body .luxury-card.bm-card .btn-wishlist.active svg { fill: #ff3b30 !important; stroke: #ff3b30 !important; }
+html body .luxury-card.bm-card .btn-compare-card { position: absolute !important; top: 7px !important; left: 7px !important; width: 30px !important; height: 30px !important; background: rgba(255,255,255,.88) !important; border: 0 !important; box-shadow: 0 2px 6px rgba(0,0,0,.18) !important; z-index: 3 !important; }
+html body .luxury-card.bm-card .btn-compare-card .cmp-card-ic { color: #1c1c1e !important; width: 17px !important; height: 17px !important; }
+html body .luxury-card.bm-card .btn-compare-card.active { background: #e2c46e !important; }
+.bm-chips { position: absolute; left: 7px; top: 44px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+.bm-timer { position: absolute; left: 7px; bottom: 7px; right: 7px; z-index: 2; pointer-events: none; }
+.bm-chip { display: inline-flex; align-items: center; gap: 3px; height: 21px; padding: 0 7px; border-radius: 8px; font-style: normal; font-size: 11.5px; font-weight: 800; letter-spacing: 0; color: #fff; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bm-chip svg { width: 11px; height: 11px; }
+.bm-chip.is-disc { background: #ff3b30; }
+.bm-chip.is-hot { background: #ff9500; }
+.bm-chip.is-new { background: #0a84ff; }
+.bm-chip.is-out { background: rgba(60,60,67,.9); }
+.bm-chip.is-time { font-weight: 700; background: rgba(0,0,0,.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
+html body .luxury-card.bm-card .info { flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; gap: 0 !important; padding: 9px 5px 3px !important; min-height: 0 !important; }
+.bm-pr { display: flex; align-items: baseline; flex-wrap: nowrap; gap: 4px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.bm-pr b { font-size: 19px; font-weight: 800; letter-spacing: -.5px; color: var(--bm-gold); font-variant-numeric: tabular-nums; }
+.bm-pr small { font-size: 12px; font-weight: 600; color: var(--bm-gold); opacity: .8; }
+.bm-pr s { margin-left: 2px; font-size: 12px; color: var(--bm-tx2); opacity: .8; font-variant-numeric: tabular-nums; }
+.bm-card.is-long .bm-pr b { font-size: 17px; }
+/* Eski narx bo'lsa: «so'm» yashiriladi, eski narx kichikroq — hammasi bir qatorga sig'adi */
+.bm-pr.has-old small { display: none; }
+.bm-pr.has-old s { font-size: 11.5px; }
+/* Reyting keyin yuklansa «Kafolatlangan» o'rnini bo'shatadi (bir qator saqlanadi) */
+.bm-card .card-meta .card-rating ~ .bm-trust, .bm-card .card-meta .cr-stars ~ .bm-trust, .bm-card .card-meta .card-stock-low ~ .bm-trust { display: none !important; }
+html body .luxury-card.bm-card .info h4 { margin: 3px 0 0 !important; min-height: 0 !important; height: 2.6em !important; font-size: 13.5px !important; font-weight: 400 !important; line-height: 1.3 !important; letter-spacing: -.1px !important; color: var(--bm-tx) !important; opacity: .92; text-align: left !important; overflow: hidden !important; display: -webkit-box !important; -webkit-line-clamp: 2 !important; -webkit-box-orient: vertical !important; white-space: normal !important; }
+html body .luxury-card.bm-card .info h4 .car-hint { color: var(--bm-tx2) !important; }
+html body .luxury-card.bm-card .card-meta { display: flex !important; align-items: center !important; gap: 6px !important; height: 17px !important; margin: 4px 0 0 !important; padding: 0 !important; overflow: hidden !important; white-space: nowrap !important; font-size: 11.5px !important; color: var(--bm-tx2) !important; flex-wrap: nowrap !important; }
+html body .luxury-card.bm-card .card-meta > * { flex: 0 0 auto; }
+.bm-trust { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--bm-tx2); }
+.bm-trust svg, .bm-card .card-stock-low svg { width: 12px; height: 12px; }
+html body .luxury-card.bm-card .card-stock-low { color: #ff9f0a !important; background: none !important; padding: 0 !important; font-size: 11.5px !important; font-weight: 600 !important; }
+
+html body .luxury-card.bm-card .btn-add-cart.bm-btn {
+    margin: auto 0 0 !important; flex: 0 0 auto !important; width: 100% !important; height: 38px !important; min-height: 0 !important; padding: 0 !important;
+    display: flex !important; align-items: center !important; justify-content: center !important; gap: 6px !important;
+    border-radius: 12px !important; border: 0 !important; color: #1a1405 !important;
+    background: linear-gradient(135deg, #f0d060 0%, #c9a84c 55%, #a8851f 100%) !important; box-shadow: 0 8px 18px -12px rgba(212,175,55,.95) !important;
+    font: 600 14px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif !important; letter-spacing: -.1px !important;
+}
+html body .luxury-card.bm-card .btn-add-cart.bm-btn { margin-top: 8px !important; }
+html body .luxury-card.bm-card .info > .card-meta + .btn-add-cart.bm-btn { margin-top: auto !important; }
+html body .luxury-card.bm-card .info::after { display: none !important; }
+html body .luxury-card.bm-card .btn-add-cart.bm-btn::before, html body .luxury-card.bm-card .btn-add-cart.bm-btn::after { display: none !important; }
+html body .luxury-card.bm-card .btn-add-cart.bm-btn svg { width: 17px !important; height: 17px !important; fill: #1a1405 !important; flex: 0 0 auto !important; }
+html body .luxury-card.bm-card .btn-add-cart.bm-btn:active { transform: scale(.96) !important; filter: brightness(.94); }
+html body .luxury-card.bm-card .btn-add-cart.bm-btn.is-out { background: var(--bm-fill) !important; color: var(--bm-tx2) !important; box-shadow: none !important; }
 </style>
 </body>
 </html>
