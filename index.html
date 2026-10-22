@@ -6234,14 +6234,16 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
     // 1) Brend kartalari
     var bw = document.getElementById('brand-cards-wrap');
     if (bw) {
-      bw.innerHTML = TREE.map(function (b) {
-        return '<div class="neon-brand-card" role="button" tabindex="0" onclick="showSection(\'' + b.modelsSection + '\')">' +
-          '<div class="neon-logo" style="width: 55px; height: 55px;"><img src="' + esc(b.logo) + '" alt="' + esc(b.title) + '"></div>' +
-          '<div class="pay-info" style="margin-left: 15px;">' +
-            '<h4 style="font-size: 18px; margin: 0;">' + esc(b.title) + '</h4>' +
-            '<p style="color: var(--text-muted); font-size: 12px;">' + esc(b.sub) + '</p>' +
-          '</div><div class="pay-arrow">›</div></div>';
-      }).join('');
+      // 🍏 iOS 26: ixcham guruhlangan ro'yxat (ilgari har marka katta alohida karta edi)
+      bw.innerHTML = '<div class="a1b-list">' + TREE.map(function (b, i) {
+        var n = (b.models && b.models.length) || 0;
+        return '<div class="a1b-row" role="button" tabindex="0" style="--i:' + i + '" onclick="showSection(\'' + b.modelsSection + '\')" ' +
+            'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}">' +
+          '<span class="a1b-logo"><img src="' + esc(b.logo) + '" alt="" loading="lazy" decoding="async"></span>' +
+          '<span class="a1b-tx"><b>' + esc(b.title) + '</b>' + (b.sub ? '<i>' + esc(b.sub) + '</i>' : '') + '</span>' +
+          (n ? '<span class="a1b-n">' + n + '</span>' : '') +
+          '<span class="a1b-chev"><svg viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5"/></svg></span></div>';
+      }).join('') + '</div>';
     }
 
     // 2) Model ro'yxatlari (#<brand>-models) + mahsulot gridlari (#<slug>-parts)
@@ -6665,7 +6667,7 @@ html.lite .ad-row { animation: none !important; }
         <div id="cart-items-container"></div>
         <!-- 🛡 Ishonch belgilari — bitta ixcham qator -->
         <div id="cart-trust-badges" class="co-grp co-trust" style="display:none;">
-            <button type="button" class="co-row" onclick="openModal('trustModal')"><span class="co-ic" style="--ic:#5e5ce6"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg></span><span class="co-t">Kafolat · 14 kun ichida qaytarish<small>Yetkazish 1–2 kun · original tovar</small></span><span class="co-chev">›</span></button>
+            <button type="button" class="co-row" onclick="openModal('trustModal')"><span class="co-ic" style="--ic:#5e5ce6"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg></span><span class="co-t">Kafolat · 14 kun ichida qaytarish<small id="co-trust-sub">Yetkazish 1–2 kun · original tovar</small></span><span class="co-chev">›</span></button>
         </div>
         <div class="co-dock">
             <div id="cart-total-footer" class="co-sumline"><span>Jami <i id="co-cart-count"></i></span><b id="cart-total-sum">0 so'm</b></div>
@@ -6902,72 +6904,16 @@ html.lite .ad-row { animation: none !important; }
     </div>
 </div>
 
+<!-- 📞 ALOQA — iOS 26 (tarkibini ShopInfo chizadi; admin «Tahrirlash» orqali o'zgartiradi) -->
 <div class="modal-standard" id="contactModal">
-    <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-phone"></use></svg>Aloqa</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
-    <div style="text-align: center;">
-        <img src="https://i.postimg.cc/DZbSYcSS/Gemini-Generated-Image-wyl7ivwyl7ivwyl7-(1).png" style="width: 100%; border-radius: 16px; margin-bottom: 20px;">
-        <a href="tel:+998882893030" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(0, 122, 255, 0.1); color: var(--primary-blue); border: 1px solid rgba(0, 122, 255, 0.3);"><svg class="uic" aria-hidden="true"><use href="#i-smartphone"></use></svg> +998 88 289 30 30</a>
-        <a href="https://t.me/anvaraxtamov2004" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 12px; background: rgba(40, 167, 69, 0.1); color: #28a745; border: 1px solid rgba(40, 167, 69, 0.3);"><svg class="uic" aria-hidden="true"><use href="#i-chat"></use></svg> Telegram</a>
-    </div>
+    <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-phone"></use></svg>Aloqa</h2><div class="a1-hd-acts"><button type="button" class="a1-edit-btn" onclick="ShopInfo.openEditor()" aria-label="Tahrirlash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Tahrirlash</button><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div></div>
+    <div id="ci-body"></div>
 </div>
 
-<!-- 🛡️ QADAM 4+5: KAFOLAT VA YETKAZIB BERISH (mijoz ishonchini oshiradi) -->
+<!-- 🛡 KAFOLAT VA YETKAZIB BERISH — iOS 26 (tarkibini ShopInfo chizadi; admin tahrirlaydi) -->
 <div class="modal-standard" id="trustModal">
-    <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-shield"></use></svg>Kafolat va Yetkazib berish</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
-    <div style="padding-bottom: 30px;">
-
-        <!-- 🚚 YETKAZIB BERISH MUDDATLARI -->
-        <div style="background: linear-gradient(135deg, rgba(0,122,255,0.08), rgba(0,122,255,0.02)); border: 1px solid rgba(0,122,255,0.2); border-radius: 18px; padding: 18px; margin-bottom: 18px;">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-                <span style="font-size:24px;">🚚</span>
-                <h3 style="margin:0; font-size:16px; color:var(--primary-blue);">Yetkazib berish muddatlari</h3>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">
-                <div><div style="font-weight:700; font-size:14px;">Shahar ichida</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">🚕 Taksi orqali</div></div>
-                <div style="color:var(--accent-green); font-weight:800; font-size:14px;">1–2 kun</div>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0;">
-                <div><div style="font-weight:700; font-size:14px;">Viloyatlarga</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">📦 BTS pochta orqali</div></div>
-                <div style="color:var(--accent-green); font-weight:800; font-size:14px;">2–4 kun</div>
-            </div>
-            <div style="margin-top:14px; padding:12px; background: rgba(212,175,55,0.08); border:1px solid rgba(212,175,55,0.25); border-radius:12px; font-size:12.5px; line-height:1.5;">
-                💎 <b>3 000 000 so'm</b>дан ortiq buyurtmalarga yetkazib berish <b style="color:var(--luxury-gold);">TEKIN</b>
-            </div>
-        </div>
-
-        <!-- 🛡️ KAFOLAT -->
-        <div style="background: linear-gradient(135deg, rgba(48,209,88,0.08), rgba(48,209,88,0.02)); border: 1px solid rgba(48,209,88,0.2); border-radius: 18px; padding: 18px; margin-bottom: 18px;">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-                <span style="font-size:24px;">🛡️</span>
-                <h3 style="margin:0; font-size:16px; color:var(--accent-green);">Kafolat shartlari</h3>
-            </div>
-            <ul style="list-style:none; padding:0; margin:0; font-size:13px; line-height:1.7;">
-                <li style="padding:6px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">✅ Barcha tovarlar <b>kafolatlangan</b></li>
-                <li style="padding:6px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">✅ Agar tovarning o'zi nosoz bo'lsa — <b>14 kun</b> ichida qaytarib olinadi</li>
-                <li style="padding:6px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">✅ Zavod nuqsoni — <b>bepul almashtiriladi</b></li>
-                <li style="padding:6px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">✅ Tovar haqiqiyligi — <b>100% kafolat</b></li>
-                <li style="padding:6px 0;">✅ Original tovarlarga zavod kafolati amal qiladi</li>
-            </ul>
-        </div>
-
-        <!-- 💰 PUL QAYTARISH -->
-        <div style="background: linear-gradient(135deg, rgba(255,69,58,0.08), rgba(255,69,58,0.02)); border: 1px solid rgba(255,69,58,0.18); border-radius: 18px; padding: 18px; margin-bottom: 18px;">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-                <span style="font-size:24px;">💰</span>
-                <h3 style="margin:0; font-size:16px; color:var(--accent-red);">Pul qaytarish</h3>
-            </div>
-            <ul style="list-style:none; padding:0; margin:0; font-size:13px; line-height:1.7;">
-                <li style="padding:6px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">↩️ Tovar olganingizdan <b>14 kun</b> ichida pulingizni qaytarib olishingiz mumkin</li>
-                <li style="padding:6px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">📦 Tovar <b>ishlatilmagan</b> va asl o'rovida bo'lishi shart</li>
-                <li style="padding:6px 0;">⏱ Pul <b>3–5 ish kuni</b> ichida kartaga qaytariladi</li>
-            </ul>
-        </div>
-
-        <!-- 📞 SAVOLINGIZ BO'LSA -->
-        <div style="text-align:center; padding:14px; background:rgba(255,255,255,0.03); border-radius:14px; font-size:12px; color:var(--text-muted);">
-            Savollar bo'lsa: <a href="tel:+998882893030" style="color:var(--luxury-gold); text-decoration:none; font-weight:700;"><svg class="uic" aria-hidden="true"><use href="#i-smartphone"></use></svg> +998 88 289 30 30</a>
-        </div>
-    </div>
+    <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-shield"></use></svg>Kafolat va yetkazish</h2><div class="a1-hd-acts"><button type="button" class="a1-edit-btn" onclick="ShopInfo.openEditor()" aria-label="Tahrirlash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Tahrirlash</button><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div></div>
+    <div id="tr-body"></div>
 </div>
 <div class="modal-standard" id="editModal" style="z-index: 3000; display: none; padding: 0;">
     <div class="modal-header" style="padding: 20px 20px 15px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 0;">
@@ -7252,6 +7198,14 @@ html.lite .ad-row { animation: none !important; }
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="9" rx="2"/><path d="M3 16h7.5M3 19.5h5M13.5 16H21M13.5 19.5h5"/></svg>
             </span>
             <span class="ap2-tile-tx"><b>Karta dizayni</b><i id="cs-admin-sub">Tovar kartasi ko'rinishi</i></span>
+            <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </div>
+        <!-- 🏪 DO'KON MA'LUMOTLARI — aloqa, manzil, ish vaqti, yetkazish, kafolat matnlari -->
+        <div class="ap2-tile" style="--ac:#30d158" onclick="window.ShopInfo && ShopInfo.openEditor()" role="button" tabindex="0">
+            <span class="ap2-tile-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 4.5 4h15L21 9.5"/><path d="M3 9.5a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M5 12v8h14v-8"/><path d="M10 20v-5h4v5"/></svg>
+            </span>
+            <span class="ap2-tile-tx"><b>Do'kon ma'lumotlari</b><i>Aloqa, manzil, kafolat</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
     </div>
@@ -11429,7 +11383,7 @@ async function changeOrderStatus(uid, orderId, newStatus) {
             mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz yetkazib berildi.\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.`;
         } else if (newStatus === "bekor_qilingan") {
             statusText = (oldStatus === 'yetkazildi') ? "↩️ QAYTARILDI" : "❌ BEKOR QILINDI";
-            mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30`;
+            mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: ${(window.ShopInfo && ShopInfo.mainPhone()) || '+998 88 289 30 30'}`;
         }
         let adminMsg = `🔄 <b>Buyurtma holati o'zgardi</b>\n\n🆔 Buyurtma: <b>#${escTg(displayCode)}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
         try {
@@ -12592,7 +12546,7 @@ window.confirmOrder = async (paymentMethod) => {
         var _closed = false;
         var _doClose = function () {
             if (_closed) return; _closed = true;
-            try { if (paymentMethod && paymentMethod.indexOf('Karta') !== -1) tg.openTelegramLink("https://t.me/anvaraxtamov2004"); } catch (e) {}
+            try { if (paymentMethod && paymentMethod.indexOf('Karta') !== -1) tg.openTelegramLink((window.ShopInfo && ShopInfo.tgUrl()) || "https://t.me/anvaraxtamov2004"); } catch (e) {}
             try { tg.close(); } catch (e) {}
         };
         Promise.race([
@@ -14922,7 +14876,7 @@ window.renderCartItems = () => {
 };
 // 🏠 OYNA TASHQARISIGA BOSGANDA YOPILISHI (Professional ergonomics)
 window.onclick = function(event) {
-    const modals = ['productModal', 'cartModal', 'paymentModal', 'profileEditModal', 'contactModal'];
+    const modals = ['productModal', 'cartModal', 'paymentModal', 'profileEditModal'];
     modals.forEach(id => {
         let m = document.getElementById(id);
         if (event.target == m) {
@@ -19140,8 +19094,14 @@ document.addEventListener('click', function (e) {
        ============================================================ */
     function pushNotif(icon, title, text, opts) {
         opts = opts || {};
+        // 🧹 DUBLIKATGA QARSHI: ilgari har sync'da bir xil ogohlantirish qayta
+        // qo'shilardi (kafolat «notified» bayrog'i serverda saqlanmaydi).
+        // Endi: barqaror kalit (opts.key) yoki aynan bir xil sarlavha+matn bo'lsa — qo'shilmaydi.
+        if ((P.state.notifications || []).some(function (n) {
+            return n && ((opts.key && n.id === opts.key) || (n.title === title && n.text === text));
+        })) return;
         P.state.notifications.unshift({
-            id: 'n' + Date.now() + Math.floor(Math.random() * 999),
+            id: opts.key || ('n' + Date.now() + Math.floor(Math.random() * 999)),
             icon: icon, title: title, text: text, date: Date.now(), read: false
         });
         if (P.state.notifications.length > 60) P.state.notifications.length = 60;
@@ -19241,20 +19201,168 @@ document.addEventListener('click', function (e) {
         markAdminNotificationsRead(P.adminNotifications);
         save(); updateBell(false); renderNotifs();
     };
+    /* ——— 🍏 iOS 26 bildirishnoma markazi ———
+       • Kun bo'yicha guruhlar (Bugun / Kecha / Oxirgi 7 kun / Avvalroq)
+       • Har tur uchun rangli iOS ikonka (emoji o'rniga)
+       • Bir xil xabarlar iOS kabi «stack» bo'lib bitta kartaga yig'iladi
+       • Chapga surib o'chirish (faqat shaxsiy xabarlar) */
+    var NF_SVG = {
+        gift: '<path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7z"/>',
+        undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+        shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+        user: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+        truck: '<path d="M1 4h14v12H1z"/><path d="M15 9h4l3 3v4h-7V9z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/>',
+        trophy: '<path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
+        users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+        bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'
+    };
+    function nfKind(x) {
+        var i = String(x.icon || ''), t = String(x.title || '');
+        if (i.indexOf('🎁') > -1 || /cashback/i.test(t) && i.indexOf('↩') < 0) return ['gift', '#d4a72c'];
+        if (i.indexOf('↩') > -1) return ['undo', '#ff453a'];
+        if (i.indexOf('🛡') > -1) return ['shield', '#ff9f0a'];
+        if (i.indexOf('🆕') > -1) return ['user', '#0a84ff'];
+        if (i.indexOf('🏁') > -1 || /yetkaz/i.test(t)) return ['truck', '#30d158'];
+        if (i.indexOf('🏆') > -1) return ['trophy', '#bf5af2'];
+        if (i.indexOf('🤝') > -1) return ['users', '#5e5ce6'];
+        return ['bell', '#c9a84c'];
+    }
+    function nfDayStart(ts) { var d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
+    function nfBucket(ts) {
+        var t0 = nfDayStart(Date.now()), d = nfDayStart(ts);
+        if (d >= t0) return 'Bugun';
+        if (d >= t0 - DAY) return 'Kecha';
+        if (d >= t0 - DAY * 6) return 'Oxirgi 7 kun';
+        return 'Avvalroq';
+    }
+    function nfTime(ts, bucket) {
+        var d = Date.now() - ts, dt = new Date(ts);
+        var hm = ('0' + dt.getHours()).slice(-2) + ':' + ('0' + dt.getMinutes()).slice(-2);
+        if (bucket === 'Bugun') {
+            if (d < 60000) return 'hozir';
+            if (d < 3600000) return Math.floor(d / 60000) + ' daq oldin';
+            return hm;
+        }
+        if (bucket === 'Kecha') return hm;
+        return ('0' + dt.getDate()).slice(-2) + '.' + ('0' + (dt.getMonth() + 1)).slice(-2) + (dt.getFullYear() !== new Date().getFullYear() ? '.' + dt.getFullYear() : '');
+    }
+    function nfDedupeKey(n) {
+        // Kafolat ogohlantirishida faqat «N kun» farq qiladi — bitta deb hisoblaymiz
+        var t = String(n.text || '');
+        if (n.title === 'Qaytarish muddati tugayapti') t = t.replace(/\d+\s*kundan/, '#kundan');
+        return (n._admin ? 'a|' : 'u|') + n.title + '|' + t;
+    }
+    function dedupeLocalNotifs() {
+        var seen = {}, before = (P.state.notifications || []).length;
+        P.state.notifications = (P.state.notifications || []).filter(function (n) {
+            if (!n) return false;
+            var k = nfDedupeKey(n);
+            if (seen[k]) return false;
+            seen[k] = 1; return true;
+        });
+        return P.state.notifications.length !== before;
+    }
     function renderNotifs() {
         var box = document.getElementById('p2-notif-list');
         if (!box) return;
-        var n = allNotifications();
-        if (!n.length) { box.innerHTML = emptyHTML('🔔', "Hozircha bildirishnoma yo'q"); return; }
-        box.innerHTML = n.map(function (x) {
-            return '<div class="p2-notif ' + (x.read ? '' : 'unread') + '">' +
-                '<div class="p2-notif-ic">' + (x.icon || '🔔') + '</div>' +
-                '<div style="flex:1;min-width:0;"><div class="p2-notif-title">' + esc(x.title) + '</div>' +
-                '<div class="p2-notif-text">' + esc(x.text) + '</div>' +
-                '<div class="p2-notif-time">' + timeAgo(x.date) + '</div></div></div>';
+        var n = allNotifications(), fresh = P._nfFresh || {};
+        var sum = document.getElementById('p2-nf-sum');
+        var newCount = n.filter(function (x) { return !x.read || fresh[x.id]; }).length;
+        if (sum) sum.textContent = n.length ? (newCount ? newCount + ' ta yangi' : 'Hammasi o\u2018qilgan') : '';
+        var mk = document.querySelector('#p2NotifModal .p2-markall-btn');
+        if (mk) mk.style.display = n.some(function (x) { return !x.read; }) ? '' : 'none';
+        if (!n.length) {
+            box.innerHTML = '<div class="a1-empty"><span class="a1-empty-ic"><svg viewBox="0 0 24 24" aria-hidden="true">' + NF_SVG.bell + '</svg></span>' +
+                '<b>Bildirishnoma yo\u2018q</b><p>Buyurtma holati, cashback va kafolat haqidagi xabarlar shu yerda chiqadi.</p></div>';
+            return;
+        }
+        // Guruhlash: kun → bir xil xabarlar «stack»
+        var groups = [], gmap = {};
+        n.forEach(function (x) {
+            var b = nfBucket(Number(x.date) || 0);
+            if (!gmap[b]) { gmap[b] = { name: b, items: [], idx: {} }; groups.push(gmap[b]); }
+            var g = gmap[b], k = nfDedupeKey(x);
+            if (g.idx[k] != null) { g.items[g.idx[k]].dup.push(x); return; }
+            g.idx[k] = g.items.length; g.items.push({ x: x, dup: [] });
+        });
+        var i = 0, anyLocal = false;
+        var html = groups.map(function (g) {
+            return '<div class="nf-day">' + g.name + '</div>' + g.items.map(function (it) {
+                var x = it.x, all = [x].concat(it.dup), kind = nfKind(x);
+                var isNew = all.some(function (y) { return !y.read || fresh[y.id]; });
+                var local = !x._admin; if (local) anyLocal = true;
+                var ids = all.map(function (y) { return String(y.id).replace(/[^\w-]/g, ''); }).join(',');
+                return '<div class="nf-wrap' + (it.dup.length ? ' is-stack' : '') + '" style="--d:' + Math.min(i++, 12) + '" data-ids="' + ids + '" data-local="' + (local ? 1 : 0) + '">' +
+                    (local ? '<div class="nf-del">O\u2018chirish</div>' : '') +
+                    '<div class="nf' + (isNew ? ' is-new' : '') + '">' +
+                    '<div class="nf-ic" style="--ic:' + kind[1] + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + NF_SVG[kind[0]] + '</svg></div>' +
+                    '<div class="nf-main"><div class="nf-top"><div class="nf-title">' + esc(x.title) + '</div>' +
+                    (it.dup.length ? '<em class="nf-count">' + (it.dup.length + 1) + '</em>' : '') +
+                    '<span class="nf-time">' + nfTime(Number(x.date) || 0, g.name) + '</span></div>' +
+                    '<div class="nf-text">' + esc(x.text) + '</div></div></div></div>';
+            }).join('');
         }).join('');
+        if (anyLocal) html += '<p class="nf-hint">Xabarni o\u2018chirish uchun chapga suring</p>' +
+            '<button type="button" class="nf-clear" onclick="Phase2.clearReadNotifs()">O\u2018qilganlarni tozalash</button>';
+        box.innerHTML = html;
+        bindNotifSwipe(box);
     }
+    function bindNotifSwipe(box) {
+        if (box._a1Swipe) return; box._a1Swipe = true;
+        var el = null, wrap = null, x0 = 0, y0 = 0, dx = 0, lock = null;
+        box.addEventListener('touchstart', function (e) {
+            var w = e.target.closest && e.target.closest('.nf-wrap[data-local="1"]');
+            if (!w || !e.touches || !e.touches[0]) { el = null; return; }
+            wrap = w; el = w.querySelector('.nf'); x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; lock = null;
+        }, { passive: true });
+        box.addEventListener('touchmove', function (e) {
+            if (!el || !e.touches || !e.touches[0]) return;
+            var mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+            if (lock === null) { if (Math.abs(mx) < 8 && Math.abs(my) < 8) return; lock = Math.abs(mx) > Math.abs(my) * 1.2 ? 'x' : 'y'; if (lock === 'x') el.style.transition = 'none'; }
+            if (lock !== 'x') return;
+            dx = Math.min(0, mx);
+            el.style.transform = 'translateX(' + dx + 'px)';
+            var del = wrap.querySelector('.nf-del'); if (del) del.style.opacity = Math.min(1, -dx / 50);
+        }, { passive: true });
+        function end() {
+            if (!el) return;
+            var e1 = el, w1 = wrap; el = null; e1.style.transition = '';
+            if (lock === 'x' && dx < -Math.min(110, e1.offsetWidth * 0.32)) {
+                e1.style.transform = 'translateX(-115%)';
+                w1.style.overflow = 'hidden'; w1.style.height = w1.offsetHeight + 'px';
+                requestAnimationFrame(function () { requestAnimationFrame(function () { w1.style.height = '0px'; w1.style.marginBottom = '0px'; w1.style.opacity = '0'; }); });
+                try { if (window._hap) window._hap('light'); } catch (er) {}
+                setTimeout(function () { P.deleteNotifs((w1.getAttribute('data-ids') || '').split(',')); }, 330);
+            } else {
+                e1.style.transform = '';
+                var del = w1.querySelector('.nf-del'); if (del) del.style.opacity = '';
+            }
+        }
+        box.addEventListener('touchend', end, { passive: true });
+        box.addEventListener('touchcancel', end, { passive: true });
+    }
+    P.deleteNotifs = function (ids) {
+        var set = {}; (ids || []).forEach(function (i) { if (i) set[i] = 1; });
+        P.state.notifications = (P.state.notifications || []).filter(function (n) { return !(n && set[String(n.id).replace(/[^\w-]/g, '')]); });
+        save(); updateBell(false); renderNotifs();
+    };
+    P.clearReadNotifs = function () {
+        var go = function () {
+            P.state.notifications = (P.state.notifications || []).filter(function (n) { return n && !n.read; });
+            P._nfFresh = {};
+            save(); updateBell(false); renderNotifs();
+            try { if (window._hap) window._hap('success'); } catch (er) {}
+        };
+        var w = (typeof tg !== 'undefined' && tg) ? tg : null;
+        try { if (w && w.showConfirm && w.isVersionAtLeast && w.isVersionAtLeast('6.2')) { w.showConfirm("O\u2018qilgan bildirishnomalar o\u2018chirilsinmi?", function (ok) { if (ok) go(); }); return; } } catch (er) {}
+        if (window.confirm("O\u2018qilgan bildirishnomalar o\u2018chirilsinmi?")) go();
+    };
     P.openNotifs = function () {
+        if (dedupeLocalNotifs()) save();
+        // Ochilgan paytdagi «yangi»larni eslab qolamiz — o'qilgan deb belgilansa ham
+        // shu ochilish davomida tilla bilan ajralib turadi (iOS kabi).
+        P._nfFresh = {};
+        allNotifications().forEach(function (x) { if (!x.read) P._nfFresh[x.id] = 1; });
         renderNotifs();
         if (typeof openModal === 'function') openModal('p2NotifModal');
         setTimeout(function () {
@@ -19409,34 +19517,98 @@ document.addEventListener('click', function (e) {
             var s = warrStatus(w);
             if (s.state === 'soon' && !w.notified) {
                 w.notified = true; changed = true;
-                pushNotif('🛡', 'Qaytarish muddati tugayapti', w.name + ' — nosozlik uchun qaytarish muddati ' + s.remDays + ' kundan keyin tugaydi.', { silent: true });
+                pushNotif('🛡', 'Qaytarish muddati tugayapti', w.name + ' — nosozlik uchun qaytarish muddati ' + s.remDays + ' kundan keyin tugaydi.', { silent: true, key: 'warr_' + w.id });
             }
         });
         if (changed) save();
     }
-    P.openWarranty = function () {
+    /* ——— 🍏 iOS 26 kafolat kuzatuvi ———
+       Umumiy halqa (faol / jami) + segment filtr + har tovar uchun mini-halqa
+       (qolgan kun), bosilsa sanalar va «Muammo bormi?» tugmasi ochiladi. */
+    var UZ_MON = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
+    function uzDate(ts) { var d = new Date(ts); return d.getDate() + '-' + UZ_MON[d.getMonth()] + (d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''); }
+    var WR_SVG = {
+        shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+        check: '<path d="M20 6 9 17l-5-5"/>',
+        chev: '<path d="M9 6l6 6-6 6"/>',
+        chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+        doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>'
+    };
+    function wsvg(k, cls) { return '<svg class="' + (cls || 'a1-svg') + '" viewBox="0 0 24 24" aria-hidden="true">' + WR_SVG[k] + '</svg>'; }
+    function renderWarr(anim) {
         var box = document.getElementById('p2-warr-body');
-        if (box) {
-            var ws = P.state.warranties.slice().sort(function (a, b) { return (b.start) - (a.start); });
-            if (!ws.length) { box.innerHTML = emptyHTML('🛡', "Hali kafolatli mahsulot yo'q. Xarid qilganingizda kafolat avtomatik kuzatiladi."); }
-            else {
-                box.innerHTML =
-                    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.5;">Har xaridingiz <b style="color:var(--luxury-gold);">kafolatlangan</b>. Tovar nosoz bo\'lsa — <b style="color:var(--luxury-gold);">' + WARRANTY_DAYS + ' kun</b> ichida qaytarib olinadi. Muddatni quyida kuzating.</div>' +
-                    ws.map(function (w) {
-                        var s = warrStatus(w);
-                        var pillTxt = s.state === 'expired' ? 'Tugagan' : (s.state === 'soon' ? s.remDays + ' kun qoldi' : s.remDays + ' kun');
-                        var col = s.state === 'expired' ? '#ff453a' : (s.state === 'soon' ? '#ff9f0a' : '#30d158');
-                        return '<div class="p2-warr"><div class="p2-warr-top">' +
-                            '<div><div class="p2-warr-name">' + esc(w.name) + (w.qty > 1 ? ' ×' + w.qty : '') + '</div>' +
-                            '<div class="p2-warr-code">Buyurtma: ' + esc(w.code) + '</div></div>' +
-                            '<span class="p2-warr-pill ' + s.state + '">' + pillTxt + '</span></div>' +
-                            '<div class="p2-warr-track"><div class="p2-warr-fill" data-w="' + s.pct + '" style="background:' + col + ';"></div></div>' +
-                            '<div class="p2-warr-meta"><span>Boshlangan: ' + new Date(w.start).toLocaleDateString('uz-UZ') + '</span>' +
-                            '<span>Tugaydi: ' + new Date(s.end).toLocaleDateString('uz-UZ') + '</span></div></div>';
-                    }).join('');
-                animateFills('#p2-warr-body .p2-warr-fill', 'w');
-            }
+        if (!box) return;
+        var ws = P.state.warranties.slice().sort(function (a, b) { return (b.start) - (a.start); });
+        if (!ws.length) {
+            box.innerHTML = '<div class="a1-empty"><span class="a1-empty-ic">' + wsvg('shield', '') + '</span><b>Hali kafolatli tovar yo\u2018q</b>' +
+                '<p>Xarid qilganingizda har bir tovarning kafolat muddati shu yerda avtomatik kuzatiladi.</p>' +
+                '<button type="button" class="a1-btn" onclick="openModal(\'trustModal\')">' + wsvg('doc', '') + 'Kafolat shartlari</button></div>';
+            return;
         }
+        var rows = ws.map(function (w) { return { w: w, s: warrStatus(w) }; });
+        var live = rows.filter(function (r) { return r.s.state !== 'expired'; }).length;
+        var soon = rows.filter(function (r) { return r.s.state === 'soon'; }).length;
+        var exp = rows.length - live;
+        var tab = P._warrTab || (live ? 'live' : 'all');
+        if (tab === 'live' && !live) tab = 'all';
+        P._warrTab = tab;
+        var C = 238.76, off = C * (1 - (rows.length ? live / rows.length : 0));
+        var h = '<div class="' + (anim ? 'a1-in' : '') + '">';
+        h += '<div class="a1-hero" style="--d:0"><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="wrGoldG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F6DC7E"/><stop offset=".55" stop-color="#D4AF37"/><stop offset="1" stop-color="#A8851F"/></linearGradient></defs></svg>' +
+            '<div class="wr-hero"><div class="wr-big"><svg viewBox="0 0 86 86" aria-hidden="true"><circle class="t" cx="43" cy="43" r="38"/><circle class="v" cx="43" cy="43" r="38" style="--off:' + off.toFixed(2) + '"/></svg>' +
+            '<b>' + live + '<small>faol</small></b></div>' +
+            '<div class="wr-hero-tx"><b>Kafolatlaringiz</b><span>Har bir tovar ' + WARRANTY_DAYS + ' kun davomida himoyalangan</span><div class="wr-chips">' +
+            '<span class="wr-chip" style="--c:#30d158"><i></i>' + (live - soon) + ' faol</span>' +
+            (soon ? '<span class="wr-chip" style="--c:#ff9f0a"><i></i>' + soon + ' tugayapti</span>' : '') +
+            (exp ? '<span class="wr-chip" style="--c:#8e8e93"><i></i>' + exp + ' tugagan</span>' : '') +
+            '</div></div></div></div>';
+        h += '<div class="a1-seg" role="tablist" style="--d:1">' +
+            '<button type="button" role="tab" class="' + (tab === 'live' ? 'on' : '') + '" onclick="Phase2.warrTab(\'live\')">Faol<em>' + live + '</em></button>' +
+            '<button type="button" role="tab" class="' + (tab === 'exp' ? 'on' : '') + '" onclick="Phase2.warrTab(\'exp\')">Tugagan<em>' + exp + '</em></button>' +
+            '<button type="button" role="tab" class="' + (tab === 'all' ? 'on' : '') + '" onclick="Phase2.warrTab(\'all\')">Hammasi<em>' + rows.length + '</em></button></div>';
+        var list = rows.filter(function (r) { return tab === 'all' || (tab === 'live' ? r.s.state !== 'expired' : r.s.state === 'expired'); });
+        h += '<div class="a1-grp" style="--d:2">';
+        if (!list.length) h += '<div class="wr-none">Bu bo\u2018limda tovar yo\u2018q</div>';
+        h += list.map(function (r) {
+            var w = r.w, s = r.s;
+            var col = s.state === 'expired' ? '#8e8e93' : (s.state === 'soon' ? '#ff9f0a' : '#30d158');
+            var pill = s.state === 'expired' ? 'Tugagan' : (s.state === 'soon' ? s.remDays + ' kun qoldi' : 'Faol');
+            var dOff = (119.38 * (1 - s.pct / 100)).toFixed(2);
+            var sub = s.state === 'expired' ? uzDate(s.end) + ' da tugagan' : uzDate(s.end) + ' gacha';
+            return '<div class="wr-it' + (s.state === 'expired' ? ' is-expired' : '') + '">' +
+                '<button type="button" class="wr-row" onclick="Phase2.warrToggle(this)" aria-expanded="false">' +
+                '<span class="wr-dial" style="--c:' + col + '"><svg viewBox="0 0 46 46" aria-hidden="true"><circle class="t" cx="23" cy="23" r="19"/>' +
+                (s.state === 'expired' ? '' : '<circle class="v" cx="23" cy="23" r="19" style="--off:' + dOff + '"/>') + '</svg>' +
+                (s.state === 'expired' ? wsvg('check') : '<b>' + s.remDays + '<small>kun</small></b>') + '</span>' +
+                '<span class="wr-tx"><b>' + esc(w.name) + (w.qty > 1 ? ' \u00D7' + esc(w.qty) : '') + '</b><small>' + esc(w.code) + ' \u00B7 ' + sub + '</small></span>' +
+                '<span class="wr-pill" style="--c:' + col + '">' + pill + '</span>' +
+                '<span class="wr-chev">' + wsvg('chev', '') + '</span></button>' +
+                '<div class="wr-more"><div><div class="wr-more-in"><div class="wr-dates"><span>Boshlangan<b>' + uzDate(w.start) + '</b></span><span>' + (s.state === 'expired' ? 'Tugagan' : 'Tugaydi') + '<b>' + uzDate(s.end) + '</b></span></div>' +
+                (s.state === 'expired'
+                    ? '<button type="button" class="a1-btn wr-act" onclick="openModal(\'trustModal\')">' + wsvg('doc', '') + 'Kafolat shartlari</button>'
+                    : '<button type="button" class="a1-btn is-gold wr-act" onclick="Phase2.warrHelp(\'' + esc(String(w.id).replace(/[^\w-]/g, '')) + '\')">' + wsvg('chat', '') + 'Muammo bormi? Yozing</button>') +
+                '</div></div></div></div>';
+        }).join('');
+        h += '</div>';
+        h += '<p class="a1-foot" style="--d:3">Kafolat muddati buyurtma berilgan kundan boshlab hisoblanadi.</p>';
+        h += '<div class="a1-grp" style="--d:4;margin-top:18px"><button type="button" class="a1-row" onclick="openModal(\'trustModal\')"><span class="a1-ic" style="--ic:#5e5ce6">' + wsvg('doc') + '</span><span class="a1-t">Kafolat va qaytarish shartlari</span><span class="a1-chev"><svg viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5"/></svg></span></button></div>';
+        h += '</div>';
+        box.innerHTML = h;
+    }
+    P.warrTab = function (t) { P._warrTab = t; renderWarr(false); try { if (window._hap) window._hap('selection'); } catch (e) {} };
+    P.warrToggle = function (btn) {
+        var it = btn && btn.closest('.wr-it'); if (!it) return;
+        var open = it.classList.toggle('open'); btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        try { if (window._hap) window._hap('light'); } catch (e) {}
+    };
+    P.warrHelp = function (id) {
+        var w = P.state.warranties.filter(function (x) { return String(x.id).replace(/[^\w-]/g, '') === id; })[0];
+        var msg = 'Assalomu alaykum! Kafolat bo\u2018yicha murojaat:\n' + (w ? w.name + (w.code ? ' (buyurtma ' + w.code + ')' : '') : '');
+        if (window.ShopInfo) ShopInfo.openTg(msg);
+    };
+    P.openWarranty = function () {
+        P._warrTab = null;
+        renderWarr(true);
         if (typeof openModal === 'function') openModal('p2WarrantyModal');
     };
 
@@ -20032,16 +20204,17 @@ document.addEventListener('click', function (e) {
     function buildModals() {
         if (document.getElementById('p2NotifModal')) return;
         var html =
-            modal('p2NotifModal', '🔔 Bildirishnomalar',
+            modal('p2NotifModal', 'Bildirishnomalar',
+                '<div class="nf-bar"><span class="nf-sum" id="p2-nf-sum"></span>' +
                 '<button class="p2-markall-btn" onclick="Phase2.markAllRead()" aria-label="Hammasini o\'qilgan deb belgilash">' +
                     '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12.5l4 4L14 8"/><path d="M9.5 15.5l1 1L22.5 5"/></svg>' +
                     '<span>Hammasini o\'qildi</span>' +
-                '</button>' +
+                '</button></div>' +
                 '<div class="p2-modal-scroll" id="p2-notif-list"></div>') +
             modal('p2AchievementsModal', '🏆 Yutuqlar', '<div class="p2-modal-scroll" id="p2-ach-body"></div>') +
             modal('p2AnalyticsModal', '📊 Shaxsiy analitika', '<div class="p2-modal-scroll" id="p2-an-body"></div>') +
             modal('p2ReferralModal', '🔗 Referral dasturi', '<div class="p2-modal-scroll" id="p2-ref-body"></div>') +
-            modal('p2WarrantyModal', '🛡 Kafolat kuzatuvi', '<div class="p2-modal-scroll" id="p2-warr-body"></div>') +
+            modal('p2WarrantyModal', 'Kafolat kuzatuvi', '<div class="p2-modal-scroll" id="p2-warr-body"></div>') +
             modal('p2CashbackModal', '🎁 Cashback', '<div class="p2-modal-scroll" id="p2-cashback-body"></div>') +
             '<div id="p2-unlock" onclick="Phase2.closeUnlock()">' +
             '<div class="p2-unlock-card" onclick="event.stopPropagation()">' +
@@ -35190,6 +35363,928 @@ html body #aiChatModal .sg-attach-tx { font-weight: 500; font-size: 13.5px; colo
 html body #aiChatModal .sg-attach-x { border-radius: 50%; }
 @media (prefers-reduced-motion: reduce) { html body #aiChatModal .sg-msg:last-child { animation: none; } }
 </style>
+<style id="a1-ios26-info">
+/* ══════════════════════════════════════════════════════════════════
+   🍏 AVTO A1 · iOS 26 «Liquid Glass» — ma'lumot sahifalari
+   Aloqa · Kafolat va yetkazish · Bildirishnomalar · Kafolat kuzatuvi ·
+   Do'kon ma'lumotlari (admin muharriri) · Markalar ro'yxati
+   - backdrop-filter ISHLATILMAYDI (iPhone'da qotmasligi uchun): shisha
+     effekti yarim shaffof qatlam + ichki "specular" chiziqlar bilan.
+   - Faqat transform/opacity animatsiyalari; lite/reduced-motion'da o'chadi.
+   ══════════════════════════════════════════════════════════════════ */
+:is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal) {
+    --a-gold: #e2c46e; --a-gold2: #c9a84c; --a-goldbg: rgba(201,168,76,.14);
+    --a-grad: linear-gradient(135deg, #f6dc7e 0%, #d4af37 48%, #a8851f 100%);
+    --a-ink: #1a1405;
+    --a-glass: rgba(255,255,255,.065); --a-glass2: rgba(255,255,255,.11);
+    --a-edge: inset 0 1px 0 rgba(255,255,255,.09), inset 0 0 0 .5px rgba(255,255,255,.08);
+    --a-drop: 0 12px 30px -16px rgba(0,0,0,.75);
+    --a-sep: rgba(84,84,88,.36);
+    --a-tx: #f5f5f7; --a-tx2: rgba(235,235,245,.62); --a-tx3: rgba(235,235,245,.32);
+    --a-fill: rgba(118,118,128,.24); --a-fill2: rgba(118,118,128,.14);
+    --a-green: #30d158; --a-orange: #ff9f0a; --a-red: #ff453a; --a-blue: #0a84ff;
+    --a-indigo: #5e5ce6; --a-purple: #bf5af2; --a-teal: #40c8e0;
+    --a-spring: cubic-bezier(.34,1.4,.64,1); --a-ease: cubic-bezier(.32,.72,0,1);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; color: var(--a-tx);
+}
+html[data-theme="light"] :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal) {
+    --a-gold: #8a6a14; --a-gold2: #9c7c20; --a-goldbg: rgba(156,124,32,.1);
+    --a-glass: rgba(255,255,255,.82); --a-glass2: #fff;
+    --a-edge: inset 0 1px 0 #fff, inset 0 0 0 .5px rgba(120,90,30,.12);
+    --a-drop: 0 10px 26px -16px rgba(92,68,24,.38);
+    --a-sep: rgba(60,60,67,.13);
+    --a-tx: #1c1c1e; --a-tx2: rgba(60,60,67,.64); --a-tx3: rgba(60,60,67,.32);
+    --a-fill: rgba(118,118,128,.14); --a-fill2: rgba(118,118,128,.08);
+    --a-green: #248a3d; --a-orange: #c76a00; --a-red: #d70015; --a-blue: #007aff;
+}
+html body :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal).modal-standard {
+    background: radial-gradient(120% 55% at 50% -12%, rgba(201,168,76,.14), transparent 62%), #08080a !important;
+    padding-left: 16px !important; padding-right: 16px !important;
+}
+html[data-theme="light"] body :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal).modal-standard {
+    background: radial-gradient(120% 55% at 50% -12%, rgba(201,168,76,.16), transparent 62%), #f6f1e6 !important;
+}
+
+/* ——— Sarlavha: katta iOS sarlavhasi + yumaloq tugmalar ——— */
+html body :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal) > .modal-header {
+    margin: 2px 0 12px !important; padding: 0 2px !important; gap: 10px;
+    background: transparent !important; border: 0 !important; box-shadow: none !important;
+}
+html body :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal) > .modal-header h2 {
+    display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif !important;
+    font-size: 32px !important; font-weight: 700 !important; letter-spacing: -.6px !important; line-height: 1.1 !important;
+    color: var(--a-tx) !important; -webkit-text-fill-color: var(--a-tx) !important; background: none !important;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html body :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal) > .modal-header h2 .uic { display: none !important; }
+html body :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal) > .modal-header .close-btn {
+    width: 32px !important; height: 32px !important; min-width: 32px; flex: 0 0 32px; padding: 0 !important; border-radius: 50% !important;
+    display: inline-flex !important; align-items: center; justify-content: center;
+    background: var(--a-fill) !important; color: var(--a-tx2) !important; border: 0 !important; box-shadow: none !important;
+    font-size: 18px !important; font-weight: 600; line-height: 1 !important; transition: transform .3s var(--a-spring);
+}
+html body :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal) > .modal-header .close-btn:active { transform: scale(.86); }
+.a1-hd-acts { display: flex; align-items: center; gap: 8px; flex: none; }
+.a1-edit-btn {
+    display: none; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border: 0; border-radius: 16px;
+    background: var(--a-goldbg); color: var(--a-gold); font: 600 14px/1 inherit; font-family: inherit; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a-spring);
+}
+.a1-edit-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.a1-edit-btn:active { transform: scale(.9); }
+.is-adm .a1-edit-btn { display: inline-flex; }
+/* Uzun sarlavhali sahifada tahrirlash tugmasi — faqat ikonka (iOS uslubidagi doira) */
+#trustModal .a1-edit-btn { width: 32px; padding: 0; justify-content: center; border-radius: 50%; font-size: 0; gap: 0; }
+#trustModal .a1-edit-btn svg { width: 16px; height: 16px; }
+html body #trustModal > .modal-header h2 { font-size: 27px !important; letter-spacing: -.5px !important; }
+
+/* ——— Umumiy iOS bloklari ——— */
+.a1-sec { margin: 24px 16px 7px; font-size: 13px; font-weight: 600; letter-spacing: .2px; text-transform: uppercase; color: var(--a-tx2); }
+.a1-foot { margin: 7px 16px 0; font-size: 12.5px; line-height: 1.4; color: var(--a-tx2); }
+.a1-grp { position: relative; background: var(--a-glass); border-radius: 22px; box-shadow: var(--a-edge), var(--a-drop); overflow: hidden; }
+.a1-row {
+    position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; box-sizing: border-box;
+    padding: 10px 14px; margin: 0; border: 0; background: none; color: inherit; text-align: left; text-decoration: none;
+    font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .2s ease;
+}
+.a1-row + .a1-row::before, .a1-grp > * + .a1-row::before {
+    content: ''; position: absolute; top: 0; left: 58px; right: 0; height: .5px; background: var(--a-sep);
+}
+.a1-row.no-ic + .a1-row::before, .a1-row.no-ic::before { left: 16px !important; }
+.a1-row:active { background: var(--a-fill2); }
+.a1-row.static { cursor: default; } .a1-row.static:active { background: none; }
+.a1-ic {
+    flex: 0 0 32px; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: #fff;
+    background: var(--ic, #c9a84c);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ic, #c9a84c) 78%, #fff), var(--ic, #c9a84c));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 2px 6px -2px color-mix(in srgb, var(--ic, #c9a84c) 70%, transparent);
+}
+.a1-ic svg, .a1-svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.a1-t { flex: 1; min-width: 0; font-size: 16px; font-weight: 500; letter-spacing: -.25px; line-height: 1.28; color: var(--a-tx); }
+.a1-t small { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; letter-spacing: -.05px; color: var(--a-tx2); }
+.a1-t b { font-weight: 650; }
+.a1-v { flex: none; max-width: 52%; font-size: 15px; color: var(--a-tx2); text-align: right; letter-spacing: -.2px; }
+.a1-v.is-pill { padding: 5px 10px; border-radius: 99px; font-size: 13.5px; font-weight: 650; color: var(--a-green); background: color-mix(in srgb, var(--a-green) 14%, transparent); }
+.a1-chev { flex: none; width: 8px; height: 13px; color: var(--a-tx3); }
+.a1-chev svg { width: 8px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.a1-mini {
+    flex: none; width: 32px; height: 32px; border-radius: 50%; border: 0; display: grid; place-items: center;
+    background: var(--a-fill2); color: var(--a-gold); cursor: pointer; transition: transform .3s var(--a-spring);
+}
+.a1-mini svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.a1-mini:active { transform: scale(.85); }
+
+/* Liquid Glass "hero" kartasi */
+.a1-hero {
+    position: relative; overflow: hidden; border-radius: 28px; padding: 18px;
+    background:
+        radial-gradient(120% 120% at 0% 0%, rgba(212,175,55,.24), transparent 55%),
+        linear-gradient(160deg, rgba(255,255,255,.1), rgba(255,255,255,.035));
+    box-shadow: var(--a-edge), 0 18px 40px -22px rgba(0,0,0,.9), 0 0 0 .5px rgba(226,196,110,.18);
+}
+.a1-hero::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(115deg, transparent 32%, rgba(255,255,255,.07) 46%, transparent 60%);
+}
+html[data-theme="light"] .a1-hero {
+    background:
+        radial-gradient(120% 120% at 0% 0%, rgba(212,175,55,.22), transparent 58%),
+        linear-gradient(160deg, #fffdf8, #fbf6ea);
+    box-shadow: var(--a-edge), 0 16px 34px -22px rgba(92,68,24,.45), 0 0 0 .5px rgba(156,124,32,.18);
+}
+
+/* Ochiq/yopiq holat belgisi */
+.a1-st { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 10px 4px 8px; border-radius: 99px; font-size: 12.5px; font-weight: 600; font-style: normal; letter-spacing: -.1px; }
+.a1-st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
+.a1-st.on { color: var(--a-green); background: color-mix(in srgb, var(--a-green) 13%, transparent); }
+.a1-st.on i { animation: a1Pulse 2s ease-in-out infinite; }
+.a1-st.off { color: var(--a-orange); background: color-mix(in srgb, var(--a-orange) 13%, transparent); }
+@keyframes a1Pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent); } }
+
+/* Mini shesterna (brend belgisi) */
+.a1-gear { position: relative; flex: none; width: 64px; height: 64px; display: grid; place-items: center; }
+.a1-gear svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 8px rgba(240,208,96,.3)); animation: a1Spin 14s linear infinite; }
+.a1-gear b {
+    position: relative; font-size: 17px; font-weight: 800; letter-spacing: -.6px; line-height: 1;
+    background: var(--a-grad); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+}
+html[data-theme="light"] .a1-gear b { background: linear-gradient(135deg, #c9a84c, #8a6a14); -webkit-background-clip: text; background-clip: text; }
+@keyframes a1Spin { to { transform: rotate(360deg); } }
+
+/* Kirish animatsiyasi (bir martalik) */
+.a1-in > * { animation: a1Up .5s var(--a-ease) both; animation-delay: calc(var(--d, 0) * 45ms); }
+@keyframes a1Up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* Tugmalar */
+.a1-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 18px; box-sizing: border-box;
+    border: 0; border-radius: 25px; font: 600 16px/1 inherit; font-family: inherit; letter-spacing: -.2px; text-decoration: none; cursor: pointer;
+    background: var(--a-glass); color: var(--a-tx); box-shadow: var(--a-edge);
+    -webkit-tap-highlight-color: transparent; transition: transform .35s var(--a-spring);
+}
+.a1-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.a1-btn.is-gold { background: var(--a-grad); color: var(--a-ink); box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 8px 20px -10px rgba(212,175,55,.8); }
+.a1-btn:active { transform: scale(.95); }
+.a1-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ══════════════ 📞 ALOQA ══════════════ */
+.ci-hero { display: flex; align-items: center; gap: 15px; }
+.ci-hero-tx { min-width: 0; }
+.ci-hero-tx > b { display: block; font-size: 22px; font-weight: 700; letter-spacing: -.5px; color: var(--a-tx); }
+.ci-hero-tx > span { display: block; margin-top: 2px; font-size: 13.5px; line-height: 1.35; color: var(--a-tx2); }
+.ci-qa { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: 12px; }
+.ci-qa-b {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 70px; padding: 10px 2px 9px;
+    border: 0; border-radius: 20px; background: var(--a-glass); box-shadow: var(--a-edge), var(--a-drop);
+    color: var(--a-gold); text-decoration: none; font: inherit; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; transition: transform .35s var(--a-spring), opacity .2s;
+}
+.ci-qa-b svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ci-qa-b span { font-size: 12px; font-weight: 600; letter-spacing: -.1px; color: var(--a-tx); }
+.ci-qa-b.is-main { background: var(--a-grad); color: var(--a-ink); box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 10px 22px -12px rgba(212,175,55,.9); }
+.ci-qa-b.is-main span { color: var(--a-ink); }
+.ci-qa-b.is-off { opacity: .4; pointer-events: none; }
+.ci-qa-b:active { transform: scale(.9); }
+.ci-num { font-size: 17px; font-weight: 600; letter-spacing: -.2px; font-variant-numeric: tabular-nums; color: var(--a-tx); }
+/* Xarita kartochkasi (Apple Maps uslubidagi stilizatsiya — tashqi API'siz) */
+.ci-map {
+    position: relative; display: block; width: 100%; height: 148px; border: 0; padding: 0; cursor: pointer; overflow: hidden;
+    background:
+        linear-gradient(28deg, transparent 47%, rgba(226,196,110,.32) 47.6%, rgba(226,196,110,.32) 50.6%, transparent 51.2%),
+        linear-gradient(-62deg, transparent 58%, rgba(255,255,255,.1) 58.4%, rgba(255,255,255,.1) 60.4%, transparent 60.8%),
+        linear-gradient(90deg, transparent 30%, rgba(255,255,255,.07) 30.3%, rgba(255,255,255,.07) 31.6%, transparent 31.9%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px),
+        radial-gradient(60% 80% at 78% 20%, rgba(48,209,88,.10), transparent 70%),
+        #16181d;
+    -webkit-tap-highlight-color: transparent;
+}
+html[data-theme="light"] .ci-map {
+    background:
+        linear-gradient(28deg, transparent 47%, rgba(232,190,80,.55) 47.6%, rgba(232,190,80,.55) 50.6%, transparent 51.2%),
+        linear-gradient(-62deg, transparent 58%, #fff 58.4%, #fff 60.4%, transparent 60.8%),
+        linear-gradient(90deg, transparent 30%, #fff 30.3%, #fff 31.6%, transparent 31.9%),
+        repeating-linear-gradient(0deg, rgba(0,0,0,.04) 0 1px, transparent 1px 26px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,.04) 0 1px, transparent 1px 26px),
+        radial-gradient(60% 80% at 78% 20%, rgba(52,199,89,.16), transparent 70%),
+        #efe9dc;
+}
+.ci-pin { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -36px 0 0 -22px; display: grid; place-items: center; }
+.ci-pin::before { content: ''; position: absolute; left: 50%; bottom: -6px; width: 14px; height: 5px; margin-left: -7px; border-radius: 50%; background: rgba(0,0,0,.35); filter: blur(1.5px); }
+.ci-pin::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; border: 2px solid rgba(226,196,110,.8); animation: a1Ping 2.2s ease-out infinite; }
+.ci-pin span {
+    width: 40px; height: 40px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: grid; place-items: center;
+    background: var(--a-grad); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 14px -4px rgba(0,0,0,.6);
+}
+.ci-pin span b { transform: rotate(45deg); font-size: 13px; font-weight: 800; letter-spacing: -.4px; color: var(--a-ink); }
+@keyframes a1Ping { from { transform: scale(.6); opacity: 1; } to { transform: scale(3.2); opacity: 0; } }
+.ci-map-tag { position: absolute; left: 12px; bottom: 10px; padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--a-tx); background: rgba(0,0,0,.45); }
+html[data-theme="light"] .ci-map-tag { background: rgba(255,255,255,.85); }
+.ci-map-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: .5px solid var(--a-sep); }
+.ci-map-acts button { height: 46px; border: 0; background: none; color: var(--a-gold); font: 600 15px/1 inherit; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.ci-map-acts button + button { border-left: .5px solid var(--a-sep); }
+.ci-map-acts button:active { background: var(--a-fill2); }
+.ci-map-acts svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ci-addr .a1-t { font-size: 15.5px; }
+.ci-add { color: var(--a-gold); }
+
+/* ══════════════ 🛡 KAFOLAT VA YETKAZISH ══════════════ */
+.tr-hero-top { display: flex; align-items: center; gap: 14px; }
+.tr-shield {
+    flex: 0 0 56px; width: 56px; height: 56px; border-radius: 17px; display: grid; place-items: center; color: var(--a-ink);
+    background: var(--a-grad); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 10px 22px -10px rgba(212,175,55,.85);
+}
+.tr-shield svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tr-hero-tx b { display: block; font-size: 21px; font-weight: 700; letter-spacing: -.45px; color: var(--a-tx); }
+.tr-hero-tx span { display: block; margin-top: 3px; font-size: 13.5px; line-height: 1.35; color: var(--a-tx2); }
+.tr-stats { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); gap: 8px; margin-top: 16px; }
+.tr-stat { padding: 11px 6px 10px; border-radius: 16px; text-align: center; background: rgba(0,0,0,.22); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.07); }
+html[data-theme="light"] .tr-stat { background: rgba(255,255,255,.75); box-shadow: inset 0 0 0 .5px rgba(156,124,32,.16); }
+.tr-stat b { display: block; font-size: 18px; font-weight: 750; letter-spacing: -.4px; background: var(--a-grad); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
+html[data-theme="light"] .tr-stat b { background: linear-gradient(135deg, #b8901f, #7a5c0e); -webkit-background-clip: text; background-clip: text; }
+.tr-stat span { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 500; color: var(--a-tx2); }
+.tr-free { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 13px 14px; border-radius: 20px; background: var(--a-goldbg); box-shadow: inset 0 0 0 .5px rgba(226,196,110,.3); }
+.tr-free .a1-ic { --ic: #c9a84c; }
+.tr-free p { margin: 0; font-size: 14px; line-height: 1.38; color: var(--a-tx); }
+.tr-free p b { font-weight: 700; color: var(--a-gold); }
+.tr-check { flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--a-green); }
+.tr-check svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.tr-term { align-items: flex-start; }
+.tr-term .a1-t { font-size: 15px; line-height: 1.4; padding-top: 1px; }
+.tr-term + .tr-term::before { left: 50px !important; }
+.tr-steps { padding: 6px 14px; }
+.tr-step { position: relative; display: flex; gap: 12px; padding: 9px 0; }
+.tr-step::after { content: ''; position: absolute; left: 13px; top: 38px; bottom: -8px; width: 2px; border-radius: 1px; background: linear-gradient(var(--a-gold2), transparent); opacity: .45; }
+.tr-step:last-child::after { display: none; }
+.tr-step i {
+    flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    font-style: normal; font-size: 13.5px; font-weight: 750; color: var(--a-ink); background: var(--a-grad);
+}
+.tr-step p { margin: 0; padding-top: 4px; font-size: 15px; line-height: 1.4; color: var(--a-tx); }
+.tr-step p b, .tr-term b { font-weight: 650; color: var(--a-gold); }
+.tr-note { margin-top: 10px; padding: 12px 14px; border-radius: 18px; font-size: 13.5px; line-height: 1.45; color: var(--a-tx2); background: var(--a-fill2); }
+.tr-help { margin-top: 24px; padding: 16px; text-align: center; }
+.tr-help > b { display: block; font-size: 17px; font-weight: 700; letter-spacing: -.3px; color: var(--a-tx); }
+.tr-help > span { display: block; margin: 3px 0 14px; font-size: 13.5px; color: var(--a-tx2); }
+
+/* ══════════════ 🔔 BILDIRISHNOMALAR ══════════════ */
+#p2NotifModal .nf-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -2px 2px 4px; min-height: 32px; }
+#p2NotifModal .nf-sum { font-size: 15px; font-weight: 500; color: var(--a-tx2); letter-spacing: -.2px; }
+html body #p2NotifModal .p2-markall-btn {
+    margin: 0 !important; align-self: auto !important; height: 32px; padding: 0 13px !important; border: 0 !important; border-radius: 16px !important;
+    background: var(--a-goldbg) !important; color: var(--a-gold) !important; font: 600 13.5px/1 inherit !important; font-family: inherit !important;
+    box-shadow: none !important; transition: transform .3s var(--a-spring) !important;
+}
+html body #p2NotifModal .p2-markall-btn:active { transform: scale(.9) !important; }
+#p2NotifModal .nf-day { margin: 18px 6px 9px; font-size: 21px; font-weight: 700; letter-spacing: -.45px; color: var(--a-tx); }
+#p2NotifModal .nf-day:first-child { margin-top: 8px; }
+#p2NotifModal .nf-wrap { position: relative; isolation: isolate; margin-bottom: 9px; border-radius: 22px; animation: a1Up .45s var(--a-ease) both; animation-delay: calc(var(--d, 0) * 35ms); transition: height .3s var(--a-ease), margin .3s var(--a-ease), opacity .25s; }
+#p2NotifModal .nf-wrap.is-stack { margin-bottom: 17px; }
+#p2NotifModal .nf-wrap.is-stack::before, #p2NotifModal .nf-wrap.is-stack::after {
+    content: ''; position: absolute; z-index: -1; left: 10px; right: 10px; bottom: -6px; height: 30px; border-radius: 0 0 18px 18px;
+    background: var(--a-glass); box-shadow: var(--a-edge); opacity: .75;
+}
+#p2NotifModal .nf-wrap.is-stack::after { left: 20px; right: 20px; bottom: -11px; opacity: .45; }
+#p2NotifModal .nf-del {
+    position: absolute; inset: 0; z-index: -1; border-radius: 22px; display: flex; align-items: center; justify-content: flex-end; padding-right: 20px;
+    background: var(--a-red); color: #fff; font-size: 14.5px; font-weight: 600; opacity: 0; transition: opacity .15s;
+}
+#p2NotifModal .nf {
+    position: relative; display: flex; gap: 12px; padding: 13px 14px 13px 13px; border-radius: 22px;
+    background: var(--a-glass); box-shadow: var(--a-edge), var(--a-drop); touch-action: pan-y; will-change: transform;
+    transition: transform .45s var(--a-ease), background .3s;
+}
+html[data-theme="light"] #p2NotifModal .nf { background: rgba(255,255,255,.9); }
+#p2NotifModal .nf.is-new { background: linear-gradient(135deg, rgba(212,175,55,.16), rgba(255,255,255,.06)); box-shadow: var(--a-edge), inset 0 0 0 .5px rgba(226,196,110,.3), var(--a-drop); }
+html[data-theme="light"] #p2NotifModal .nf.is-new { background: linear-gradient(135deg, #fff7e0, #fff); }
+#p2NotifModal .nf.is-new::after { content: ''; position: absolute; top: 18px; right: 14px; width: 8px; height: 8px; border-radius: 50%; background: var(--a-gold); box-shadow: 0 0 8px rgba(226,196,110,.7); }
+#p2NotifModal .nf-ic {
+    flex: 0 0 38px; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; color: #fff;
+    background: var(--ic); background: linear-gradient(180deg, color-mix(in srgb, var(--ic) 75%, #fff), var(--ic));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 10px -4px color-mix(in srgb, var(--ic) 80%, transparent);
+}
+#p2NotifModal .nf-ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#p2NotifModal .nf-main { flex: 1; min-width: 0; }
+#p2NotifModal .nf-top { display: flex; align-items: baseline; gap: 8px; padding-right: 14px; }
+#p2NotifModal .nf.is-new .nf-top { padding-right: 18px; }
+#p2NotifModal .nf-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 650; letter-spacing: -.25px; line-height: 1.3; color: var(--a-tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#p2NotifModal .nf-time { flex: none; font-size: 12.5px; color: var(--a-tx3); font-variant-numeric: tabular-nums; }
+#p2NotifModal .nf-text { margin-top: 2px; font-size: 14px; line-height: 1.36; letter-spacing: -.1px; color: var(--a-tx2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#p2NotifModal .nf-count { display: inline-block; margin-left: 5px; padding: 1px 7px; border-radius: 99px; font-style: normal; font-size: 11.5px; font-weight: 700; vertical-align: 1px; color: var(--a-tx2); background: var(--a-fill); }
+#p2NotifModal .nf-clear { display: block; margin: 18px auto 6px; padding: 9px 16px; border: 0; border-radius: 99px; background: var(--a-fill2); color: var(--a-tx2); font: 600 13.5px/1 inherit; font-family: inherit; cursor: pointer; }
+#p2NotifModal .nf-clear:active { transform: scale(.94); }
+#p2NotifModal .nf-hint { margin: 2px 0 0; text-align: center; font-size: 12px; color: var(--a-tx3); }
+
+/* Bo'sh holat */
+.a1-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 56px 20px 30px; }
+.a1-empty-ic { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; color: var(--a-gold); background: var(--a-glass); box-shadow: var(--a-edge), var(--a-drop); margin-bottom: 16px; }
+.a1-empty-ic svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.a1-empty b { font-size: 19px; font-weight: 700; letter-spacing: -.35px; color: var(--a-tx); }
+.a1-empty p { max-width: 280px; margin: 6px 0 18px; font-size: 14.5px; line-height: 1.42; color: var(--a-tx2); }
+
+/* ══════════════ 🛡 KAFOLAT KUZATUVI ══════════════ */
+.wr-hero { display: flex; align-items: center; gap: 16px; }
+.wr-big { position: relative; flex: 0 0 86px; width: 86px; height: 86px; display: grid; place-items: center; }
+.wr-big svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.wr-big circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+.wr-big .t { stroke: var(--a-fill); }
+.wr-big .v { stroke: url(#wrGoldG); stroke-dasharray: 238.76; stroke-dashoffset: var(--off); animation: wrDial 1.1s var(--a-ease) .1s both; }
+@keyframes wrDial { from { stroke-dashoffset: 238.76; } }
+.wr-big b { position: relative; font-size: 26px; font-weight: 750; letter-spacing: -.8px; line-height: 1; color: var(--a-tx); text-align: center; }
+.wr-big b small { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--a-tx2); }
+.wr-hero-tx { min-width: 0; position: relative; z-index: 1; }
+.wr-hero-tx > b { display: block; font-size: 20px; font-weight: 700; letter-spacing: -.45px; color: var(--a-tx); }
+.wr-hero-tx > span { display: block; margin-top: 3px; font-size: 13.5px; line-height: 1.35; color: var(--a-tx2); }
+.wr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.wr-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--a-tx); background: rgba(0,0,0,.22); }
+html[data-theme="light"] .wr-chip { background: rgba(255,255,255,.8); }
+.wr-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.a1-seg { position: relative; display: flex; padding: 3px; margin: 16px 0 12px; border-radius: 99px; background: var(--a-fill2); box-shadow: inset 0 0 0 .5px var(--a-sep); }
+.a1-seg button {
+    flex: 1; height: 32px; border: 0; border-radius: 99px; background: none; color: var(--a-tx2); cursor: pointer;
+    font: 600 13.5px/1 inherit; font-family: inherit; letter-spacing: -.15px; transition: background .3s var(--a-ease), color .2s, box-shadow .3s;
+}
+.a1-seg button.on { color: var(--a-tx); background: rgba(255,255,255,.14); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 3px 8px rgba(0,0,0,.25); }
+html[data-theme="light"] .a1-seg button.on { background: #fff; box-shadow: 0 3px 8px rgba(0,0,0,.1), 0 0 0 .5px rgba(0,0,0,.04); }
+.a1-seg button em { font-style: normal; margin-left: 4px; opacity: .6; font-variant-numeric: tabular-nums; }
+.wr-it { position: relative; }
+.wr-it + .wr-it::before { content: ''; position: absolute; top: 0; left: 72px; right: 0; height: .5px; background: var(--a-sep); z-index: 1; }
+.wr-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; color: inherit; text-align: left; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.wr-row:active { background: var(--a-fill2); }
+.wr-dial { position: relative; flex: 0 0 46px; width: 46px; height: 46px; display: grid; place-items: center; }
+.wr-dial svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.wr-dial circle { fill: none; stroke-width: 4; stroke-linecap: round; }
+.wr-dial .t { stroke: var(--a-fill); }
+.wr-dial .v { stroke: var(--c); stroke-dasharray: 119.38; stroke-dashoffset: var(--off); animation: wrDialS .9s var(--a-ease) .15s both; }
+@keyframes wrDialS { from { stroke-dashoffset: 119.38; } }
+.wr-dial b { position: relative; font-size: 15px; font-weight: 750; letter-spacing: -.4px; line-height: 1; color: var(--a-tx); text-align: center; }
+.wr-dial b small { display: block; font-size: 9.5px; font-weight: 600; letter-spacing: 0; margin-top: 1px; color: var(--a-tx2); }
+.wr-dial .a1-svg { position: relative; width: 18px; height: 18px; color: var(--a-tx3); stroke-width: 2.6; }
+.wr-tx { flex: 1; min-width: 0; }
+.wr-tx b { display: block; font-size: 15.5px; font-weight: 600; letter-spacing: -.25px; line-height: 1.28; color: var(--a-tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wr-tx small { display: block; margin-top: 2px; font-size: 13px; color: var(--a-tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wr-pill { flex: none; padding: 4px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; letter-spacing: -.1px; color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent); }
+.wr-it.is-expired .wr-tx b { color: var(--a-tx2); }
+.wr-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .4s var(--a-ease); }
+.wr-more > div { overflow: hidden; }
+.wr-it.open .wr-more { grid-template-rows: 1fr; }
+.wr-more-in { padding: 0 14px 14px 72px; }
+.wr-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.wr-dates span { padding: 9px 11px; border-radius: 14px; font-size: 11.5px; font-weight: 500; color: var(--a-tx2); background: var(--a-fill2); }
+.wr-dates span b { display: block; margin-top: 2px; font-size: 14px; font-weight: 650; color: var(--a-tx); }
+.wr-act { width: 100%; height: 42px; border-radius: 21px; font-size: 14.5px; }
+.wr-chev { flex: none; color: var(--a-tx3); transition: transform .35s var(--a-ease); }
+.wr-chev svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.wr-it.open .wr-chev { transform: rotate(90deg); }
+.wr-none { padding: 28px 16px; text-align: center; font-size: 14.5px; color: var(--a-tx2); }
+
+/* ══════════════ ✏️ DO'KON MA'LUMOTLARI (admin) ══════════════ */
+#shopInfoModal .se-lead { margin: -4px 4px 4px; font-size: 14px; line-height: 1.42; color: var(--a-tx2); }
+#shopInfoModal .se-f { position: relative; display: block; padding: 10px 14px 11px; }
+#shopInfoModal .se-f + .se-f::before, #shopInfoModal .se-li + .se-li::before, #shopInfoModal .se-li + .se-add::before, #shopInfoModal .se-f + .se-add::before {
+    content: ''; position: absolute; top: 0; left: 14px; right: 0; height: .5px; background: var(--a-sep);
+}
+#shopInfoModal .se-f > span { display: block; margin-bottom: 4px; font-size: 12.5px; font-weight: 600; color: var(--a-tx2); }
+#shopInfoModal :is(input, textarea) {
+    display: block; width: 100%; box-sizing: border-box; margin: 0; padding: 0; border: 0 !important; outline: 0; border-radius: 0;
+    background: transparent !important; box-shadow: none !important; color: var(--a-tx) !important;
+    font: 400 16px/1.38 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif; letter-spacing: -.2px; -webkit-appearance: none; appearance: none;
+}
+#shopInfoModal textarea { min-height: 92px; resize: vertical; }
+#shopInfoModal :is(input, textarea)::placeholder { color: var(--a-tx3); }
+#shopInfoModal input[type="time"] { min-height: 24px; }
+#shopInfoModal .se-li { position: relative; display: flex; align-items: center; gap: 10px; padding: 9px 12px 9px 14px; }
+#shopInfoModal .se-li .se-cols { flex: 1; min-width: 0; display: grid; gap: 6px; grid-template-columns: var(--cols, 1fr 1.4fr); }
+#shopInfoModal .se-li input { padding: 8px 10px; border-radius: 10px; background: var(--a-fill2) !important; font-size: 15.5px; }
+#shopInfoModal .se-x { flex: 0 0 26px; width: 26px; height: 26px; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--a-red); color: #fff; cursor: pointer; }
+#shopInfoModal .se-x svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
+#shopInfoModal .se-add { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; height: 48px; padding: 0 14px; border: 0; background: none; color: var(--a-gold); font: 600 15.5px/1 inherit; font-family: inherit; cursor: pointer; }
+#shopInfoModal .se-add i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 18px; font-weight: 600; color: #fff; background: var(--a-green); }
+#shopInfoModal .se-add:active { background: var(--a-fill2); }
+#shopInfoModal .se-days { display: flex; gap: 6px; flex-wrap: wrap; }
+#shopInfoModal .se-day { width: 40px; height: 34px; border: 0; border-radius: 12px; background: var(--a-fill2); color: var(--a-tx2); font: 650 13.5px/1 inherit; font-family: inherit; cursor: pointer; transition: transform .3s var(--a-spring), background .2s; }
+#shopInfoModal .se-day.on { background: var(--a-grad); color: var(--a-ink); }
+#shopInfoModal .se-day:active { transform: scale(.88); }
+#shopInfoModal .se-two { display: grid; grid-template-columns: 1fr 1fr; }
+#shopInfoModal .se-two .se-f + .se-f::before { top: 10px; bottom: 10px; left: 0; right: auto; width: .5px; height: auto; }
+#shopInfoModal .se-geo { margin: 10px 0 0; height: 44px; width: 100%; font-size: 15px; }
+#shopInfoModal .se-bar { position: sticky; bottom: calc(-80px + var(--safe-bottom, 0px)); z-index: 3; margin: 26px -16px 0; padding: 12px 16px calc(14px + var(--safe-bottom, 0px)); background: linear-gradient(transparent, rgba(8,8,10,.92) 30%); }
+html[data-theme="light"] #shopInfoModal .se-bar { background: linear-gradient(rgba(246,241,230,0), rgba(246,241,230,.95) 30%); }
+#shopInfoModal .se-bar .a1-btn { width: 100%; }
+#shopInfoModal .se-reset { display: block; margin: 12px auto 0; border: 0; background: none; color: var(--a-red); font: 500 14.5px/1 inherit; font-family: inherit; cursor: pointer; }
+#shopInfoModal .se-busy { opacity: .6; pointer-events: none; }
+
+/* ══════════════ 🚗 MARKALAR (ixcham iOS ro'yxati) ══════════════ */
+html body #brand-cards-wrap .a1b-list {
+    overflow: hidden; border-radius: 22px;
+    background: rgba(255,255,255,.055);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.07), inset 0 0 0 .5px rgba(255,255,255,.07), 0 14px 32px -20px rgba(0,0,0,.85);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased;
+}
+html body #brand-cards-wrap .a1b-row {
+    position: relative; display: flex; align-items: center; gap: 13px; min-height: 64px; padding: 10px 14px; box-sizing: border-box;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .2s ease;
+    animation: a1Up .45s cubic-bezier(.32,.72,0,1) both; animation-delay: calc(var(--i, 0) * 40ms);
+}
+html body #brand-cards-wrap .a1b-row + .a1b-row::before { content: ''; position: absolute; top: 0; left: 71px; right: 0; height: .5px; background: rgba(84,84,88,.36); }
+html body #brand-cards-wrap .a1b-row:active { background: rgba(118,118,128,.18); }
+html body #brand-cards-wrap .a1b-logo {
+    flex: 0 0 44px; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; overflow: hidden;
+    background: #fff; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 4px 10px -5px rgba(0,0,0,.6);
+}
+html body #brand-cards-wrap .a1b-logo img { width: 80%; height: 80%; object-fit: contain; display: block; }
+html body #brand-cards-wrap .a1b-tx { flex: 1; min-width: 0; }
+html body #brand-cards-wrap .a1b-tx b { display: block; font-size: 16.5px; font-weight: 600; letter-spacing: -.25px; line-height: 1.25; color: #f5f5f7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html body #brand-cards-wrap .a1b-tx i { display: block; margin-top: 2px; font-style: normal; font-size: 13px; color: rgba(235,235,245,.58); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html body #brand-cards-wrap .a1b-n { flex: none; padding: 3px 8px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: #e2c46e; background: rgba(201,168,76,.13); font-variant-numeric: tabular-nums; }
+html body #brand-cards-wrap .a1b-chev { flex: none; width: 8px; height: 13px; color: rgba(235,235,245,.3); }
+html body #brand-cards-wrap .a1b-chev svg { display: block; width: 8px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+html[data-theme="light"] body #brand-cards-wrap .a1b-list { background: #fff; box-shadow: inset 0 0 0 .5px rgba(120,90,30,.12), 0 12px 28px -20px rgba(92,68,24,.45); }
+html[data-theme="light"] body #brand-cards-wrap .a1b-row + .a1b-row::before { background: rgba(60,60,67,.13); }
+html[data-theme="light"] body #brand-cards-wrap .a1b-row:active { background: rgba(118,118,128,.1); }
+html[data-theme="light"] body #brand-cards-wrap .a1b-tx b { color: #1c1c1e; }
+html[data-theme="light"] body #brand-cards-wrap .a1b-tx i { color: rgba(60,60,67,.6); }
+html[data-theme="light"] body #brand-cards-wrap .a1b-n { color: #8a6a14; background: rgba(156,124,32,.1); }
+html[data-theme="light"] body #brand-cards-wrap .a1b-chev { color: rgba(60,60,67,.3); }
+html[data-theme="light"] body #brand-cards-wrap .a1b-logo { box-shadow: 0 0 0 .5px rgba(0,0,0,.1); }
+
+/* ——— Harakatni kamaytirish ——— */
+@media (prefers-reduced-motion: reduce) {
+    :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shopInfoModal) *,
+    #brand-cards-wrap .a1b-row { animation: none !important; }
+}
+</style>
+<script id="a1-ios26-info-js">
+/* ══════════════════════════════════════════════════════════════════
+   🏪 ShopInfo — do'kon ma'lumotlari (Aloqa · Manzil · Ish vaqti ·
+   Yetkazish · Kafolat · Pul qaytarish). Admin ilova ichidan tahrirlaydi.
+   Manba: Firebase `settings/shopInfo` (o'qish — hamma, yozish — admin;
+   qoidalar database.rules.json'dagi `settings` tugunidan meros).
+   Kesh: localStorage `avto_shop_info` (internet sekin bo'lsa ham darhol).
+   ══════════════════════════════════════════════════════════════════ */
+(function () {
+    if (window.ShopInfo) return;
+    var KEY = 'avto_shop_info', PATH = 'settings/shopInfo';
+    var DAYS = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+    var DSHORT = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
+    var DEF = {
+        phones: [{ l: 'Asosiy raqam', n: '+998 88 289 30 30' }, { l: "Qo'shimcha raqam", n: '+998 90 603 32 10' }],
+        tgUser: 'anvaraxtamov2004', ig: '',
+        addr: '', mark: '', lat: '', lng: '',
+        days: [1, 2, 3, 4, 5, 6], open: '', close: '',
+        deliv: [
+            { t: 'Shahar ichida', s: 'Taksi orqali', v: '1–2 kun' },
+            { t: 'Viloyatlarga', s: 'BTS pochta orqali', v: '2–4 kun' }
+        ],
+        stats: [{ v: '14 kun', l: 'Qaytarish' }, { v: '100%', l: 'Original' }, { v: '3–5 kun', l: 'Pul qaytishi' }],
+        warr: [
+            'Barcha tovarlar **kafolatlangan**',
+            "Tovarning o'zi nosoz bo'lsa — **14 kun** ichida qaytarib olinadi",
+            'Zavod nuqsoni — **bepul almashtiriladi**',
+            'Tovar haqiqiyligi — **100% kafolat**',
+            'Original tovarlarga zavod kafolati amal qiladi'
+        ],
+        refund: [
+            'Tovar olganingizdan **14 kun** ichida murojaat qiling',
+            "Tovar **ishlatilmagan** va asl o'ramida bo'lishi shart",
+            'Pul **3–5 ish kuni** ichida kartangizga qaytariladi'
+        ],
+        note: ''
+    };
+
+    /* ——— yordamchilar ——— */
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+    function md(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); }
+    function str(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max || 160); }
+    function arr(v) {
+        if (Array.isArray(v)) return v.filter(function (x) { return x != null; });
+        if (v && typeof v === 'object') return Object.keys(v).sort(function (a, b) { return a - b; }).map(function (k) { return v[k]; }).filter(function (x) { return x != null; });
+        return [];
+    }
+    function cleanTg(v) { return String(v || '').trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?t(elegram)?\.me\//i, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 40); }
+    function cleanIg(v) { return String(v || '').trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/\/.*$/, '').replace(/[^A-Za-z0-9_.]/g, '').slice(0, 40); }
+    function cleanTime(v) { v = String(v || '').trim(); return /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : ''; }
+    function cleanCoord(v, lim) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return (isFinite(n) && Math.abs(n) <= lim) ? String(Math.round(n * 1e6) / 1e6) : ''; }
+    function telHref(n) { return 'tel:' + String(n || '').replace(/[^\d+]/g, ''); }
+    function fmtSum(n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+    function isAdm() { try { return !!(window.isAdmin && window.isAdmin()); } catch (e) { return false; } }
+    function toast(m, t) { try { showToast(esc(m), t); } catch (e) {} }
+    function hap(k) { try { if (typeof window._hap === 'function') window._hap(k); } catch (e) {} }
+    function webApp() { try { if (typeof tg !== 'undefined' && tg) return tg; } catch (e) {} return (window.Telegram && window.Telegram.WebApp) || null; }
+    function getDb() { try { if (typeof db !== 'undefined' && db) return db; } catch (e) {} try { return firebase.database(); } catch (e) { return null; } }
+
+    function normalize(raw) {
+        raw = raw && typeof raw === 'object' ? raw : {};
+        // Muharrirda saqlangan bo'lsa (updatedAt bor) — bo'sh ro'yxat «bo'sh» degani
+        // (Firebase bo'sh massivni saqlamaydi); aks holda standart qiymat olinadi.
+        var saved = !!raw.updatedAt;
+        var o = {};
+        o.phones = arr(raw.phones).map(function (p) { return { l: str(p && p.l, 40), n: str(p && p.n, 32) }; }).filter(function (p) { return p.n.replace(/\D/g, '').length >= 5; }).slice(0, 6);
+        if (!raw.phones && !saved) o.phones = DEF.phones.slice();
+        o.tgUser = raw.tgUser != null ? cleanTg(raw.tgUser) : DEF.tgUser;
+        o.ig = cleanIg(raw.ig);
+        o.addr = str(raw.addr, 220); o.mark = str(raw.mark, 160);
+        o.lat = cleanCoord(raw.lat, 90); o.lng = cleanCoord(raw.lng, 180);
+        o.days = (raw.days || saved) ? arr(raw.days).map(Number).filter(function (d) { return d >= 1 && d <= 7; }) : DEF.days.slice();
+        o.open = cleanTime(raw.open); o.close = cleanTime(raw.close);
+        o.deliv = (raw.deliv || saved) ? arr(raw.deliv).map(function (d) { return { t: str(d && d.t, 40), s: str(d && d.s, 60), v: str(d && d.v, 24) }; }).filter(function (d) { return d.t; }).slice(0, 6) : DEF.deliv.slice();
+        o.stats = (raw.stats || saved) ? arr(raw.stats).map(function (d) { return { v: str(d && d.v, 12), l: str(d && d.l, 20) }; }).filter(function (d) { return d.v; }).slice(0, 4) : DEF.stats.slice();
+        o.warr = (raw.warr || saved) ? arr(raw.warr).map(function (s) { return str(s, 200); }).filter(Boolean).slice(0, 12) : DEF.warr.slice();
+        o.refund = (raw.refund || saved) ? arr(raw.refund).map(function (s) { return str(s, 200); }).filter(Boolean).slice(0, 8) : DEF.refund.slice();
+        o.note = str(raw.note, 400);
+        o.updatedAt = Number(raw.updatedAt) || 0;
+        return o;
+    }
+
+    var S = (function () { try { return normalize(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch (e) { return normalize(null); } })();
+
+    /* ——— ish vaqti (Toshkent vaqti bo'yicha) ——— */
+    function nowTk() {
+        try {
+            var parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tashkent', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+            var o = {}; parts.forEach(function (p) { o[p.type] = p.value; });
+            var wd = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[o.weekday];
+            if (wd) return { d: wd, m: (parseInt(o.hour, 10) % 24) * 60 + parseInt(o.minute, 10) };
+        } catch (e) {}
+        var n = new Date(); return { d: (n.getDay() + 6) % 7 + 1, m: n.getHours() * 60 + n.getMinutes() };
+    }
+    function mins(t) { var p = t.split(':'); return +p[0] * 60 + +p[1]; }
+    function daysText(days) {
+        var d = days.slice().sort();
+        if (!d.length) return '';
+        if (d.length === 7) return 'Har kuni';
+        var run = d.every(function (x, i) { return i === 0 || x === d[i - 1] + 1; });
+        if (run && d.length >= 3) return DAYS[d[0] - 1] + ' – ' + DAYS[d[d.length - 1] - 1];
+        return d.map(function (x) { return DSHORT[x - 1]; }).join(', ');
+    }
+    function offText(days) {
+        var off = [1, 2, 3, 4, 5, 6, 7].filter(function (x) { return days.indexOf(x) < 0; });
+        return off.length ? 'Dam olish: ' + off.map(function (x) { return DAYS[x - 1]; }).join(', ') : '';
+    }
+    function status() {
+        if (!S.open || !S.close || !S.days.length) return null;
+        var n = nowTk(), o = mins(S.open), c = mins(S.close);
+        var workToday = S.days.indexOf(n.d) > -1;
+        if (workToday && n.m >= o && n.m < c) return { on: true, t: 'Hozir ochiq · ' + S.close + ' gacha' };
+        if (workToday && n.m < o) return { on: false, t: 'Yopiq · bugun ' + S.open + ' da ochiladi' };
+        for (var i = 1; i <= 7; i++) {
+            var d = (n.d - 1 + i) % 7 + 1;
+            if (S.days.indexOf(d) > -1) return { on: false, t: 'Yopiq · ' + (i === 1 ? 'ertaga' : DAYS[d - 1]) + ' ' + S.open + ' da' };
+        }
+        return null;
+    }
+
+    /* ——— ikonkalar ——— */
+    var I = {
+        phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+        send: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/>',
+        pin: '<path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+        share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/>',
+        copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+        clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+        ig: '<rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r=".6" fill="currentColor"/>',
+        car: '<path d="M5 17h14M5 17a2 2 0 1 1-4 0v-5l2.5-6A2 2 0 0 1 5.4 5h13.2a2 2 0 0 1 1.9 1l2.5 6v5a2 2 0 1 1-4 0"/><path d="M3 12h18"/><circle cx="7" cy="14.5" r=".8" fill="currentColor"/><circle cx="17" cy="14.5" r=".8" fill="currentColor"/>',
+        box: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+        truck: '<path d="M1 4h14v12H1z"/><path d="M15 9h4l3 3v4h-7V9z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/>',
+        gift: '<path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7z"/>',
+        shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+        check: '<path d="M20 6 9 17l-5-5"/>',
+        edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        chev: '<path d="M1.5 1.5 6.5 6.5 1.5 11.5"/>',
+        loc: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/>'
+    };
+    function svg(k, cls) { return '<svg class="' + (cls || 'a1-svg') + '" viewBox="0 0 24 24" aria-hidden="true">' + (I[k] || '') + '</svg>'; }
+    function chev() { return '<span class="a1-chev"><svg viewBox="0 0 8 13" aria-hidden="true">' + I.chev + '</svg></span>'; }
+
+    var GEAR = (function () {
+        var N = 12, R = 47, r = 40.5, H = 33.5, step = 360 / N, rh = step * 0.27, th = step * 0.17, d = '';
+        function pt(a, rad) { a = (a - 90) * Math.PI / 180; return (50 + rad * Math.cos(a)).toFixed(2) + ' ' + (50 + rad * Math.sin(a)).toFixed(2); }
+        for (var i = 0; i < N; i++) {
+            var c = i * step;
+            if (!i) d += 'M' + pt(c - rh, r);
+            d += 'L' + pt(c - th, R) + 'A' + R + ' ' + R + ' 0 0 1 ' + pt(c + th, R) + 'L' + pt(c + rh, r) + 'A' + r + ' ' + r + ' 0 0 1 ' + pt(c + step - rh, r);
+        }
+        d += 'ZM50 ' + (50 - H) + 'A' + H + ' ' + H + ' 0 1 0 50 ' + (50 + H) + 'A' + H + ' ' + H + ' 0 1 0 50 ' + (50 - H) + 'Z';
+        return '<div class="a1-gear"><svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="a1GearG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F0D060"/><stop offset=".5" stop-color="#C9A84C"/><stop offset="1" stop-color="#96720A"/></linearGradient></defs>' +
+            '<path fill="url(#a1GearG)" stroke="url(#a1GearG)" stroke-width="1.6" stroke-linejoin="round" fill-rule="evenodd" d="' + d + '"/></svg><b>A1</b></div>';
+    })();
+
+    /* ——— amallar ——— */
+    function openExt(url) {
+        var w = webApp();
+        try { if (w && w.openLink) { w.openLink(url); return; } } catch (e) {}
+        window.open(url, '_blank', 'noopener');
+    }
+    function copy(text) {
+        var done = function () { hap('success'); toast("Nusxa olindi"); };
+        try { if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, fallback); return; } } catch (e) {}
+        fallback();
+        function fallback() {
+            try { var t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;opacity:0;top:0'; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); done(); } catch (e) { toast("Nusxa olinmadi", 'warning'); }
+        }
+    }
+    function mapUrl(kind) {
+        var has = S.lat && S.lng, q = encodeURIComponent(S.addr || 'Avto A1');
+        if (kind === 'g') return has ? 'https://www.google.com/maps/search/?api=1&query=' + S.lat + ',' + S.lng : 'https://www.google.com/maps/search/?api=1&query=' + q;
+        return has ? 'https://yandex.uz/maps/?pt=' + S.lng + ',' + S.lat + '&z=17&l=map' : 'https://yandex.uz/maps/?text=' + q;
+    }
+    function shareText() {
+        var t = 'Avto A1 — original avto ehtiyot qismlar';
+        if (S.phones[0]) t += '\n📞 ' + S.phones[0].n;
+        if (S.addr) t += '\n📍 ' + S.addr + (S.mark ? ' (' + S.mark + ')' : '');
+        if (S.open && S.close && S.days.length) t += '\n🕘 ' + daysText(S.days) + ', ' + S.open + '–' + S.close;
+        if (S.tgUser) t += '\n✈️ https://t.me/' + S.tgUser;
+        return t;
+    }
+
+    var API = window.ShopInfo = {
+        get: function () { return S; },
+        mainPhone: function () { return (S.phones[0] && S.phones[0].n) || '+998 88 289 30 30'; },
+        tgUrl: function () { return 'https://t.me/' + (S.tgUser || 'anvaraxtamov2004'); },
+        openTg: function (text) {
+            if (!S.tgUser) { toast("Telegram manzili kiritilmagan", 'warning'); return; }
+            var url = 'https://t.me/' + S.tgUser + (text ? '?text=' + encodeURIComponent(text) : '');
+            var w = webApp(); hap('light');
+            try { if (w && w.openTelegramLink) { w.openTelegramLink(url); return; } } catch (e) {}
+            window.open(url, '_blank', 'noopener');
+        },
+        openIg: function () { if (S.ig) openExt('https://instagram.com/' + S.ig); },
+        openMap: function (kind) {
+            if (!S.addr && !(S.lat && S.lng)) { toast("Manzil hali kiritilmagan", 'warning'); return; }
+            hap('light'); openExt(mapUrl(kind));
+        },
+        copy: function (what) {
+            if (what === 'addr') return copy(S.addr + (S.mark ? ' (' + S.mark + ')' : ''));
+            var i = parseInt(what, 10); if (S.phones[i]) copy(S.phones[i].n);
+        },
+        share: function () {
+            var t = shareText();
+            try { if (navigator.share) { navigator.share({ title: 'Avto A1', text: t }).catch(function () {}); return; } } catch (e) {}
+            copy(t);
+        },
+        render: function (id) {
+            if (!id || id === 'contactModal') renderContact();
+            if (!id || id === 'trustModal') renderTrust();
+        },
+        openEditor: openEditor
+    };
+
+    /* ══════════════ 📞 ALOQA ══════════════ */
+    function renderContact() {
+        var m = document.getElementById('contactModal'), b = document.getElementById('ci-body');
+        if (!m || !b) return;
+        var adm = isAdm(); m.classList.toggle('is-adm', adm);
+        var st = status(), p0 = S.phones[0], hasMap = !!(S.addr || (S.lat && S.lng)), k = 0;
+        var h = '<div class="a1-in">';
+        h += '<div class="a1-hero" style="--d:' + (k++) + '"><div class="ci-hero">' + GEAR + '<div class="ci-hero-tx"><b>Avto A1</b><span>Original avto ehtiyot qismlar do\'koni</span>' +
+            (st ? '<em class="a1-st ' + (st.on ? 'on' : 'off') + '"><i></i>' + esc(st.t) + '</em>' : '') + '</div></div></div>';
+        h += '<div class="ci-qa" style="--d:' + (k++) + '">' +
+            (p0 ? '<a class="ci-qa-b is-main" href="' + esc(telHref(p0.n)) + '">' + svg('phone') + '<span>Qo\'ng\'iroq</span></a>' : '<span class="ci-qa-b is-main is-off">' + svg('phone') + '<span>Qo\'ng\'iroq</span></span>') +
+            '<button type="button" class="ci-qa-b' + (S.tgUser ? '' : ' is-off') + '" onclick="ShopInfo.openTg()">' + svg('send') + '<span>Telegram</span></button>' +
+            '<button type="button" class="ci-qa-b' + (hasMap ? '' : ' is-off') + '" onclick="ShopInfo.openMap(\'y\')">' + svg('pin') + '<span>Xarita</span></button>' +
+            '<button type="button" class="ci-qa-b" onclick="ShopInfo.share()">' + svg('share') + '<span>Ulashish</span></button></div>';
+        if (S.phones.length) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Telefon</div><div class="a1-grp">' + S.phones.map(function (p, i) {
+                return '<a class="a1-row" href="' + esc(telHref(p.n)) + '"><span class="a1-ic" style="--ic:#30d158">' + svg('phone') + '</span>' +
+                    '<span class="a1-t"><small style="margin:0 0 1px">' + esc(p.l || 'Telefon') + '</small><span class="ci-num">' + esc(p.n) + '</span></span>' +
+                    '<button type="button" class="a1-mini" aria-label="Nusxa olish" onclick="event.preventDefault();event.stopPropagation();ShopInfo.copy(' + i + ')">' + svg('copy') + '</button></a>';
+            }).join('') + '</div></div>';
+        }
+        if (hasMap) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Do\'kon manzili</div><div class="a1-grp">' +
+                '<button type="button" class="ci-map" aria-label="Xaritada ochish" onclick="ShopInfo.openMap(\'y\')"><span class="ci-pin"><span><b>A1</b></span></span><span class="ci-map-tag">Avto A1</span></button>' +
+                '<div class="a1-row static ci-addr"><span class="a1-ic" style="--ic:#ff453a">' + svg('pin') + '</span><span class="a1-t">' + esc(S.addr || 'Xaritadagi joylashuv') +
+                (S.mark ? '<small>Mo\'ljal: ' + esc(S.mark) + '</small>' : '') + '</span>' +
+                (S.addr ? '<button type="button" class="a1-mini" aria-label="Manzilni nusxalash" onclick="ShopInfo.copy(\'addr\')">' + svg('copy') + '</button>' : '') + '</div>' +
+                '<div class="ci-map-acts"><button type="button" onclick="ShopInfo.openMap(\'y\')">' + svg('pin') + 'Yandex Xarita</button><button type="button" onclick="ShopInfo.openMap(\'g\')">' + svg('pin') + 'Google Maps</button></div>' +
+                '</div></div>';
+        } else if (adm) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Do\'kon manzili</div><div class="a1-grp"><button type="button" class="a1-row ci-add" onclick="ShopInfo.openEditor()"><span class="a1-ic" style="--ic:#ff453a">' + svg('pin') + '</span><span class="a1-t" style="color:inherit">Do\'kon manzilini qo\'shing<small>Mijozlar xaritada topa olishi uchun</small></span>' + chev() + '</button></div></div>';
+        }
+        if (S.open && S.close && S.days.length) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Ish vaqti</div><div class="a1-grp"><div class="a1-row static"><span class="a1-ic" style="--ic:#0a84ff">' + svg('clock') + '</span>' +
+                '<span class="a1-t">' + esc(daysText(S.days)) + (offText(S.days) ? '<small>' + esc(offText(S.days)) + '</small>' : '') + '</span><span class="a1-v">' + esc(S.open + ' – ' + S.close) + '</span></div></div></div>';
+        } else if (adm) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Ish vaqti</div><div class="a1-grp"><button type="button" class="a1-row ci-add" onclick="ShopInfo.openEditor()"><span class="a1-ic" style="--ic:#0a84ff">' + svg('clock') + '</span><span class="a1-t" style="color:inherit">Ish vaqtini kiriting<small>«Hozir ochiq» belgisi avtomatik chiqadi</small></span>' + chev() + '</button></div></div>';
+        }
+        if (S.tgUser || S.ig) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Ijtimoiy tarmoqlar</div><div class="a1-grp">' +
+                (S.tgUser ? '<button type="button" class="a1-row" onclick="ShopInfo.openTg()"><span class="a1-ic" style="--ic:#2aabee">' + svg('send') + '</span><span class="a1-t">Telegram<small>@' + esc(S.tgUser) + '</small></span>' + chev() + '</button>' : '') +
+                (S.ig ? '<button type="button" class="a1-row" onclick="ShopInfo.openIg()"><span class="a1-ic" style="--ic:#e1306c">' + svg('ig') + '</span><span class="a1-t">Instagram<small>@' + esc(S.ig) + '</small></span>' + chev() + '</button>' : '') +
+                '</div></div>';
+        }
+        h += '</div>';
+        b.innerHTML = h;
+    }
+
+    /* ══════════════ 🛡 KAFOLAT VA YETKAZISH ══════════════ */
+    function renderTrust() {
+        var m = document.getElementById('trustModal'), b = document.getElementById('tr-body');
+        if (!m || !b) return;
+        m.classList.toggle('is-adm', isAdm());
+        var free = 3000000;
+        try { if (window.VIP && typeof VIP.freeDeliveryTarget === 'function') free = VIP.freeDeliveryTarget() || free; } catch (e) {}
+        var DIC = [['car', '#0a84ff'], ['box', '#ff9f0a'], ['truck', '#5e5ce6'], ['truck', '#40c8e0'], ['box', '#bf5af2'], ['car', '#30d158']];
+        var k = 0, h = '<div class="a1-in">';
+        h += '<div class="a1-hero" style="--d:' + (k++) + '"><div class="tr-hero-top"><span class="tr-shield">' + svg('shield') + '</span><div class="tr-hero-tx"><b>Avto A1 kafolati</b><span>Har bir xaridingiz himoyalangan — xotirjam buyurtma bering</span></div></div>' +
+            (S.stats.length ? '<div class="tr-stats" style="--n:' + S.stats.length + '">' + S.stats.map(function (s) { return '<div class="tr-stat"><b>' + esc(s.v) + '</b><span>' + esc(s.l) + '</span></div>'; }).join('') + '</div>' : '') + '</div>';
+        if (S.deliv.length) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Yetkazib berish</div><div class="a1-grp">' + S.deliv.map(function (d, i) {
+                var ic = DIC[i % DIC.length];
+                return '<div class="a1-row static"><span class="a1-ic" style="--ic:' + ic[1] + '">' + svg(ic[0]) + '</span><span class="a1-t">' + esc(d.t) + (d.s ? '<small>' + esc(d.s) + '</small>' : '') + '</span>' +
+                    (d.v ? '<span class="a1-v is-pill">' + esc(d.v) + '</span>' : '') + '</div>';
+            }).join('') + '</div>' +
+                '<div class="tr-free"><span class="a1-ic">' + svg('gift') + '</span><p><b>' + fmtSum(free) + ' so\'m</b>dan ortiq buyurtmalarga yetkazib berish <b>tekin</b></p></div></div>';
+        }
+        if (S.warr.length) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Kafolat shartlari</div><div class="a1-grp">' + S.warr.map(function (t) {
+                return '<div class="a1-row static tr-term"><span class="tr-check">' + svg('check', '') + '</span><span class="a1-t">' + md(t) + '</span></div>';
+            }).join('') + '</div></div>';
+        }
+        if (S.refund.length) {
+            h += '<div style="--d:' + (k++) + '"><div class="a1-sec">Pul qaytarish</div><div class="a1-grp tr-steps">' + S.refund.map(function (t, i) {
+                return '<div class="tr-step"><i>' + (i + 1) + '</i><p>' + md(t) + '</p></div>';
+            }).join('') + '</div></div>';
+        }
+        if (S.note) h += '<div class="tr-note" style="--d:' + (k++) + '">' + md(S.note) + '</div>';
+        if (window.Phase2 && Phase2.openWarranty) {
+            h += '<div style="--d:' + (k++) + ';margin-top:24px"><div class="a1-grp"><button type="button" class="a1-row" onclick="Phase2.openWarranty()"><span class="a1-ic" style="--ic:#c9a84c">' + svg('shield') + '</span><span class="a1-t">Mening kafolatlarim<small>Har bir tovar muddatini kuzating</small></span>' + chev() + '</button></div></div>';
+        }
+        var p0 = S.phones[0];
+        h += '<div class="a1-hero tr-help" style="--d:' + (k++) + '"><b>Savollaringiz bormi?</b><span>Mutaxassisimiz tez javob beradi</span><div class="a1-btns">' +
+            (p0 ? '<a class="a1-btn is-gold" href="' + esc(telHref(p0.n)) + '">' + svg('phone', '') + 'Qo\'ng\'iroq</a>' : '') +
+            (S.tgUser ? '<button type="button" class="a1-btn" onclick="ShopInfo.openTg()">' + svg('send', '') + 'Telegram</button>' : '') + '</div></div>';
+        h += '</div>';
+        b.innerHTML = h;
+    }
+
+    /* ——— checkout'dagi qisqa yozuv ——— */
+    function syncCheckoutRow() {
+        var el = document.getElementById('co-trust-sub');
+        if (el && S.deliv[0] && S.deliv[0].v) el.textContent = 'Yetkazish ' + S.deliv[0].v + ' · original tovar';
+    }
+
+    function apply(raw) {
+        S = normalize(raw);
+        try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+        API.render(); syncCheckoutRow();
+    }
+
+    /* ══════════════ ✏️ ADMIN MUHARRIRI ══════════════ */
+    function liPhone(p) {
+        return '<div class="se-li" data-k="ph"><div class="se-cols"><input data-f="l" maxlength="40" placeholder="Nomi" value="' + esc(p.l) + '"><input data-f="n" type="tel" inputmode="tel" maxlength="32" placeholder="+998 __ ___ __ __" value="' + esc(p.n) + '"></div>' + xBtn() + '</div>';
+    }
+    function liDeliv(d) {
+        return '<div class="se-li" data-k="dv"><div class="se-cols" style="--cols:1fr 1fr .75fr"><input data-f="t" maxlength="40" placeholder="Qayerga" value="' + esc(d.t) + '"><input data-f="s" maxlength="60" placeholder="Qanday" value="' + esc(d.s) + '"><input data-f="v" maxlength="24" placeholder="Muddat" value="' + esc(d.v) + '"></div>' + xBtn() + '</div>';
+    }
+    function liStat(d) {
+        return '<div class="se-li" data-k="st"><div class="se-cols" style="--cols:.8fr 1.2fr"><input data-f="v" maxlength="12" placeholder="14 kun" value="' + esc(d.v) + '"><input data-f="l" maxlength="20" placeholder="Izoh" value="' + esc(d.l) + '"></div>' + xBtn() + '</div>';
+    }
+    function xBtn() { return '<button type="button" class="se-x" aria-label="O\'chirish" onclick="ShopInfo._rm(this)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>'; }
+    function addBtn(kind, label) { return '<button type="button" class="se-add" onclick="ShopInfo._add(this,\'' + kind + '\')"><i>+</i>' + label + '</button>'; }
+    function field(label, name, val, opt) {
+        opt = opt || {};
+        var inner = opt.area
+            ? '<textarea name="' + name + '" maxlength="' + (opt.max || 400) + '" placeholder="' + esc(opt.ph || '') + '"' + (opt.rows ? ' style="min-height:' + opt.rows * 23 + 'px"' : '') + '>' + esc(val) + '</textarea>'
+            : '<input name="' + name + '" type="' + (opt.type || 'text') + '"' + (opt.mode ? ' inputmode="' + opt.mode + '"' : '') + ' maxlength="' + (opt.max || 160) + '" placeholder="' + esc(opt.ph || '') + '" value="' + esc(val) + '">';
+        return '<label class="se-f"><span>' + label + '</span>' + inner + '</label>';
+    }
+    function formHTML(D) {
+        var h = '<p class="se-lead">Bu ma\'lumotlar «Aloqa» va «Kafolat va yetkazish» sahifalarida hamma mijozlarga ko\'rinadi.</p>';
+        h += '<div class="a1-sec">Telefon raqamlar</div><div class="a1-grp" data-list="ph">' + D.phones.map(liPhone).join('') + addBtn('ph', 'Raqam qo\'shish') + '</div>';
+        h += '<div class="a1-sec">Ijtimoiy tarmoqlar</div><div class="a1-grp">' + field('Telegram (username)', 'tgUser', D.tgUser ? '@' + D.tgUser : '', { ph: '@username' }) + field('Instagram (ixtiyoriy)', 'ig', D.ig ? '@' + D.ig : '', { ph: '@avto_a1' }) + '</div>';
+        h += '<div class="a1-sec">Do\'kon manzili</div><div class="a1-grp">' + field('Manzil', 'addr', D.addr, { area: 1, rows: 2, max: 220, ph: 'Shahar, tuman, ko\'cha, uy' }) + field('Mo\'ljal', 'mark', D.mark, { ph: 'Masalan: avtobozor yonida' }) +
+            '<div class="se-two">' + field('Kenglik (lat)', 'lat', D.lat, { mode: 'decimal', max: 14, ph: '41.311081' }) + field('Uzunlik (lng)', 'lng', D.lng, { mode: 'decimal', max: 14, ph: '69.240562' }) + '</div></div>' +
+            '<button type="button" class="a1-btn se-geo" onclick="ShopInfo._geo(this)">' + svg('loc', '') + 'Joriy joylashuvimni olish</button>' +
+            '<p class="a1-foot">Do\'konda turib bosing — mijozlar xaritada aniq nuqtani ko\'radi. Koordinata bo\'lmasa, manzil matni bo\'yicha qidiriladi.</p>';
+        h += '<div class="a1-sec">Ish vaqti</div><div class="a1-grp"><div class="se-f"><span>Ish kunlari</span><div class="se-days">' + DSHORT.map(function (s, i) {
+            return '<button type="button" class="se-day' + (D.days.indexOf(i + 1) > -1 ? ' on' : '') + '" data-d="' + (i + 1) + '" aria-pressed="' + (D.days.indexOf(i + 1) > -1) + '" onclick="this.classList.toggle(\'on\');this.setAttribute(\'aria-pressed\',this.classList.contains(\'on\'))">' + s + '</button>';
+        }).join('') + '</div></div><div class="se-two">' + field('Ochilish', 'open', D.open, { type: 'time', max: 5 }) + field('Yopilish', 'close', D.close, { type: 'time', max: 5 }) + '</div></div>' +
+            '<p class="a1-foot">Vaqt kiritilsa, «Hozir ochiq / Yopiq» belgisi Toshkent vaqti bo\'yicha avtomatik ko\'rsatiladi.</p>';
+        h += '<div class="a1-sec">Yetkazib berish</div><div class="a1-grp" data-list="dv">' + D.deliv.map(liDeliv).join('') + addBtn('dv', 'Yo\'nalish qo\'shish') + '</div>';
+        h += '<div class="a1-sec">Afzalliklar (yuqoridagi raqamlar)</div><div class="a1-grp" data-list="st">' + D.stats.map(liStat).join('') + addBtn('st', 'Qo\'shish') + '</div>';
+        h += '<div class="a1-sec">Kafolat shartlari</div><div class="a1-grp">' + field('Har bir qator — alohida band', 'warr', D.warr.join('\n'), { area: 1, rows: 6, max: 2400 }) + '</div>';
+        h += '<div class="a1-sec">Pul qaytarish bosqichlari</div><div class="a1-grp">' + field('Har bir qator — alohida bosqich', 'refund', D.refund.join('\n'), { area: 1, rows: 4, max: 1600 }) + '</div>' +
+            '<p class="a1-foot">Maslahat: so\'zni **ikki yulduzcha** ichiga olsangiz, u tilla rangda qalin ko\'rinadi.</p>';
+        h += '<div class="a1-sec">Qo\'shimcha izoh (ixtiyoriy)</div><div class="a1-grp">' + field('Kafolat sahifasi oxirida chiqadi', 'note', D.note, { area: 1, rows: 3, max: 400 }) + '</div>';
+        h += '<div class="se-bar"><button type="button" class="a1-btn is-gold" id="se-save" onclick="ShopInfo._save()">' + svg('check', '') + 'Saqlash</button>' +
+            '<button type="button" class="se-reset" onclick="ShopInfo._reset()">Standart matnlarga qaytarish</button></div>';
+        return h;
+    }
+    function openEditor() {
+        if (!isAdm()) { toast('Faqat admin uchun', 'warning'); return; }
+        var m = document.getElementById('shopInfoModal');
+        if (!m) {
+            m = document.createElement('div');
+            m.className = 'modal-standard'; m.id = 'shopInfoModal';
+            m.innerHTML = '<div class="modal-header"><h2>Do\'kon ma\'lumotlari</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">\u00D7</button></div><div id="se-body"></div>';
+            document.body.appendChild(m);
+        }
+        document.getElementById('se-body').innerHTML = formHTML(S);
+        if (typeof openModal === 'function') openModal('shopInfoModal');
+        try { m.scrollTop = 0; } catch (e) {}
+    }
+    function collect() {
+        var b = document.getElementById('se-body'); if (!b) return null;
+        function v(n) { var el = b.querySelector('[name="' + n + '"]'); return el ? el.value : ''; }
+        function list(k, fields) {
+            return Array.prototype.map.call(b.querySelectorAll('.se-li[data-k="' + k + '"]'), function (li) {
+                var o = {}; fields.forEach(function (f) { var el = li.querySelector('[data-f="' + f + '"]'); o[f] = el ? el.value : ''; }); return o;
+            });
+        }
+        function lines(n) { return v(n).split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
+        return {
+            phones: list('ph', ['l', 'n']), tgUser: v('tgUser'), ig: v('ig'),
+            addr: v('addr'), mark: v('mark'), lat: v('lat'), lng: v('lng'),
+            days: Array.prototype.map.call(b.querySelectorAll('.se-day.on'), function (x) { return +x.getAttribute('data-d'); }),
+            open: v('open'), close: v('close'),
+            deliv: list('dv', ['t', 's', 'v']), stats: list('st', ['v', 'l']),
+            warr: lines('warr'), refund: lines('refund'), note: v('note')
+        };
+    }
+    API._rm = function (btn) { var li = btn.closest('.se-li'); if (li) li.remove(); hap('light'); };
+    API._add = function (btn, kind) {
+        var grp = btn.parentNode, n = grp.querySelectorAll('.se-li').length;
+        var lim = { ph: 6, dv: 6, st: 4 }[kind];
+        if (n >= lim) { toast('Ko\'pi bilan ' + lim + ' ta', 'warning'); return; }
+        var html = kind === 'ph' ? liPhone({ l: '', n: '' }) : kind === 'dv' ? liDeliv({ t: '', s: '', v: '' }) : liStat({ v: '', l: '' });
+        btn.insertAdjacentHTML('beforebegin', html);
+        var inp = btn.previousElementSibling && btn.previousElementSibling.querySelector('input'); if (inp) inp.focus();
+        hap('light');
+    };
+    API._geo = function (btn) {
+        if (!navigator.geolocation) { toast('Qurilma joylashuvni bermaydi', 'warning'); return; }
+        btn.classList.add('se-busy');
+        navigator.geolocation.getCurrentPosition(function (pos) {
+            btn.classList.remove('se-busy');
+            var b = document.getElementById('se-body');
+            b.querySelector('[name="lat"]').value = pos.coords.latitude.toFixed(6);
+            b.querySelector('[name="lng"]').value = pos.coords.longitude.toFixed(6);
+            hap('success'); toast('Joylashuv olindi');
+        }, function () { btn.classList.remove('se-busy'); toast('Joylashuvga ruxsat berilmadi', 'warning'); }, { enableHighAccuracy: true, timeout: 12000 });
+    };
+    API._reset = function () {
+        var b = document.getElementById('se-body'); if (!b) return;
+        var keep = collect(), D = normalize(null);
+        D.phones = normalize({ phones: keep.phones }).phones; D.tgUser = cleanTg(keep.tgUser); D.ig = cleanIg(keep.ig);
+        D.addr = str(keep.addr, 220); D.mark = str(keep.mark, 160); D.lat = cleanCoord(keep.lat, 90); D.lng = cleanCoord(keep.lng, 180);
+        D.days = keep.days; D.open = cleanTime(keep.open); D.close = cleanTime(keep.close);
+        b.innerHTML = formHTML(D);
+        toast('Matnlar standartga qaytdi — saqlash uchun «Saqlash»ni bosing');
+    };
+    API._save = function () {
+        if (!isAdm()) { toast('Faqat admin uchun', 'warning'); return; }
+        var raw = collect(); if (!raw) return;
+        raw.updatedAt = Date.now();
+        var D = normalize(raw);
+        if (!D.phones.length) { toast('Kamida bitta telefon raqam kiriting', 'warning'); return; }
+        if ((raw.lat || raw.lng) && !(D.lat && D.lng)) { toast('Koordinata noto\'g\'ri (masalan: 41.311081)', 'warning'); return; }
+        if ((raw.open || raw.close) && !(D.open && D.close)) { toast('Ochilish va yopilish vaqtini to\'liq kiriting', 'warning'); return; }
+        var d = getDb(), btn = document.getElementById('se-save');
+        if (!d) { toast('Baza ulanmagan', 'warning'); return; }
+        if (btn) btn.classList.add('se-busy');
+        var go = function () {
+            d.ref(PATH).set(D).then(function () {
+                apply(D); hap('success'); toast('✅ Do\'kon ma\'lumotlari saqlandi');
+                if (btn) btn.classList.remove('se-busy');
+                if (typeof closeModal === 'function') closeModal();
+            }).catch(function (err) {
+                if (btn) btn.classList.remove('se-busy');
+                toast('Saqlanmadi: ' + ((err && err.code) || 'ruxsat yo\'q'), 'warning');
+            });
+        };
+        if (window._ensureAuth) window._ensureAuth().then(go, go); else go();
+    };
+
+    /* ——— ochilganda yangilab chizish (admin belgisi auth'dan keyin aniqlanadi) ——— */
+    var _open = window.openModal;
+    if (typeof _open === 'function') {
+        window.openModal = function (id) {
+            if (id === 'contactModal' || id === 'trustModal') { try { API.render(id); } catch (e) {} }
+            return _open.apply(this, arguments);
+        };
+    }
+
+    /* ——— Firebase'dan jonli tinglash ——— */
+    var tries = 0;
+    (function listen() {
+        var d = getDb();
+        if (!d || !d.ref) { if (++tries < 40) setTimeout(listen, 250); return; }
+        try {
+            d.ref(PATH).on('value', function (snap) {
+                var v = snap && snap.val();
+                if (v && typeof v === 'object') apply(v);
+            }, function () {});
+        } catch (e) {}
+    })();
+
+    function boot() { API.render(); syncCheckoutRow(); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+</script>
 </body>
 </html>
 
