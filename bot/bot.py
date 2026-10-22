@@ -35,7 +35,7 @@ import google.auth.transport.requests
 from google.oauth2 import service_account
 
 from groq import AsyncGroq
-from aiogram import Bot, Dispatcher, types, F
+from aiogram import BaseMiddleware, Bot, Dispatcher, types, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -1082,6 +1082,62 @@ def _mini_active_chat(uid, data):
     return f"ai_requests/{uid}", _mini_msgs(data.get("messages"))
 
 
+# =====================================================================
+# ⛔ BLOKLANGAN FOYDALANUVCHILAR
+#   Admin mini app'da mijozni bloklasa `blocked_users/{uid}` yoziladi.
+#   Bot bunday foydalanuvchining HECH QANDAY xabari/tugmasiga javob bermaydi
+#   (bir marta qisqa ogohlantirish yuboriladi). Adminlar hech qachon bloklanmaydi.
+#   Baza vaqtincha javob bermasa — "fail-open" (hamma to'xtab qolmasin).
+# =====================================================================
+BLOCKED_TEXT = ("⛔ Hisobingiz administrator tomonidan bloklangan.\n"
+                "Bot va ilovadan foydalanib bo'lmaydi.")
+_BLOCKED_CACHE = {}
+_BLOCKED_TTL = 60
+_BLOCKED_NOTIFIED = {}
+
+
+async def is_user_blocked(uid) -> bool:
+    try:
+        uid_i = int(str(uid))
+    except (TypeError, ValueError):
+        return False
+    if uid_i in ADMIN_IDS:
+        return False
+    now = time.time()
+    hit = _BLOCKED_CACHE.get(uid_i)
+    if hit and hit[1] > now:
+        return hit[0]
+    val = await firebase_get(f"blocked_users/{uid_i}")
+    blocked = bool(val)
+    if len(_BLOCKED_CACHE) > 5000:
+        _BLOCKED_CACHE.clear()
+    _BLOCKED_CACHE[uid_i] = (blocked, now + _BLOCKED_TTL)
+    return blocked
+
+
+class BlockedUserMiddleware(BaseMiddleware):
+    """Har bir update'dan oldin: foydalanuvchi bloklangan bo'lsa — to'xtatamiz."""
+
+    async def __call__(self, handler, event, data):
+        user = data.get("event_from_user")
+        if user is not None and await is_user_blocked(user.id):
+            try:
+                cq = getattr(event, "callback_query", None)
+                if cq is not None:
+                    await cq.answer(BLOCKED_TEXT, show_alert=True)
+                elif getattr(event, "message", None) is not None:
+                    now = time.time()
+                    if now - _BLOCKED_NOTIFIED.get(user.id, 0) > 600:
+                        _BLOCKED_NOTIFIED[user.id] = now
+                        if len(_BLOCKED_NOTIFIED) > 5000:
+                            _BLOCKED_NOTIFIED.clear()
+                        await bot.send_message(user.id, BLOCKED_TEXT)
+            except Exception as e:
+                logging.warning(f"Bloklangan foydalanuvchiga javob yuborilmadi ({user.id}): {e}")
+            return None
+        return await handler(event, data)
+
+
 async def process_mini_app_ai():
     # 🟢 Yurak urishi: oxirgi yozilgan vaqt. Har tsiklda emas, ~30 sekundda
     #    bir yozamiz — aks holda 2 sekundlik tsikl bazani bekorga urardi.
@@ -1119,6 +1175,8 @@ async def process_mini_app_ai():
                                             json={"needs_processing": False})
                         chat_path, messages = _mini_active_chat(uid, data)
                         if not messages:
+                            continue
+                        if await is_user_blocked(uid):
                             continue
 
                         # 👤 SUHBATDOSHNI ANIQLASH.
@@ -3866,6 +3924,9 @@ async def main():
             shutdown_observer.register(_on_shutdown)
         except Exception as e:
             logging.warning(f"Shutdown hook ro'yxatga olinmadi: {e}")
+
+    # ⛔ Bloklangan foydalanuvchilar filtri — barcha handlerlardan oldin ishlaydi
+    dp.update.outer_middleware(BlockedUserMiddleware())
 
     await dp.start_polling(bot, drop_pending_updates=True,
                            allowed_updates=dp.resolve_used_update_types())

@@ -148,6 +148,7 @@ def _install_stubs():
 
     # ——— aiogram ———
     aio = mod("aiogram", Bot=_Bot, Dispatcher=_Dispatcher,
+              BaseMiddleware=type("BaseMiddleware", (), {}),
               types=_Magic(), F=_Magic())
     mod("aiogram.filters", Command=_Named, StateFilter=_Named)
     mod("aiogram.fsm")
