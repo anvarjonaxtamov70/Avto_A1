@@ -7057,6 +7057,14 @@ html.lite .ad-row { animation: none !important; }
             <span class="ap2-tile-tx"><b>Markalar</b><i>Brend, model va emblema</i></span>
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
+        <!-- 🎛 KARTA DIZAYNI — hamma foydalanuvchilar uchun tovar kartasi ko'rinishi -->
+        <div class="ap2-tile" style="--ac:#e2c46e" onclick="window.CardStyle && CardStyle.openAdmin()" role="button" tabindex="0">
+            <span class="ap2-tile-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="9" rx="2"/><path d="M3 16h7.5M3 19.5h5M13.5 16H21M13.5 19.5h5"/></svg>
+            </span>
+            <span class="ap2-tile-tx"><b>Karta dizayni</b><i id="cs-admin-sub">Tovar kartasi ko'rinishi</i></span>
+            <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </div>
     </div>
 </div>
     
@@ -9844,8 +9852,42 @@ function cardHTML(p) {
     let isFav = wishlist.includes(p.id) ? 'active' : '';
     let heartBtn = `<div class="btn-wishlist ${isFav}" onclick="toggleWishlist(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>`;
     
-    // 🛍 B · BOZOR KARTASI (narx birinchi). Eski kartaga qaytish: window.__bmCards = false
-    if (window.__bmCards !== false) {
+    // 🎛 KARTA DIZAYNI — admin paneldan boshqariladi (Firebase settings/ui/cardStyle).
+    //    'market' = B · Bozor (narx birinchi), 'appstore' = A · App Store, 'classic' = eski karta.
+    let _cardStyle = window.__cardStyle || 'market';
+    // 🧾 iOS karta (App Store uslubi): narx alohida, tugma — yumaloq «+».
+    let _fmtS = (n) => (Math.round(Number(n) || 0)).toLocaleString('ru-RU').replace(/,/g, ' ');
+    let acOld = (p.oldPrice && Number(p.oldPrice) > Number(p.price)) ? `<s>${_fmtS(p.oldPrice)} so'm</s>` : '<s></s>';
+    let acChips = '';
+    if (st <= 0) acChips += `<i class="ac-chip is-out">Tugagan</i>`;
+    else if (p.badge === 'hot') acChips += `<i class="ac-chip is-hot">${icon('flame')} Top</i>`;
+    else if (p.badge === 'new') acChips += `<i class="ac-chip is-new">Yangi</i>`;
+    if (_pct > 0) acChips += `<i class="ac-chip is-disc">-${_pct}%</i>`;
+    if (flashOn) acChips += `<i class="ac-chip is-time">🔥 <span class="flash-cd" data-until="${p.flashUntil}"></span></i>`;
+    let acMeta = _ratingHTML + _stockHTML;
+    if (!acMeta && st > 0) acMeta = `<span class="ac-trust">${icon('shield')} Kafolatlangan</span>`;
+    let acAdd = st > 0
+        ? `<button class="btn-add-cart ac-add" aria-label="Savatga qo'shish" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`
+        : `<button class="btn-add-cart ac-add is-out" disabled aria-label="Tugagan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>`;
+    if (_cardStyle === 'appstore') {
+        return `<div class="luxury-card ac-card${Number(p.price) >= 1000000 ? ' is-long' : ''}" data-pid="${p.id}" onclick="openProduct(${p.id})">
+        ${heartBtn}
+        <div class="btn-compare-card ${(window.compareList||[]).includes(String(p.id))?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash" aria-label="Taqqoslash"><span class="cmp-rock"><svg class="cmp-card-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4" r="1.25" fill="currentColor" stroke="none"/><path d="M12 5.2V19"/><path d="M7.5 19h9"/><path d="M4.5 6.6h15"/><path d="M4.5 6.6L2 11.6h5z"/><path d="M19.5 6.6L17 11.6h5z"/></svg></span></div>
+        <div class="img-wrap" style="${oosStyle}">
+        <img src="${_thumb(p.img, 240)}" loading="lazy" decoding="async" class="card-img-lazy" data-full="${(p.img||'').replace(/"/g,'&quot;')}" onerror="window._imgFallback(this)">
+        ${acChips ? `<div class="ac-chips">${acChips}</div>` : ''}
+        </div>
+        <div class="info">
+            <h4>${mainName}${carHint}</h4>
+            <div class="card-meta">${acMeta}</div>
+            <div class="ac-ft"><div class="ac-pr">${acOld}<b>${_fmtS(p.price)}<small> so'm</small></b></div>${acAdd}</div>
+        </div>
+    </div>`;
+    }
+
+
+    // 🛍 B · BOZOR KARTASI (narx birinchi)
+    if (_cardStyle === 'market') {
         let _f = (n) => (Math.round(Number(n) || 0)).toLocaleString('ru-RU').replace(/,/g, ' ');
         let bmOld = (p.oldPrice && Number(p.oldPrice) > Number(p.price)) ? `<s>${_f(p.oldPrice)}</s>` : '';
         let bmChips = '';
@@ -33932,6 +33974,202 @@ html body .luxury-card.bm-card .btn-add-cart.bm-btn svg { width: 17px !important
 html body .luxury-card.bm-card .btn-add-cart.bm-btn:active { transform: scale(.96) !important; filter: brightness(.94); }
 html body .luxury-card.bm-card .btn-add-cart.bm-btn.is-out { background: var(--bm-fill) !important; color: var(--bm-tx2) !important; box-shadow: none !important; }
 </style>
+
+<style id="card-style-appstore">
+/* App Store kartasi (A) — admin «Karta dizayni»da tanlansa ishlatiladi */
+/* ── Mahsulot kartasi (A · App Store) ── */
+html body .luxury-card.ac-card {
+    display: flex !important; flex-direction: column !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+    border-radius: 20px !important; overflow: hidden !important; background: var(--hx-card) !important; border: .5px solid var(--hx-sep) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 28px -22px rgba(0,0,0,.8) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+}
+html[data-theme="light"] body .luxury-card.ac-card { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 10px 24px -20px rgba(60,40,0,.35) !important; }
+html body .luxury-card.ac-card::before, html body .luxury-card.ac-card::after { display: none !important; }
+html body .luxury-card.ac-card .img-wrap { position: relative !important; flex: 0 0 auto !important; width: 100% !important; aspect-ratio: 1 / 1 !important; height: auto !important; margin: 0 !important; padding: 0 !important; border-radius: 0 !important; background: #fff !important; overflow: hidden !important; box-shadow: none !important; border: 0 !important; -webkit-mask-image: none !important; mask-image: none !important; }
+html body .luxury-card.ac-card .img-wrap img { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 0 !important; transform: none !important; }
+.ac-chips { position: absolute; left: 8px; bottom: 8px; right: 8px; z-index: 2; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: none; }
+.ac-chip { display: inline-flex; align-items: center; gap: 3px; height: 21px; padding: 0 7px; border-radius: 7px; font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: 0; color: #fff; background: rgba(0,0,0,.58); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ac-chip svg { width: 11px; height: 11px; }
+.ac-chip.is-disc { color: #1a1405; background: #e2c46e; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ac-chip.is-hot { background: rgba(255,59,48,.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ac-chip.is-new { background: rgba(10,132,255,.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ac-chip.is-out { background: rgba(60,60,67,.85); }
+html body .luxury-card.ac-card .btn-wishlist { top: 8px !important; right: 8px !important; width: 32px !important; height: 32px !important; border-radius: 50% !important; background: rgba(0,0,0,.32) !important; -webkit-backdrop-filter: blur(10px) !important; backdrop-filter: blur(10px) !important; border: 0 !important; z-index: 3 !important; }
+html body .luxury-card.ac-card .btn-wishlist svg { width: 18px !important; height: 18px !important; stroke: #fff !important; fill: none !important; stroke-width: 2 !important; }
+html body .luxury-card.ac-card .btn-wishlist.active svg { fill: #ff3b30 !important; stroke: #ff3b30 !important; }
+html body .luxury-card.ac-card .btn-compare-card { top: 8px !important; left: 8px !important; width: 32px !important; height: 32px !important; background: rgba(0,0,0,.32) !important; border: 0 !important; box-shadow: none !important; z-index: 3 !important; }
+html body .luxury-card.ac-card .btn-compare-card .cmp-card-ic { color: #fff !important; width: 18px !important; height: 18px !important; }
+html body .luxury-card.ac-card .btn-compare-card.active { background: rgba(201,168,76,.85) !important; }
+html body .luxury-card.ac-card .btn-compare-card.active .cmp-card-ic { color: #1a1405 !important; }
+
+html body .luxury-card.ac-card .info { flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; gap: 0 !important; padding: 10px 11px 11px !important; min-height: 0 !important; }
+html body .luxury-card.ac-card .info h4 { margin: 0 !important; min-height: 0 !important; height: 2.56em !important; font-size: 14.5px !important; font-weight: 500 !important; line-height: 1.28 !important; letter-spacing: -.15px !important; color: var(--hx-tx) !important; text-align: left !important; overflow: hidden !important; display: -webkit-box !important; -webkit-line-clamp: 2 !important; -webkit-box-orient: vertical !important; white-space: normal !important; }
+html body .luxury-card.ac-card .info h4 .car-hint { color: var(--hx-tx2) !important; font-weight: 400 !important; }
+html body .luxury-card.ac-card .card-meta { display: flex !important; align-items: center !important; gap: 6px !important; height: 18px !important; margin: 5px 0 0 !important; padding: 0 !important; overflow: hidden !important; white-space: nowrap !important; font-size: 12px !important; color: var(--hx-tx2) !important; flex-wrap: nowrap !important; }
+html body .luxury-card.ac-card .card-meta > * { flex: 0 0 auto; }
+.ac-trust { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--hx-tx2); }
+.ac-trust svg, .ac-card .card-stock-low svg { width: 12px; height: 12px; }
+html body .luxury-card.ac-card .card-stock-low { color: #ff9f0a !important; background: none !important; padding: 0 !important; font-size: 12px !important; font-weight: 600 !important; }
+.ac-ft { margin-top: auto; padding-top: 8px; display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; }
+.ac-pr { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.ac-pr b small { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--hx-tx2); }
+.ac-card.is-long .ac-pr b { font-size: 15px; }
+.ac-pr s { display: block; height: 15px; font-size: 12px; line-height: 15px; color: var(--hx-tx2); opacity: .75; white-space: nowrap; }
+.ac-pr b { display: block; font-size: 16.5px; font-weight: 700; letter-spacing: -.35px; color: var(--hx-tx); white-space: nowrap; font-variant-numeric: tabular-nums; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add {
+    flex: 0 0 36px !important; width: 36px !important; height: 36px !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+    border-radius: 50% !important; display: grid !important; place-items: center !important; border: 0 !important;
+    background: linear-gradient(135deg, #f0d060 0%, #c9a84c 55%, #a8851f 100%) !important; box-shadow: 0 6px 14px -6px rgba(212,175,55,.95) !important; color: #1a1405 !important;
+}
+html body .luxury-card.ac-card .btn-add-cart.ac-add::after, html body .luxury-card.ac-card .btn-add-cart.ac-add::before { display: none !important; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add svg { width: 18px !important; height: 18px !important; fill: none !important; stroke: #1a1405 !important; stroke-width: 2.6 !important; stroke-linecap: round !important; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add:active { transform: scale(.86) !important; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add.is-out { background: var(--hx-fill) !important; box-shadow: none !important; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add.is-out svg { stroke: var(--hx-tx2) !important; }
+
+
+</style>
+<style id="card-style-admin">
+#cardStyleModal { --cs-bg2: #1c1c1e; --cs-sep: rgba(84,84,88,.38); --cs-tx: #f5f5f7; --cs-tx2: rgba(235,235,245,.62); --cs-gold: #e2c46e;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+html[data-theme="light"] #cardStyleModal { --cs-bg2: #fff; --cs-sep: rgba(60,60,67,.14); --cs-tx: #1c1c1e; --cs-tx2: rgba(60,60,67,.64); --cs-gold: #8a6a14; }
+#cardStyleModal .modal-header h2 { color: var(--cs-gold) !important; }
+.cs-lead { margin: 0 4px 14px; font-size: 14px; line-height: 1.45; color: var(--cs-tx2); }
+.cs-opt { position: relative; display: block; width: 100%; margin: 0 0 12px; padding: 12px; border-radius: 18px; background: var(--cs-bg2); border: 1.5px solid var(--cs-sep); text-align: left; cursor: pointer; font-family: inherit; color: var(--cs-tx); -webkit-tap-highlight-color: transparent; transition: border-color .2s, transform .35s cubic-bezier(.34,1.4,.64,1); }
+.cs-opt:active { transform: scale(.985); }
+.cs-opt.on { border-color: var(--cs-gold); box-shadow: 0 0 0 3px rgba(201,168,76,.18); }
+.cs-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.cs-radio { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--cs-sep); }
+.cs-opt.on .cs-radio { border: 0; background: var(--cs-gold); box-shadow: inset 0 0 0 6px var(--cs-gold), inset 0 0 0 11px var(--cs-bg2); }
+.cs-name { flex: 1; font-size: 16px; font-weight: 600; }
+.cs-name small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: var(--cs-tx2); }
+.cs-live { font-size: 11px; font-weight: 800; color: #1a1405; background: var(--cs-gold); padding: 3px 8px; border-radius: 6px; }
+.cs-prev { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; pointer-events: none; }
+.cs-prev .luxury-card { animation: none !important; opacity: 1 !important; transform: none !important; }
+.cs-prev .btn-add-cart { display: flex; }
+.cs-prev .luxury-card.bm-card .btn-add-cart.bm-btn, .cs-prev .luxury-card.ac-card .btn-add-cart.ac-add { display: flex !important; }
+.cs-note { margin: 4px 6px 0; font-size: 12.5px; color: var(--cs-tx2); line-height: 1.45; }
+</style>
+
+<script id="card-style-switch">
+/* 🎛 KARTA DIZAYNI — bitta sozlama, hamma uchun.
+   Manba: Firebase `settings/ui/cardStyle` (o'qish — hamma, yozish — faqat admin).
+   Birinchi chizishda miltillamasligi uchun oxirgi qiymat localStorage'da saqlanadi. */
+(function () {
+    'use strict';
+    var KEY = 'avto_card_style';
+    var STYLES = {
+        market:   { name: 'Bozor kartasi', sub: 'Narx birinchi, to\u2018liq \u00ABSavatga\u00BB tugmasi' },
+        appstore: { name: 'App Store kartasi', sub: 'Narx pastda, yumaloq \u00AB+\u00BB tugma' },
+        classic:  { name: 'Klassik karta', sub: 'Avvalgi dizayn: narx tilla tugma ichida' }
+    };
+    var valid = function (v) { return Object.prototype.hasOwnProperty.call(STYLES, v); };
+    try { var c = localStorage.getItem(KEY); if (valid(c)) window.__cardStyle = c; } catch (e) {}
+    if (!valid(window.__cardStyle)) window.__cardStyle = 'market';
+
+    function rerender() {
+        try { if (typeof window.renderProducts === 'function') window.renderProducts(); } catch (e) {}
+        try {
+            var ws = document.getElementById('wishlist-section');
+            if (ws && !ws.classList.contains('hidden') && typeof renderWishlist === 'function') renderWishlist();
+        } catch (e) {}
+        try { if (typeof initReveal === 'function') setTimeout(initReveal, 60); } catch (e) {}
+        paintAdmin();
+    }
+    function apply(v, silent) {
+        if (!valid(v) || v === window.__cardStyle) { paintAdmin(); return; }
+        window.__cardStyle = v;
+        try { localStorage.setItem(KEY, v); } catch (e) {}
+        if (!silent) rerender();
+    }
+
+    // Jonli tinglash — admin o'zgartirsa, ochiq turgan har bir telefonda darhol yangilanadi
+    var tries = 0;
+    (function listen() {
+        var d = (typeof db !== 'undefined') ? db : (window.firebase && firebase.database ? firebase.database() : null);
+        if (!d || !d.ref) { if (++tries < 40) setTimeout(listen, 250); return; }
+        try {
+            d.ref('settings/ui/cardStyle').on('value', function (snap) {
+                var v = snap && snap.val();
+                if (valid(v)) apply(v);
+            }, function () {});
+        } catch (e) {}
+    })();
+
+    function paintAdmin() {
+        var sub = document.getElementById('cs-admin-sub');
+        if (sub) sub.textContent = 'Hozir: ' + STYLES[window.__cardStyle].name;
+    }
+
+    function sampleProducts() {
+        var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
+        var ok = pdb.filter(function (p) { return p && p.img && Number(p.price) > 0 && (p.stock === undefined || p.stock > 0); });
+        var disc = ok.find(function (p) { return p.oldPrice && Number(p.oldPrice) > Number(p.price); });
+        var out = []; if (disc) out.push(disc);
+        ok.forEach(function (p) { if (out.length < 2 && out.indexOf(p) < 0) out.push(p); });
+        return out;
+    }
+    function preview(style, items) {
+        var saved = window.__cardStyle;
+        window.__cardStyle = style;
+        var html = '';
+        try { html = items.map(function (p) { return cardHTML(p); }).join(''); } catch (e) {}
+        window.__cardStyle = saved;
+        // Namunada bosish/ID to'qnashuvi bo'lmasin
+        return html.replace(/\sonclick="[^"]*"/g, '').replace(/\sid="[^"]*"/g, '').replace(/data-pid=/g, 'data-prev-pid=')
+            .replace(/<button\b/g, '<span').replace(/<\/button>/g, '</span>').replace(/\sdisabled\b/g, '');
+    }
+
+    function render() {
+        var body = document.getElementById('cardStyleModal-body'); if (!body) return;
+        var items = sampleProducts();
+        body.innerHTML = '<p class="cs-lead">Tanlangan dizayn <b>barcha foydalanuvchilarda</b> darhol ko\u2018rinadi \u2014 bosh sahifa, katalog va saqlanganlar.</p>' +
+            ['market', 'appstore', 'classic'].map(function (k) {
+                var S = STYLES[k], on = window.__cardStyle === k;
+                return '<div class="cs-opt' + (on ? ' on' : '') + '" role="button" tabindex="0" onclick="CardStyle.set(\'' + k + '\')">' +
+                    '<div class="cs-top"><span class="cs-radio"></span><span class="cs-name">' + S.name + '<small>' + S.sub + '</small></span>' + (on ? '<span class="cs-live">HOZIR</span>' : '') + '</div>' +
+                    (items.length ? '<div class="cs-prev">' + preview(k, items) + '</div>' : '') + '</div>';
+            }).join('') +
+            '<p class="cs-note">O\u2018zgartirish faqat ko\u2018rinishga ta\u2019sir qiladi: narx, savat va buyurtmalar o\u2018zgarmaydi.</p>';
+    }
+
+    window.CardStyle = {
+        get: function () { return window.__cardStyle; },
+        openAdmin: function () {
+            if (typeof window.isAdmin === 'function' && !window.isAdmin()) { try { showToast('Faqat admin uchun', 'warning'); } catch (e) {} return; }
+            var m = document.getElementById('cardStyleModal');
+            if (!m) {
+                m = document.createElement('div');
+                m.id = 'cardStyleModal'; m.className = 'modal-standard';
+                m.innerHTML = '<div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-list"></use></svg>Karta dizayni</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">\u00D7</button></div><div id="cardStyleModal-body"></div>';
+                document.body.appendChild(m);
+            }
+            render();
+            openModal('cardStyleModal');
+        },
+        set: function (v) {
+            if (!valid(v)) return;
+            if (v === window.__cardStyle) { try { showToast('Bu dizayn allaqachon tanlangan'); } catch (e) {} return; }
+            var prev = window.__cardStyle;
+            var d = (typeof db !== 'undefined') ? db : null;
+            var go = function () {
+                if (!d) { try { showToast('Baza ulanmagan', 'warning'); } catch (e) {} return; }
+                d.ref('settings/ui/cardStyle').set(v).then(function () {
+                    apply(v); render();
+                    try { if (window._hap) window._hap('success'); } catch (e) {}
+                    try { showToast('\u2705 \u00AB' + STYLES[v].name + '\u00BB hamma uchun yoqildi'); } catch (e) {}
+                }).catch(function (err) {
+                    window.__cardStyle = prev; render();
+                    try { showToast('Saqlanmadi: ' + ((err && err.code) || 'ruxsat yo\u2018q'), 'warning'); } catch (e) {}
+                });
+            };
+            if (window._ensureAuth) window._ensureAuth().then(go, go); else go();
+        }
+    };
+    setTimeout(paintAdmin, 800);
+})();
+</script>
 </body>
 </html>
 
