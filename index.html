@@ -5762,9 +5762,13 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 <div id="welcome-screen"><div class="welcome-text">Assalomu alaykum</div></div>
 <div class="floating-btn" id="back-btn" onclick="goBack()"><svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
 <div class="container">
-    <div class="header">
+    <div class="header hx">
         <h1>Avto A1</h1>
-        <p>Original ehtiyot qismlar • Kafolatlangan</p>
+        <div class="hx-chips" aria-label="Avto A1 afzalliklari">
+            <span class="hx-chip is-gold"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>Original qismlar</span>
+            <span class="hx-chip">Kafolatlangan</span>
+            <span class="hx-chip">1–2 kunda</span>
+        </div>
     </div>    
  <!-- 📱 AKTUALNIY STORIS HALQALARI (YANGILANGAN VA ANIMATSIYALI) -->
     <div class="stories-container" id="stories-list">
@@ -9840,6 +9844,36 @@ function cardHTML(p) {
     let isFav = wishlist.includes(p.id) ? 'active' : '';
     let heartBtn = `<div class="btn-wishlist ${isFav}" onclick="toggleWishlist(event, ${p.id})"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>`;
     
+    // 🧾 iOS karta (App Store uslubi): narx alohida, tugma — yumaloq «+».
+    let _fmtS = (n) => (Math.round(Number(n) || 0)).toLocaleString('ru-RU').replace(/,/g, ' ');
+    let acOld = (p.oldPrice && Number(p.oldPrice) > Number(p.price)) ? `<s>${_fmtS(p.oldPrice)} so'm</s>` : '<s></s>';
+    let acChips = '';
+    if (st <= 0) acChips += `<i class="ac-chip is-out">Tugagan</i>`;
+    else if (p.badge === 'hot') acChips += `<i class="ac-chip is-hot">${icon('flame')} Top</i>`;
+    else if (p.badge === 'new') acChips += `<i class="ac-chip is-new">Yangi</i>`;
+    if (_pct > 0) acChips += `<i class="ac-chip is-disc">-${_pct}%</i>`;
+    if (flashOn) acChips += `<i class="ac-chip is-time">🔥 <span class="flash-cd" data-until="${p.flashUntil}"></span></i>`;
+    let acMeta = _ratingHTML + _stockHTML;
+    if (!acMeta && st > 0) acMeta = `<span class="ac-trust">${icon('shield')} Kafolatlangan</span>`;
+    let acAdd = st > 0
+        ? `<button class="btn-add-cart ac-add" aria-label="Savatga qo'shish" onclick="addToCartQuick(event, ${p.id})"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`
+        : `<button class="btn-add-cart ac-add is-out" disabled aria-label="Tugagan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>`;
+    if (window.__acCards !== false) {
+        return `<div class="luxury-card ac-card${Number(p.price) >= 1000000 ? ' is-long' : ''}" data-pid="${p.id}" onclick="openProduct(${p.id})">
+        ${heartBtn}
+        <div class="btn-compare-card ${(window.compareList||[]).includes(String(p.id))?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash" aria-label="Taqqoslash"><span class="cmp-rock"><svg class="cmp-card-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4" r="1.25" fill="currentColor" stroke="none"/><path d="M12 5.2V19"/><path d="M7.5 19h9"/><path d="M4.5 6.6h15"/><path d="M4.5 6.6L2 11.6h5z"/><path d="M19.5 6.6L17 11.6h5z"/></svg></span></div>
+        <div class="img-wrap" style="${oosStyle}">
+        <img src="${_thumb(p.img, 240)}" loading="lazy" decoding="async" class="card-img-lazy" data-full="${(p.img||'').replace(/"/g,'&quot;')}" onerror="window._imgFallback(this)">
+        ${acChips ? `<div class="ac-chips">${acChips}</div>` : ''}
+        </div>
+        <div class="info">
+            <h4>${mainName}${carHint}</h4>
+            <div class="card-meta">${acMeta}</div>
+            <div class="ac-ft"><div class="ac-pr">${acOld}<b>${_fmtS(p.price)}<small> so'm</small></b></div>${acAdd}</div>
+        </div>
+    </div>`;
+    }
+
     let cartBtn = '';
     if(st > 0) {
         cartBtn = `
@@ -33767,6 +33801,114 @@ html body .bottom-nav .nav-badge.pulse { animation: niBadge .45s cubic-bezier(.3
     html body .bottom-nav .nav-item.active svg.ni-f, html body .bottom-nav .nav-badge.pulse { animation: none !important; }
     html body .bottom-nav .nav-indicator { transition: none !important; }
 }
+</style>
+
+<style id="home-ios-2026">
+/* ═══════════════════════════════════════════════════════════════════
+   🏠 BOSH SAHIFA — iOS: karta (App Store), katta sarlavha, qidiruv, Shogird
+   Zaxira: git tag backup/pre-home-ios-2026-10-22
+   ═══════════════════════════════════════════════════════════════════ */
+:root { --hx-gold: #e2c46e; --hx-tx: #f5f5f7; --hx-tx2: rgba(235,235,245,.62); --hx-fill: rgba(118,118,128,.24); --hx-card: #1c1c1e; --hx-sep: rgba(84,84,88,.38); }
+html[data-theme="light"] { --hx-gold: #8a6a14; --hx-tx: #1c1c1e; --hx-tx2: rgba(60,60,67,.64); --hx-fill: rgba(118,118,128,.12); --hx-card: #ffffff; --hx-sep: rgba(60,60,67,.12); }
+
+/* ── Sarlavha ── */
+html body .header.hx { text-align: left !important; padding: calc(60px + var(--safe-top, 0px)) 20px 12px !important; }
+html body .header.hx h1 {
+    display: block !important; margin: 0 !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif !important;
+    font-size: 34px !important; font-weight: 800 !important; letter-spacing: -1px !important; line-height: 1.1 !important; text-align: left !important;
+    background: linear-gradient(135deg, #f6dc7e 0%, #d4af37 45%, #a07c1c 100%) !important; -webkit-background-clip: text !important; background-clip: text !important;
+    -webkit-text-fill-color: transparent !important; color: transparent !important; text-shadow: none !important; filter: none !important;
+}
+html[data-theme="light"] body .header.hx h1 { background-image: linear-gradient(135deg, #b68f2e, #6b500c) !important; }
+html body .header.hx h1::before, html body .header.hx h1::after { display: none !important; }
+.hx-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.hx-chip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 13px; font: 600 12.5px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif; letter-spacing: 0; color: var(--hx-tx2); background: var(--hx-fill); }
+.hx-chip.is-gold { color: var(--hx-gold); background: rgba(201,168,76,.14); box-shadow: inset 0 0 0 .5px rgba(201,168,76,.4); }
+html[data-theme="light"] .hx-chip.is-gold { background: rgba(156,124,32,.1); box-shadow: inset 0 0 0 .5px rgba(156,124,32,.3); }
+.hx-chip svg { width: 13px; height: 13px; flex: 0 0 13px; }
+html body .p2-hdr-btn { width: 36px !important; height: 36px !important; background: var(--hx-fill) !important; border: 0 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+/* ── Qidiruv (iOS) ── */
+html body .search-input-container .search-box,
+html[data-theme] body .search-input-container input.search-box,
+html.lite[data-theme] body .search-input-container input.search-box {
+    height: 40px !important; min-height: 40px !important; padding: 0 84px 0 38px !important; border-radius: 12px !important;
+    background: var(--hx-fill) !important; border: 0 !important; box-shadow: none !important; color: var(--hx-tx) !important;
+    font: 400 16px/40px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif !important; letter-spacing: -.2px !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+html body .search-input-container .search-box::placeholder { color: var(--hx-tx2) !important; opacity: 1; }
+html body .search-input-container .search-box:focus,
+html[data-theme] body .search-input-container input.search-box:focus { background: var(--hx-fill) !important; box-shadow: 0 0 0 2px rgba(201,168,76,.35) !important; outline: none !important; }
+html body .search-input-container .search-icon-left { left: 11px !important; color: var(--hx-tx2) !important; }
+html body .search-input-container .search-icon-left svg { width: 18px !important; height: 18px !important; stroke-width: 2.2 !important; }
+html body .search-input-container .scan-search-btn { width: 30px !important; height: 30px !important; border-radius: 9px !important; background: transparent !important; border: 0 !important; box-shadow: none !important; color: var(--hx-gold) !important; }
+
+/* ── Mahsulot kartasi (A · App Store) ── */
+html body .luxury-card.ac-card {
+    display: flex !important; flex-direction: column !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+    border-radius: 20px !important; overflow: hidden !important; background: var(--hx-card) !important; border: .5px solid var(--hx-sep) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 28px -22px rgba(0,0,0,.8) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+}
+html[data-theme="light"] body .luxury-card.ac-card { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 10px 24px -20px rgba(60,40,0,.35) !important; }
+html body .luxury-card.ac-card::before, html body .luxury-card.ac-card::after { display: none !important; }
+html body .luxury-card.ac-card .img-wrap { position: relative !important; flex: 0 0 auto !important; width: 100% !important; aspect-ratio: 1 / 1 !important; height: auto !important; margin: 0 !important; padding: 0 !important; border-radius: 0 !important; background: #fff !important; overflow: hidden !important; box-shadow: none !important; border: 0 !important; -webkit-mask-image: none !important; mask-image: none !important; }
+html body .luxury-card.ac-card .img-wrap img { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 0 !important; transform: none !important; }
+.ac-chips { position: absolute; left: 8px; bottom: 8px; right: 8px; z-index: 2; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: none; }
+.ac-chip { display: inline-flex; align-items: center; gap: 3px; height: 21px; padding: 0 7px; border-radius: 7px; font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: 0; color: #fff; background: rgba(0,0,0,.58); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ac-chip svg { width: 11px; height: 11px; }
+.ac-chip.is-disc { color: #1a1405; background: #e2c46e; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ac-chip.is-hot { background: rgba(255,59,48,.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ac-chip.is-new { background: rgba(10,132,255,.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ac-chip.is-out { background: rgba(60,60,67,.85); }
+html body .luxury-card.ac-card .btn-wishlist { top: 8px !important; right: 8px !important; width: 32px !important; height: 32px !important; border-radius: 50% !important; background: rgba(0,0,0,.32) !important; -webkit-backdrop-filter: blur(10px) !important; backdrop-filter: blur(10px) !important; border: 0 !important; z-index: 3 !important; }
+html body .luxury-card.ac-card .btn-wishlist svg { width: 18px !important; height: 18px !important; stroke: #fff !important; fill: none !important; stroke-width: 2 !important; }
+html body .luxury-card.ac-card .btn-wishlist.active svg { fill: #ff3b30 !important; stroke: #ff3b30 !important; }
+html body .luxury-card.ac-card .btn-compare-card { top: 8px !important; left: 8px !important; width: 32px !important; height: 32px !important; background: rgba(0,0,0,.32) !important; border: 0 !important; box-shadow: none !important; z-index: 3 !important; }
+html body .luxury-card.ac-card .btn-compare-card .cmp-card-ic { color: #fff !important; width: 18px !important; height: 18px !important; }
+html body .luxury-card.ac-card .btn-compare-card.active { background: rgba(201,168,76,.85) !important; }
+html body .luxury-card.ac-card .btn-compare-card.active .cmp-card-ic { color: #1a1405 !important; }
+
+html body .luxury-card.ac-card .info { flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; gap: 0 !important; padding: 10px 11px 11px !important; min-height: 0 !important; }
+html body .luxury-card.ac-card .info h4 { margin: 0 !important; min-height: 0 !important; height: 2.56em !important; font-size: 14.5px !important; font-weight: 500 !important; line-height: 1.28 !important; letter-spacing: -.15px !important; color: var(--hx-tx) !important; text-align: left !important; overflow: hidden !important; display: -webkit-box !important; -webkit-line-clamp: 2 !important; -webkit-box-orient: vertical !important; white-space: normal !important; }
+html body .luxury-card.ac-card .info h4 .car-hint { color: var(--hx-tx2) !important; font-weight: 400 !important; }
+html body .luxury-card.ac-card .card-meta { display: flex !important; align-items: center !important; gap: 6px !important; height: 18px !important; margin: 5px 0 0 !important; padding: 0 !important; overflow: hidden !important; white-space: nowrap !important; font-size: 12px !important; color: var(--hx-tx2) !important; flex-wrap: nowrap !important; }
+html body .luxury-card.ac-card .card-meta > * { flex: 0 0 auto; }
+.ac-trust { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--hx-tx2); }
+.ac-trust svg, .ac-card .card-stock-low svg { width: 12px; height: 12px; }
+html body .luxury-card.ac-card .card-stock-low { color: #ff9f0a !important; background: none !important; padding: 0 !important; font-size: 12px !important; font-weight: 600 !important; }
+.ac-ft { margin-top: auto; padding-top: 8px; display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; }
+.ac-pr { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.ac-pr b small { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--hx-tx2); }
+.ac-card.is-long .ac-pr b { font-size: 15px; }
+.ac-pr s { display: block; height: 15px; font-size: 12px; line-height: 15px; color: var(--hx-tx2); opacity: .75; white-space: nowrap; }
+.ac-pr b { display: block; font-size: 16.5px; font-weight: 700; letter-spacing: -.35px; color: var(--hx-tx); white-space: nowrap; font-variant-numeric: tabular-nums; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add {
+    flex: 0 0 36px !important; width: 36px !important; height: 36px !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+    border-radius: 50% !important; display: grid !important; place-items: center !important; border: 0 !important;
+    background: linear-gradient(135deg, #f0d060 0%, #c9a84c 55%, #a8851f 100%) !important; box-shadow: 0 6px 14px -6px rgba(212,175,55,.95) !important; color: #1a1405 !important;
+}
+html body .luxury-card.ac-card .btn-add-cart.ac-add::after, html body .luxury-card.ac-card .btn-add-cart.ac-add::before { display: none !important; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add svg { width: 18px !important; height: 18px !important; fill: none !important; stroke: #1a1405 !important; stroke-width: 2.6 !important; stroke-linecap: round !important; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add:active { transform: scale(.86) !important; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add.is-out { background: var(--hx-fill) !important; box-shadow: none !important; }
+html body .luxury-card.ac-card .btn-add-cart.ac-add.is-out svg { stroke: var(--hx-tx2) !important; }
+
+/* ── Shogird: kichik tilla doira ── */
+html body #shogird-launcher.ai-luxury-btn {
+    width: 54px !important; height: 54px !important; padding: 0 !important; gap: 0 !important; border-radius: 50% !important; justify-content: center !important;
+    right: 14px !important; bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
+    background: radial-gradient(circle at 32% 26%, #3a3a3e, #121214 72%) !important; border: .5px solid rgba(226,196,110,.55) !important;
+    box-shadow: 0 14px 30px rgba(0,0,0,.55), 0 0 0 4px rgba(226,196,110,.07), inset 0 1px 0 rgba(255,255,255,.12) !important;
+}
+html body #shogird-launcher.ai-luxury-btn > .shogird-label { display: none !important; }
+html body #shogird-launcher.ai-luxury-btn > .shogird-orbit { left: 7px !important; top: 7px !important; width: 40px !important; height: 40px !important; border-radius: 50% !important; }
+html body #shogird-launcher.ai-luxury-btn > .shogird-mark { flex: 0 0 40px !important; width: 40px !important; height: 40px !important; }
+html body #shogird-launcher.ai-luxury-btn .shogird-mark svg { width: 30px !important; height: 30px !important; }
+html body #shogird-launcher.ai-luxury-btn::after { content: ""; position: absolute; right: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: #30d158; box-shadow: 0 0 0 2px #121214; pointer-events: none; }
+html[data-theme="light"] body #shogird-launcher.ai-luxury-btn::after { box-shadow: 0 0 0 2px #fff; }
+@media (max-width: 370px) { html body #shogird-launcher.ai-luxury-btn { width: 54px !important; } }
 </style>
 </body>
 </html>
