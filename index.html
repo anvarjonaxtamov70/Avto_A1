@@ -10680,6 +10680,41 @@ window._aoUpdateCounts = function () {
         var n = c[el.getAttribute('data-cnt')] || 0; el.textContent = n ? n : '';
     });
 };
+
+// 🧭 ADMIN buyurtmalar: tartib + HAQIQIY (server) holat.
+//  1) Tartib: server buyurtma id si "1729…-hash" ko'rinishida (matn). `b.id - a.id`
+//     bunday id da NaN berib, tartibni buzardi — yangi buyurtmalar ro'yxat
+//     o'rtasida yo'qolib qolardi. Endi createdAt (yoki id ning raqamli boshi).
+//  2) Holat: `users/{uid}/orders` — faqat proyeksiya; eski oqimda o'zgargan
+//     buyurtmalarda u eskirib qolishi mumkin (ekranda "Kutilmoqda", serverda
+//     aslida "Bekor"). Admin `orders/` ni o'qiy oladi — ko'rsatishdan oldin
+//     holatni o'sha yerdan olamiz. Xato bo'lsa — jim, eski xatti-harakat.
+window._aoOrderTime = function (o) {
+    var c = Number(o && o.createdAt);
+    if (c > 0) return c;
+    var n = parseInt(String(o && o.id != null ? o.id : ''), 10);
+    return isFinite(n) ? n : 0;
+};
+window._aoSortOrders = function (arr) {
+    return arr.sort(function (a, b) { return window._aoOrderTime(b) - window._aoOrderTime(a); });
+};
+window._aoCanonStatus = function (arr) {
+    if (!arr || !arr.length || typeof db === 'undefined') return Promise.resolve(arr);
+    var read = db.ref('orders').once('value').then(function (snap) {
+        var all = (snap && snap.val()) || {};
+        arr.forEach(function (o) {
+            var c = all[String(o.uI) + '_' + String(o.id)];
+            if (!c || typeof c !== 'object') return;
+            var st = c.status || 'kutilmoqda';
+            if ((o.status || 'kutilmoqda') !== st) { o._projStatus = o.status || 'kutilmoqda'; o.status = st; }
+            if (!o.createdAt && c.createdAt) o.createdAt = c.createdAt;
+        });
+        return arr;
+    }).catch(function () { return arr; });
+    // Sekin tarmoqda ro'yxatni ushlab turmaymiz (3 s dan keyin bor ma'lumot bilan).
+    var timeout = new Promise(function (res) { setTimeout(function () { res(arr); }, 3000); });
+    return Promise.race([read, timeout]);
+};
   function openAdminOrders() { 
     try { if (window._aoHideDetail) window._aoHideDetail(); } catch (e) {}
     document.getElementById('adminModal').style.display = 'none'; 
@@ -10714,9 +10749,12 @@ window._aoUpdateCounts = function () {
                 } 
             } 
         } 
-        aO.sort((a,b) => b.id - a.id); 
-        window.allFetchedOrders = aO;
-        renderAdminOrdersUI(aO);
+        window._aoCanonStatus(aO).then(() => {
+            window._aoSortOrders(aO);
+            window.allFetchedOrders = aO;
+            window.lastOrdersRef = null;
+            renderAdminOrdersUI(aO);
+        });
     }); 
 }
     
@@ -10785,6 +10823,11 @@ async function changeOrderStatus(uid, orderId, newStatus) {
             var _emsg = (_data && _data.error) ? String(_data.error)
                         : ("server javobi " + (_resp ? _resp.status : '?'));
             if (_data && _data.retryable) _emsg = "boshqa o'zgarish bajarilmoqda — birozdan keyin qayta bosing";
+            var _cur = _data && (_data.currentStatus || _data.from || _data.canonicalStatus);
+            if (_resp && _resp.status === 409 && _cur && _cur !== newStatus) {
+                var _lbl = { kutilmoqda: "Kutilmoqda", qabul: "Qabul qilingan", yolda: "Yo'lda", yetkazildi: "Yetkazilgan", bekor_qilingan: "Bekor qilingan" }[_cur] || _cur;
+                _emsg = "bu buyurtma allaqachon \u00AB" + _lbl + "\u00BB — ro'yxat yangilandi";
+            }
             showToast("Holat saqlanmadi: " + _emsg, "warning");
             try { if (window._dwarn) window._dwarn('[order-status] xato:', _resp && _resp.status, _data); } catch (e) {}
             // Ro'yxat eskirgan bo'lishi mumkin (boshqa admin/bot o'zgartirgan) — yangilaymiz.
@@ -11433,9 +11476,12 @@ window.openCustomerSpecificOrders = (uid, customerName) => {
                 });
             }
         }
-        aO.sort((a,b) => b.id - a.id);
-        window.allFetchedOrders = aO;
-        renderAdminOrdersUI(aO);
+        window._aoCanonStatus(aO).then(() => {
+            window._aoSortOrders(aO);
+            window.allFetchedOrders = aO;
+            window.lastOrdersRef = null;
+            renderAdminOrdersUI(aO);
+        });
     });
 };
 
