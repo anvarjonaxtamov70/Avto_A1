@@ -658,16 +658,47 @@ function randomOwnerToken() {
 }
 
 async function authenticateBody(body, env) {
+  let identity;
   if (typeof body.initData === "string" && body.initData) {
     const verified = await verifyTelegramInitData(body.initData, env.BOT_TOKEN);
     if (!verified.ok) throw httpError(401, verified.error);
-    return { uid: requireSafeUid(verified.user.id, 401), source: "telegram", claims: verified.user };
-  }
-  if (typeof body.idToken === "string" && body.idToken) {
+    identity = { uid: requireSafeUid(verified.user.id, 401), source: "telegram", claims: verified.user };
+  } else if (typeof body.idToken === "string" && body.idToken) {
     const claims = await verifyFirebaseIdToken(body.idToken, env);
-    return { uid: requireSafeUid(claims.sub, 401), source: "firebase", claims };
+    identity = { uid: requireSafeUid(claims.sub, 401), source: "firebase", claims };
+  } else {
+    throw httpError(401, "initData yoki idToken kerak");
   }
-  throw httpError(401, "initData yoki idToken kerak");
+  await assertNotBlocked(identity.uid, env);
+  return identity;
+}
+
+// ===================== ⛔ Bloklangan foydalanuvchilar =====================
+// Admin mini app'da mijozni bloklasa `blocked_users/{uid}` yoziladi. Shu yerda
+// har bir himoyalangan so'rov (buyurtma, xabar, ro'yxatdan o'tish...) rad etiladi.
+// 30 soniyalik kesh — har so'rovda bazaga bormaslik uchun. Baza vaqtincha
+// javob bermasa "fail-open": hamma mijozni to'xtatib qo'ymaymiz.
+const blockedCache = new Map();
+async function assertNotBlocked(uid, env) {
+  const key = String(uid || "");
+  if (!/^\d+$/.test(key) || getAdminIds(env).includes(key)) return;
+  const now = Date.now();
+  const hit = blockedCache.get(key);
+  let blocked;
+  if (hit && hit.exp > now) {
+    blocked = hit.v;
+  } else {
+    try {
+      const ctx = getDbContext(env);
+      const token = await getAccessToken(env);
+      blocked = !!(await rtdbGet(ctx.dbUrl, "blocked_users/" + key, token));
+    } catch (_) {
+      return;
+    }
+    if (blockedCache.size > 5000) blockedCache.clear();
+    blockedCache.set(key, { v: blocked, exp: now + 30 * 1000 });
+  }
+  if (blocked) throw httpError(403, "foydalanuvchi bloklangan", { blocked: true });
 }
 
 function decodeJwtPart(part) {
@@ -3374,7 +3405,7 @@ async function handleCustomerRegister(request, env) {
 function consumeMessageRate(identity, isAdmin) {
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const limit = isAdmin ? 30 : 10;
+  const limit = isAdmin ? 600 : 10; // admin: ommaviy xabar uchun (Telegram ~30/s ruxsat beradi)
   const current = messageRateLimits.get(identity);
   const bucket = !current || now - current.startedAt >= windowMs
     ? { startedAt: now, count: 0 }

@@ -7325,34 +7325,33 @@ html.lite .ad-row { animation: none !important; }
 </div>
 
 <div class="modal-standard" id="adminInventoryModal">
-    <div class="modal-header"><h2 style="color: var(--luxury-gold);"><svg class="uic" aria-hidden="true"><use href="#i-box"></use></svg>Ombor</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
-    <div style="padding: 0 15px 10px;">
-        <input type="text" id="inv-search" class="search-box" placeholder="🔍 Tovar nomi yoki kodi bo'yicha qidirish..." oninput="renderAdminInventory()" style="margin-bottom:12px;">
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;" id="inv-filter-chips">
+    <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-box"></use></svg>Ombor</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">&larr;</button></div>
+    <div class="iv-top">
+        <label class="iv-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.2" y2="16.2"/></svg><input type="text" id="inv-search" class="search-box" placeholder="Nomi yoki kodi bo'yicha qidirish" oninput="renderAdminInventory()" autocomplete="off"></label>
+        <div class="iv-chips" id="inv-filter-chips">
             <span class="chip inv-fchip selected" data-f="all" onclick="setInvFilter(this,'all')">Hammasi</span>
-            <span class="chip inv-fchip" data-f="gaz" onclick="setInvFilter(this,'gaz')">🚛 GAZ</span>
-            <span class="chip inv-fchip" data-f="chevy" onclick="setInvFilter(this,'chevy')">🚘 Chevrolet</span>
-            <span class="chip inv-fchip" data-f="daewoo" onclick="setInvFilter(this,'daewoo')">🚕 Daewoo</span>
-            <span class="chip inv-fchip" data-f="uaz" onclick="setInvFilter(this,'uaz')">🚙 UAZ</span>
-            <span class="chip inv-fchip" data-f="low" onclick="setInvFilter(this,'low')" style="color:#ff9f0a;">⚠️ Kam qolgan</span>
+            <span class="chip inv-fchip" data-f="low" onclick="setInvFilter(this,'low')"><i class="iv-dot" style="--c:#ff9f0a"></i>Kam qolgan</span>
+            <span class="chip inv-fchip" data-f="gaz" onclick="setInvFilter(this,'gaz')">GAZ</span>
+            <span class="chip inv-fchip" data-f="chevy" onclick="setInvFilter(this,'chevy')">Chevrolet</span>
+            <span class="chip inv-fchip" data-f="daewoo" onclick="setInvFilter(this,'daewoo')">Daewoo</span>
+            <span class="chip inv-fchip" data-f="uaz" onclick="setInvFilter(this,'uaz')">UAZ</span>
         </div>
-        <div style="display:flex; gap:10px; align-items:center; margin-top:10px;">
-            <button class="inv-btn" id="inv-selall-btn" style="background:rgba(10,132,255,0.15); color:#0a84ff; border:1px solid rgba(10,132,255,0.35);" onclick="invSelectAllVisible()">☑️ Hammasini belgilash</button>
-            <span id="inv-visible-count" style="font-size:11px; color:var(--text-muted);"></span>
+        <div class="iv-tools">
+            <span id="inv-visible-count"></span>
+            <button type="button" class="iv-link" id="inv-selall-btn" onclick="invSelectAllVisible()">Hammasini belgilash</button>
         </div>
     </div>
-    <div id="inv-bulk-bar" style="display:none; margin:0 15px 12px; padding:12px; border-radius:14px; background:rgba(10,132,255,0.08); border:1px solid rgba(10,132,255,0.3);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <span id="inv-bulk-count" style="font-size:12px; font-weight:800; color:#0a84ff;">0 ta belgilandi</span>
-            <span onclick="invClearSelection()" style="font-size:11px; color:var(--text-muted); cursor:pointer; text-decoration:underline;">Bekor qilish</span>
-        </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <input type="text" inputmode="numeric" id="inv-bulk-price" class="inv-input" placeholder="Yangi narx" oninput="formatPriceInput(this)" style="width:100px; text-align:left;">
+    <div id="inv-bulk-bar" style="display:none;">
+        <div class="iv-bulk-hd"><span id="inv-bulk-count">0 ta belgilandi</span><button type="button" class="iv-link" onclick="invClearSelection()">Bekor qilish</button></div>
+        <div class="iv-bulk-row">
+            <input type="text" inputmode="numeric" id="inv-bulk-price" class="inv-input" placeholder="Yangi narx" oninput="formatPriceInput(this)">
             <button class="inv-btn" onclick="invBulkSetPrice()">Narx qo'yish</button>
-            <input type="number" id="inv-bulk-pct" placeholder="%" class="inv-input" style="width:55px;">
-            <button class="inv-btn" style="background:#30d158;" onclick="invBulkPercent(1)">＋%</button>
-            <button class="inv-btn" style="background:#ff9f0a;" onclick="invBulkPercent(-1)">−%</button>
-            <button class="inv-btn" style="background:#ff453a; color:#fff;" onclick="invBulkDelete()">🗑 O'chirish</button>
+        </div>
+        <div class="iv-bulk-row">
+            <input type="number" id="inv-bulk-pct" placeholder="%" class="inv-input">
+            <button class="inv-btn iv-green" onclick="invBulkPercent(1)">+ %</button>
+            <button class="inv-btn iv-orange" onclick="invBulkPercent(-1)">&minus; %</button>
+            <button class="inv-btn iv-red" onclick="invBulkDelete()">O'chirish</button>
         </div>
     </div>
     <div id="admin-inventory-list"></div>
@@ -7830,7 +7829,7 @@ html.lite .ao-o, html.lite .ao-day, html.lite .ao-push, html.lite .ao-step.cur i
 </div>
     
     <div class="modal-standard" id="adminCustomersModal">
-    <div class="modal-header"><h2 style="color: #ff9500;"><svg class="uic" aria-hidden="true"><use href="#i-users"></use></svg>Mijozlar Ro'yxati</h2><button class="close-btn" aria-label="Yopish" style="font-size: 24px;" onclick="closeModal()">←</button></div>
+    <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-users"></use></svg>Mijozlar</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">&larr;</button></div>
     
     <div style="display: flex; gap: 8px; margin-bottom: 15px;">
         <input type="text" id="customer-search-input" class="search-box" placeholder="Mijoz ismi yoki ID si..." oninput="searchCustomers()" style="flex: 1; padding: 10px 15px; border-radius: 12px; font-size: 13px;">
@@ -17101,19 +17100,19 @@ window.renderAdminInventory = () => {
         let sb = document.getElementById('inv-selall-btn');
         if (sb) {
             let allOn = items.length > 0 && items.every(p => p && p.id != null && window._invSelected[p.id]);
-            sb.innerText = allOn ? "✖️ Belgilashni bekor qilish" : "☑️ Hammasini belgilash";
+            sb.innerText = allOn ? "Belgilashni bekor qilish" : "Hammasini belgilash";
         }
     } catch (e) {}
 
     // #30: yuqorida jami / kam qolgan / tugagan xulosasi
-    let summaryHtml = `<div class="inv2-summary" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:0 15px 12px;">
+    let summaryHtml = `<div class="inv2-summary">
         <div class="inv2-stat"><b>${_live.length}</b><span>Jami tovar</span></div>
         <div class="inv2-stat inv2-stat-low"><b>${_lowCount}</b><span>Kam qoldi</span></div>
         <div class="inv2-stat inv2-stat-out"><b>${_outCount}</b><span>Tugagan</span></div>
     </div>`;
 
     if (items.length === 0) {
-        c.innerHTML = summaryHtml + '<p style="text-align:center; color:gray; margin:30px 0;">Tovar topilmadi.</p>';
+        c.innerHTML = summaryHtml + '<p class="iv-empty">Tovar topilmadi</p>';
         invUpdateBulkBar();
         return;
     }
@@ -17122,14 +17121,14 @@ window.renderAdminInventory = () => {
         let checked = window._invSelected[p.id] ? 'checked' : '';
         let selCls = window._invSelected[p.id] ? ' inv-selected' : '';
         let checkbox = `<input type="checkbox" class="inv-check" ${checked} onchange="invToggleSelect(this, ${p.id})">`;
-        let codeHint = p.code ? `<span class="inv-code">🔖 ${p.code}</span>` : '';
+        let codeHint = p.code ? `<span class="inv-code">${p.code}</span>` : '';
         let tot = _stockOf(p);
         let flag = tot <= 0 ? '<span class="inv-flag inv-flag-out">Tugagan</span>' : (tot <= 3 ? '<span class="inv-flag inv-flag-low">Kam qoldi</span>' : '');
         let urg = tot <= 0 ? ' inv-urg-out' : (tot <= 3 ? ' inv-urg-low' : '');
         if (p.product_type === 'razmerli' && p.sizes) {
             let sizesHtml = p.sizes.map((s, idx) => `
                 <div class="inv-size-row">
-                    <span class="inv-size-name">Razmer: ${s.size}</span>
+                    <span class="inv-size-name">${s.size}</span>
                     <div class="inv-controls">
                         <input type="number" id="inv-input-${p.id}-${idx}" class="inv-input" value="${s.stock}">
                         <button class="inv-btn" onclick="fastSaveSizeStock(${p.id}, ${idx})">Saqlash</button>
@@ -17462,88 +17461,223 @@ window.openCompareModal = () => {
     else { m.style.display='flex'; window.activeModal='compareModal'; }
 };
 
-// 5.1 BROADCAST (admin)
-window.openBroadcastModal = () => {
-    let m = document.getElementById('broadcastModal');
-    if (!m) {
+// 5.1 XABAR YUBORISH (admin) — hammaga, tanlangan bir nechta yoki bitta mijozga.
+//     Yetkazish o'zgarmadi: har bir xabar `tgProxySend` -> Worker -> Telegram.
+// Faqat HAQIQIY Telegram chat_id (sof raqamli). Soxta ID (apk_*, tg_url_*) — skip.
+window._isTelegramId = function (uid) { return /^\d+$/.test(String(uid)); };
+(function () {
+    var BC = { mode: 'all', sel: {}, users: [], q: '', busy: false, fake: 0, loaded: false };
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var hap = function (k) { try { if (window._hap) window._hap(k); } catch (e) {} };
+    var DBX = function () { try { if (typeof db !== 'undefined' && db) return db; } catch (e) {} return (window.firebase && firebase.database) ? firebase.database() : null; };
+
+    function ensureModal() {
+        var m = $('broadcastModal');
+        if (m) return m;
         m = document.createElement('div');
         m.id = 'broadcastModal';
         m.className = 'modal-standard';
-        m.innerHTML = `
-            <div class="modal-header"><h2 style="color:#0a84ff;"><svg class="uic" aria-hidden="true"><use href="#i-megaphone"></use></svg>Ommaviy xabar</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>
-            <div style="padding:20px;">
-                <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;line-height:1.5;">Bu xabar faqat <b>Telegram</b> orqali ro'yxatdan o'tgan mijozlarga yuboriladi (APK/brauzer foydalanuvchilari o'tkazib yuboriladi). HTML ishlatish mumkin.</p>
-                <textarea id="bc-text" placeholder="Salom! Bizning yangi chegirmalarimiz bilan tanishing..."></textarea>
-                <div class="bc-stats">
-                    <div class="bc-stat"><strong id="bc-count">0</strong>Telegram</div>
-                    <div class="bc-stat"><strong id="bc-sent">0</strong>Yuborildi</div>
-                    <div class="bc-stat"><strong id="bc-failed">0</strong>Xato</div>
-                    <div class="bc-stat"><strong id="bc-skipped">0</strong>O'tkazildi</div>
-                </div>
-                <button onclick="sendBroadcast()" id="bc-send-btn" style="width:100%;margin-top:14px;padding:14px;background:var(--gold-gradient);color:#000;border:none;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">📤 YUBORISH</button>
-            </div>`;
+        m.innerHTML =
+            '<div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-megaphone"></use></svg>Xabar yuborish</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">\u00D7</button></div>' +
+            '<div class="bcx">' +
+                '<div class="bcx-seg" id="bcx-seg"><button type="button" data-m="all" class="on">Hammaga</button><button type="button" data-m="pick">Tanlanganlarga</button></div>' +
+                '<p class="bcx-sec">Xabar</p>' +
+                '<div class="bcx-grp"><textarea id="bc-text" rows="5" maxlength="3500" placeholder="Assalomu alaykum! Yangi chegirmalarimiz bilan tanishing..."></textarea></div>' +
+                '<p class="bcx-hint">Faqat Telegram mijozlariga boradi, bloklanganlar o\u2018tkazib yuboriladi. HTML ishlatish mumkin: &lt;b&gt;qalin&lt;/b&gt;</p>' +
+                '<div id="bcx-pick" hidden>' +
+                    '<p class="bcx-sec"><span>Qabul qiluvchilar</span><button type="button" class="bcx-link" id="bcx-clear">Tozalash</button></p>' +
+                    '<label class="bcx-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.2" y2="16.2"/></svg><input type="text" id="bcx-q" placeholder="Ism yoki telefon" autocomplete="off"></label>' +
+                    '<div class="bcx-grp bcx-list" id="bcx-list"><div class="bcx-empty">Yuklanmoqda...</div></div>' +
+                '</div>' +
+                '<div class="bcx-stats" id="bcx-stats" hidden>' +
+                    '<div><b id="bc-count">0</b><span>Jami</span></div>' +
+                    '<div><b id="bc-sent">0</b><span>Yuborildi</span></div>' +
+                    '<div><b id="bc-failed">0</b><span>Xato</span></div>' +
+                    '<div><b id="bc-skipped">0</b><span>O\u2018tkazildi</span></div>' +
+                '</div>' +
+                '<p class="bcx-wait" id="bcx-wait" hidden></p>' +
+            '</div>' +
+            '<div class="bcx-foot"><button type="button" id="bc-send-btn" onclick="sendBroadcast()">Yuborish</button></div>';
         document.body.appendChild(m);
+        $('bcx-seg').onclick = function (e) {
+            var b = e.target.closest ? e.target.closest('button[data-m]') : null;
+            if (!b || BC.busy) return;
+            setMode(b.getAttribute('data-m'));
+            hap('selection');
+        };
+        $('bcx-q').oninput = function () { BC.q = this.value || ''; renderPick(); };
+        $('bcx-clear').onclick = function () { if (BC.busy) return; BC.sel = {}; renderPick(); paint(); };
+        $('bcx-list').onclick = function (e) {
+            var r = e.target.closest ? e.target.closest('.bcx-row') : null;
+            if (!r || BC.busy || r.classList.contains('is-blk')) return;
+            var id = r.getAttribute('data-uid');
+            if (BC.sel[id]) delete BC.sel[id]; else BC.sel[id] = true;
+            r.classList.toggle('on', !!BC.sel[id]);
+            hap('selection');
+            paint();
+        };
+        return m;
     }
-    if (typeof openModal === 'function') openModal('broadcastModal');
-    else { m.style.display='flex'; window.activeModal='broadcastModal'; }
-    db.ref('users').once('value', (snap) => {
-        const users = snap.val() || {};
-        const cnt = document.getElementById('bc-count');
-        if (cnt) cnt.innerText = Object.keys(users).filter(window._isTelegramId).length;
-    });
-};
-window.sendBroadcast = async () => {
-    const txtEl = document.getElementById('bc-text');
-    const text = (txtEl ? txtEl.value : '').trim();
-    if (!text || text.length < 5) { showToast("Xabar kamida 5 ta belgi bo'lsin", 'warning'); return; }
-    if (typeof tg !== 'undefined' && tg.showConfirm) {
-        tg.showConfirm("Hammaga yuborilsinmi?", (ok) => { if (ok) _doBroadcast(text); });
-    } else if (confirm("Hammaga yuborilsinmi?")) _doBroadcast(text);
-};
-// Faqat HAQIQIY Telegram chat_id (sof raqamli). Soxta ID (apk_*, tg_url_*) — skip.
-window._isTelegramId = function (uid) { return /^\d+$/.test(String(uid)); };
-window._doBroadcast = async (text) => {
-    const btn = document.getElementById('bc-send-btn');
-    if (btn) { btn.disabled = true; btn.innerText = '⏳ Yuborilmoqda...'; }
-    let sent = 0, failed = 0, skipped = 0;
-    try {
-        const snap = await db.ref('users').once('value');
-        const users = snap.val() || {};
-        const allIds = Object.keys(users);
-        const ids = allIds.filter(window._isTelegramId);     // faqat Telegram
-        skipped = allIds.length - ids.length;                // soxta/APK — o'tkazib yuboriladi
-        const sentEl = document.getElementById('bc-sent');
-        const failEl = document.getElementById('bc-failed');
-        const skipEl = document.getElementById('bc-skipped');
-        if (skipEl) skipEl.innerText = skipped;
-        for (const uid of ids) {
-            let ok = false;
-            // 2 urinish: 429 (Too Many Requests) bo'lsa retry_after kutib qayta yuboramiz
-            for (let attempt = 0; attempt < 2 && !ok; attempt++) {
-                try {
-                    const res = await tgProxySend({ chat_id: uid, text: text, parse_mode: 'HTML' });
-                    const j = await res.json();
-                    if (j && j.ok) { ok = true; break; }
-                    if (j && j.error_code === 429 && j.parameters && j.parameters.retry_after) {
-                        await new Promise(r => setTimeout(r, (j.parameters.retry_after * 1000) + 250));
-                        continue; // qayta urinamiz
-                    }
-                    break; // boshqa xato (mas. user botni bloklagan) — qayta urinmaymiz
-                } catch (e) { break; }
+
+    function setMode(md) {
+        BC.mode = md === 'pick' ? 'pick' : 'all';
+        var seg = $('bcx-seg');
+        if (seg) Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.classList.toggle('on', x.getAttribute('data-m') === BC.mode); });
+        var pk = $('bcx-pick'); if (pk) pk.hidden = BC.mode !== 'pick';
+        if (BC.mode === 'pick') renderPick();
+        paint();
+    }
+
+    function recipients() {
+        if (BC.mode === 'all') return BC.users.filter(function (u) { return !u.blocked; }).map(function (u) { return u.uid; });
+        return Object.keys(BC.sel).filter(function (id) { return BC.sel[id] && window._isTelegramId(id) && !(window._blockedMap || {})[id]; });
+    }
+
+    function paint() {
+        var btn = $('bc-send-btn');
+        if (!btn || BC.busy) return;
+        var n = recipients().length;
+        btn.disabled = !BC.loaded || n === 0;
+        btn.textContent = !BC.loaded ? 'Yuklanmoqda...' : (n === 0 ? 'Qabul qiluvchini tanlang' : (n + ' kishiga yuborish'));
+    }
+
+    function renderPick() {
+        var box = $('bcx-list');
+        if (!box || BC.mode !== 'pick') return;
+        if (!BC.loaded) { box.innerHTML = '<div class="bcx-empty">Yuklanmoqda...</div>'; return; }
+        var q = BC.q.toLowerCase().trim();
+        var list = BC.users.filter(function (u) {
+            return !q || u.name.toLowerCase().indexOf(q) !== -1 || (u.phone || '').toLowerCase().indexOf(q) !== -1 || u.uid.indexOf(q) !== -1;
+        });
+        // Tanlanganlar tepada turadi — kimga ketishini darhol ko'rish uchun
+        list.sort(function (a, b) { return (BC.sel[b.uid] ? 1 : 0) - (BC.sel[a.uid] ? 1 : 0); });
+        var more = list.length > 150 ? list.length - 150 : 0;
+        list = list.slice(0, 150);
+        box.innerHTML = list.length ? list.map(function (u) {
+            return '<div class="bcx-row' + (BC.sel[u.uid] ? ' on' : '') + (u.blocked ? ' is-blk' : '') + '" role="button" tabindex="0" data-uid="' + esc(u.uid) + '">' +
+                '<span class="bcx-chk" aria-hidden="true"></span>' +
+                '<span class="bcx-mid"><b>' + esc(u.name) + '</b><span>' + esc(u.phone || 'Telefon yo\u2018q') + '</span></span>' +
+                (u.blocked ? '<span class="bcx-blk">Bloklangan</span>' : '') +
+            '</div>';
+        }).join('') + (more ? '<div class="bcx-empty">Yana ' + more + ' ta \u2014 qidiruvdan foydalaning</div>' : '')
+            : '<div class="bcx-empty">Mijoz topilmadi</div>';
+    }
+
+    function loadUsers() {
+        var d = DBX();
+        if (!d) return Promise.reject(new Error('Baza ulanmagan'));
+        var snapP = window._getUsersSnap ? window._getUsersSnap() : d.ref('users').once('value');
+        var blkP = d.ref('blocked_users').once('value').then(function (x) { return x.val() || {}; }, function () { return {}; });
+        return Promise.all([snapP, blkP]).then(function (r) {
+            var us = (r[0] && r[0].val && r[0].val()) || {};
+            var bm = r[1] || {};
+            window._blockedMap = bm;
+            var all = Object.keys(us);
+            BC.fake = all.filter(function (u) { return !window._isTelegramId(u); }).length;
+            BC.users = all.filter(window._isTelegramId).map(function (uid) {
+                var p = (us[uid] && us[uid].profile) || {};
+                return { uid: String(uid), name: String(p.name || p.firstName || 'Nomsiz mijoz'), phone: String(p.phone || ''), blocked: !!bm[uid] };
+            }).sort(function (a, b) { return a.name.localeCompare(b.name, 'uz'); });
+            BC.loaded = true;
+        });
+    }
+
+    /** ids — ixtiyoriy: oldindan tanlangan mijozlar (masalan mijoz kartasidan). */
+    window.openBroadcastModal = function (ids) {
+        ensureModal();
+        if (!BC.busy) {
+            if (Array.isArray(ids) && ids.length) {
+                BC.sel = {};
+                ids.forEach(function (id) { BC.sel[String(id)] = true; });
+                setMode('pick');
+            } else {
+                setMode(BC.mode);
             }
-            if (ok) sent++; else failed++;
-            if (sentEl) sentEl.innerText = sent;
-            if (failEl) failEl.innerText = failed;
-            await new Promise(r => setTimeout(r, 60)); // ~16/s — Telegram limitidan past
         }
-        showToast(`✅ Yuborildi: ${sent} | Xato: ${failed} | O'tkazildi: ${skipped}`, 'success');
-        try { db.ref('broadcasts').push({ text, sent, failed, skipped, time: Date.now() }); } catch(e) {}
-    } catch (e) {
-        showToast("Xato: " + (e.message || e), 'warning');
-    } finally {
-        if (btn) { btn.disabled = false; btn.innerText = '📤 YUBORISH'; }
-    }
-};
+        if (typeof openModal === 'function') openModal('broadcastModal');
+        else { var m = $('broadcastModal'); m.style.display = 'flex'; window.activeModal = 'broadcastModal'; }
+        paint();
+        loadUsers().then(function () { renderPick(); paint(); }).catch(function (e) {
+            try { showToast('Mijozlar yuklanmadi: ' + (e.message || e), 'warning'); } catch (x) {}
+        });
+    };
+
+    window.sendBroadcast = function () {
+        if (BC.busy) return;
+        var txtEl = $('bc-text');
+        var text = (txtEl ? txtEl.value : '').trim();
+        if (text.length < 2) { showToast('Xabar matnini yozing', 'warning'); return; }
+        var ids = recipients();
+        if (!ids.length) { showToast('Qabul qiluvchini tanlang', 'warning'); return; }
+        var q = BC.mode === 'all' ? ('Xabar hamma (' + ids.length + ' kishi)ga yuborilsinmi?') : (ids.length + ' kishiga yuborilsinmi?');
+        if (typeof tg !== 'undefined' && tg.showConfirm) {
+            tg.showConfirm(q, function (ok) { if (ok) window._doBroadcast(text, ids); });
+        } else if (confirm(q)) window._doBroadcast(text, ids);
+    };
+
+    window._doBroadcast = async function (text, ids) {
+        if (BC.busy) return;
+        if (!Array.isArray(ids)) {   // eski chaqiruv: hammaga
+            if (!BC.loaded) { try { await loadUsers(); } catch (e) {} }
+            BC.mode = 'all';
+            ids = recipients();
+        }
+        BC.busy = true;
+        var btn = $('bc-send-btn');
+        var stats = $('bcx-stats'), wait = $('bcx-wait');
+        var setN = function (id, v) { var el = $(id); if (el) el.textContent = v; };
+        var sent = 0, failed = 0;
+        var skipped = BC.mode === 'all' ? (BC.fake + BC.users.filter(function (u) { return u.blocked; }).length) : 0;
+        if (stats) stats.hidden = false;
+        setN('bc-count', ids.length); setN('bc-sent', 0); setN('bc-failed', 0); setN('bc-skipped', skipped);
+        if (btn) { btn.disabled = true; btn.textContent = 'Yuborilmoqda... 0/' + ids.length; }
+        try {
+            for (var i = 0; i < ids.length; i++) {
+                var uid = ids[i], ok = false;
+                for (var attempt = 0; attempt < 6 && !ok; attempt++) {
+                    try {
+                        var res = await window.tgProxySend({ chat_id: uid, text: text, parse_mode: 'HTML' });
+                        var j = null;
+                        try { j = await res.json(); } catch (e) {}
+                        if (j && j.ok) { ok = true; break; }
+                        // Limit: Worker (retryAfter) yoki Telegram (retry_after / telegramStatus 429)
+                        var waitS = 0;
+                        if (res.status === 429 || (j && (j.error_code === 429 || j.telegramStatus === 429))) {
+                            waitS = (j && (j.retryAfter || (j.parameters && j.parameters.retry_after)))
+                                || parseInt(res.headers.get('Retry-After') || '0', 10) || 5;
+                        }
+                        if (waitS > 0) {
+                            waitS = Math.min(90, waitS);
+                            if (wait) { wait.hidden = false; wait.textContent = 'Telegram limiti: ' + waitS + ' soniya kutilmoqda. Oynani yopmang.'; }
+                            await sleep(waitS * 1000 + 300);
+                            if (wait) wait.hidden = true;
+                            continue;
+                        }
+                        break; // boshqa xato (mas. mijoz botni bloklagan) — qayta urinmaymiz
+                    } catch (e) {
+                        if (attempt === 0) { await sleep(1500); continue; }
+                        break;
+                    }
+                }
+                if (ok) sent++; else failed++;
+                setN('bc-sent', sent); setN('bc-failed', failed);
+                if (btn) btn.textContent = 'Yuborilmoqda... ' + (i + 1) + '/' + ids.length;
+                await sleep(60);
+            }
+            try { showToast('\u2705 Yuborildi: ' + sent + ' | Xato: ' + failed, 'success'); } catch (e) {}
+            try { var d = DBX(); if (d) d.ref('broadcasts').push({ text: text, sent: sent, failed: failed, skipped: skipped, mode: BC.mode, count: ids.length, time: Date.now() }); } catch (e) {}
+            var te = $('bc-text'); if (te && failed === 0) te.value = '';
+        } catch (e) {
+            try { showToast('Xato: ' + (e.message || e), 'warning'); } catch (x) {}
+        } finally {
+            BC.busy = false;
+            if (wait) wait.hidden = true;
+            paint();
+        }
+    };
+})();
 
 // 1.6 PULL-TO-REFRESH — OLIB TASHLANDI (foydalanuvchi so'roviga ko'ra: pastga
 //      tortib yangilash kerak emas. Ma'lumot baribir real-time yangilanadi.)
@@ -24333,7 +24467,8 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         { id: 'active',   icon: '\uD83D\uDD25', label: 'Faol' },
         { id: 'new',      icon: '\uD83C\uDD95', label: 'Yangi' },
         { id: 'sleeping', icon: '\uD83D\uDCA4', label: 'Uxlagan' },
-        { id: 'noorder',  icon: '\uD83D\uDC64', label: 'Xaridsiz' }
+        { id: 'noorder',  icon: '\uD83D\uDC64', label: 'Xaridsiz' },
+        { id: 'blocked',  icon: '\u26D4', label: 'Bloklangan' }
     ];
 
     var DAY = 86400000;
@@ -24379,6 +24514,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                 cartCount: u.cart ? Object.keys(u.cart).length : 0,
                 wishCount: Array.isArray(u.wishlist) ? u.wishlist.length : (u.wishlist ? Object.keys(u.wishlist).length : 0),
                 cashback: (u.phase2 && parseInt(u.phase2.cashback, 10)) || 0,
+                blocked: !!(window._blockedMap && window._blockedMap[uid]),
                 // 🚗 ⚠️ ILGARI XATO: bu yerda `u.my_car.model || u.my_car.name`
                 //    yozilgan, ya'ni OBYEKT kutilardi. Ilova esa `my_car` ni
                 //    MATN sifatida saqlaydi ("chevy-Nexia 3"). Natijada admin
@@ -24407,6 +24543,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             case 'new':      return c.first > 0 && (now - c.first) <= 14 * DAY;
             case 'sleeping': return c.orders > 0 && c.last > 0 && (now - c.last) > 60 * DAY;
             case 'noorder':  return c.orders === 0;
+            case 'blocked':  return !!c.blocked;
             default:         return true;
         }
     }
@@ -24490,45 +24627,17 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
     function customerCardHTML(c, idx) {
         var initial = E((c.name || '?').trim().charAt(0).toUpperCase() || '?');
         var t = c.tier;
-        var lastTx = c.last ? agoLabel(c.last) : 'xarid yo\'q';
-        return '<div class="cst-card' + (c.isVip ? ' is-vip' : '') + '" data-uid="' + E(c.uid) + '" ' +
+        return '<div class="cx-row' + (c.blocked ? ' is-blocked' : '') + '" role="button" tabindex="0" data-uid="' + E(c.uid) + '" ' +
                 'style="--tier-grad:' + t.grad + '; --tier-1:' + t.c1 + '; --tier-tx:' + t.ink + ';">' +
-            '<div class="cst-top">' +
-                '<div class="cst-av">' + initial +
-                    '<span class="cst-av-ring"></span>' +
-                    '<span class="cst-rank">' + rankBadge(idx) + '</span>' +
-                '</div>' +
-                '<div class="cst-id">' +
-                    '<h4 class="cst-name">' + E(c.name) + '</h4>' +
-                    '<div class="cst-sub">' +
-                        '<span class="cst-tier">' + t.icon + ' ' + E(t.name) + '</span>' +
-                        '<span class="cst-phone">' + E(c.phone || 'telefon yo\'q') + '</span>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="cst-money"><b>' + fmtShort(c.spent) + "</b><span>so'm</span></div>" +
-            '</div>' +
-            '<div class="cst-stats">' +
-                '<div class="cst-stat"><b>' + c.orders + '</b><span>buyurtma</span></div>' +
-                '<div class="cst-stat"><b>' + (c.avg ? fmtShort(c.avg) : '0') + '</b><span>o\'rtacha</span></div>' +
-                '<div class="cst-stat"><b style="font-size:12.5px; line-height:1.4;">' + E(lastTx) + '</b><span>oxirgi xarid</span></div>' +
-            '</div>' +
-            '<div class="cst-acts">' +
-                '<button type="button" class="cst-act" data-act="orders">' +
-                    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1 0-2 .9-2 2v3c0 .7.4 1.3 1 1.7V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.6-.4 1-1 1-1.7V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>' +
-                    'Buyurtma</button>' +
-                (c.username || c.uid
-                    ? '<button type="button" class="cst-act is-tg" data-act="tg">' +
-                        '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.8 15.6l-.2 3.6c.4 0 .6-.2.8-.4l2-1.9 4.1 3c.8.4 1.3.2 1.5-.7l2.7-12.6c.2-1.1-.4-1.5-1.1-1.2L3.4 10.1c-1.1.4-1 1-.2 1.3l4.2 1.3 9.7-6.1c.5-.3.9-.1.5.2z"/></svg>' +
-                        'Yozish</button>'
-                    : '') +
-                (c.phone
-                    ? '<button type="button" class="cst-act is-call" data-act="call">' +
-                        '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.5 0 1 .4 1 1V20c0 .6-.5 1-1 1-9.4 0-17-7.6-17-17 0-.6.5-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.6.1.3 0 .7-.2 1z"/></svg>' +
-                        'Qo\'ng\'iroq</button>'
-                    : '') +
-                '<button type="button" class="cst-act is-vip' + (c.manual ? ' on' : '') + '" data-act="vip" aria-label="VIP">' +
-                    '\uD83D\uDC51</button>' +
-            '</div>' +
+            '<span class="cx-av">' + initial + '</span>' +
+            '<span class="cx-mid">' +
+                '<span class="cx-name"><span class="t">' + E(c.name) + '</span>' +
+                    (c.isVip ? '<span class="cx-vip" title="VIP">\uD83D\uDC51</span>' : '') +
+                    (c.blocked ? '<span class="cx-blk">Bloklangan</span>' : '') +
+                '</span>' +
+                '<span class="cx-phone">' + E(c.phone || 'Telefon yo\'q') + '</span>' +
+            '</span>' +
+            '<span class="cx-chev" aria-hidden="true">\u203A</span>' +
         '</div>';
     }
 
@@ -24545,7 +24654,8 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             return;
         }
         var visible = CS.view.slice(0, CS.limit);
-        var html = visible.map(function (c, i) { return customerCardHTML(c, i); }).join('');
+        var html = '<p class="cx-count">' + CS.view.length + ' ta mijoz</p><div class="cx-group">' +
+            visible.map(function (c, i) { return customerCardHTML(c, i); }).join('') + '</div>';
         if (CS.limit < CS.view.length) {
             html += '<div class="cst-more"><span><i></i>Yana ' +
                 (CS.view.length - CS.limit) + ' ta mijoz &middot; pastga suring</span></div>';
@@ -24553,9 +24663,9 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         box.innerHTML = html;
         // Animatsiya faqat segment/saralash/ochilishda — qidiruvda har harf bosilganda
         // kartalar qayta "sakrasa" ko'z charchaydi.
-        if (CS.animate) { stagger(box.querySelectorAll('.cst-card'), 42, 12); CS.animate = false; }
+        if (CS.animate) { stagger(box.querySelectorAll('.cx-row'), 30, 12); CS.animate = false; }
         else {
-            Array.prototype.forEach.call(box.querySelectorAll('.cst-card'), function (n) {
+            Array.prototype.forEach.call(box.querySelectorAll('.cx-row'), function (n) {
                 n.style.animation = 'none';
             });
         }
@@ -24564,7 +24674,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
     function renderShell() {
         var box = $('admin-customers-list');
         if (!box) return;
-        box.innerHTML = '<div class="cst-wrap">' + kpisHTML() + toolsHTML() + segsHTML() +
+        box.innerHTML = '<div class="cst-wrap">' + toolsHTML() + segsHTML() +
             '<div id="cst-list"></div></div>';
 
         // KPI raqamlarini sanab chiqaramiz
@@ -24626,7 +24736,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         // Karta amallari
         var list = $('cst-list');
         if (list) list.onclick = function (e) {
-            var card = e.target.closest ? e.target.closest('.cst-card') : null;
+            var card = e.target.closest ? e.target.closest('.cx-row') : null;
             if (!card) return;
             var uid = card.getAttribute('data-uid');
             var c = CS.all.filter(function (x) { return x.uid === uid; })[0];
@@ -24717,79 +24827,86 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 
         var body = $('customer-detail-body');
         if (!body) return;
+        var SV = {
+            call: '<path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.5 0 1 .4 1 1V20c0 .6-.5 1-1 1-9.4 0-17-7.6-17-17 0-.6.5-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.6.1.3 0 .7-.2 1z"/>',
+            tg: '<path d="M9.8 15.6l-.2 3.6c.4 0 .6-.2.8-.4l2-1.9 4.1 3c.8.4 1.3.2 1.5-.7l2.7-12.6c.2-1.1-.4-1.5-1.1-1.2L3.4 10.1c-1.1.4-1 1-.2 1.3l4.2 1.3 9.7-6.1c.5-.3.9-.1.5.2z"/>',
+            msg: '<path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM7 9h10v2H7zm6 5H7v-2h6zm4-6H7V6h10z"/>',
+            box: '<path d="M20 2H4c-1 0-2 .9-2 2v3c0 .7.4 1.3 1 1.7V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.6-.4 1-1 1-1.7V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/>',
+            crown: '<path d="M5 16 3 5l5.5 5L12 4l3.5 6L21 5l-2 11zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14z"/>',
+            block: '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM4 12a8 8 0 0 1 12.9-6.3L5.7 16.9A7.9 7.9 0 0 1 4 12zm8 8a7.9 7.9 0 0 1-4.9-1.7L18.3 7.1A8 8 0 0 1 12 20z"/>'
+        };
+        var svg = function (k) { return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' + SV[k] + '</svg>'; };
+        var qb = function (id, label, k, color) {
+            return '<button type="button" class="cx-q" id="' + id + '" style="--qc:' + color + '"><span class="cx-q-ic">' + svg(k) + '</span><span class="cx-q-l">' + label + '</span></button>';
+        };
+        var kv = function (k, v, cls) {
+            return '<div class="cx-kv"><span class="k">' + k + '</span><span class="v' + (cls ? ' ' + cls : '') + '">' + v + '</span></div>';
+        };
+        var telV = c.phone
+            ? '<a class="cx-link" href="tel:' + E(String(c.phone).replace(/[^0-9+]/g, '')) + '">' + E(c.phone) + '</a>'
+            : '\u2014';
         body.innerHTML =
             // --- HERO ---
-            '<div class="cdt-hero" id="cdt-hero">' +
-                '<div class="cdt-av" id="cdt-av">' + E((c.name || '?').charAt(0).toUpperCase()) + '</div>' +
-                '<h3 class="cdt-name">' + E(c.name) + '</h3>' +
-                '<div class="cdt-badges">' +
-                    '<span class="cdt-badge is-tier" id="cdt-tier-badge">' + t.icon + ' ' + E(t.name) + '</span>' +
-                    (c.manual ? '<span class="cdt-badge">Qo\'lda belgilangan</span>' : '') +
-                    (c.pending ? '<span class="cdt-badge">' + c.pending + ' ta faol buyurtma</span>' : '') +
+            '<div class="cx-hero" id="cdt-hero">' +
+                '<div class="cx-hav" id="cdt-av">' + E((c.name || '?').charAt(0).toUpperCase()) + '</div>' +
+                '<h3 class="cx-hname">' + E(c.name) + '</h3>' +
+                '<div class="cx-hphone">' + E(c.phone || 'Telefon yo\'q') + '</div>' +
+                '<div class="cx-badges">' +
+                    '<span class="cx-badge is-tier" id="cdt-tier-badge">' + t.icon + ' ' + E(t.name) + '</span>' +
+                    (c.manual ? '<span class="cx-badge">Qo\'lda</span>' : '') +
+                    (c.blocked ? '<span class="cx-badge is-blk">Bloklangan</span>' : '') +
                 '</div>' +
             '</div>' +
-            // --- KPI ---
-            '<div class="cdt-kpis">' +
-                '<div class="cdt-kpi"><b>' + c.orders + '</b><span>buyurtma</span></div>' +
-                '<div class="cdt-kpi"><b>' + fmtShort(c.spent) + '</b><span>sarflagan</span></div>' +
-                '<div class="cdt-kpi"><b>' + fmtShort(c.avg) + '</b><span>o\'rtacha</span></div>' +
+            // --- TEZKOR AMALLAR ---
+            '<div class="cx-quick">' +
+                (c.phone ? qb('cdt-a-call', 'Qo\'ng\'iroq', 'call', '#30d158') : '') +
+                qb('cdt-a-tg', 'Telegram', 'tg', '#0a84ff') +
+                qb('cdt-a-msg', 'Xabar', 'msg', '#c9a84c') +
+                qb('cdt-a-orders', 'Buyurtmalar', 'box', '#ff9f0a') +
+            '</div>' +
+            '<div id="cdt-msg-box" data-open="0"></div>' +
+            // --- STATISTIKA ---
+            '<p class="cx-sec">Statistika</p><div class="cx-grp">' +
+                kv('Buyurtmalar', c.orders + ' ta' + (c.pending ? ' <em>\u00B7 ' + c.pending + ' faol</em>' : '')) +
+                kv('Sarflagan', fmtSom(c.spent) + " so'm", 'gold') +
+                kv('O\'rtacha chek', c.avg ? fmtSom(c.avg) + " so'm" : '\u2014') +
+                kv('Cashback', fmtSom(c.cashback) + " so'm") +
+                kv('Oxirgi xarid', E(c.last ? agoLabel(c.last) : '\u2014')) +
+            '</div>' +
+            // --- MA'LUMOT ---
+            '<p class="cx-sec">Ma\'lumot</p><div class="cx-grp">' +
+                kv('Telefon', telV) +
+                kv('Telegram', c.username ? '@' + E(c.username) : '\u2014') +
+                kv('ID', E(c.uid), 'mono') +
+                kv('Manzil', E(c.address || '\u2014')) +
+                (c.car ? kv('Mashinasi', E(c.car)) : '') +
+                kv('Birinchi xarid', c.first ? E(new Date(c.first).toLocaleDateString('uz-UZ')) : '\u2014') +
             '</div>' +
             // --- DARAJA ---
-            '<div class="cdt-sec">' +
-                '<p class="cdt-sec-t">Daraja</p>' +
-                '<div class="cdt-rows">' +
-                    '<div class="cdt-row"><span class="k">Hozirgi</span><span class="v">' + t.icon + ' ' + E(t.name) + '</span></div>' +
-                    '<div class="cdt-row"><span class="k">Keyingi</span><span class="v">' + E(nextTx) + '</span></div>' +
-                    '<div class="cdt-row"><span class="k">Imtiyozlar</span><span class="v">Bepul yetkazish ' +
-                        fmtShort(t.freeDelivery) + " so'mdan &middot; cashback " + VIP.ratePct(t) + '%</span></div>' +
-                '</div>' +
-            '</div>' +
-            // --- ALOQA ---
-            '<div class="cdt-sec">' +
-                '<p class="cdt-sec-t">Aloqa va ma\'lumot</p>' +
-                '<div class="cdt-rows">' +
-                    '<div class="cdt-row"><span class="k">Telefon</span><span class="v">' + E(c.phone || '—') + '</span></div>' +
-                    '<div class="cdt-row"><span class="k">Telegram</span><span class="v">' + (c.username ? '@' + E(c.username) : '—') + '</span></div>' +
-                    '<div class="cdt-row"><span class="k">ID</span><span class="v">' + E(c.uid) + '</span></div>' +
-                    '<div class="cdt-row"><span class="k">Manzil</span><span class="v">' + E(c.address || '—') + '</span></div>' +
-                    (c.car ? '<div class="cdt-row"><span class="k">Mashinasi</span><span class="v">' + E(c.car) + '</span></div>' : '') +
-                    '<div class="cdt-row"><span class="k">Ro\'yxatdan</span><span class="v">' +
-                        (c.first ? E(new Date(c.first).toLocaleDateString('uz-UZ')) : '—') + '</span></div>' +
-                    '<div class="cdt-row"><span class="k">Oxirgi xarid</span><span class="v">' + E(c.last ? agoLabel(c.last) : '—') + '</span></div>' +
-                '</div>' +
-            '</div>' +
-            // --- FAOLLIK ---
-            '<div class="cdt-sec">' +
-                '<p class="cdt-sec-t">Hozirgi faollik</p>' +
-                '<div class="cdt-rows">' +
-                    '<div class="cdt-row"><span class="k">Savatda</span><span class="v">' + c.cartCount + ' ta tovar</span></div>' +
-                    '<div class="cdt-row"><span class="k">Saqlangan</span><span class="v">' + c.wishCount + ' ta</span></div>' +
-                    '<div class="cdt-row"><span class="k">Cashback</span><span class="v">' + fmtSom(c.cashback) + " so'm</span></div>" +
-                '</div>' +
+            '<p class="cx-sec">Daraja</p><div class="cx-grp">' +
+                kv('Hozirgi', t.icon + ' ' + E(t.name)) +
+                kv('Keyingi', E(nextTx)) +
+                kv('Imtiyoz', 'Bepul yetkazish ' + fmtShort(t.freeDelivery) + " so'mdan \u00B7 cashback " + VIP.ratePct(t) + '%') +
+                kv('Savat / Saqlangan', c.cartCount + ' ta / ' + c.wishCount + ' ta') +
             '</div>' +
             // --- OXIRGI BUYURTMALAR ---
-            '<div class="cdt-sec">' +
-                '<p class="cdt-sec-t">Oxirgi buyurtmalar</p>' +
-                '<div class="cdt-rows">' +
-                    (recent.length ? recent.map(function (o) {
-                        return '<div class="cdt-ord"><div class="cdt-ord-c">' +
-                            '<b>#' + E(o.code || o.id || '') + '</b>' +
-                            '<span>' + E(o.date || agoLabel(orderTime(o))) + ' &middot; ' + E(statusLabel(o.status)) + '</span>' +
-                            '</div><div class="cdt-ord-s">' + fmtShort(o.total) + '</div></div>';
-                    }).join('') : '<div class="cdt-row"><span class="v" style="text-align:left; font-weight:600; color:var(--text-muted);">Hali buyurtma yo\'q</span></div>') +
-                '</div>' +
+            '<p class="cx-sec">Oxirgi buyurtmalar</p><div class="cx-grp">' +
+                (recent.length ? recent.map(function (o) {
+                    return '<div class="cx-ord"><span class="cx-ord-c"><b>#' + E(o.code || o.id || '') + '</b>' +
+                        '<span>' + E(o.date || agoLabel(orderTime(o))) + ' \u00B7 ' + E(statusLabel(o.status)) + '</span></span>' +
+                        '<span class="cx-ord-s">' + fmtShort(o.total) + '</span></div>';
+                }).join('') : '<div class="cx-kv"><span class="k">Hali buyurtma yo\'q</span></div>') +
             '</div>' +
-            // --- AMALLAR ---
-            '<div class="cdt-acts">' +
-                '<button type="button" class="cdt-act gold wide" id="cdt-a-orders">\uD83D\uDCE6 Buyurtmalarini ko\'rish</button>' +
-                (c.username || c.uid ? '<button type="button" class="cdt-act tg" id="cdt-a-tg">\u2708 Telegram</button>' : '') +
-                (c.phone ? '<button type="button" class="cdt-act green" id="cdt-a-call">\uD83D\uDCDE Qo\'ng\'iroq</button>' : '') +
-                '<button type="button" class="cdt-act wide" id="cdt-a-msg">\uD83D\uDCAC Botdan xabar yuborish</button>' +
-                '<button type="button" class="cdt-act wide" id="cdt-a-vip">\uD83D\uDC51 ' +
-                    (c.manual ? 'Qo\'lda darajani olib tashlash' : 'Qo\'lda VIP (Oltin) qilish') + '</button>' +
+            // --- BOSHQARUV ---
+            '<p class="cx-sec">Boshqaruv</p><div class="cx-grp">' +
+                '<button type="button" class="cx-act" id="cdt-a-vip"><span class="cx-ic" style="--ic:#c9a84c">' + svg('crown') + '</span><span class="cx-act-t">' +
+                    (c.manual ? 'Qo\'lda VIPni olib tashlash' : 'Qo\'lda VIP qilish') + '</span><span class="cx-chev">\u203A</span></button>' +
+                '<button type="button" class="cx-act is-danger" id="cdt-a-block"><span class="cx-ic" style="--ic:' + (c.blocked ? '#30d158' : '#ff453a') + '">' + svg('block') + '</span><span class="cx-act-t">' +
+                    (c.blocked ? 'Blokdan chiqarish' : 'Bloklash') + '</span></button>' +
             '</div>' +
-            // Xabar yozish maydoni shu yerda ochiladi (prompt o'rniga)
-            '<div id="cdt-msg-box" data-open="0"></div>';
+            '<p class="cx-foot">' + (c.blocked
+                ? 'Bu mijoz bloklangan: botga yoza olmaydi, ilovani ocha olmaydi va buyurtma bera olmaydi.'
+                : 'Bloklangan mijoz botdan va ilovadan foydalana olmaydi. Istalgan payt blokdan chiqarish mumkin.') + '</p>';
 
         paintTier($('cdt-hero'), t);
         paintTier($('cdt-av'), t);
@@ -24804,6 +24921,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             toggleManualVip(c, null);
             setTimeout(function () { openCustomerDetail(c); }, 350);
         };
+        if ((b = $('cdt-a-block')))  b.onclick = function () { hap('light'); toggleBlock(c); };
 
         // ⚠️ Oyna ALLAQACHON ochiq bo'lsa (masalan VIP darajasi o'zgargandan keyin
         //    qayta chizilayotganda) yana pushState QILMAYMIZ — aks holda "orqaga"
@@ -24814,6 +24932,54 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             var m = $('customerDetailModal');
             if (m) m.scrollTop = 0;
         }
+    }
+
+    /** ⛔ Mijozni bloklash / blokdan chiqarish.
+     *  Manba: `blocked_users/{uid}` (faqat admin yozadi). Ilova, Worker va bot
+     *  shu tugunni o'qib, bloklangan foydalanuvchini to'xtatadi. */
+    function isAdminUid(uid) {
+        try {
+            if (typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS && ADMIN_IDS.map(String).indexOf(String(uid)) !== -1) return true;
+        } catch (e) {}
+        return false;
+    }
+    function toggleBlock(c) {
+        if (!amAdmin()) { toast('Faqat admin', 'warning'); return; }
+        if (!c.blocked && isAdminUid(c.uid)) { toast('Adminni bloklab bo\'lmaydi', 'warning'); return; }
+        var q = c.blocked
+            ? (c.name + ' blokdan chiqarilsinmi?')
+            : (c.name + ' bloklansinmi? U botdan va ilovadan foydalana olmaydi.');
+        var run = function () {
+            var d = DB();
+            if (!d) { toast('Baza ulanmagan', 'warning'); return; }
+            var ref = d.ref('blocked_users/' + c.uid);
+            var go = function () {
+                var by = '';
+                try { by = (window.firebase && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : ''; } catch (e) {}
+                var p = c.blocked ? ref.remove() : ref.set({
+                    name: String(c.name || '').slice(0, 80),
+                    phone: String(c.phone || '').slice(0, 30),
+                    at: Date.now(),
+                    by: String(by || '')
+                });
+                p.then(function () {
+                    c.blocked = !c.blocked;
+                    var m = window._blockedMap || (window._blockedMap = {});
+                    if (c.blocked) m[c.uid] = true; else delete m[c.uid];
+                    hap('success');
+                    toast(c.blocked ? ('\u26D4 ' + c.name + ' bloklandi') : (c.name + ' blokdan chiqarildi'), 'success');
+                    applyFilters(); renderList();
+                    openCustomerDetail(c);
+                }).catch(function (err) {
+                    toast('Saqlanmadi: ' + ((err && (err.code || err.message)) || 'ruxsat yo\'q'), 'warning');
+                });
+            };
+            if (window._ensureAuth) window._ensureAuth().then(go, go); else go();
+        };
+        try {
+            if (window.tg && tg.showConfirm) { tg.showConfirm(q, function (ok) { if (ok) run(); }); return; }
+        } catch (e) {}
+        if (window.confirm(q)) run();
     }
 
     /**
@@ -24885,7 +25051,14 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             ? window._getUsersSnap()
             : DB().ref('users').once('value');
 
-        snapP.then(function (snap) {
+        var dd = DB();
+        var blkP = dd
+            ? dd.ref('blocked_users').once('value').then(function (x) { return x.val() || {}; }, function () { return {}; })
+            : Promise.resolve({});
+
+        Promise.all([snapP, blkP]).then(function (r) {
+            var snap = r[0];
+            window._blockedMap = r[1] || {};
             CS.all = buildCustomers(snap);
             CS.loaded = true;
             applyFilters();
@@ -29311,7 +29484,7 @@ html body .flying-img.mo-fly {
     var sb = document.getElementById('bd-selall-btn');
     if (sb) {
       var allOn = items.length > 0 && items.every(function (p) { return p && p.id != null && BD.sel[p.id]; });
-      sb.innerText = allOn ? "✖️ Belgilashni bekor qilish" : "☑️ Hammasini belgilash";
+      sb.innerText = allOn ? "Belgilashni bekor qilish" : "Hammasini belgilash";
     }
 
     if (!items.length) {
@@ -34102,36 +34275,24 @@ html[data-theme="light"] #cardStyleModal { --cs-bg2: #fff; --cs-sep: rgba(60,60,
         if (sub) sub.textContent = 'Hozir: ' + STYLES[window.__cardStyle].name;
     }
 
-    function sampleProducts() {
-        var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
-        var ok = pdb.filter(function (p) { return p && p.img && Number(p.price) > 0 && (p.stock === undefined || p.stock > 0); });
-        var disc = ok.find(function (p) { return p.oldPrice && Number(p.oldPrice) > Number(p.price); });
-        var out = []; if (disc) out.push(disc);
-        ok.forEach(function (p) { if (out.length < 2 && out.indexOf(p) < 0) out.push(p); });
-        return out;
-    }
-    function preview(style, items) {
-        var saved = window.__cardStyle;
-        window.__cardStyle = style;
-        var html = '';
-        try { html = items.map(function (p) { return cardHTML(p); }).join(''); } catch (e) {}
-        window.__cardStyle = saved;
-        // Namunada bosish/ID to'qnashuvi bo'lmasin
-        return html.replace(/\sonclick="[^"]*"/g, '').replace(/\sid="[^"]*"/g, '').replace(/data-pid=/g, 'data-prev-pid=')
-            .replace(/<button\b/g, '<span').replace(/<\/button>/g, '</span>').replace(/\sdisabled\b/g, '');
-    }
+    var GLYPH = {
+        market:   '<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="5" y="3" width="18" height="22" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="8" y="6" width="12" height="9" rx="2" fill="currentColor" opacity=".35"/><rect x="8" y="18" width="12" height="4" rx="2" fill="currentColor"/></svg>',
+        appstore: '<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="5" y="3" width="18" height="22" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="8" y="6" width="12" height="9" rx="2" fill="currentColor" opacity=".35"/><rect x="8" y="18" width="7" height="2.2" rx="1.1" fill="currentColor"/><circle cx="18.5" cy="20" r="2.4" fill="currentColor"/></svg>',
+        classic:  '<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="5" y="3" width="18" height="22" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="8" y="6" width="12" height="9" rx="2" fill="currentColor" opacity=".35"/><rect x="8" y="17.5" width="12" height="2" rx="1" fill="currentColor" opacity=".6"/><rect x="8" y="20.8" width="8" height="2" rx="1" fill="currentColor"/></svg>'
+    };
 
     function render() {
         var body = document.getElementById('cardStyleModal-body'); if (!body) return;
-        var items = sampleProducts();
-        body.innerHTML = '<p class="cs-lead">Tanlangan dizayn <b>barcha foydalanuvchilarda</b> darhol ko\u2018rinadi \u2014 bosh sahifa, katalog va saqlanganlar.</p>' +
-            ['market', 'appstore', 'classic'].map(function (k) {
+        body.innerHTML = '<p class="cs-lead">Tanlangan dizayn <b>barcha foydalanuvchilarda</b> darhol ko\u2018rinadi.</p>' +
+            '<div class="cs-grp">' + ['market', 'appstore', 'classic'].map(function (k) {
                 var S = STYLES[k], on = window.__cardStyle === k;
-                return '<div class="cs-opt' + (on ? ' on' : '') + '" role="button" tabindex="0" onclick="CardStyle.set(\'' + k + '\')">' +
-                    '<div class="cs-top"><span class="cs-radio"></span><span class="cs-name">' + S.name + '<small>' + S.sub + '</small></span>' + (on ? '<span class="cs-live">HOZIR</span>' : '') + '</div>' +
-                    (items.length ? '<div class="cs-prev">' + preview(k, items) + '</div>' : '') + '</div>';
-            }).join('') +
-            '<p class="cs-note">O\u2018zgartirish faqat ko\u2018rinishga ta\u2019sir qiladi: narx, savat va buyurtmalar o\u2018zgarmaydi.</p>';
+                return '<button type="button" class="cs-row' + (on ? ' on' : '') + '" onclick="CardStyle.set(\'' + k + '\')" aria-pressed="' + on + '">' +
+                    '<span class="cs-gl">' + GLYPH[k] + '</span>' +
+                    '<span class="cs-name">' + S.name + '<small>' + S.sub + '</small></span>' +
+                    '<span class="cs-ok" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+                '</button>';
+            }).join('') + '</div>' +
+            '<p class="cs-note">Faqat ko\u2018rinish o\u2018zgaradi: narx, savat va buyurtmalar o\u2018zgarmaydi.</p>';
     }
 
     window.CardStyle = {
@@ -34170,6 +34331,468 @@ html[data-theme="light"] #cardStyleModal { --cs-bg2: #fff; --cs-sep: rgba(60,60,
     setTimeout(paintAdmin, 800);
 })();
 </script>
+<!-- ==========================================================================
+     ADMIN iOS 2026 (b): Ombor, Mijozlar (+ tafsilot), Xabar yuborish, Karta dizayni.
+     Faqat ko'rinish: barcha ID va onclick'lar o'z joyida.
+     + Bosh sahifa sarlavhasi / storislar / qidiruv faqat «Asosiy»da.
+     + Bloklangan foydalanuvchi uchun "kirish cheklangan" ekrani.
+     ========================================================================== -->
+<style id="admin-ios-2026b">
+/* ——— 0) Bosh sahifa "chrome" faqat Asosiy bo'limda ——— */
+body:not(.is-home) .container > .header.hx,
+body:not(.is-home) .container > #stories-list,
+body:not(.is-home) .container > .search-input-container,
+body:not(.is-home) .container > #quick-chips { display: none !important; }
+body:not(.is-home) #content-area { padding-top: calc(56px + var(--safe-top, 0px)); }
+
+/* ——— 1) Umumiy tokenlar ——— */
+#adminInventoryModal, #adminCustomersModal, #customerDetailModal, #broadcastModal, #cardStyleModal {
+    --x-gold: #e2c46e; --x-gold2: #c9a84c; --x-goldbg: rgba(201,168,76,.14); --x-selbg: #2a2618;
+    --x-bg2: #1c1c1e; --x-bg3: #2c2c2e; --x-sep: rgba(84,84,88,.38);
+    --x-tx: #f5f5f7; --x-tx2: rgba(235,235,245,.62); --x-tx3: rgba(235,235,245,.3);
+    --x-fill: rgba(118,118,128,.24); --x-fill2: rgba(118,118,128,.14);
+    --x-green: #30d158; --x-orange: #ff9f0a; --x-red: #ff453a; --x-blue: #0a84ff;
+    --x-ink: #1a1405; --x-grad: linear-gradient(135deg, #f0d060 0%, #c9a84c 50%, #a8851f 100%);
+    --x-spring: cubic-bezier(.34,1.4,.64,1); --x-ease: cubic-bezier(.32,.72,0,1);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; color: var(--x-tx);
+}
+html[data-theme="light"] :is(#adminInventoryModal, #adminCustomersModal, #customerDetailModal, #broadcastModal, #cardStyleModal) {
+    --x-gold: #8a6a14; --x-gold2: #9c7c20; --x-goldbg: rgba(156,124,32,.1); --x-selbg: #fbf5e3;
+    --x-bg2: #fff; --x-bg3: #f2f2f7; --x-sep: rgba(60,60,67,.14);
+    --x-tx: #1c1c1e; --x-tx2: rgba(60,60,67,.64); --x-tx3: rgba(60,60,67,.3);
+    --x-fill: rgba(118,118,128,.14); --x-fill2: rgba(118,118,128,.08);
+    --x-green: #248a3d; --x-orange: #c76a00; --x-red: #d70015; --x-blue: #007aff;
+}
+
+html[data-theme="light"] :is(#adminInventoryModal, #adminCustomersModal, #customerDetailModal, #broadcastModal, #cardStyleModal) { background: #f4eee2 !important; }
+html[data-theme="light"] #customerDetailModal .st2-hd { background: #f4eee2 !important; }
+/* Sarlavha: katta iOS sarlavhasi + yumaloq yopish tugmasi */
+:is(#adminInventoryModal, #adminCustomersModal, #broadcastModal, #cardStyleModal) > .modal-header { margin-bottom: 14px !important; padding-left: 2px; padding-right: 2px; }
+:is(#adminInventoryModal, #adminCustomersModal, #broadcastModal, #cardStyleModal) > .modal-header h2 {
+    display: flex; align-items: center; gap: 9px; margin: 0;
+    font-size: 30px !important; font-weight: 700 !important; letter-spacing: -.5px; color: var(--x-tx) !important;
+}
+:is(#adminInventoryModal, #adminCustomersModal, #broadcastModal, #cardStyleModal) > .modal-header h2 .uic { display: none !important; }
+:is(#adminInventoryModal, #adminCustomersModal, #broadcastModal, #cardStyleModal) > .modal-header .close-btn,
+#customerDetailModal .st2-hd .close-btn {
+    width: 32px !important; height: 32px !important; min-width: 32px; padding: 0 !important; border-radius: 50% !important;
+    display: inline-flex !important; align-items: center; justify-content: center;
+    background: var(--x-fill) !important; color: var(--x-tx2) !important; border: 0 !important; box-shadow: none !important;
+    font-size: 18px !important; font-weight: 600; line-height: 1 !important;
+    transition: transform .3s var(--x-spring);
+}
+:is(#adminInventoryModal, #adminCustomersModal, #broadcastModal, #cardStyleModal) > .modal-header .close-btn:active,
+#customerDetailModal .st2-hd .close-btn:active { transform: scale(.88); }
+
+/* Yopish: matn o'rniga aniq "×" belgisi (shrift farqi bo'lmasin) */
+:is(#adminInventoryModal, #adminCustomersModal, #broadcastModal, #cardStyleModal) > .modal-header .close-btn,
+#customerDetailModal .st2-hd .close-btn { font-size: 0 !important; color: transparent !important; position: relative; }
+:is(#adminInventoryModal, #adminCustomersModal, #broadcastModal, #cardStyleModal) > .modal-header .close-btn::before,
+#customerDetailModal .st2-hd .close-btn::before {
+    content: "" !important; display: block !important; position: static !important; width: 13px; height: 13px; background: var(--x-tx2);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 6l12 12M18 6 6 18' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 6l12 12M18 6 6 18' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+:is(#adminInventoryModal, #adminCustomersModal, #broadcastModal, #cardStyleModal) > .modal-header h2 { font-family: inherit !important; }
+#customerDetailModal .st2-hd h2 { font-family: inherit !important; }
+.iv-search svg, .bcx-search svg { display: none !important; }
+.iv-search::before, .bcx-search::before {
+    content: ""; position: absolute; left: 11px; top: 50%; width: 16px; height: 16px; margin-top: -8px; z-index: 1; pointer-events: none;
+    background: var(--x-tx2); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.8-3.8'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.8-3.8'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* Qidiruv maydoni (iOS) */
+.iv-search, .bcx-search { position: relative; display: block; margin: 0 0 12px; }
+.iv-search svg, .bcx-search svg { position: absolute; left: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--x-tx2); pointer-events: none; }
+html body #adminInventoryModal #inv-search, #bcx-q {
+    width: 100%; box-sizing: border-box; height: 38px !important; margin: 0 !important; padding: 0 12px 0 33px !important;
+    border-radius: 11px !important; border: 0 !important; background: var(--x-fill2) !important; box-shadow: none !important;
+    color: var(--x-tx) !important; font-weight: 400 !important; font-size: 16px !important; line-height: 1 !important; font-family: inherit !important; outline: none;
+}
+#adminInventoryModal #inv-search::placeholder, #bcx-q::placeholder { color: var(--x-tx2); }
+
+/* ——— 2) OMBOR ——— */
+#adminInventoryModal .iv-top { padding: 0 2px 6px; }
+#adminInventoryModal .iv-chips { display: flex; gap: 8px; overflow-x: auto; margin: 0 -20px; padding: 0 20px 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+#adminInventoryModal .iv-chips::-webkit-scrollbar { display: none; }
+html body #adminInventoryModal .inv-fchip {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px !important; margin: 0 !important;
+    border-radius: 999px !important; border: 0 !important; background: var(--x-fill2) !important; color: var(--x-tx) !important;
+    font-size: 14px !important; font-weight: 500 !important; box-shadow: none !important; white-space: nowrap;
+    transition: background-color .25s, color .25s, transform .3s var(--x-spring);
+}
+html body #adminInventoryModal .inv-fchip.selected { background: var(--x-grad) !important; color: var(--x-ink) !important; font-weight: 600 !important; }
+#adminInventoryModal .iv-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); display: inline-block; }
+#adminInventoryModal .iv-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 2px 8px; }
+#adminInventoryModal #inv-visible-count { font-size: 13px !important; color: var(--x-tx2) !important; font-variant-numeric: tabular-nums; }
+.iv-link, .bcx-link {
+    border: 0; background: none; padding: 4px 0; cursor: pointer; font-family: inherit;
+    font-size: 15px; font-weight: 500; color: var(--x-gold); -webkit-tap-highlight-color: transparent;
+}
+.iv-link:active, .bcx-link:active { opacity: .5; }
+
+#adminInventoryModal #inv-bulk-bar { margin: 0 2px 14px; padding: 12px; border-radius: 14px; background: var(--x-bg2); border: .5px solid var(--x-sep); }
+#adminInventoryModal .iv-bulk-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+#adminInventoryModal #inv-bulk-count { font-size: 15px; font-weight: 600; color: var(--x-tx); font-variant-numeric: tabular-nums; }
+#adminInventoryModal .iv-bulk-row { display: flex; gap: 8px; align-items: center; }
+#adminInventoryModal .iv-bulk-row + .iv-bulk-row { margin-top: 8px; }
+#adminInventoryModal .iv-bulk-row .inv-input { flex: 1 1 auto; width: auto !important; min-width: 0; text-align: left !important; padding: 0 12px !important; }
+#adminInventoryModal .iv-bulk-row #inv-bulk-pct { flex: 0 0 64px; text-align: center !important; }
+#adminInventoryModal .iv-bulk-row .inv-btn { flex: 0 0 auto; height: 38px !important; }
+html body #adminInventoryModal .inv-btn.iv-green { background: rgba(48,209,88,.16) !important; color: var(--x-green) !important; }
+html body #adminInventoryModal .inv-btn.iv-orange { background: rgba(255,159,10,.16) !important; color: var(--x-orange) !important; }
+html body #adminInventoryModal .inv-btn.iv-red { background: rgba(255,69,58,.14) !important; color: var(--x-red) !important; }
+
+/* Xulosa: bitta guruhda 3 ta raqam */
+html body #adminInventoryModal .inv2-summary {
+    display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 0 !important; margin: 0 2px 18px !important;
+    background: var(--x-bg2) !important; border: .5px solid var(--x-sep) !important; border-radius: 14px !important; overflow: hidden;
+}
+html body #adminInventoryModal .inv2-stat {
+    background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; animation: none !important;
+    padding: 12px 6px !important; text-align: center; position: relative;
+}
+html body #adminInventoryModal .inv2-stat::before, html body #adminInventoryModal .inv2-stat::after { display: none !important; }
+html body #adminInventoryModal .inv2-stat + .inv2-stat { border-left: .5px solid var(--x-sep) !important; }
+html body #adminInventoryModal .inv2-stat b { display: block; font-size: 22px !important; font-weight: 700 !important; letter-spacing: -.3px; color: var(--x-tx) !important; font-variant-numeric: tabular-nums; line-height: 1.15; }
+html body #adminInventoryModal .inv2-stat-low b { color: var(--x-orange) !important; }
+html body #adminInventoryModal .inv2-stat-out b { color: var(--x-red) !important; }
+html body #adminInventoryModal .inv2-stat span { display: block; margin-top: 2px; font-size: 12px !important; font-weight: 500 !important; color: var(--x-tx2) !important; text-transform: none !important; letter-spacing: 0 !important; }
+
+/* Ro'yxat: iOS inset-grouped */
+#adminInventoryModal #admin-inventory-list { padding: 0 2px calc(24px + var(--safe-bottom, 0px)); }
+html body #adminInventoryModal .inventory-item {
+    position: relative; display: flex; align-items: center; gap: 10px;
+    margin: 0 !important; padding: 11px 12px 11px 14px !important;
+    background: var(--x-bg2) !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+    animation: none !important; transition: background-color .2s;
+}
+html body #adminInventoryModal .inventory-item::after { display: none !important; }
+html body #adminInventoryModal .inventory-item + .inventory-item::before {
+    content: "" !important; display: block !important; position: absolute; top: 0; left: 48px; right: 0; height: .5px;
+    background: var(--x-sep) !important; border: 0 !important; width: auto !important; opacity: 1 !important;
+}
+html body #adminInventoryModal .inv2-summary + .inventory-item,
+html body #adminInventoryModal .inventory-item:first-child { border-top-left-radius: 14px !important; border-top-right-radius: 14px !important; }
+html body #adminInventoryModal .inventory-item:last-child { border-bottom-left-radius: 14px !important; border-bottom-right-radius: 14px !important; }
+html body #adminInventoryModal .inventory-item.inv-selected { background: var(--x-selbg) !important; border: 0 !important; box-shadow: none !important; }
+html body #adminInventoryModal .inventory-item.inv-selected .inv-info h4 { color: var(--x-tx) !important; }
+
+/* Belgilash: yumaloq iOS katakcha */
+html body #adminInventoryModal .inv-check {
+    -webkit-appearance: none; appearance: none; flex: 0 0 22px; width: 22px !important; height: 22px !important; margin: 0 12px 0 0 !important;
+    border-radius: 50% !important; border: 1.5px solid var(--x-tx3) !important; background: transparent !important; box-shadow: none !important;
+    position: relative; cursor: pointer; animation: none !important;
+}
+html body #adminInventoryModal .inv-check:checked { background: var(--x-gold2) !important; border-color: var(--x-gold2) !important; }
+html body #adminInventoryModal .inv-check::after { border-color: #fff !important; }
+
+html body #adminInventoryModal .inv-info { min-width: 0; }
+html body #adminInventoryModal .inv-info h4 {
+    margin: 0 0 3px !important; font-size: 15px !important; font-weight: 500 !important; line-height: 1.3; color: var(--x-tx) !important;
+    letter-spacing: -.1px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+html body #adminInventoryModal .inv-info .car-hint { color: var(--x-tx2) !important; font-weight: 400 !important; font-size: 13px; margin-left: 3px; }
+html body #adminInventoryModal .inv-code {
+    display: inline-block; margin-left: 6px; padding: 1px 6px !important; border-radius: 5px !important; border: 0 !important;
+    background: var(--x-fill2) !important; color: var(--x-tx2) !important; font: 500 11px/1.5 ui-monospace, "SF Mono", Menlo, monospace !important; vertical-align: 1px;
+}
+html body #adminInventoryModal .inv-info p {
+    margin: 0 !important; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    font-size: 13.5px !important; font-weight: 600 !important; color: var(--x-gold) !important; font-variant-numeric: tabular-nums;
+}
+html body #adminInventoryModal .inv-flag {
+    padding: 1px 7px !important; border-radius: 999px !important; border: 0 !important; font-size: 11px !important; font-weight: 600 !important;
+    line-height: 1.6; animation: none !important;
+}
+html body #adminInventoryModal .inv-flag-low { background: rgba(255,159,10,.16) !important; color: var(--x-orange) !important; }
+html body #adminInventoryModal .inv-flag-out { background: rgba(255,69,58,.15) !important; color: var(--x-red) !important; }
+html body #adminInventoryModal .inv-type-tag {
+    flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; background: rgba(10,132,255,.14) !important; color: var(--x-blue) !important;
+    font-size: 11px !important; font-weight: 600 !important; border: 0 !important;
+}
+
+/* Qoldiq + Saqlash */
+html body #adminInventoryModal .inv-controls { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+html body #adminInventoryModal .inv-input {
+    width: 56px !important; height: 34px !important; box-sizing: border-box; padding: 0 4px !important; margin: 0 !important;
+    border-radius: 9px !important; border: 0 !important; background: var(--x-fill2) !important; box-shadow: none !important;
+    color: var(--x-tx) !important; text-align: center; font-weight: 600 !important; font-size: 16px !important; line-height: 1 !important; font-family: inherit !important;
+    font-variant-numeric: tabular-nums; outline: none; -moz-appearance: textfield;
+}
+html body #adminInventoryModal #inv-bulk-bar .inv-input { height: 38px !important; }
+html body #adminInventoryModal .inv-input:focus { box-shadow: 0 0 0 2px var(--x-gold2) !important; }
+html body #adminInventoryModal .inv-input::-webkit-outer-spin-button,
+html body #adminInventoryModal .inv-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+html body #adminInventoryModal .inv-btn {
+    height: 34px !important; padding: 0 12px !important; border-radius: 9px !important; border: 0 !important;
+    background: var(--x-grad) !important; color: var(--x-ink) !important; box-shadow: none !important;
+    font-weight: 600 !important; font-size: 14px !important; line-height: 1 !important; font-family: inherit !important; letter-spacing: -.1px; cursor: pointer;
+    transition: transform .3s var(--x-spring), opacity .2s;
+}
+html body #adminInventoryModal .inv-btn:active { transform: scale(.94); opacity: .85; }
+
+/* Razmerli tovar */
+html body #adminInventoryModal .inventory-item > div[style*="dashed"] { border-top: .5px solid var(--x-sep) !important; margin-top: 10px !important; padding-top: 2px !important; }
+html body #adminInventoryModal .inv-size-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0 0 34px; background: none !important; border: 0 !important; }
+html body #adminInventoryModal .inv-size-name { font-size: 14px !important; font-weight: 500 !important; color: var(--x-tx2) !important; }
+#adminInventoryModal .iv-empty { text-align: center; color: var(--x-tx2); font-size: 15px; margin: 34px 0; }
+
+/* ——— 3) MIJOZLAR ro'yxati ——— */
+#adminCustomersModal .cst-wrap { padding: 0 2px; }
+#adminCustomersModal .cst-tools { gap: 8px; margin-bottom: 12px; }
+html body #adminCustomersModal .cst-search {
+    height: 38px; padding: 0 34px 0 33px !important; border-radius: 11px !important; border: 0 !important;
+    background: var(--x-fill2) !important; box-shadow: none !important; color: var(--x-tx) !important;
+    font-size: 16px !important; font-weight: 400 !important;
+}
+html body #adminCustomersModal .cst-search::placeholder { color: var(--x-tx2) !important; }
+html body #adminCustomersModal .cst-search-ic { left: 10px !important; width: 16px !important; height: 16px !important; color: var(--x-tx2) !important; }
+html body #adminCustomersModal .cst-search-x { width: 20px !important; height: 20px !important; font-size: 13px !important; background: var(--x-tx3) !important; color: var(--x-bg2) !important; }
+html body #adminCustomersModal .cst-sort {
+    width: 38px !important; height: 38px; border-radius: 11px !important; border: 0 !important;
+    background: var(--x-fill2) !important; color: var(--x-gold) !important; box-shadow: none !important;
+}
+html body #adminCustomersModal .cst-sort svg { width: 18px !important; height: 18px !important; }
+#adminCustomersModal .cst-segs { gap: 8px; padding: 0 0 6px; }
+html body #adminCustomersModal .cst-seg {
+    height: 32px; padding: 0 13px !important; border-radius: 999px !important; border: 0 !important;
+    background: var(--x-fill2) !important; color: var(--x-tx) !important; box-shadow: none !important;
+    font-size: 14px !important; font-weight: 500 !important; animation: none !important;
+}
+html body #adminCustomersModal .cst-seg em { margin-left: 4px; font-size: 12px !important; font-weight: 600 !important; opacity: .55; font-variant-numeric: tabular-nums; }
+html body #adminCustomersModal .cst-seg.on { background: var(--x-grad) !important; color: var(--x-ink) !important; font-weight: 600 !important; }
+
+.cx-count { margin: 14px 6px 7px; font-size: 13px; font-weight: 500; color: var(--x-tx2); text-transform: uppercase; letter-spacing: .4px; }
+.cx-group { background: var(--x-bg2); border: .5px solid var(--x-sep); border-radius: 14px; overflow: hidden; }
+html[data-theme="light"] .cx-group, html[data-theme="light"] .cx-grp, html[data-theme="light"] .bcx-grp, html[data-theme="light"] .cs-grp { box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.cx-row {
+    position: relative; display: flex; align-items: center; gap: 12px; min-height: 62px; padding: 9px 12px 9px 14px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color .15s;
+    animation: cxIn .45s var(--x-ease) both;
+}
+.cx-row:active { background: var(--x-fill2); }
+.cx-row + .cx-row::before { content: ""; position: absolute; top: 0; left: 68px; right: 0; height: .5px; background: var(--x-sep); }
+@keyframes cxIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.cx-av {
+    flex: 0 0 42px; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--tier-grad, var(--x-fill)); color: var(--tier-tx, var(--x-tx)); font-size: 17px; font-weight: 600;
+}
+.cx-row.is-blocked .cx-av { filter: grayscale(1); opacity: .55; }
+.cx-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cx-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 16px; font-weight: 500; color: var(--x-tx); letter-spacing: -.2px; }
+.cx-name .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-vip { flex: 0 0 auto; font-size: 12px; }
+.cx-blk, .bcx-blk { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; background: rgba(255,69,58,.15); color: var(--x-red); font-size: 11px; font-weight: 600; }
+.cx-phone { font-size: 14px; color: var(--x-tx2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cx-chev { flex: 0 0 auto; color: var(--x-tx3); font-size: 24px; font-weight: 300; line-height: 1; margin-top: -2px; }
+#adminCustomersModal .cst-more { margin-top: 12px; }
+
+/* ——— 4) MIJOZ TAFSILOTI ——— */
+#customerDetailModal { background: var(--bg-dark) !important; }
+#customerDetailModal .st2-hd { padding: 10px 16px 6px !important; border: 0 !important; }
+#customerDetailModal .st2-hd h2 { font-size: 17px !important; font-weight: 600 !important; color: var(--x-tx) !important; letter-spacing: -.2px; }
+#customerDetailModal .st2-hd span { font-size: 12.5px !important; color: var(--x-tx2) !important; }
+#customer-detail-body { padding: 0 16px calc(36px + var(--safe-bottom, 0px)) !important; }
+.cx-hero { text-align: center; padding: 8px 0 18px; }
+.cx-hav {
+    width: 84px; height: 84px; margin: 0 auto 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--tier-grad, var(--x-fill)); color: var(--tier-tx, var(--x-tx)); font-size: 36px; font-weight: 600;
+    box-shadow: 0 10px 30px -12px var(--tier-glow, rgba(0,0,0,.6));
+}
+.cx-hname { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.4px; color: var(--x-tx); }
+.cx-hphone { margin-top: 3px; font-size: 15px; color: var(--x-tx2); font-variant-numeric: tabular-nums; }
+.cx-badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+.cx-badge { padding: 3px 10px; border-radius: 999px; background: var(--x-fill2); color: var(--x-tx2); font-size: 12.5px; font-weight: 600; }
+.cx-badge.is-tier { background: var(--tier-soft, var(--x-goldbg)); color: var(--x-gold); }
+.cx-badge.is-blk { background: rgba(255,69,58,.15); color: var(--x-red); }
+.cx-quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+.cx-q {
+    display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 11px 4px 9px; border: 0; border-radius: 14px; cursor: pointer;
+    background: var(--x-bg2); color: var(--qc); font-family: inherit; -webkit-tap-highlight-color: transparent;
+    transition: transform .3s var(--x-spring), background-color .15s;
+}
+.cx-q:active { transform: scale(.94); background: var(--x-fill2); }
+.cx-q-ic svg { width: 22px; height: 22px; display: block; }
+.cx-q-l { font-size: 12px; font-weight: 500; color: var(--x-tx); white-space: nowrap; }
+.cx-sec { margin: 24px 6px 7px; font-size: 13px; font-weight: 500; color: var(--x-tx2); text-transform: uppercase; letter-spacing: .4px; }
+.cx-grp { background: var(--x-bg2); border-radius: 14px; overflow: hidden; }
+.cx-kv, .cx-ord, .cx-act { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 46px; padding: 10px 14px; box-sizing: border-box; }
+.cx-kv + .cx-kv::before, .cx-ord + .cx-ord::before, .cx-act + .cx-act::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: .5px; background: var(--x-sep); }
+.cx-act + .cx-act::before { left: 56px; }
+.cx-kv .k { flex: 0 0 auto; font-size: 15.5px; color: var(--x-tx); }
+.cx-kv .v { min-width: 0; text-align: right; font-size: 15.5px; color: var(--x-tx2); font-variant-numeric: tabular-nums; word-break: break-word; }
+.cx-kv .v em { font-style: normal; color: var(--x-orange); }
+.cx-kv .v.gold { color: var(--x-gold); font-weight: 600; }
+.cx-kv .v.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; }
+.cx-link { color: var(--x-gold); text-decoration: none; }
+.cx-ord-c { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cx-ord-c b { font-size: 15px; font-weight: 600; color: var(--x-tx); font-variant-numeric: tabular-nums; }
+.cx-ord-c span { font-size: 13px; color: var(--x-tx2); }
+.cx-ord-s { font-size: 15px; font-weight: 600; color: var(--x-gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cx-act { width: 100%; justify-content: flex-start; gap: 12px; border: 0; background: none; text-align: left; font-family: inherit; cursor: pointer; color: var(--x-tx); -webkit-tap-highlight-color: transparent; }
+.cx-act:active { background: var(--x-fill2); }
+.cx-act-t { flex: 1; font-size: 16px; }
+.cx-act.is-danger .cx-act-t { color: var(--x-red); font-weight: 500; }
+.cx-ic { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--ic); color: #fff; }
+.cx-ic svg { width: 18px; height: 18px; }
+.cx-foot { margin: 8px 6px 0; font-size: 13px; line-height: 1.45; color: var(--x-tx2); }
+/* To'g'ridan-to'g'ri xabar maydoni */
+#cdt-msg-box > div { margin-top: 12px !important; background: var(--x-bg2) !important; border: 0 !important; border-radius: 14px !important; padding: 12px !important; animation: none !important; }
+#cdt-msg-box .st2-field > span { font-size: 13px !important; color: var(--x-tx2) !important; }
+#cdt-msg-box textarea { border-radius: 10px !important; background: var(--x-fill2) !important; border: 0 !important; color: var(--x-tx) !important; font-size: 16px !important; }
+#cdt-msg-box .cdt-act { height: 44px; border-radius: 12px !important; border: 0 !important; background: var(--x-grad) !important; color: var(--x-ink) !important; font-size: 16px !important; font-weight: 600 !important; }
+
+/* ——— 5) XABAR YUBORISH ——— */
+#broadcastModal .bcx { padding: 0 2px 12px; }
+.bcx-seg { display: grid; grid-template-columns: 1fr 1fr; padding: 2px; border-radius: 10px; background: var(--x-fill2); }
+.bcx-seg button {
+    height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--x-tx); cursor: pointer;
+    font-family: inherit; font-size: 14px; font-weight: 500; transition: background-color .25s, color .25s;
+}
+.bcx-seg button.on { background: var(--x-grad); color: var(--x-ink); font-weight: 600; box-shadow: 0 3px 8px rgba(0,0,0,.18); }
+.bcx-sec { display: flex; align-items: center; justify-content: space-between; margin: 22px 6px 7px; font-size: 13px; font-weight: 500; color: var(--x-tx2); text-transform: uppercase; letter-spacing: .4px; }
+.bcx-sec .bcx-link { font-size: 14px; text-transform: none; letter-spacing: 0; }
+.bcx-grp { background: var(--x-bg2); border-radius: 14px; overflow: hidden; }
+html body #broadcastModal #bc-text {
+    display: block; width: 100%; box-sizing: border-box; min-height: 130px; margin: 0; padding: 12px 14px;
+    border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+    color: var(--x-tx); font-weight: 400; font-size: 16px; line-height: 1.4; font-family: inherit; resize: vertical; outline: none;
+}
+.bcx-hint { margin: 7px 6px 0; font-size: 12.5px; line-height: 1.45; color: var(--x-tx2); }
+#bcx-pick .bcx-search { margin-bottom: 10px; }
+.bcx-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 8px 14px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.bcx-row:active { background: var(--x-fill2); }
+.bcx-row + .bcx-row::before { content: ""; position: absolute; top: 0; left: 48px; right: 0; height: .5px; background: var(--x-sep); }
+.bcx-chk { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--x-tx3); box-sizing: border-box; position: relative; transition: background-color .2s, border-color .2s; }
+.bcx-row.on .bcx-chk { background: var(--x-gold2); border-color: var(--x-gold2); }
+.bcx-row.on .bcx-chk::after { content: ""; position: absolute; left: 7px; top: 3.5px; width: 5px; height: 10px; border: solid #fff; border-width: 0 2.2px 2.2px 0; transform: rotate(45deg); }
+.bcx-row.is-blk { opacity: .5; cursor: default; }
+.bcx-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.bcx-mid b { font-size: 15.5px; font-weight: 500; color: var(--x-tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bcx-mid span { font-size: 13.5px; color: var(--x-tx2); font-variant-numeric: tabular-nums; }
+.bcx-empty { padding: 16px; text-align: center; font-size: 14px; color: var(--x-tx2); }
+.bcx-stats[hidden], .bcx-wait[hidden] { display: none !important; }
+.bcx-stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 18px; background: var(--x-bg2); border-radius: 14px; overflow: hidden; }
+.bcx-stats > div { padding: 11px 4px; text-align: center; }
+.bcx-stats > div + div { border-left: .5px solid var(--x-sep); }
+.bcx-stats b { display: block; font-size: 20px; font-weight: 700; color: var(--x-tx); font-variant-numeric: tabular-nums; }
+.bcx-stats > div:nth-child(2) b { color: var(--x-green); }
+.bcx-stats > div:nth-child(3) b { color: var(--x-red); }
+.bcx-stats span { font-size: 11.5px; color: var(--x-tx2); }
+.bcx-wait { margin: 10px 6px 0; font-size: 13px; color: var(--x-orange); text-align: center; }
+.bcx-foot {
+    position: sticky; bottom: 0; margin: 14px -20px 0; padding: 12px 20px calc(14px + var(--safe-bottom, 0px));
+    background: linear-gradient(to top, var(--bg-dark) 72%, transparent); z-index: 2;
+}
+#broadcastModal { padding-bottom: 0 !important; }
+html[data-theme="light"] .bcx-foot { background: linear-gradient(to top, #f4eee2 72%, transparent); }
+#bc-send-btn {
+    width: 100%; height: 50px; border: 0; border-radius: 14px; cursor: pointer;
+    background: var(--x-grad); color: var(--x-ink); font-weight: 600; font-size: 17px; line-height: 1; font-family: inherit; letter-spacing: -.2px;
+    box-shadow: 0 10px 24px -14px rgba(212,175,55,.9); transition: transform .3s var(--x-spring), opacity .2s;
+}
+#bc-send-btn:active { transform: scale(.97); }
+#bc-send-btn:disabled { opacity: .45; box-shadow: none; }
+
+/* ——— 6) KARTA DIZAYNI: 3 ta tugma ——— */
+.cs-grp { background: var(--x-bg2); border-radius: 14px; overflow: hidden; }
+.cs-row {
+    position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 14px;
+    border: 0; background: none; text-align: left; cursor: pointer; font-family: inherit; color: var(--x-tx); -webkit-tap-highlight-color: transparent;
+}
+.cs-row:active { background: var(--x-fill2); }
+.cs-row + .cs-row::before { content: ""; position: absolute; top: 0; left: 60px; right: 0; height: .5px; background: var(--x-sep); }
+.cs-gl { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--x-fill2); color: var(--x-tx2); transition: background .25s, color .25s; }
+.cs-gl svg { width: 24px; height: 24px; }
+.cs-row.on .cs-gl { background: var(--x-grad); color: var(--x-ink); }
+#cardStyleModal .cs-name { flex: 1; font-size: 16px; font-weight: 500; }
+#cardStyleModal .cs-name small { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--x-tx2); }
+.cs-ok { flex: 0 0 22px; color: var(--x-gold); opacity: 0; transform: scale(.6); transition: opacity .2s, transform .35s var(--x-spring); }
+.cs-ok svg { width: 22px; height: 22px; display: block; }
+.cs-row.on .cs-ok { opacity: 1; transform: none; }
+#cardStyleModal .cs-lead { margin: 0 6px 12px; font-size: 14px; color: var(--x-tx2); }
+#cardStyleModal .cs-note { margin: 8px 6px 0; font-size: 12.5px; color: var(--x-tx2); }
+
+/* ——— 7) Bloklangan foydalanuvchi ekrani ——— */
+#blockedScreen {
+    position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 32px;
+    background: var(--bg-dark, #121212); color: #f5f5f7; text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+}
+html[data-theme="light"] #blockedScreen { color: #1c1c1e; }
+#blockedScreen .bk-ic { width: 76px; height: 76px; margin: 0 auto 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,69,58,.14); color: #ff453a; }
+#blockedScreen .bk-ic svg { width: 38px; height: 38px; }
+#blockedScreen h2 { margin: 0 0 8px; font-size: 24px; font-weight: 700; letter-spacing: -.3px; }
+#blockedScreen p { margin: 0 auto; max-width: 300px; font-size: 15px; line-height: 1.5; opacity: .65; }
+body.is-blocked { overflow: hidden !important; }
+</style>
+
+<script id="admin-ios-2026b-js">
+(function () {
+    'use strict';
+    /* ——— Bosh sahifa chrome: `#main-menu` ko'rinsa (yoki qidiruv ochiq bo'lsa) body.is-home ——— */
+    function syncHome() {
+        var mm = document.getElementById('main-menu');
+        var ca = document.getElementById('content-area');
+        var home = !mm || !ca || ca.classList.contains('hidden') || !mm.classList.contains('hidden');
+        if (document.body.classList.contains('is-home') !== home) document.body.classList.toggle('is-home', home);
+    }
+    document.body.classList.add('is-home');
+    try {
+        var mo = new MutationObserver(syncHome);
+        ['main-menu', 'content-area'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) mo.observe(el, { attributes: true, attributeFilter: ['class'] });
+        });
+    } catch (e) {}
+    syncHome();
+
+    /* ——— ⛔ Bloklangan foydalanuvchi: `blocked_users/{uid}` bo'lsa ilova yopiladi ——— */
+    var ref = null, shown = false;
+    function isAdminUid(uid) {
+        try { if (typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.map(String).indexOf(String(uid)) !== -1) return true; } catch (e) {}
+        return false;
+    }
+    function show() {
+        if (shown) return;
+        shown = true;
+        var o = document.createElement('div');
+        o.id = 'blockedScreen';
+        o.setAttribute('role', 'alertdialog');
+        o.innerHTML = '<div><div class="bk-ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM4 12a8 8 0 0 1 12.9-6.3L5.7 16.9A7.9 7.9 0 0 1 4 12zm8 8a7.9 7.9 0 0 1-4.9-1.7L18.3 7.1A8 8 0 0 1 12 20z"/></svg></div>' +
+            '<h2>Kirish cheklangan</h2><p>Hisobingiz administrator tomonidan bloklangan. Ilova va botdan foydalanib bo\u2018lmaydi.</p></div>';
+        document.body.appendChild(o);
+        document.body.classList.add('is-blocked');
+        try { if (window.tg && tg.MainButton) tg.MainButton.hide(); } catch (e) {}
+    }
+    function hide() {
+        if (!shown) return;
+        shown = false;
+        var o = document.getElementById('blockedScreen');
+        if (o) o.parentNode.removeChild(o);
+        document.body.classList.remove('is-blocked');
+    }
+    function attach(uid) {
+        try { if (ref) ref.off(); } catch (e) {}
+        ref = null;
+        if (!uid || !/^\d+$/.test(String(uid)) || isAdminUid(uid)) { hide(); return; }
+        var d = (typeof db !== 'undefined' && db) ? db : (window.firebase && firebase.database ? firebase.database() : null);
+        if (!d) return;
+        ref = d.ref('blocked_users/' + uid);
+        ref.on('value', function (snap) { if (snap && snap.exists()) show(); else hide(); }, function () {});
+    }
+    window._blockGateAttach = attach;   // diagnostika uchun
+    var tries = 0;
+    (function wait() {
+        if (!(window.firebase && firebase.auth && firebase.apps && firebase.apps.length)) {
+            if (++tries < 60) setTimeout(wait, 250);
+            return;
+        }
+        try { firebase.auth().onAuthStateChanged(function (u) { attach(u ? u.uid : null); }); } catch (e) {}
+    })();
+})();
+</script>
+
 </body>
 </html>
 
