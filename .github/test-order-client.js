@@ -30,7 +30,7 @@ function slice(startLit, endLit, label) {
 const AUTH = slice('    window._initDataAgeSec = function', '    // 🔐 Auth kafolati', 'auth');
 const STATUS = slice('// ✅ Tasdiq oynasi', '    function openModal(id) {', 'changeOrderStatus');
 const CHECKOUT = slice('window.confirmOrder = async (paymentMethod) => {', '// 📦 1. VIZUAL KUZATUV', 'confirmOrder');
-const CANCEL = slice('window._renderOrderCancel = function', '// 📦 3. KUZATUV', 'cancelMyOrder');
+const CANCEL = slice('window._renderOrderCancel = function', '// 🧾 ADMIN buyurtma qatorlari', 'cancelMyOrder');
 const REORDER = slice('window.reorderItems = () => {', '// 2. GRAFIK STATISTIKA', 'reorderItems');
 
 let passed = 0, failed = 0;
