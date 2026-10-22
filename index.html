@@ -9860,7 +9860,7 @@ function cardHTML(p) {
 
     return `<div class="luxury-card" data-pid="${p.id}" onclick="openProduct(${p.id})">
         ${bH}${heartBtn}
-        <div class="btn-compare-card ${(window.compareList||[]).includes(String(p.id))?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash" aria-label="Taqqoslash"><svg class="cmp-card-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4" r="1.25" fill="currentColor" stroke="none"/><path d="M12 5.2V19"/><path d="M7.5 19h9"/><path d="M4.5 6.6h15"/><path d="M4.5 6.6L2 11.6h5z"/><path d="M19.5 6.6L17 11.6h5z"/></svg></div>
+        <div class="btn-compare-card ${(window.compareList||[]).includes(String(p.id))?'active':''}" onclick="toggleCompare(${p.id}, event)" title="Taqqoslash" aria-label="Taqqoslash"><span class="cmp-rock"><svg class="cmp-card-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4" r="1.25" fill="currentColor" stroke="none"/><path d="M12 5.2V19"/><path d="M7.5 19h9"/><path d="M4.5 6.6h15"/><path d="M4.5 6.6L2 11.6h5z"/><path d="M19.5 6.6L17 11.6h5z"/></svg></span></div>
         <div class="img-wrap" style="${oosStyle}">
         <img src="${_thumb(p.img, 240)}" 
      loading="lazy" 
@@ -32883,6 +32883,31 @@ html.lite body .ai-luxury-btn .shogird-orbit { animation: none !important; }
 })();
 </script>
 
+
+<style id="perf-ios-2026">
+/* ═══════════════════════════════════════════════════════════════════
+   ⚡ iOS (Telegram WKWebView) QOTISHLARIGA QARSHI — ko'rinish O'ZGARMAYDI.
+   O'lchov (CPU x4, bekor turgan holat, 5 s): Task 1098 ms, Style 288 ms.
+   Sabablar:
+   1) Har mahsulot kartasidagi "taqqoslash" ikonkasi (SVG) cheksiz tebranardi —
+      SVG transform WebKit'da GPU'da emas, har kadrda qayta chiziladi; ustiga
+      tugmada backdrop-filter bor -> har kadrda xiralashtirish qayta hisoblanardi.
+      Tugma foni 90–95% to'q — blur ko'zga ko'rinmasdi, faqat yuk edi.
+   2) Eski #order-loading-overlay (yangisi bilan almashtirilgan) ko'rinmas holda
+      (opacity:0) butun ekranga blur(10px) va ikkita cheksiz animatsiya bilan turardi.
+   ═══════════════════════════════════════════════════════════════════ */
+.btn-compare-card { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.btn-compare-card .cmp-card-ic { animation: none !important; }
+.cmp-rock { display: inline-flex; transform-origin: 50% 17%; animation: cmpRock 2.6s ease-in-out infinite; }
+.btn-compare-card:active .cmp-rock,
+.reveal-item:not(.active) .cmp-rock { animation-play-state: paused; }
+html.lite .cmp-rock, .pf-weak .cmp-rock { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .cmp-rock { animation: none !important; } }
+
+.order-loading-overlay:not(.active) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.order-loading-overlay:not(.active) .hourglass:after,
+.order-loading-overlay:not(.active) .order-loading-text { animation-play-state: paused !important; }
+</style>
 </body>
 </html>
 
