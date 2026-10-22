@@ -1288,61 +1288,234 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         .container { scrollbar-width: none; -ms-overflow-style: none; }
         .hidden { display: none !important; }
         /* ================================================= */
-        /* 🎬 5. CINEMATIC WELCOME SCREEN (YANGI USLUB) */
+        /* 🍏 5. KIRISH EKRANI — iOS uslubi (Avto A1)          */
+        /* Ketma-ketlik (≈2.8s):
+           1) Tilla "aura" sekin yoyiladi
+           2) A1 ikonkasi iOS "spring" bilan ochiladi (ilova ochilgandek)
+           3) Ikonka ichidagi spidometr shkalasi "gaz berib" ko'tarilib, joyiga
+              tushadi (dvigatel o't olgandek) — Avto A1 ga xos detal
+           4) "Assalomu alaykum" harfma-harf blur'dan tiniqlashib chiqadi
+           5) Ikonka ustidan nozik yaltiroq nur o'tadi, pastda shior chiqadi
+           6) Chiqishda sahna iOS kabi yengil kattalashib eriydi
+           Faqat transform/opacity (+ kichik blur) — GPU uchun arzon. */
         /* ================================================= */
         #welcome-screen {
+            --wl-text: #F5F5F7;
+            --wl-muted: rgba(235, 235, 245, 0.55);
+            --wl-track: rgba(255, 255, 255, 0.09);
+            --wl-aura: rgba(201, 168, 76, 0.20);
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; /* Mutlaqo qora fon */
+            inset: 0;
             z-index: 10000;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), filter 0.8s ease;
+            overflow: hidden;
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -webkit-user-select: none; user-select: none;
+            transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        html[data-theme="light"] #welcome-screen {
+            --wl-text: #1C1C1E;
+            --wl-muted: rgba(60, 60, 67, 0.6);
+            --wl-track: rgba(0, 0, 0, 0.07);
+            --wl-aura: rgba(201, 168, 76, 0.22);
+            background: #F7F5F0;
         }
 
-        .welcome-text {
-            color: var(--luxury-gold);
-            font-size: 24px; /* Telefonga chiroyli sig'ishi uchun sal kichraytirdik */
-            font-weight: 300; /* Sal qalinroq qildik, tiniq ko'rinadi */
-            text-transform: uppercase;
-            text-align: center;
-            
-            /* 🔥 ENG ASOSIYSI: Ikkiga bo'linib ketishini taqqa to'xtatadi! */
-            white-space: nowrap; 
-            
+        /* Fondagi yumshoq tilla nur */
+        .wl-aura {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 560px; height: 560px;
+            margin: -330px 0 0 -280px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--wl-aura) 0%, transparent 62%);
             opacity: 0;
-            transform: scale(0.9);
-            text-shadow: 0 0 20px rgba(212, 175, 55, 0.5), 0 0 40px rgba(212, 175, 55, 0.2);
-            animation: cinematicFade 2.5s ease-out forwards;
+            transform: scale(0.6);
+            animation: wlAura 2.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            pointer-events: none;
+        }
+        @keyframes wlAura { to { opacity: 1; transform: scale(1); } }
+
+        .wl-stage {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease, filter 0.7s ease;
         }
 
-        /* Nafas oluvchi va kengayuvchi animatsiya */
-        @keyframes cinematicFade {
-            0% { 
-                opacity: 0; 
-                transform: scale(0.9); 
-                letter-spacing: 2px;
-                filter: blur(10px);
-            }
-            40% { 
-                opacity: 1; 
-                filter: blur(0);
-            }
-            100% { 
-                opacity: 1; 
-                transform: scale(1.05); 
-                letter-spacing: 10px;
-                text-shadow: 0 0 30px rgba(212, 175, 55, 0.8), 0 0 60px rgba(212, 175, 55, 0.4);
-            }
+        /* iOS ilova ikonkasi (squircle) */
+        .wl-icon {
+            position: relative;
+            width: 96px; height: 96px;
+            border-radius: 22px;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            background: linear-gradient(160deg, #2C2C2E 0%, #141416 55%, #08080A 100%);
+            box-shadow:
+                inset 0 0 0 0.5px rgba(240, 208, 96, 0.38),
+                inset 0 1px 0 rgba(255, 255, 255, 0.10),
+                0 20px 44px -14px rgba(0, 0, 0, 0.85),
+                0 0 46px -8px rgba(201, 168, 76, 0.40);
+            opacity: 0;
+            transform: scale(0.55);
+            animation: wlIconIn 0.95s cubic-bezier(0.34, 1.42, 0.5, 1) 0.1s forwards;
+        }
+        html[data-theme="light"] .wl-icon {
+            box-shadow:
+                inset 0 0 0 0.5px rgba(240, 208, 96, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.10),
+                0 18px 36px -14px rgba(0, 0, 0, 0.38),
+                0 0 40px -10px rgba(201, 168, 76, 0.45);
+        }
+        @keyframes wlIconIn { to { opacity: 1; transform: scale(1); } }
+
+        /* Spidometr shkalasi */
+        .wl-gauge {
+            position: absolute;
+            inset: 9px;
+            width: 78px; height: 78px;
+            overflow: visible;
+            filter: drop-shadow(0 0 3px rgba(240, 208, 96, 0.55));
+        }
+        .wl-gauge path { fill: none; stroke-width: 5; stroke-linecap: round; }
+        .wl-gauge-track { stroke: rgba(255, 255, 255, 0.09); }
+        .wl-gauge-fill {
+            stroke: url(#wlGold);
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: wlGauge 1.25s cubic-bezier(0.65, 0, 0.35, 1) 0.45s forwards;
+        }
+        /* "Gaz berish": 0 -> deyarli to'liq -> biroz qaytib joyida to'xtaydi */
+        @keyframes wlGauge {
+            0%   { stroke-dashoffset: 100; }
+            55%  { stroke-dashoffset: 4; }
+            100% { stroke-dashoffset: 28; }
         }
 
-        /* Sahifa ochilayotganda fonning xiralashishi */
+        .wl-mono {
+            position: relative;
+            margin-top: 4px;
+            font-size: 33px;
+            font-weight: 800;
+            letter-spacing: -1.2px;
+            line-height: 1;
+            background: linear-gradient(135deg, #F0D060 0%, #C9A84C 45%, #96720A 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Ikonka ustidan bir marta o'tadigan nozik nur */
+        .wl-shine {
+            position: absolute;
+            inset: -30%;
+            background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.30) 50%, transparent 58%);
+            transform: translateX(-110%);
+            animation: wlShine 1.1s cubic-bezier(0.4, 0, 0.2, 1) 1.45s forwards;
+            pointer-events: none;
+        }
+        @keyframes wlShine { to { transform: translateX(110%); } }
+
+        /* "Assalomu alaykum" — harfma-harf */
+        .wl-title {
+            margin: 30px 0 0;
+            display: flex;
+            gap: 0.27em;
+            white-space: nowrap;
+            font-size: 30px;
+            font-weight: 600;
+            letter-spacing: -0.6px;
+            line-height: 1.15;
+            color: var(--wl-text);
+        }
+        .wl-word { display: inline-flex; }
+        .wl-ch {
+            display: inline-block;
+            opacity: 0;
+            transform: translateY(10px) scale(0.96);
+            filter: blur(5px);
+            animation: wlChar 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: calc(0.6s + var(--i) * 38ms);
+        }
+        @keyframes wlChar { to { opacity: 1; transform: none; filter: blur(0); } }
+
+        .wl-sub {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.2px;
+            color: var(--wl-muted);
+            opacity: 0;
+            transform: translateY(6px);
+            animation: wlFadeUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 1.35s forwards;
+        }
+        .wl-sub b { font-weight: 600; color: var(--luxury-gold, #C9A84C); }
+        .wl-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+        @keyframes wlFadeUp { to { opacity: 1; transform: none; } }
+
+        /* Pastdagi iOS uslubidagi ingichka yuklanish chizig'i */
+        .wl-progress {
+            position: absolute;
+            left: 50%;
+            bottom: calc(52px + var(--safe-bottom, 0px));
+            width: 120px; height: 4px;
+            margin-left: -60px;
+            border-radius: 2px;
+            overflow: hidden;
+            background: var(--wl-track);
+            opacity: 0;
+            animation: wlFadeUp 0.5s ease 0.4s forwards;
+        }
+        .wl-progress i {
+            display: block;
+            width: 100%; height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #96720A, #C9A84C 55%, #F0D060);
+            transform: scaleX(0);
+            transform-origin: left center;
+            animation: wlLoad 2.3s cubic-bezier(0.45, 0.05, 0.2, 1) 0.45s forwards;
+        }
+        @keyframes wlLoad { to { transform: scaleX(1); } }
+
+        .wl-sr {
+            position: absolute; width: 1px; height: 1px; overflow: hidden;
+            clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+        }
+
+        /* Chiqish: iOS ilova ochilgandek — sahna kattalashib eriydi */
         .welcome-fade-out {
             opacity: 0 !important;
-            filter: blur(10px);
             pointer-events: none;
+        }
+        .welcome-fade-out .wl-stage {
+            transform: scale(1.08);
+            filter: blur(6px);
+            opacity: 0;
+        }
+
+        @media (max-width: 340px) {
+            .wl-title { font-size: 26px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #welcome-screen *,
+            #welcome-screen *::before,
+            #welcome-screen *::after {
+                animation-duration: 0.01s !important;
+                animation-delay: 0s !important;
+                transition-duration: 0.2s !important;
+            }
+            .wl-ch { filter: none !important; }
         }
         .header { text-align: center; padding: 10px 20px 20px; }
         .header h1 { font-size: 26px; font-weight: 800; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -4827,7 +5000,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         }
 
         /* #5 WELCOME SCREEN: O'TA QORA fon + gold glow halosi (faqat matn atrofida) */
-        #welcome-screen { background: #000 !important; }
+        html:not([data-theme="light"]) #welcome-screen { background: #000 !important; }
         #welcome-screen h1 {
             background: none !important;
             color: var(--luxury-gold) !important;
@@ -5757,9 +5930,26 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
 <div class="order-loading-overlay" id="order-loading-overlay"><div class="hourglass"></div><div class="order-loading-text">Kuting...</div></div>
 <!-- Kirish ekrani: matn DARHOL yakuniy (animatsiyali) ko'rinishda turadi.
      Ilgari bu yerda eski "<h1>Assalomu alaykum, ISM!</h1>" turardi va JS uni
-     keyinroq .welcome-text bilan almashtirardi -> sekin qurilmada eski yozuv
+     keyinroq boshqa matn bilan almashtirardi -> sekin qurilmada eski yozuv
      bir lahza "yonib o'chib" ko'rinardi (FOUC/flash). Endi flash yo'q. -->
-<div id="welcome-screen"><div class="welcome-text">Assalomu alaykum</div></div>
+<div id="welcome-screen" role="status" aria-live="polite">
+  <span class="wl-sr">Assalomu alaykum! Avto A1 — original ehtiyot qismlar</span>
+  <div class="wl-aura" aria-hidden="true"></div>
+  <div class="wl-stage" aria-hidden="true">
+    <div class="wl-icon">
+      <svg class="wl-gauge" viewBox="0 0 100 100" focusable="false">
+        <defs><linearGradient id="wlGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F0D060"/><stop offset=".5" stop-color="#C9A84C"/><stop offset="1" stop-color="#96720A"/></linearGradient></defs>
+        <path class="wl-gauge-track" pathLength="100" d="M21.72 78.28A40 40 0 1 1 78.28 78.28"/>
+        <path class="wl-gauge-fill" pathLength="100" d="M21.72 78.28A40 40 0 1 1 78.28 78.28"/>
+      </svg>
+      <span class="wl-mono">A1</span>
+      <span class="wl-shine"></span>
+    </div>
+    <div class="wl-title"><span class="wl-word"><span class="wl-ch" style="--i:0">A</span><span class="wl-ch" style="--i:1">s</span><span class="wl-ch" style="--i:2">s</span><span class="wl-ch" style="--i:3">a</span><span class="wl-ch" style="--i:4">l</span><span class="wl-ch" style="--i:5">o</span><span class="wl-ch" style="--i:6">m</span><span class="wl-ch" style="--i:7">u</span></span><span class="wl-word"><span class="wl-ch" style="--i:9">a</span><span class="wl-ch" style="--i:10">l</span><span class="wl-ch" style="--i:11">a</span><span class="wl-ch" style="--i:12">y</span><span class="wl-ch" style="--i:13">k</span><span class="wl-ch" style="--i:14">u</span><span class="wl-ch" style="--i:15">m</span></span></div>
+    <div class="wl-sub"><b>Avto A1</b><span class="wl-dot"></span>Original ehtiyot qismlar</div>
+  </div>
+  <div class="wl-progress" aria-hidden="true"><i></i></div>
+</div>
 <div class="floating-btn" id="back-btn" onclick="goBack()"><svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
 <div class="container">
     <div class="header hx">
@@ -9645,16 +9835,16 @@ document.addEventListener('visibilitychange', function() {
         const screen = document.getElementById('welcome-screen');
         if (!screen) return;
 
-        // Matn (.welcome-text) endi HTML'da DARHOL turibdi va o'zi animatsiya
-        // bilan kattalashadi. Bu yerda innerHTML'ni QAYTA o'rnatmaymiz — aks holda
+        // iOS uslubidagi sahna (A1 ikonka + spidometr + harfma-harf salom)
+        // HTML'da DARHOL turibdi va o'zi CSS animatsiyasi bilan ochiladi. Bu yerda innerHTML'ni QAYTA o'rnatmaymiz — aks holda
         // animatsiya nol nuqtadan qayta boshlanib "sakrab" ketardi va eski flash
         // qaytib kelardi. Faqat animatsiya tugagach ekranni yopamiz.
 
         // ⚡ Zaif telefonda welcome'ni qisqartiramiz (admin/mijoz kutib qolmasin)
         var _weak = false;
         try { _weak = document.documentElement.classList.contains('pf-weak') || !!window.__perfLite; } catch(e){}
-        var _holdMs = _weak ? 1000 : 2800;
-        var _fadeMs = _weak ? 350 : 800;
+        var _holdMs = _weak ? 1000 : 2900;
+        var _fadeMs = _weak ? 350 : 750;
 
         // Animatsiya tugagach, ilovani ochamiz
         setTimeout(() => {
@@ -21678,18 +21868,33 @@ html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border
     animation-delay: 0s !important;
   }
   /* ISTISNO: kirishdagi "Assalomu alaykum" (welcome) animatsiyasi.
-     Bu DOIMIY bezak emas — ilova ochilganda atigi BIR MARTA, 2.5s ichida
-     o'ynab tugaydi. Yuqoridagi qoida uni 0.001s ga qisqartirib "qotib"
-     ko'rsatardi. Lite rejimda ham silliq kattalashishi uchun ozod qilamiz
-     (zaif qurilmaga sezilarli yuk bermaydi, chunki faqat bir martalik). */
-  html.lite body .welcome-text {
-    animation-duration: 2.5s !important;
-    animation-iteration-count: 1 !important;
-    animation-delay: 0s !important;
-  }
-  /* ⚡ HAQIQIY zaif telefonda welcome animatsiyasini qisqartiramiz (JS hold 1s bilan mos) */
-  html.pf-weak body .welcome-text {
-    animation-duration: 0.9s !important;
+     Bu DOIMIY bezak emas — ilova ochilganda atigi BIR MARTA o'ynab tugaydi.
+     Boot-lite HAMMA telefonda dastlab yoqiladi, shuning uchun yuqoridagi
+     qoida uni 0.001s ga qisqartirib "qotib" ko'rsatardi. Shu yerda asl
+     vaqtlarni qaytaramiz (faqat transform/opacity — yuk sezilmaydi). */
+  html.lite body #welcome-screen .wl-aura     { animation-duration: 2.6s !important; animation-delay: 0s !important; }
+  html.lite body #welcome-screen .wl-icon     { animation-duration: 0.95s !important; animation-delay: 0.1s !important; }
+  html.lite body #welcome-screen .wl-gauge-fill { animation-duration: 1.25s !important; animation-delay: 0.45s !important; }
+  html.lite body #welcome-screen .wl-shine    { animation-duration: 1.1s !important; animation-delay: 1.45s !important; }
+  html.lite body #welcome-screen .wl-ch       { animation-duration: 0.75s !important; animation-delay: calc(0.6s + var(--i) * 38ms) !important; }
+  html.lite body #welcome-screen .wl-sub      { animation-duration: 0.7s !important; animation-delay: 1.35s !important; }
+  html.lite body #welcome-screen .wl-progress { animation-duration: 0.5s !important; animation-delay: 0.4s !important; }
+  html.lite body #welcome-screen .wl-progress i { animation-duration: 2.3s !important; animation-delay: 0.45s !important; }
+
+  /* ⚡ HAQIQIY zaif telefonda: hammasi ~1s ichida (JS hold 1000ms bilan mos),
+     blur va nur o'chiriladi. */
+  html.pf-weak body #welcome-screen .wl-aura     { animation-duration: 0.6s !important; }
+  html.pf-weak body #welcome-screen .wl-icon     { animation-duration: 0.45s !important; animation-delay: 0s !important; }
+  html.pf-weak body #welcome-screen .wl-gauge    { filter: none !important; }
+  html.pf-weak body #welcome-screen .wl-gauge-fill { animation-duration: 0.6s !important; animation-delay: 0.1s !important; }
+  html.pf-weak body #welcome-screen .wl-shine    { display: none !important; }
+  html.pf-weak body #welcome-screen .wl-ch       { filter: none !important; animation-duration: 0.4s !important; animation-delay: calc(0.15s + var(--i) * 12ms) !important; }
+  html.pf-weak body #welcome-screen .wl-sub      { animation-duration: 0.4s !important; animation-delay: 0.35s !important; }
+  html.pf-weak body #welcome-screen .wl-progress { animation-duration: 0.2s !important; animation-delay: 0s !important; }
+  html.pf-weak body #welcome-screen .wl-progress i { animation-duration: 0.9s !important; animation-delay: 0s !important; }
+  html.pf-weak body .welcome-fade-out .wl-stage  { filter: none !important; }
+  @media (prefers-reduced-motion: reduce) {
+    html.lite body #welcome-screen * { animation-duration: 0.01s !important; animation-delay: 0s !important; }
   }
   /* Inline style bilan berilgan doimiy animatsiyalarni ham to'xtatamiz */
   html.lite body [style*="floatCart"],
