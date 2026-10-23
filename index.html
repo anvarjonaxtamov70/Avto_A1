@@ -19146,6 +19146,7 @@ document.addEventListener('click', function (e) {
         return Array.isArray(P.productsDB) ? P.productsDB : [];
     }
     function getWishCount() {
+        if (typeof window.a1WishItems === 'function') { var wi = window.a1WishItems(); if (wi) return wi.length; }
         if (Array.isArray(window.wishlist)) return window.wishlist.length;
         return P.wishlistCount || 0;
     }
@@ -37493,7 +37494,6 @@ html[data-theme="light"] body .story-item.st2-add .st2-add-avatar { background: 
 html body .story-item.st2-add .st2-add-plus {
     width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 0 !important; line-height: 0;
     background: var(--a3-grad); color: #1a1405 !important; -webkit-text-fill-color: #1a1405 !important; box-shadow: 0 6px 16px rgba(160,124,28,.5), inset 0 1px 0 rgba(255,255,255,.45);
-    animation: a3PlusTurn 3.6s var(--a3-spring) infinite;
 }
 html body .story-item.st2-add .st2-add-plus svg { width: 20px; height: 20px; fill: none; stroke: #1a1405 !important; stroke-width: 2.8; stroke-linecap: round; }
 html body .story-item.st2-add:active .st2-add-ring { transform: scale(.9); }
@@ -37527,7 +37527,6 @@ html body::after { background: none !important; box-shadow: none !important; }
 
 @keyframes a3Spin { to { transform: rotate(360deg); } }
 @keyframes a3Ripple { 0% { box-shadow: 0 0 0 0 rgba(212,175,55,.45); } 70%, 100% { box-shadow: 0 0 0 10px rgba(212,175,55,0); } }
-@keyframes a3PlusTurn { 0%, 72% { transform: rotate(0) scale(1); } 86% { transform: rotate(90deg) scale(1.12); } 100% { transform: rotate(90deg) scale(1); } }
 @keyframes a3Rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 html.lite .st2-add-orbit { animation-duration: 8s; }
@@ -37561,6 +37560,19 @@ html.lite .st2-add-ring::after { animation: none; }
     var wl = function () { try { return (typeof wishlist !== 'undefined' && Array.isArray(wishlist)) ? wishlist : (window.wishlist || []); } catch (e) { return window.wishlist || []; } };
     var db = function () { try { return (typeof productsDB !== 'undefined' && Array.isArray(productsDB)) ? productsDB : (window.productsDB || []); } catch (e) { return window.productsDB || []; } };
 
+    /* Saqlanganlar — yagona manba: ro'yxatdagi, bazada HALI MAVJUD, takrorlanmagan tovarlar.
+       (O'chirilgan tovar id'lari wishlist'da qolib ketadi — ularni sanamaymiz.) */
+    window.a1WishItems = function () {
+        var ids = wl(), all = db(), seen = {}, out = [];
+        if (!all.length) return null; // baza hali yuklanmagan
+        ids.forEach(function (id) {
+            if (seen[id]) return; seen[id] = 1;
+            var p = all.find(function (x) { return x.id === id; });
+            if (p) out.push(p);
+        });
+        return out;
+    };
+
     /* ── 1. Savat: sarlavha + bo'sh holat ── */
     function cartChrome() {
         ['cartModal', 'checkoutModal', 'coPayModal'].forEach(function (id) {
@@ -37575,7 +37587,7 @@ html.lite .st2-add-ring::after { animation: none; }
         var empty = !!c.querySelector('.co-empty');
         m.classList.toggle('co-is-empty', empty);
         if (!empty) return;
-        var n = wl().length;
+        var wi = window.a1WishItems(), n = wi ? wi.length : 0;
         c.innerHTML = '<div class="a3-empty">' + art(IC.cart) +
             '<h3>Savatingiz hozircha bo\u2018sh</h3>' +
             '<p>Mashinangizga mos original ehtiyot qismlarni katalogdan tanlang \u2014 qolganini Avto A1 o\u2018zi hal qiladi.</p>' +
@@ -37623,8 +37635,7 @@ html.lite .st2-add-ring::after { animation: none; }
     /* ── 4. Saqlanganlar ── */
     function paintWish() {
         var c = $('wishlist-items-container'), sub = $('wl-sub'); if (!c) return;
-        var ids = wl(), all = db();
-        var items = ids.map(function (id) { return all.find(function (x) { return x.id === id; }); }).filter(Boolean);
+        var items = window.a1WishItems() || [];
         if (!items.length) {
             if (sub) sub.textContent = 'Yoqqan tovarlaringiz shu yerda turadi';
             c.innerHTML = '<div class="a3-empty">' + art(IC.heart) +
@@ -37633,6 +37644,8 @@ html.lite .st2-add-ring::after { animation: none; }
                 '<button type="button" class="a3-cta" onclick="showCatalog()">' + IC.grid + 'Katalogni ko\u2018rish</button></div>';
             return;
         }
+        // Takroriy id'lar ikki marta karta bo'lib chiqmasin — sanoq bilan bir xil bo'lsin
+        if (typeof window.cardHTML === 'function' && c.children.length !== items.length) c.innerHTML = items.map(function (p) { return window.cardHTML(p); }).join('');
         var sum = items.reduce(function (s, p) { return s + (Number(p.price) || 0); }, 0);
         if (sub) sub.innerHTML = '<b>' + items.length + ' ta tovar</b><span class="dot">\u00b7</span>' + fmt(sum) + ' so\u2018m';
     }
