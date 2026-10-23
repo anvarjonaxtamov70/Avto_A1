@@ -15905,7 +15905,7 @@ function initReveal() {
                            style="width:100%;height:100%;object-fit:contain;background:#000;">
                     </video>
                     <div class="sv-buffer-bar" id="sv-buffer-bar"><div></div></div>
-                    <div class="sv-pause-indicator" id="sv-pause-indicator">⏸</div>
+                    <div class="sv-pause-indicator" id="sv-pause-indicator"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.4"/><rect x="14" y="5" width="4" height="14" rx="1.4"/></svg></div>
                 `;
 
                 storyVideoElement = document.getElementById('stVideo');
@@ -16058,7 +16058,7 @@ function initReveal() {
                         <div class="sv-spinner"></div>
                     </div>
                     <img id="stImg" class="stv-loading" src="${escHtml(item.src)}" style="width:100%;height:100%;object-fit:contain;background:#000;">
-                    <div class="sv-pause-indicator" id="sv-pause-indicator">⏸</div>
+                    <div class="sv-pause-indicator" id="sv-pause-indicator"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.4"/><rect x="14" y="5" width="4" height="14" rx="1.4"/></svg></div>
                 `;
                 const _img = document.getElementById('stImg');
                 const _imgLoader = document.getElementById('sv-loader');
@@ -36856,30 +36856,46 @@ html body #broadcastModal #bc-text { min-height: 150px; padding: 14px 16px 30px 
 /* ══════════════ 📸 STORIES (iOS 26) ══════════════ */
 html body #story-viewer { background: #000 !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
 html body #story-viewer #story-content { border-radius: 0 0 22px 22px !important; }
-html body #story-viewer .story-header { top: calc(8px + var(--safe-top, 0px)) !important; padding: 0 10px !important; z-index: 60 !important; }
-html body #story-viewer .story-header::before { content: ''; position: absolute; left: 0; right: 0; top: calc(-8px - var(--safe-top, 0px)); height: calc(110px + var(--safe-top, 0px)); background: linear-gradient(rgba(0,0,0,.55), transparent); pointer-events: none; z-index: -1; }
-html body #story-viewer .story-progress-container { gap: 3px !important; }
-html body #story-viewer .story-progress-bg { height: 2.5px !important; border-radius: 2px !important; background: rgba(255,255,255,.3) !important; overflow: hidden; }
-html body #story-viewer .story-progress-fill { border-radius: 2px !important; background: #fff !important; box-shadow: none !important; }
-html body #story-viewer .story-top-info { display: flex !important; align-items: center !important; gap: 10px; margin-top: 10px !important; min-height: 38px; padding-right: 96px; }
-.sv-ava { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; padding: 2px; box-sizing: border-box; background: conic-gradient(from 210deg, #f6dc7e, #d4af37, #a8851f, #f6dc7e); }
-.sv-ava b { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; background: #0c0c0e; font-size: 12.5px; font-weight: 800; letter-spacing: -.4px; color: #e2c46e; }
-html body #story-viewer .story-title { display: flex !important; flex-direction: column; justify-content: center; min-width: 0; font-size: 15px !important; font-weight: 650 !important; letter-spacing: -.2px; line-height: 1.2 !important; text-shadow: 0 1px 6px rgba(0,0,0,.45) !important; }
+/* Tepa panel: progress → [A1 avatar | sarlavha + "Avto A1 ✓" | ovoz · o'chirish · yopish] — HAMMASI BITTA QATORDA.
+   ⚠️ Ilgari ✕ header ICHIDA, ovoz/o'chirish esa viewer'ga nisbatan joylashardi: ✕ ga --safe-top
+   IKKI MARTA qo'shilib, ~60–90px pastga tushib qolardi, qolgan ikkitasi sarlavha ustiga chiqardi. */
+html body #story-viewer .story-header { top: 0 !important; padding: calc(8px + var(--safe-top, 0px)) 12px 0 !important; z-index: 60 !important; transition: opacity .22s ease, transform .22s ease; }
+html body #story-viewer .story-header::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: calc(150px + var(--safe-top, 0px)); background: linear-gradient(180deg, rgba(0,0,0,.66) 0%, rgba(0,0,0,.32) 52%, rgba(0,0,0,0) 100%); pointer-events: none; z-index: -1; }
+html body #story-viewer .story-progress-container { gap: 4px !important; margin: 0 !important; }
+html body #story-viewer .story-progress-bg { height: 3px !important; border-radius: 3px !important; background: rgba(255,255,255,.26) !important; overflow: hidden; }
+html body #story-viewer .story-progress-fill { border-radius: 3px !important; background: #fff !important; box-shadow: 0 0 8px rgba(255,255,255,.5) !important; }
+html body #story-viewer .story-top-info { display: flex !important; align-items: center !important; justify-content: flex-start !important; gap: 10px; margin-top: 12px !important; padding: 0 !important; min-height: 40px; }
+.sv-ava { position: relative; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; padding: 2px; box-sizing: border-box; background: conic-gradient(from 210deg, #f6dc7e, #d4af37, #8f6f17, #f6dc7e); box-shadow: 0 4px 14px rgba(0,0,0,.45); }
+.sv-ava b { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 30% 25%, #26231b, #0b0b0d 70%); box-shadow: 0 0 0 1.5px #0b0b0d; font-size: 13px; font-weight: 800; letter-spacing: -.5px; color: #f0d27a; }
+.sv-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+html body #story-viewer .sv-id .story-title { display: block !important; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 15.5px !important; font-weight: 700 !important; letter-spacing: -.25px; line-height: 1.2 !important; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.5) !important; }
 html body #story-viewer .story-title .uic { display: none !important; }
-.sv-meta { font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,.72); letter-spacing: 0; }
-.sv-meta i { font-style: normal; margin: 0 4px; opacity: .6; }
+.sv-meta { display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; font-size: 12.5px; font-weight: 550; letter-spacing: -.1px; line-height: 1.2; color: rgba(255,255,255,.78); text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+.sv-meta svg { flex: none; width: 13px; height: 13px; }
+.sv-meta em { font-style: normal; color: rgba(255,255,255,.55); overflow: hidden; text-overflow: ellipsis; }
+.sv-acts { flex: none; display: flex; align-items: center; gap: 8px; }
+html body #story-viewer :is(.story-tap-left, .story-tap-right) { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+@media (max-width: 374px) { .sv-meta em { display: none; } .sv-acts { gap: 6px; } }
 .sv-circ, html body #story-viewer .story-close-btn, html body #story-viewer .sv-sound-btn, html body #story-viewer .story-admin-delete {
+    position: static !important; inset: auto !important; transform: none; margin: 0 !important;
     width: 36px !important; height: 36px !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important;
     display: grid !important; place-items: center; cursor: pointer; color: #fff !important; font-size: 0 !important;
-    background: rgba(255,255,255,.16) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 0 0 .5px rgba(255,255,255,.12) !important;
-    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); -webkit-tap-highlight-color: transparent; transition: transform .3s cubic-bezier(.34,1.4,.64,1);
+    background: rgba(255,255,255,.16) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), inset 0 0 0 .5px rgba(255,255,255,.14), 0 4px 14px rgba(0,0,0,.25) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%); -webkit-tap-highlight-color: transparent;
+    transition: transform .3s cubic-bezier(.34,1.4,.64,1), background .2s ease;
 }
 .sv-circ svg, html body #story-viewer .story-close-btn svg, html body #story-viewer .sv-sound-btn svg, html body #story-viewer .story-admin-delete svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
-html body #story-viewer .story-close-btn { position: absolute !important; right: 10px; top: calc(19px + var(--safe-top, 0px)); z-index: 62; }
-html body #story-viewer .sv-sound-btn { position: absolute !important; right: 54px !important; top: calc(19px + var(--safe-top, 0px)) !important; z-index: 62 !important; }
-html body #story-viewer .story-admin-delete { position: absolute !important; left: auto !important; bottom: auto !important; right: 98px !important; top: calc(19px + var(--safe-top, 0px)) !important; z-index: 62 !important; color: #ff6961 !important; background: rgba(255,69,58,.2) !important; }
+html body #story-viewer .story-close-btn svg { width: 17px; height: 17px; stroke-width: 2.6; }
+html body #story-viewer .story-admin-delete { color: #ff6961 !important; background: rgba(255,69,58,.22) !important; box-shadow: inset 0 0 0 .5px rgba(255,105,97,.35), 0 4px 14px rgba(0,0,0,.25) !important; }
 html body #story-viewer .story-admin-delete:not([style*="flex"]), html body #story-viewer .sv-sound-btn:not([style*="flex"]) { display: none !important; }
-html body #story-viewer :is(.story-close-btn, .sv-sound-btn, .story-admin-delete):active { transform: scale(.86); }
+html body #story-viewer :is(.story-close-btn, .sv-sound-btn, .story-admin-delete):active { transform: scale(.86); background: rgba(255,255,255,.26) !important; }
+html.lite body #story-viewer :is(.story-close-btn, .sv-sound-btn, .story-admin-delete) { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(40,40,44,.78) !important; }
+/* ⏸ Bosib turganda — Instagram kabi: interfeys yashirinadi, faqat kontent qoladi */
+html body #story-viewer :is(.story-header, .sv-reply-bar, #st2-story-cap) { transition: opacity .22s ease; }
+html body #story-viewer:has(.sv-pause-indicator.show) :is(.story-header, .sv-reply-bar, #st2-story-cap) { opacity: 0 !important; }
+html body #story-viewer .sv-pause-indicator { width: 66px; height: 66px; font-size: 0; color: #fff; background: rgba(20,20,22,.5); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16), 0 10px 30px rgba(0,0,0,.4); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+html body #story-viewer .sv-pause-indicator svg { width: 26px; height: 26px; fill: currentColor; }
+html body #story-viewer .sv-spinner { width: 38px; height: 38px; border-width: 3px; border-color: rgba(255,255,255,.14); border-top-color: #e2c46e; }
 html body #story-viewer .sv-reply-bar { padding: 12px 12px calc(10px + env(safe-area-inset-bottom, 0px)) !important; background: linear-gradient(transparent, rgba(0,0,0,.55)) !important; }
 html body #story-viewer .sv-reply-inputwrap {
     height: 48px; padding: 0 6px 0 18px !important; border-radius: 24px !important; border: 0 !important;
@@ -37201,24 +37217,25 @@ html body #p2ReferralModal .modal-header h2 { font-size: 28px !important; letter
     /* ══════════ 📸 STORIES ══════════ */
     window._svSoundIco = function (muted) { return muted ? I.spkOff : I.spkOn; };
     window._svHeartIco = I.heart;
-    function storyAgo(ts) {
-        ts = Number(ts) || 0; if (!ts) return '';
-        var d = Date.now() - ts;
-        if (d < 60000) return 'hozir';
-        if (d < 3600000) return Math.floor(d / 60000) + ' daqiqa';
-        if (d < 86400000) return Math.floor(d / 3600000) + ' soat';
-        return Math.floor(d / 86400000) + ' kun';
-    }
+    /* Sarlavha ostidagi qator: raqam/vaqt EMAS — brend imzosi (Avto A1 + oltin "tasdiqlangan" belgisi).
+       ⚠️ Ilgari meta #story-caption ICHIGA yozilardi — reaksiya yuborilganda adminga
+       caption.textContent "AksiyalarAvto A1 · 136 kun" bo'lib ketardi. Endi alohida qatorda. */
+    var VERIFIED = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#e2c46e" d="M12 1.8l2.5 1.9 3.1-.3 1.1 2.9 2.7 1.6-.6 3.1 1.3 2.8-2.3 2.1-.4 3.1-3.1.5-2 2.4-2.9-1.2-2.9 1.2-2-2.4-3.1-.5-.4-3.1L.8 13.8l1.3-2.8-.6-3.1 2.7-1.6 1.1-2.9 3.1.3z"/><path d="M7.8 12.3l2.8 2.8 5.6-5.8" fill="none" stroke="#1a1405" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     function decorateStory() {
-        var cap = $('story-caption'); if (!cap) return;
-        var it = window._st2CurrentStoryItem || {};
-        var meta = cap.querySelector('.sv-meta');
-        if (!meta) { meta = document.createElement('span'); meta.className = 'sv-meta'; cap.appendChild(meta); }
-        var pl = window.currentPlaylist || null;
-        var ago = storyAgo(it.timestamp);
-        meta.innerHTML = 'Avto A1' + (ago ? '<i>\u00B7</i>' + ago : '');
+        var old = document.querySelector('#story-caption .sv-meta'); if (old) old.remove();
         var sb = $('sv-sound-btn'); if (sb && !sb.querySelector('svg')) sb.innerHTML = I.spkOn;
         var hb = $('sv-heart-btn'); if (hb && !hb.classList.contains('sv-reacted')) hb.innerHTML = I.heart;
+    }
+    /** Ovoz · o'chirish · yopish — sarlavha qatorining o'ng tomonida, bitta guruhda. */
+    function mountStoryActs() {
+        var top = document.querySelector('#story-viewer .story-top-info'); if (!top) return;
+        var acts = top.querySelector('.sv-acts');
+        if (!acts) { acts = document.createElement('div'); acts.className = 'sv-acts'; top.appendChild(acts); }
+        ['sv-sound-btn', 'admin-story-delete-btn'].forEach(function (id) {
+            var el = $(id); if (el && el.parentNode !== acts) acts.appendChild(el);
+        });
+        var cl = document.querySelector('#story-viewer .story-close-btn');
+        if (cl && (cl.parentNode !== acts || acts.lastElementChild !== cl)) acts.appendChild(cl);
     }
     (function () {
         var orig = window.playCurrentStory;
@@ -37226,14 +37243,63 @@ html body #p2ReferralModal .modal-header h2 { font-size: 28px !important; letter
         var w = function () { var r = orig.apply(this, arguments); try { decorateStory(); } catch (e) {} return r; };
         w.__a1 = true; window.playCurrentStory = w;
     })();
+    (function () {
+        var orig = window.startStories;
+        if (typeof orig !== 'function' || orig.__a1) return;
+        var w = function () { var r = orig.apply(this, arguments); try { mountStoryActs(); } catch (e) {} return r; };
+        w.__a1 = true; window.startStories = w;
+    })();
     (function initStoryChrome() {
         var top = document.querySelector('#story-viewer .story-top-info');
         if (top && !top.querySelector('.sv-ava')) top.insertAdjacentHTML('afterbegin', '<span class="sv-ava" aria-hidden="true"><b>A1</b></span>');
+        var cap = $('story-caption');
+        if (top && cap && !cap.closest('.sv-id')) {
+            var idw = document.createElement('div'); idw.className = 'sv-id';
+            cap.parentNode.insertBefore(idw, cap); idw.appendChild(cap);
+            idw.insertAdjacentHTML('beforeend', '<span class="sv-meta">Avto A1' + VERIFIED + '<em>\u00B7 rasmiy do\u2018kon</em></span>');
+        }
         var cl = document.querySelector('#story-viewer .story-close-btn');
         if (cl) { cl.innerHTML = I.x; cl.setAttribute('role', 'button'); cl.setAttribute('aria-label', 'Yopish'); }
-        var del = $('admin-story-delete-btn'); if (del) { del.innerHTML = I.trash; del.setAttribute('aria-label', 'Storisni o\u2018chirish'); del.setAttribute('title', 'O\u2018chirish'); }
+        var del = $('admin-story-delete-btn'); if (del) { del.innerHTML = I.trash; del.setAttribute('role', 'button'); del.setAttribute('aria-label', 'Storisni o\u2018chirish'); del.setAttribute('title', 'O\u2018chirish'); }
         var snd = document.querySelector('#story-viewer .sv-reply-send'); if (snd) snd.innerHTML = I.send;
         var hb = $('sv-heart-btn'); if (hb && !hb.classList.contains('sv-reacted')) hb.innerHTML = I.heart;
+        mountStoryActs();
+    })();
+    /* ⏸ BOSIB TURIB PAUZA — tuzatildi.
+       ⚠️ Ilgari pauza ishlovchilari #story-content'ga ulangan, lekin uning USTIDA chap/o'ng
+       bosish zonalari (z-index:5) turadi — barmoq kontentga hech qachon yetmasdi, ya'ni
+       "bosib turib to'xtatish" umuman ishlamasdi. Endi zonalarning o'zi uzoq bosishni
+       taniydi: 220ms+ bosilsa — pauza, qo'yib yuborilganda keyingi storisga SAKRAMAYDI. */
+    (function storyHold() {
+        var viewer = $('story-viewer'); if (!viewer) return;
+        var timer = null, held = false, swallow = false, x0 = 0, y0 = 0;
+        function content() { return $('story-content'); }
+        function down(e) {
+            held = false; x0 = e.clientX; y0 = e.clientY;
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+                var c = content(); if (!c || typeof c.onmousedown !== 'function') return;
+                held = true; try { c.onmousedown(e); } catch (er) {}
+            }, 220);
+        }
+        function up() {
+            clearTimeout(timer); timer = null;
+            if (!held) return;
+            held = false; swallow = true; setTimeout(function () { swallow = false; }, 350);
+            var c = content(); if (c && typeof c.onmouseup === 'function') { try { c.onmouseup(); } catch (er) {} }
+        }
+        function move(e) { if (timer && !held && (Math.abs(e.clientX - x0) > 10 || Math.abs(e.clientY - y0) > 10)) { clearTimeout(timer); timer = null; } }
+        viewer.querySelectorAll('.story-tap-left, .story-tap-right').forEach(function (z) {
+            z.addEventListener('pointerdown', down);
+            z.addEventListener('pointerup', up);
+            z.addEventListener('pointercancel', up);
+            z.addEventListener('pointerleave', up);
+            z.addEventListener('pointermove', move);
+            z.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        });
+        viewer.addEventListener('click', function (e) {
+            if (swallow && e.target.closest && e.target.closest('.story-tap-left, .story-tap-right')) { e.stopPropagation(); e.preventDefault(); swallow = false; }
+        }, true);
     })();
 
     /* ══════════ ✦ AI TUGMASI ══════════ */
