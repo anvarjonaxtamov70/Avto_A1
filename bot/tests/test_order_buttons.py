@@ -153,6 +153,21 @@ def test_watchdog_sorovi_indekslangan():
     assert '"retryAt"' in block, "database.rules.json da notification_outbox indexOn retryAt yo'q"
 
 
+def test_watchdog_xato_sababi_aniq():
+    h = order_ops.outbox_query_hint
+    # Bo'sh navbat (200 + null) — xato EMAS, hech narsa yozilmaydi
+    assert h(200, "") is None
+    # Faqat haqiqiy "Index not defined" indeks haqida gapiradi
+    idx = h(400, '{"error" : "Index not defined, add \\".indexOn\\": \\"retryAt\\", for path \\"/notification_outbox\\", to the rules"}')
+    assert "indexOn" in idx and "Deploy" in idx, idx
+    # Token/ruxsat xatosi indeks deb ko'rsatilmaydi
+    for st in (401, 403):
+        a = h(st, '{"error" : "Permission denied"}')
+        assert "serviceAccount" in a and "indexOn" not in a, a
+    assert "tarmoq" in h(None, "timeout")
+    assert "kutilmagan" in h(500, "boom")
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0
