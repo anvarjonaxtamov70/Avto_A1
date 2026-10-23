@@ -1835,15 +1835,28 @@ async def firebase_query(path, params):
     Audit jurnalidan OXIRGI yozuvlarni olish uchun kerak — butun jurnalni
     o'qish vaqt o'tib juda qimmatga tushadi.
     """
+    _status, data, _err = await firebase_query_status(path, params)
+    return data
+
+
+async def firebase_query_status(path, params):
+    """firebase_query bilan bir xil, lekin (status, data, xato_matni) qaytaradi.
+
+    Bo'sh natija (200 + `null`, masalan tugun hali yaratilmagan) bilan haqiqiy
+    xatoni (400 "Index not defined", 401 "Permission denied", tarmoq) ajratish
+    uchun kerak. status=None — tarmoq/timeout xatosi.
+    """
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(fb_url(path, params=params), timeout=10) as r:
                 if r.status == 200:
-                    return await r.json()
-                logging.warning(f"Firebase QUERY {path}: status={r.status}")
+                    return 200, await r.json(), ""
+                body = (await r.text())[:300]
+                logging.warning(f"Firebase QUERY {path}: status={r.status} {body}")
+                return r.status, None, body
         except Exception as e:
             logging.error(f"Firebase QUERY xatosi ({path}): {e}")
-        return None
+            return None, None, str(e)
 
 
 # =====================================================================
@@ -3458,12 +3471,14 @@ async def order_outbox_watchdog():
     while True:
         try:
             now_ms = int(time.time() * 1000)
-            raw = await firebase_query("notification_outbox",
-                                       order_ops.outbox_query_params(now_ms))
-            if raw is None and not warned_no_index:
+            status, raw, err = await firebase_query_status(
+                "notification_outbox", order_ops.outbox_query_params(now_ms))
+            # 200 + null — navbat bo'sh (yoki tugun hali yo'q): bu XATO EMAS.
+            # Ilgari shu holat ham "indeks yo'q" deb noto'g'ri yozilardi.
+            hint = order_ops.outbox_query_hint(status, err)
+            if hint and not warned_no_index:
                 warned_no_index = True
-                logging.error("notification_outbox so'rovi ishlamadi — database.rules.json "
-                              "(indexOn: retryAt) joriy qilinganmi?")
+                logging.error("notification_outbox so'rovi ishlamadi (status=%s): %s", status, hint)
             keys = order_ops.outbox_keys_to_retry(raw, now_ms)
             for key in keys[:10]:
                 ok, http_status, data = await order_ops.worker_order_notify(

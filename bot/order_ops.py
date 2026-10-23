@@ -55,6 +55,27 @@ def outbox_query_params(now_ms, limit=25):
             "limitToFirst": str(int(limit))}
 
 
+def outbox_query_hint(status, err_text=""):
+    """Watchdog so'rovi natijasidan admin uchun ANIQ sababni qaytaradi.
+
+    None — hammasi joyida (200; bo'sh navbat `null` ham normal holat).
+    Ilgari har qanday muvaffaqiyatsizlik "indexOn: retryAt yo'q" deb
+    yozilardi — sabab ko'pincha boshqa (token yo'q, tarmoq) bo'lsa ham.
+    """
+    if status == 200:
+        return None
+    t = str(err_text or "")
+    if status == 400 and "index" in t.lower():
+        return ("Firebase'da `notification_outbox` uchun `.indexOn: [\"retryAt\"]` yo'q — "
+                "GitHub Actions'dagi «Deploy Firebase qoidalari» workflow'ini ishga tushiring.")
+    if status in (401, 403):
+        return ("ruxsat yo'q (Permission denied) — botda serviceAccount.json / "
+                "SERVICE_ACCOUNT_JSON sozlanmagan yoki yaroqsiz. Indeks bilan bog'liq EMAS.")
+    if status is None:
+        return "Firebase'ga ulanib bo'lmadi (tarmoq/timeout): " + t[:120]
+    return "kutilmagan javob: " + t[:160]
+
+
 def _bot_auth_key(bot_token):
     return hashlib.sha256(("avto-a1-bot-auth|" + str(bot_token)).encode("utf-8")).digest()
 
