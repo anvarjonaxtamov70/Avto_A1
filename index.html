@@ -11,6 +11,164 @@
     <meta http-equiv="Expires" content="0">
     <title>Avto A1 — Ehtiyot qismlar do'koni</title>
     <!-- ============================================================
+         🛡 A1 BOOT GATE — ilova TO'LIQ tayyor bo'lmaguncha ochilmaydi
+         ────────────────────────────────────────────────────────────
+         Muammo: welcome ekrani qat'iy 2.9s taymer bilan yopilardi. Fayl
+         katta (2.4MB, uslublarning ko'pi body oxirida) — sekin internetda
+         welcome yopilganda sahifa hali yuklanib bo'lmagan bo'lardi va
+         mijoz uslubsiz/eski ko'rinishlarni ko'rardi, keyin "pirillardi".
+         Endi: welcome (aylanayotgan shesterna) quyidagilar bajarilmaguncha
+         turadi:
+           1) butun HTML o'qildi (DOMContentLoaded) — barcha CSS joyida;
+           2) shriftlar yuklandi (ko'pi bilan 3s kutiladi);
+           3) tovarlar serverdan keldi (yoki kesh bor bo'lsa — 8s dan keyin
+              keshdan kiriladi);
+           4) ekran "tinchidi" — tovarlar/banner/stories qayta chizilishi
+              to'xtadi (450ms tinchlik);
+           5) boot-lite yechildi va uslublar o'rnashdi.
+         Sekin/uzilgan internetda welcome'da muloyim holat matni va
+         "Qayta urinish" tugmasi chiqadi.
+         ============================================================ -->
+    <style id="a1-boot-css">
+        html { background: #000; }
+        html[data-theme="light"] { background: #F7F5F0; }
+        /* Yuklanayotganda welcome'dan boshqa HAMMA narsa ko'rinmas (lekin joylashuv/hisob-kitob davom etadi) */
+        html.a1-boot body > :not(#welcome-screen) { visibility: hidden !important; }
+        /* Kutish holati: progress cheksiz "yugurib" turadi */
+        #welcome-screen.wl-wait .wl-progress { opacity: 1 !important; }
+        #welcome-screen.wl-wait .wl-progress i { width: 40% !important; transform: none; animation: wlIndet 1.25s cubic-bezier(.45,.05,.55,.95) infinite !important; }
+        @keyframes wlIndet { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
+        #welcome-screen .wl-status-box { position: absolute; left: 24px; right: 24px; bottom: calc(76px + var(--safe-bottom, 0px)); display: flex; flex-direction: column; align-items: center; gap: 14px;
+            opacity: 0; transform: translateY(6px); transition: opacity .45s ease, transform .45s cubic-bezier(.22,1,.36,1); pointer-events: none; }
+        #welcome-screen .wl-status-box.on { opacity: 1; transform: none; pointer-events: auto; }
+        #welcome-screen .wl-status { font: 500 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; color: rgba(235,235,245,.62); text-align: center; letter-spacing: .1px; }
+        html[data-theme="light"] #welcome-screen .wl-status { color: rgba(60,60,67,.62); }
+        #welcome-screen .wl-retry { display: none; height: 40px; padding: 0 22px; border: 0; border-radius: 999px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+            font: 600 14px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; color: #1a1405;
+            background: linear-gradient(150deg, #ffe48a, #d4af37 55%, #a8851f); box-shadow: 0 8px 18px -8px rgba(212,175,55,.9), inset 0 0 0 .5px rgba(255,255,255,.45); transition: transform .18s ease; }
+        #welcome-screen .wl-retry.on { display: inline-flex; align-items: center; }
+        #welcome-screen .wl-retry:active { transform: scale(.94); }
+    </style>
+    <script id="a1-boot-gate">
+    (function () {
+        'use strict';
+        var root = document.documentElement;
+        root.classList.add('a1-boot');
+        try { var s = JSON.parse(localStorage.getItem('avto_phase2') || '{}'); root.setAttribute('data-theme', s.theme === 'light' ? 'light' : 'dark'); }
+        catch (e) { root.setAttribute('data-theme', 'dark'); }
+
+        var T0 = Date.now();
+        var CACHE_ENTER_MS = 8000;   // kesh bor, server javob bermayapti -> keshdan kiramiz
+        var STATUS_MS = 6500;        // shundan keyin welcome'da holat matni
+        var RETRY_MS = 15000;        // shundan keyin "Qayta urinish" tugmasi
+        var FONT_CAP_MS = 3000;      // shriftlarni DOMContentLoaded'dan keyin ko'pi bilan kutish
+        var QUIET_MS = 450;          // qayta chizishlar to'xtagach shuncha tinchlik
+        var QUIET_CAP_MS = 3000;     // tinchlikni ko'pi bilan kutish
+        var dclAt = 0, baseAt = 0, lastMut = 0, minUntil = 0, cbs = [], registered = false, finishing = false;
+
+        window.__a1Booted = false;
+
+        // --- FPS qorovuli lite'ni yoqmoqchi bo'lsa: yuklanayotganda darhol, ilova ochiq bo'lsa —
+        //     keyingi bo'lim almashuvida (ko'rinmas payt) qo'llaymiz -> ekranda "sakrash" yo'q.
+        var pendingLite = false;
+        window.__a1ApplyLite = function () {
+            if (!window.__a1Booted) { root.classList.add('lite'); return; }
+            pendingLite = true;
+        };
+        function flushLite() { if (pendingLite) { pendingLite = false; root.classList.add('lite'); } }
+        document.addEventListener('pointerdown', function (e) {
+            if (pendingLite && e.target && e.target.closest && e.target.closest('.nav-item, .bottom-nav a, .bottom-nav button')) flushLite();
+        }, true);
+        document.addEventListener('visibilitychange', function () { if (document.hidden) flushLite(); });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            dclAt = Date.now(); lastMut = dclAt;
+            try {
+                var mo = new MutationObserver(function () { lastMut = Date.now(); });
+                ['home-products', 'main-slider', 'stories-list'].forEach(function (id) {
+                    var el = document.getElementById(id); if (el) mo.observe(el, { childList: true });
+                });
+            } catch (e) {}
+            try {
+                if (document.fonts && document.fonts.load) {
+                    document.fonts.load('600 16px Inter'); document.fonts.load('800 16px "Playfair Display"'); document.fonts.load('600 16px Montserrat');
+                }
+            } catch (e) {}
+        });
+
+        function fontsReady(now) {
+            if (now - dclAt >= FONT_CAP_MS) return true;
+            try {
+                var l = document.querySelector('link[rel="stylesheet"][href*="fonts.googleapis"]');
+                if (l && l.media !== 'all') return false;               // shrift CSS hali kelmadi
+                return !document.fonts || document.fonts.status === 'loaded';
+            } catch (e) { return true; }
+        }
+        function productsReady(now) {
+            if (window._catalogFresh) return true;
+            return !!window._catalogPaintedFromCache && (now - T0) >= CACHE_ENTER_MS;
+        }
+
+        var statusBox = null, statusTx = null, retryBtn = null;
+        function ensureStatus() {
+            if (statusBox) return true;
+            var w = document.getElementById('welcome-screen'); if (!w) return false;
+            statusBox = document.createElement('div'); statusBox.className = 'wl-status-box';
+            statusTx = document.createElement('div'); statusTx.className = 'wl-status';
+            retryBtn = document.createElement('button'); retryBtn.type = 'button'; retryBtn.className = 'wl-retry'; retryBtn.textContent = 'Qayta urinish';
+            retryBtn.addEventListener('click', function () { try { location.reload(); } catch (e) {} });
+            statusBox.appendChild(statusTx); statusBox.appendChild(retryBtn); w.appendChild(statusBox);
+            return true;
+        }
+        function paintStatus(now) {
+            var el = now - T0;
+            if (el < STATUS_MS || !ensureStatus()) return;
+            var w = document.getElementById('welcome-screen'); if (w) w.classList.add('wl-wait');
+            var off = (typeof navigator.onLine === 'boolean' && !navigator.onLine);
+            var txt = off ? 'Internet aloqasi yo\u2018q \u2014 ulanishni kutyapmiz\u2026'
+                          : (el < 11000 ? 'Do\u2018kon tayyorlanmoqda\u2026' : 'Internet sust \u2014 biroz kuting\u2026');
+            if (statusTx.textContent !== txt) statusTx.textContent = txt;
+            statusBox.classList.add('on');
+            if (el >= RETRY_MS) retryBtn.classList.add('on');
+        }
+
+        function finish() {
+            if (finishing) return; finishing = true;
+            clearInterval(timer);
+            try { if (window.__endBootLite) window.__endBootLite(); } catch (e) {}
+            // Uslublar (blur/soya) va kartalarning "suzib chiqishi" welcome ORTIDA tugasin
+            var raf = window.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+            raf(function () { raf(function () { setTimeout(function () {
+                root.classList.remove('a1-boot');
+                window.__a1Booted = true;
+                if (statusBox) statusBox.classList.remove('on');
+                var list = cbs.slice(); cbs.length = 0;
+                list.forEach(function (f) { try { f(); } catch (e) {} });
+                try { window.dispatchEvent(new CustomEvent('a1-ready')); } catch (e) {}
+            }, 420); }); });
+        }
+
+        var timer = setInterval(function () {
+            var now = Date.now();
+            paintStatus(now);
+            if (!registered || !dclAt || now < minUntil) return;
+            if (!baseAt) {
+                if (!fontsReady(now) || !productsReady(now)) return;
+                baseAt = now;
+            }
+            if ((now - lastMut) >= QUIET_MS || (now - baseAt) >= QUIET_CAP_MS) finish();
+        }, 100);
+
+        /** startCinematicWelcome shu orqali yopiladi: kamida minMs + ilova tayyor bo'lgach. */
+        window.__a1WhenReady = function (minMs, cb) {
+            registered = true;
+            minUntil = Math.max(minUntil, Date.now() + (minMs || 0));
+            if (window.__a1Booted) { setTimeout(cb, 0); return; }
+            cbs.push(cb);
+        };
+    })();
+    </script>
+    <!-- ============================================================
          ⚡ ADAPTIV TEZLIK REJIMI (PERFORMANCE TIER) — eng birinchi ishlaydi
          ────────────────────────────────────────────────────────────
          Zaif telefonlarda og'ir GPU effektlari (backdrop-filter blur,
@@ -115,7 +273,8 @@
               if (fps < 40) { slowStreak++; } else { slowStreak = 0; }
               // Ketma-ket 2 soniya 40 FPS dan past => zaif deb hisoblaymiz
               if (slowStreak >= 2) {
-                document.documentElement.classList.add('lite');
+                // Ilova ochiq bo'lsa lite keyingi bo'lim almashuvida qo'llanadi (ekranda sakrash bo'lmasin)
+                if (window.__a1ApplyLite) window.__a1ApplyLite(); else document.documentElement.classList.add('lite');
                 window.__perfLite = true;
                 (window.__perfReasons = window.__perfReasons || []).push('low-fps');
                 return; // qorovulni to'xtatamiz
@@ -9827,8 +9986,10 @@ document.addEventListener('visibilitychange', function() {
         }, 1100);
         var _fadeMs = _weak ? 350 : 750;
 
-        // Animatsiya tugagach, ilovani ochamiz
-        setTimeout(() => {
+        // Animatsiya tugagach VA ilova to'liq tayyor bo'lgach ochamiz (A1 BOOT GATE).
+        // Ilgari bu qat'iy taymer edi — sekin internetda sahifa hali yuklanmay turib
+        // ochilib, uslubsiz/eski ko'rinishlar chiqib qolardi.
+        (window.__a1WhenReady || function (ms, f) { setTimeout(f, ms); })(_holdMs, () => {
             screen.classList.add('welcome-fade-out');
             
             // Fade tugagach elementni domdan butunlay yo'qotamiz
@@ -9840,7 +10001,7 @@ document.addEventListener('visibilitychange', function() {
             if (typeof tg !== 'undefined' && tg.HapticFeedback) {
                 tg.HapticFeedback.notificationOccurred('success');
             }
-        }, _holdMs); 
+        }); 
     }
 
     // Ilova yuklanishi bilan ishga tushiramiz
@@ -40069,6 +40230,197 @@ html body #productModal.a7 .pmz-tip.pmz-tip:active { transform: scale(.92); back
         var idx = Math.round(slider.scrollLeft / (slider.clientWidth || 1));
         window.openZoom(srcs, Math.max(0, Math.min(srcs.length - 1, idx)));
     }, true);
+})();
+</script>
+<script id="a1-smooth11-js">
+/* ═══ SILLIQLIK: ilova ochilgandan keyin fonda qayta chizishlar "pirillamasin" ═══
+   1) Kesh bilan kirilgan bo'lsa va keyin server javobi kelsa — tovarlar tartibi
+      ALMASHMAYDI (avval har safar qayta aralashtirilib, kartalar sakrardi).
+   2) Ochiq turgan ro'yxat fonda qayta chizilsa (admin katalogni o'zgartirdi,
+      karta uslubi yangilandi va h.k.) — kartalar qaytadan "o'chib-yonib" suzib
+      chiqmaydi, joyida jimgina yangilanadi. Yangi qo'shilganlar (skroll) odatdagidek. */
+(function () {
+    'use strict';
+    // 1) Barqaror tartib
+    if (typeof window._sortDisplayDB === 'function') {
+        var _origSort = window._sortDisplayDB;
+        window._sortDisplayDB = function (items) {
+            var out = _origSort.apply(this, arguments);
+            try {
+                if (window._catalogFresh && !window.__a1FreshOrdered) {
+                    window.__a1FreshOrdered = true;
+                    var prev = (typeof displayDB !== 'undefined' && Array.isArray(displayDB)) ? displayDB : null;
+                    if (window._catalogPaintedFromCache && prev && prev.length && Array.isArray(out)) {
+                        var pos = {}; prev.forEach(function (p, i) { if (p) pos[p.id] = i; });
+                        var fresh = [], kept = [];
+                        out.forEach(function (p) { (p && pos.hasOwnProperty(p.id) ? kept : fresh).push(p); });
+                        kept.sort(function (a, b) { return pos[a.id] - pos[b.id]; });
+                        out = fresh.concat(kept);
+                    }
+                }
+            } catch (e) {}
+            return out;
+        };
+    }
+    // 2) Fondagi qayta chizishda kartalar qayta "suzib chiqmaydi"
+    function settle(containers) {
+        containers.forEach(function (c) {
+            c.querySelectorAll('.luxury-card').forEach(function (el) {
+                if (!el.classList.contains('active')) el.classList.add('reveal-item', 'active');
+            });
+        });
+    }
+    function wrapRender() {
+        if (typeof window.renderProducts !== 'function' || window.renderProducts.__a1s) return;
+        var _orig = window.renderProducts;
+        var w = function () {
+            var shown = [];
+            try {
+                document.querySelectorAll('#home-products, .items-grid').forEach(function (c) {
+                    if (c.querySelector('.luxury-card.active')) shown.push(c);
+                });
+            } catch (e) {}
+            var r = _orig.apply(this, arguments);
+            try { if (shown.length) settle(shown); } catch (e) {}
+            return r;
+        };
+        w.__a1s = true;
+        window.renderProducts = w;
+    }
+    wrapRender();
+    // Boshqa qatlamlar keyinroq o'rab olsa ham — tashqi qavat biz bo'lamiz
+    document.addEventListener('DOMContentLoaded', wrapRender);
+    window.addEventListener('a1-ready', wrapRender);
+})();
+</script>
+<style id="a1-smooth12-css">
+/* ═══ SILLIQLIK-12: oynalarni bittalab tekshirishda topilgan "sakrash"lar ═══ */
+/* 1) Welcome'dagi .wl-sub qoidasi (opacity:0 + 1.35s kechikish) "Saqlanganlar"
+      sarlavhasiga ham tushib, osti yozuv 2 soniyadan keyin "lip" etib chiqardi. */
+#wishlist-section .wl-sub { opacity: 1 !important; transform: none !important; animation: none !important; }
+/* 2) Orqaga tugmasi: avval 10% oq, xiralashtirishsiz — skrollda ostidagi
+      yozuv/ikonkalar orasidan ko'rinib, chalkash ko'rinardi. Endi haqiqiy shisha. */
+html body #back-btn.floating-btn {
+    background: rgba(30, 30, 33, .78) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+    border: .5px solid rgba(255, 255, 255, .14) !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35), inset 0 .5px 0 rgba(255, 255, 255, .18) !important;
+}
+html[data-theme="light"] body #back-btn.floating-btn {
+    background: rgba(255, 255, 255, .86) !important;
+    border-color: rgba(0, 0, 0, .08) !important;
+    box-shadow: 0 6px 18px rgba(70, 50, 10, .14), inset 0 .5px 0 rgba(255, 255, 255, .9) !important;
+}
+/* 3) Tepadagi "scroll edge": sahifa skroll qilinganda kontent tepada yumshoq
+      so'nadi — orqaga tugmasi yozuvlar ustida "osilib" turmaydi (iOS 26). */
+#a1-top-edge {
+    position: fixed; left: 0; right: 0; top: 0; height: calc(var(--safe-top, 0px) + 92px); z-index: 999; pointer-events: none;
+    background: linear-gradient(to top, rgba(var(--a3-page-rgb, 10,10,11), 0) 0%, rgba(var(--a3-page-rgb, 10,10,11), .82) 55%, rgba(var(--a3-page-rgb, 10,10,11), .96) 100%);
+    opacity: 0; transition: opacity .25s ease;
+}
+body.a1-scrolled #a1-top-edge { opacity: 1; }
+body.a1-srch #a1-top-edge, body.search-focused #a1-top-edge, body[style*="overflow: hidden"] #a1-top-edge { opacity: 0; }
+/* 4) Tovar oynasi: katta rasm kelguncha kartadagi (keshdagi) rasm turadi,
+      katta rasm tayyor bo'lganda ustidan yumshoq almashadi — qora bo'shliq yo'q. */
+html body #productModal.a7 .a7-slide > img.a1-ph {
+    position: absolute !important; inset: 0; z-index: 1; pointer-events: none; transition: opacity .28s ease;
+}
+html body #productModal.a7 .a7-slide > img.a1-ph-main { z-index: 2; opacity: 0; transition: opacity .28s ease; }
+html body #productModal.a7 .a7-slide > img.a1-ph-main.a1-in { opacity: 1; }
+</style>
+<script id="a1-smooth12-js">
+/* ═══ SILLIQLIK-12 (JS) ═══ */
+(function () {
+    'use strict';
+    // A) Narx "0 so'm" dan sanab chiqmaydi: mijoz bir lahza noto'g'ri narxni
+    //    (masalan 96 846 so'm) ko'rib qolardi — ishonchsizlik. Endi darhol aniq narx.
+    //    Savatdagi miqdor o'zgarganda (eski summadan yangisiga) animatsiya qoladi.
+    function wrapPrice() {
+        var o = window.animatePrice;
+        if (typeof o !== 'function' || o.__a1p) return;
+        var w = function (id, end) {
+            try {
+                if (id === 'pm-price' || id === 'cart-total-sum') {
+                    var el = document.getElementById(id);
+                    var cur = el ? (parseInt(String(el.innerText).replace(/[^0-9]/g, ''), 10) || 0) : 1;
+                    if (el && cur === 0) {
+                        var v = Math.round(Number(end) || 0);
+                        if (id === 'cart-total-sum' && typeof window._cartTotal === 'number') v = Math.round(window._cartTotal);
+                        el.innerText = String(v);   // boshlanish = oxiri → darhol yakuniy ko'rinish
+                    }
+                }
+            } catch (e) {}
+            return o.apply(this, arguments);
+        };
+        w.__a1p = true;
+        window.animatePrice = w;
+    }
+
+    // B) Tovar oynasi rasmi: karta rasmidan vaqtinchalik ko'rinish
+    function heroPlaceholder(id) {
+        var tries = 0;
+        (function tick() {
+            var sl = document.getElementById('pm-slider-wrapper');
+            var slide = sl && sl.querySelector('.a7-slide');
+            var big = slide && slide.querySelector('img:not(.a1-ph)');
+            if (!big) { if (++tries < 12) setTimeout(tick, 25); return; }
+            if (slide.__a1ph === big) return;
+            slide.__a1ph = big;
+            slide.querySelectorAll('img.a1-ph').forEach(function (x) { x.remove(); });
+            big.classList.remove('a1-ph-main', 'a1-in');
+            if (big.complete && big.naturalWidth > 0) return;           // allaqachon tayyor
+            var card = document.querySelector('.luxury-card[data-pid="' + String(id).replace(/"/g, '') + '"] img');
+            if (!card || !card.complete || !card.naturalWidth) return;
+            var src = card.currentSrc || card.src;
+            var ph = document.createElement('img');
+            ph.className = 'a1-ph'; ph.alt = ''; ph.setAttribute('aria-hidden', 'true'); ph.src = src;
+            slide.insertBefore(ph, big);
+            var blur = slide.querySelector('.a7-blur');
+            if (blur && !blur.__a1ph) { blur.__a1ph = 1; blur.style.backgroundImage = blur.style.backgroundImage + ', url("' + src.replace(/"/g, '%22') + '")'; }
+            big.classList.add('a1-ph-main');
+            var done = function () {
+                big.classList.add('a1-in');
+                setTimeout(function () { if (ph.parentNode) ph.remove(); big.classList.remove('a1-ph-main', 'a1-in'); }, 320);
+            };
+            big.addEventListener('load', done, { once: true });
+            big.addEventListener('error', function () { big.classList.remove('a1-ph-main'); }, { once: true });
+        })();
+    }
+    function wrapOpen() {
+        var o = window.openProduct;
+        if (typeof o !== 'function' || o.__a1h) return;
+        var w = function (id) {
+            var r = o.apply(this, arguments);
+            try { heroPlaceholder(id); } catch (e) {}
+            return r;
+        };
+        w.__a1h = true;
+        window.openProduct = w;
+    }
+
+    // C) Tepadagi scroll-edge
+    function edge() {
+        if (document.getElementById('a1-top-edge') || !document.body) return;
+        var e = document.createElement('div'); e.id = 'a1-top-edge'; e.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(e);
+        var raf = 0;
+        document.addEventListener('scroll', function (ev) {
+            if (raf) return;
+            raf = requestAnimationFrame(function () {
+                raf = 0;
+                var t = ev.target, y = 0;
+                if (t === document || t === document.documentElement || t === document.body) y = window.scrollY || 0;
+                else if (t && t.classList && t.classList.contains('container')) y = t.scrollTop;
+                else return;   // modal/ichki ro'yxatlar skrolli hisobga olinmaydi
+                document.body.classList.toggle('a1-scrolled', y > 24);
+            });
+        }, { passive: true, capture: true });
+    }
+
+    function all() { wrapPrice(); wrapOpen(); edge(); }
+    all();
+    document.addEventListener('DOMContentLoaded', all);
+    window.addEventListener('a1-ready', all);
 })();
 </script>
 </body>
