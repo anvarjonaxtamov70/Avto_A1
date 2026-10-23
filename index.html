@@ -6111,7 +6111,11 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         </div>
         <div id="my-orders-section" class="hidden"><div class="mo-head"><h2 class="mo-title">Buyurtmalarim</h2><span class="mo-subtitle" id="mo-subtitle"></span></div><div id="orders-list-container" class="mo-list"></div></div>
         <div id="wishlist-section" class="hidden">
-            <div class="section-title" style="margin-top: 0; display:inline-flex; align-items:center; gap:7px;"><svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="color:var(--accent-red,#ff453a);"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> Saqlanganlar</div>
+            <header class="wl-head">
+                <div class="wl-eyebrow"><span class="wl-mono">A1</span>Sizning tanlovingiz</div>
+                <h1 class="wl-title">Saqlanganlar</h1>
+                <div class="wl-sub" id="wl-sub">Yoqqan tovarlaringiz shu yerda</div>
+            </header>
             <div id="wishlist-items-container" class="items-grid"></div>
         </div>
         <!-- KATALOG (brend/model/grid) CATALOG_TREE dan generatsiya qilinadi -> buildCatalog() -->
@@ -24820,9 +24824,10 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             el.setAttribute('tabindex', '0');
             el.setAttribute('aria-label', 'Yangi stories qo‘shish');
             el.innerHTML =
-                '<div class="st2-add-ring">' +
-                    '<div class="st2-add-avatar"><span class="st2-add-plus" aria-hidden="true">+</span></div>' +
-                '</div><span>Yangi stories</span>';
+                '<div class="st2-add-ring"><i class="st2-add-orbit" aria-hidden="true"></i>' +
+                    '<div class="st2-add-avatar"><b class="st2-add-plus" aria-hidden="true">' +
+                        '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></b></div>' +
+                '</div><span>Qo\u2018shish</span>';
             var openComposer = function () { hap('medium'); AvtoStories.openComposer(null, null); };
             el.onclick = openComposer;
             el.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openComposer(); } };
@@ -37311,6 +37316,344 @@ html body #p2ReferralModal .modal-header h2 { font-size: 28px !important; letter
             '<path class="a1-spark-sm" d="M23.5 2.5c.4 2.6 1.5 3.7 4 4.2v.4c-2.5.5-3.6 1.6-4 4.2h-.4c-.4-2.6-1.5-3.7-4-4.2v-.4c2.5-.5 3.6-1.6 4-4.2z"/>' +
             '<path class="a1-spark-xs" d="M24 18.5c.3 2 1.2 2.9 3.2 3.3v.3c-2 .4-2.9 1.3-3.2 3.3h-.3c-.3-2-1.2-2.9-3.2-3.3v-.3c2-.4 2.9-1.3 3.2-3.3z"/></svg>';
         var b = $('shogird-launcher'); if (b) b.setAttribute('aria-label', 'Shogird — Avto A1 AI yordamchisi');
+    })();
+})();
+</script>
+<style id="a1-ios26-pages3">
+/* ═══════════════════════════════════════════════════════════════════
+   iOS 26 · Avto A1 — 3-qatlam: bo'sh savat, App Store qidiruv,
+   stories "+" tugmasi, Saqlanganlar sahifasi, tab bar ajralishi
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+    --a3-page: #0a0a0b; --a3-card: #1c1c1e; --a3-card2: #2c2c2e; --a3-tx: #f5f5f7; --a3-tx2: rgba(235,235,245,.62); --a3-tx3: rgba(235,235,245,.32);
+    --a3-fill: rgba(118,118,128,.24); --a3-sep: rgba(84,84,88,.4); --a3-gold: #e2c46e; --a3-gold2: #c9a84c; --a3-goldbg: rgba(201,168,76,.14);
+    --a3-grad: linear-gradient(135deg, #f6dc7e 0%, #d4af37 48%, #a07c1c 100%); --a3-ink: #1a1405;
+    --a3-ease: cubic-bezier(.32,.72,0,1); --a3-spring: cubic-bezier(.34,1.45,.64,1);
+    --a3-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    --a3-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+}
+html[data-theme="light"] {
+    --a3-page: #f4eee2; --a3-card: #ffffff; --a3-card2: #f2f2f7; --a3-tx: #1c1c1e; --a3-tx2: rgba(60,60,67,.64); --a3-tx3: rgba(60,60,67,.3);
+    --a3-fill: rgba(118,118,128,.12); --a3-sep: rgba(60,60,67,.13); --a3-gold: #8a6a14; --a3-gold2: #9c7c20; --a3-goldbg: rgba(156,124,32,.1);
+    --a3-grad: linear-gradient(135deg, #d9b54a 0%, #b68f2e 48%, #7a5c10 100%);
+}
+
+/* ─────────────────────────── 1. SAVAT ─────────────────────────── */
+/* Orqa fon to'liq qattiq — orqadagi sahifa xira ko'rinib turmaydi */
+html body #cartModal, html body #checkoutModal, html body #coPayModal,
+html[data-theme] body #cartModal, html[data-theme] body #checkoutModal, html[data-theme] body #coPayModal {
+    background: var(--a3-page) !important; background-image: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-radius: 0 !important;
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal)::before { display: none !important; }
+
+/* Sarlavha: kulrang chiziq (header foni) olib tashlandi → iOS katta sarlavha */
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header,
+html.lite body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header,
+html[data-theme] body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header {
+    background: transparent !important; background-image: none !important; border: 0 !important; box-shadow: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    position: relative !important; margin: 0 0 8px !important; padding: 6px 0 4px !important; min-height: 44px;
+    display: flex !important; align-items: center !important; justify-content: space-between !important;
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header h2 {
+    margin: 0 !important; display: flex !important; align-items: baseline; gap: 10px;
+    font: 800 34px/1.1 var(--a3-display) !important; letter-spacing: -1px !important; text-shadow: none !important;
+    background: var(--a3-grad) !important; -webkit-background-clip: text !important; background-clip: text !important;
+    -webkit-text-fill-color: transparent !important; color: transparent !important;
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header h2 > svg { display: none !important; }
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header h2 .a3-count {
+    font: 600 15px/1 var(--a3-font); letter-spacing: 0; -webkit-text-fill-color: var(--a3-tx2); color: var(--a3-tx2);
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header > .close-btn,
+html[data-theme] body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header > .close-btn {
+    width: 32px !important; height: 32px !important; min-width: 32px; padding: 0 !important; border-radius: 50% !important;
+    display: grid !important; place-items: center !important; border: 0 !important; box-shadow: none !important;
+    background: var(--a3-fill) !important; color: var(--a3-tx2) !important; font-size: 0 !important; line-height: 0 !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; transition: transform .3s var(--a3-spring), background-color .2s !important;
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header > .close-btn svg { width: 13px; height: 13px; }
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header > .close-btn:active { transform: scale(.86) !important; }
+
+/* Bo'sh savat: pastki panel (chiziq + blur) yashiriladi */
+html body #cartModal.co-is-empty .co-dock, html body #cartModal.co-is-empty .co-dock-sp { display: none !important; }
+
+/* Bo'sh holat — umumiy (savat + saqlanganlar) */
+.a3-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 26px 4px 8px; font-family: var(--a3-font); color: var(--a3-tx); animation: a3Rise .55s var(--a3-ease) both; }
+.a3-art { position: relative; width: 150px; height: 150px; margin-bottom: 22px; display: grid; place-items: center; }
+.a3-art-glow { position: absolute; inset: 14px; border-radius: 50%; background: radial-gradient(closest-side, rgba(212,175,55,.32), rgba(212,175,55,0)); filter: blur(6px); }
+html[data-theme="light"] .a3-art-glow { background: radial-gradient(closest-side, rgba(182,143,46,.22), rgba(182,143,46,0)); }
+.a3-art-ring { position: absolute; inset: 0; width: 100%; height: 100%; animation: a3Spin 18s linear infinite; }
+.a3-art-ring circle { fill: none; stroke: var(--a3-gold2); stroke-width: 1.2; stroke-dasharray: 2 7; stroke-linecap: round; opacity: .55; }
+.a3-art-ring circle.b { stroke-dasharray: none; stroke-width: .8; opacity: .18; }
+.a3-art-tile {
+    position: relative; width: 92px; height: 92px; border-radius: 28px; display: grid; place-items: center;
+    background: linear-gradient(160deg, #2a2a2d, #141416); color: var(--a3-gold);
+    box-shadow: 0 18px 40px rgba(0,0,0,.55), inset 0 0 0 .5px rgba(226,196,110,.45), inset 0 1px 0 rgba(255,255,255,.08);
+}
+html[data-theme="light"] .a3-art-tile { background: linear-gradient(160deg, #ffffff, #f5ecd9); box-shadow: 0 16px 34px rgba(120,90,20,.18), inset 0 0 0 .5px rgba(156,124,32,.35); }
+.a3-art-tile svg { width: 44px; height: 44px; }
+.a3-art-badge {
+    position: absolute; right: 18px; bottom: 22px; height: 26px; min-width: 26px; padding: 0 7px; border-radius: 13px;
+    display: grid; place-items: center; font: 800 11px/1 var(--a3-display); letter-spacing: .2px; color: var(--a3-ink);
+    background: var(--a3-grad); box-shadow: 0 6px 14px rgba(160,124,28,.45), 0 0 0 3px var(--a3-page);
+}
+.a3-empty h3 { margin: 0 0 6px; font: 700 22px/1.2 var(--a3-display); letter-spacing: -.5px; color: var(--a3-tx); }
+.a3-empty p { margin: 0 auto; max-width: 300px; font: 400 15px/1.45 var(--a3-font); color: var(--a3-tx2); }
+.a3-empty p .a3-heart { display: inline-block; width: 15px; height: 15px; vertical-align: -2px; color: #ff453a; }
+.a3-cta {
+    appearance: none; -webkit-appearance: none; border: 0; cursor: pointer; margin-top: 22px; height: 50px; padding: 0 26px; min-width: 220px;
+    border-radius: 25px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font: 600 17px/1 var(--a3-font); letter-spacing: -.2px; color: var(--a3-ink); background: var(--a3-grad);
+    box-shadow: 0 10px 24px rgba(160,124,28,.32), inset 0 1px 0 rgba(255,255,255,.35); -webkit-tap-highlight-color: transparent;
+    transition: transform .35s var(--a3-spring), filter .2s;
+}
+.a3-cta svg { width: 18px; height: 18px; }
+.a3-cta:active { transform: scale(.95); filter: brightness(.95); }
+.a3-link { appearance: none; border: 0; background: transparent; cursor: pointer; margin-top: 12px; padding: 8px 12px; font: 500 15px/1 var(--a3-font); color: var(--a3-gold); display: inline-flex; align-items: center; gap: 4px; }
+.a3-link svg { width: 14px; height: 14px; }
+.a3-perks { width: 100%; margin-top: 28px; border-radius: 16px; overflow: hidden; background: var(--a3-card); text-align: left; }
+html[data-theme="light"] .a3-perks { box-shadow: 0 1px 0 rgba(0,0,0,.03); }
+.a3-perk { display: flex; align-items: center; gap: 12px; padding: 11px 14px; position: relative; }
+.a3-perk + .a3-perk::before { content: ""; position: absolute; top: 0; left: 54px; right: 0; height: .5px; background: var(--a3-sep); }
+.a3-perk i { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--a3-goldbg); color: var(--a3-gold); }
+.a3-perk i svg { width: 17px; height: 17px; }
+.a3-perk b { display: block; font: 600 15px/1.25 var(--a3-font); color: var(--a3-tx); }
+.a3-perk small { display: block; margin-top: 1px; font: 400 13px/1.3 var(--a3-font); color: var(--a3-tx2); }
+
+/* ───────────────────── 2. QIDIRUV — App Store ───────────────────── */
+html body .search-input-container, body.search-focused .search-input-container { transform: none !important; }
+html body .search-input-container .search-box,
+html body .search-input-container .search-box:focus,
+html[data-theme] body .search-input-container input.search-box,
+html[data-theme] body .search-input-container input.search-box:focus,
+html.lite[data-theme] body .search-input-container input.search-box {
+    width: 100% !important; height: 38px !important; min-height: 38px !important; padding: 0 36px 0 35px !important; border-radius: 11px !important;
+    background: var(--a3-fill) !important; border: 0 !important; color: var(--a3-tx) !important; caret-color: var(--a3-gold);
+    font: 400 17px/38px var(--a3-font) !important; letter-spacing: -.4px !important; outline: none !important;
+    box-shadow: inset 0 0 0 1px transparent !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    transition: width .38s var(--a3-ease), box-shadow .25s !important;
+}
+html body .search-input-container .search-box:focus,
+html[data-theme] body .search-input-container input.search-box:focus { box-shadow: inset 0 0 0 1px rgba(201,168,76,.45) !important; }
+html body .search-input-container .search-box::placeholder { color: var(--a3-tx2) !important; opacity: 1; font-weight: 400; }
+html body .search-input-container:has(.scan-search-btn:not(.hidden)) .search-box { padding-right: 70px !important; }
+html body .search-input-container .search-icon-left {
+    left: 9px !important; top: 19px !important; transform: translateY(-50%) !important; height: 18px; display: grid; place-items: center;
+    color: var(--a3-tx2) !important; transition: color .25s; pointer-events: none;
+}
+html body .search-input-container .search-icon-left svg { width: 17px !important; height: 17px !important; stroke-width: 2.4 !important; }
+html body .search-input-container.a1s-on .search-icon-left { color: var(--a3-gold) !important; }
+html body .search-input-container .clear-search-btn,
+html[data-theme] body .search-input-container .clear-search-btn {
+    right: 9px !important; top: 19px !important; width: 19px !important; height: 19px !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important;
+    display: grid !important; place-items: center !important; box-shadow: none !important; transform: translateY(-50%) scale(.6) !important;
+    background: rgba(235,235,245,.42) !important; color: #1c1c1e !important; transition: opacity .2s, transform .3s var(--a3-spring), right .38s var(--a3-ease) !important;
+}
+html[data-theme="light"] body .search-input-container .clear-search-btn { background: rgba(60,60,67,.34) !important; color: #fff !important; }
+html body .search-input-container .clear-search-btn.show { transform: translateY(-50%) scale(1) !important; }
+html body .search-input-container .clear-search-btn svg { width: 10px !important; height: 10px !important; stroke-width: 3.6 !important; }
+html body .search-input-container .scan-search-btn { top: 19px !important; right: 34px !important; transform: translateY(-50%) !important; transition: right .38s var(--a3-ease) !important; }
+.a1s-cancel {
+    position: absolute; right: 0; top: 0; height: 38px; padding: 0 0 0 10px; border: 0; background: transparent; cursor: pointer; white-space: nowrap;
+    font: 400 17px/38px var(--a3-font); letter-spacing: -.4px; color: var(--a3-gold); -webkit-tap-highlight-color: transparent;
+    opacity: 0; transform: translateX(14px); pointer-events: none; transition: opacity .25s, transform .38s var(--a3-ease);
+}
+html body .search-input-container.a1s-on .search-box,
+html[data-theme] body .search-input-container.a1s-on input.search-box { width: calc(100% - var(--a1s-cw, 100px)) !important; }
+html body .search-input-container.a1s-on .clear-search-btn { right: calc(var(--a1s-cw, 100px) + 9px) !important; }
+html body .search-input-container.a1s-on .scan-search-btn { right: calc(var(--a1s-cw, 100px) + 34px) !important; }
+.search-input-container.a1s-on .a1s-cancel { opacity: 1; transform: none; pointer-events: auto; }
+.a1s-cancel:active { opacity: .45 !important; }
+
+/* ──────────────────── 3. STORIES "+" (admin) ──────────────────── */
+html body .story-item.st2-add .st2-add-ring,
+html[data-theme] body .story-item.st2-add .st2-add-ring {
+    position: relative; width: 66px !important; height: 66px !important; padding: 3.5px !important; border: 0 !important; border-radius: 50%;
+    background: transparent !important; box-shadow: none !important; isolation: isolate; transition: transform .35s var(--a3-spring);
+}
+.st2-add-orbit {
+    position: absolute; inset: 0; border-radius: 50%; z-index: -1;
+    background: conic-gradient(from 0deg, #fff3c4, #e2c46e 18%, #a07c1c 38%, rgba(212,175,55,.12) 55%, #d4af37 78%, #fff3c4);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+    animation: a3Spin 3.2s linear infinite;
+}
+.st2-add-ring::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; z-index: -2; pointer-events: none;
+    box-shadow: 0 0 0 0 rgba(212,175,55,.45); animation: a3Ripple 2.8s var(--a3-ease) infinite;
+}
+html body .story-item.st2-add .st2-add-avatar,
+html[data-theme] body .story-item.st2-add .st2-add-avatar {
+    width: 100% !important; height: 100% !important; border-radius: 50% !important; display: grid !important; place-items: center !important;
+    background: radial-gradient(circle at 50% 35%, #2a2a2e, #111113) !important; box-shadow: inset 0 0 0 .5px rgba(255,255,255,.08) !important;
+}
+html[data-theme="light"] body .story-item.st2-add .st2-add-avatar { background: radial-gradient(circle at 50% 35%, #ffffff, #f1e7d2) !important; box-shadow: inset 0 0 0 .5px rgba(156,124,32,.25) !important; }
+html body .story-item.st2-add .st2-add-plus {
+    width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 0 !important; line-height: 0;
+    background: var(--a3-grad); color: #1a1405 !important; -webkit-text-fill-color: #1a1405 !important; box-shadow: 0 6px 16px rgba(160,124,28,.5), inset 0 1px 0 rgba(255,255,255,.45);
+    animation: a3PlusTurn 3.6s var(--a3-spring) infinite;
+}
+html body .story-item.st2-add .st2-add-plus svg { width: 20px; height: 20px; fill: none; stroke: #1a1405 !important; stroke-width: 2.8; stroke-linecap: round; }
+html body .story-item.st2-add:active .st2-add-ring { transform: scale(.9); }
+html body .story-item.st2-add > span, html[data-theme] body .story-item.st2-add > span { color: var(--a3-gold) !important; font-weight: 600 !important; }
+
+/* ─────────────────────── 4. SAQLANGANLAR ─────────────────────── */
+#wishlist-section { padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px)); }
+.wl-head { padding: 4px 20px 16px; font-family: var(--a3-font); animation: a3Rise .5s var(--a3-ease) both; }
+.wl-eyebrow { display: flex; align-items: center; gap: 8px; font: 600 12.5px/1 var(--a3-font); letter-spacing: .7px; text-transform: uppercase; color: var(--a3-gold); }
+.wl-mono { display: inline-grid; place-items: center; height: 20px; padding: 0 6px; border-radius: 6px; background: var(--a3-grad) !important; color: var(--a3-ink) !important; -webkit-text-fill-color: var(--a3-ink) !important; opacity: 1 !important; font: 800 10.5px/1 var(--a3-display); letter-spacing: .2px; box-shadow: 0 3px 8px rgba(160,124,28,.35); }
+.wl-title { margin: 8px 0 4px !important; padding: 0 !important; font: 800 34px/1.08 var(--a3-display) !important; letter-spacing: -1.1px !important; color: var(--a3-tx) !important; background: none !important; -webkit-text-fill-color: currentColor !important; text-align: left !important; }
+.wl-sub { font: 400 15px/1.35 var(--a3-font); color: var(--a3-tx2); font-variant-numeric: tabular-nums; }
+.wl-sub b { font-weight: 600; color: var(--a3-tx); }
+.wl-sub .dot { margin: 0 6px; color: var(--a3-tx3); }
+#wishlist-items-container .a3-empty { grid-column: 1 / -1; padding-top: 18px; }
+#wishlist-items-container .a3-art-tile { color: #ff6b5e; }
+html[data-theme="light"] #wishlist-items-container .a3-art-tile { color: #e0483c; }
+
+/* ───────────── 5. TAB BAR — sahifadan aniq ajraladi ───────────── */
+html body .bottom-nav { box-shadow: 0 14px 36px rgba(0,0,0,.6), 0 2px 10px rgba(0,0,0,.4), inset 0 .5px 0 rgba(255,255,255,.16) !important; }
+html[data-theme="light"] body .bottom-nav { box-shadow: 0 12px 32px rgba(70,50,10,.16), 0 1px 6px rgba(70,50,10,.08), inset 0 .5px 0 rgba(255,255,255,.9) !important; }
+#a1-tab-edge {
+    position: fixed; left: 0; right: 0; bottom: 0; height: calc(104px + env(safe-area-inset-bottom, 0px)); z-index: 1499; pointer-events: none;
+    background: linear-gradient(to bottom, rgba(var(--a3-page-rgb, 10,10,11), 0) 0%, rgba(var(--a3-page-rgb, 10,10,11), .78) 55%, rgba(var(--a3-page-rgb, 10,10,11), .96) 100%);
+    transition: opacity .3s;
+}
+body:has(.bottom-nav.nav-hidden) #a1-tab-edge, body.search-focused #a1-tab-edge { opacity: 0; }
+body[style*="overflow: hidden"] #a1-tab-edge { opacity: 0; }
+/* Eski qora fade (body::after) yorug' rejimda kulrang dog' berardi — o'rniga mavzuga mos #a1-tab-edge */
+html body::after { background: none !important; box-shadow: none !important; }
+
+@keyframes a3Spin { to { transform: rotate(360deg); } }
+@keyframes a3Ripple { 0% { box-shadow: 0 0 0 0 rgba(212,175,55,.45); } 70%, 100% { box-shadow: 0 0 0 10px rgba(212,175,55,0); } }
+@keyframes a3PlusTurn { 0%, 72% { transform: rotate(0) scale(1); } 86% { transform: rotate(90deg) scale(1.12); } 100% { transform: rotate(90deg) scale(1); } }
+@keyframes a3Rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+html.lite .st2-add-orbit { animation-duration: 8s; }
+html.lite .a3-art-ring { animation: none; }
+html.lite .st2-add-ring::after { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+    .st2-add-orbit, .st2-add-ring::after, html body .story-item.st2-add .st2-add-plus, .a3-art-ring, .a3-empty, .wl-head { animation: none !important; }
+}
+</style>
+<script id="a1-ios26-pages3-js">
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var SV = function (d, w) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 2) + '" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; };
+    var IC = {
+        x: SV('<path d="M6 6l12 12M18 6L6 18"/>', 2.6),
+        cart: SV('<path d="M3 4h2.2l2.3 11.1a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6.3"/><circle cx="10" cy="20.3" r="1.3"/><circle cx="17.5" cy="20.3" r="1.3"/>', 1.7),
+        grid: SV('<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>', 2),
+        shield: SV('<path d="M12 3l7 3v5.5c0 4.4-3 8-7 9.5-4-1.5-7-5.1-7-9.5V6z"/><path d="M8.8 12.2l2.2 2.2 4.3-4.4"/>', 2),
+        clock: SV('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', 2),
+        truck: SV('<path d="M3 6.5h11v9H3zM14 10h3.6l3 3v2.5H14"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>', 1.9),
+        chev: SV('<path d="M9 6l6 6-6 6"/>', 2.4),
+        heart: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>'
+    };
+    var RING = '<svg class="a3-art-ring" viewBox="0 0 150 150" aria-hidden="true"><circle cx="75" cy="75" r="72"/><circle class="b" cx="75" cy="75" r="62"/></svg>';
+    var art = function (icon) {
+        return '<div class="a3-art" aria-hidden="true"><div class="a3-art-glow"></div>' + RING +
+            '<div class="a3-art-tile">' + icon + '</div><span class="a3-art-badge">A1</span></div>';
+    };
+    var fmt = function (n) { return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+    var wl = function () { try { return (typeof wishlist !== 'undefined' && Array.isArray(wishlist)) ? wishlist : (window.wishlist || []); } catch (e) { return window.wishlist || []; } };
+    var db = function () { try { return (typeof productsDB !== 'undefined' && Array.isArray(productsDB)) ? productsDB : (window.productsDB || []); } catch (e) { return window.productsDB || []; } };
+
+    /* ── 1. Savat: sarlavha + bo'sh holat ── */
+    function cartChrome() {
+        ['cartModal', 'checkoutModal', 'coPayModal'].forEach(function (id) {
+            var m = $(id); if (!m) return;
+            var b = m.querySelector(':scope > .modal-header > .close-btn');
+            if (b && !b.__a3) { b.__a3 = 1; b.innerHTML = IC.x; }
+        });
+    }
+    function paintCart() {
+        var m = $('cartModal'), c = $('cart-items-container'); if (!m || !c) return;
+        cartChrome();
+        var empty = !!c.querySelector('.co-empty');
+        m.classList.toggle('co-is-empty', empty);
+        if (!empty) return;
+        var n = wl().length;
+        c.innerHTML = '<div class="a3-empty">' + art(IC.cart) +
+            '<h3>Savatingiz hozircha bo\u2018sh</h3>' +
+            '<p>Mashinangizga mos original ehtiyot qismlarni katalogdan tanlang \u2014 qolganini Avto A1 o\u2018zi hal qiladi.</p>' +
+            '<button type="button" class="a3-cta" onclick="closeModal(); showCatalog();">' + IC.grid + 'Katalogga o\u2018tish</button>' +
+            (n ? '<button type="button" class="a3-link" onclick="closeModal(); setTimeout(function(){ showWishlist(); }, 320);">Saqlanganlar (' + n + ')' + IC.chev + '</button>' : '') +
+            '<div class="a3-perks">' +
+                '<div class="a3-perk"><i>' + IC.shield + '</i><div><b>100% original qismlar</b><small>Har bir tovar sotuvdan oldin tekshiriladi</small></div></div>' +
+                '<div class="a3-perk"><i>' + IC.clock + '</i><div><b>14 kun kafolat</b><small>Nuqson bo\u2018lsa \u2014 bepul almashtiramiz</small></div></div>' +
+                '<div class="a3-perk"><i>' + IC.truck + '</i><div><b>1\u20132 kunda yetkazish</b><small>Samarqand bo\u2018ylab tez va ishonchli</small></div></div>' +
+            '</div></div>';
+    }
+    var origCart = window.renderCartItems;
+    if (typeof origCart === 'function' && !origCart.__a3) {
+        window.renderCartItems = function () { var r = origCart.apply(this, arguments); try { paintCart(); } catch (e) {} return r; };
+        window.renderCartItems.__a3 = 1;
+    }
+    cartChrome();
+
+    /* ── 2. Qidiruv: App Store uslubi, "Bekor qilish" ── */
+    (function search() {
+        var inp = $('searchInput'); if (!inp || inp.__a3) return; inp.__a3 = 1;
+        var box = inp.closest('.search-input-container'); if (!box) return;
+        inp.setAttribute('enterkeyhint', 'search');
+        var cb = document.createElement('button');
+        cb.type = 'button'; cb.className = 'a1s-cancel'; cb.textContent = 'Bekor qilish';
+        box.appendChild(cb);
+        var sync = function () {
+            var on = document.activeElement === inp || inp.value.trim() !== '';
+            if (on) box.style.setProperty('--a1s-cw', (cb.offsetWidth + 10) + 'px');
+            box.classList.toggle('a1s-on', on);
+        };
+        inp.addEventListener('focus', sync);
+        inp.addEventListener('input', sync);
+        inp.addEventListener('blur', function () { setTimeout(sync, 0); });
+        cb.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+        cb.addEventListener('click', function () {
+            try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
+            try { window.exitSearch(); } catch (e) { inp.value = ''; }
+            inp.blur(); document.body.classList.remove('search-focused'); sync();
+        });
+        var oe = window.exitSearch;
+        if (typeof oe === 'function') window.exitSearch = function () { var r = oe.apply(this, arguments); setTimeout(sync, 0); return r; };
+    })();
+
+    /* ── 4. Saqlanganlar ── */
+    function paintWish() {
+        var c = $('wishlist-items-container'), sub = $('wl-sub'); if (!c) return;
+        var ids = wl(), all = db();
+        var items = ids.map(function (id) { return all.find(function (x) { return x.id === id; }); }).filter(Boolean);
+        if (!items.length) {
+            if (sub) sub.textContent = 'Yoqqan tovarlaringiz shu yerda turadi';
+            c.innerHTML = '<div class="a3-empty">' + art(IC.heart) +
+                '<h3>Hali hech narsa saqlanmagan</h3>' +
+                '<p>Tovar kartasidagi <span class="a3-heart">' + IC.heart + '</span> belgisini bosing \u2014 u shu yerda saqlanadi va narxi tushsa bilib turasiz.</p>' +
+                '<button type="button" class="a3-cta" onclick="showCatalog()">' + IC.grid + 'Katalogni ko\u2018rish</button></div>';
+            return;
+        }
+        var sum = items.reduce(function (s, p) { return s + (Number(p.price) || 0); }, 0);
+        if (sub) sub.innerHTML = '<b>' + items.length + ' ta tovar</b><span class="dot">\u00b7</span>' + fmt(sum) + ' so\u2018m';
+    }
+    var origWish = window.renderWishlist;
+    if (typeof origWish === 'function' && !origWish.__a3) {
+        window.renderWishlist = function () { var r = origWish.apply(this, arguments); try { paintWish(); } catch (e) {} return r; };
+        window.renderWishlist.__a3 = 1;
+    }
+
+    /* ── 5. Tab bar ostidagi "scroll edge" xiralik qatlami ── */
+    (function edge() {
+        if ($('a1-tab-edge')) return;
+        var e = document.createElement('div'); e.id = 'a1-tab-edge'; e.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(e);
+        var root = document.documentElement;
+        var setRGB = function () {
+            var light = root.getAttribute('data-theme') === 'light';
+            root.style.setProperty('--a3-page-rgb', light ? '244,245,247' : '10,10,11');
+        };
+        setRGB();
+        try { new MutationObserver(setRGB).observe(root, { attributes: true, attributeFilter: ['data-theme'] }); } catch (x) {}
     })();
 })();
 </script>
