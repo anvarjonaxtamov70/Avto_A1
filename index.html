@@ -38387,7 +38387,7 @@ html.lite #adminStoriesModal.a4-sheet .st2-ab-ic::before { animation: none; }
 
     /* ── 2. Ommaviy aksiya ── */
     function bulkSetup() {
-        var m = chrome('bulkDiscountModal', { title: 'Ommaviy aksiya', eb: 'Avto A1 · Aksiya', sub: 'Bir nechta tovarga birdan chegirma', back: true });
+        var m = chrome('bulkDiscountModal', { title: 'Ommaviy aksiya', eb: 'Avto A1 · Aksiya', back: true });
         if (!m || m.__a4b) return; 
         var panel = m.querySelector('.bd-panel'), pct = $('bd-pct'), hrs = $('bd-hours'), prev = $('bd-preview'), srch = $('bd-search'),
             chips = $('bd-filter-chips'), selall = $('bd-selall-btn'), cnt = $('bd-count'), list = $('bd-list');
@@ -38402,7 +38402,7 @@ html.lite #adminStoriesModal.a4-sheet .st2-ab-ic::before { animation: none; }
         var c1 = el('div', 'a4-card');
         c1.appendChild(el('div', 'a4-hero',
             '<span class="a4-hero-ic">' + IC.pct + '</span>' +
-            '<span class="a4-hero-tx"><b id="a4-pct-v">0%</b><span id="a4-pct-s">Foizni tanlang</span></span>' +
+            '<span class="a4-hero-tx"><b id="a4-pct-v">0%</b><span id="a4-pct-s"></span></span>' +
             '<span class="a4-hero-sel"><b id="a4-sel-v">0</b><span>tanlangan</span><button type="button" id="a4-sel-clr" hidden>Tozalash</button></span>'));
         c1.appendChild(el('div', 'a4-hr'));
         var p1 = el('div', 'a4-pills');
@@ -38414,7 +38414,6 @@ html.lite #adminStoriesModal.a4-sheet .st2-ab-ic::before { animation: none; }
         f1.appendChild(pct); f1.appendChild(el('em', '', '%'));
         c1.appendChild(f1);
         wrap.appendChild(c1);
-        wrap.appendChild(el('div', 'a4-gf', 'Yangi narx asl narxdan hisoblanadi va mingga yaxlitlanadi. Eng ko\u2018pi 89%.'));
 
         // Muddat
         wrap.appendChild(el('div', 'a4-gh', 'Muddat'));
@@ -38431,11 +38430,10 @@ html.lite #adminStoriesModal.a4-sheet .st2-ab-ic::before { animation: none; }
         f2.appendChild(hrs); f2.appendChild(el('em', '', 'soat'));
         c2.appendChild(f2);
         wrap.appendChild(c2);
-        wrap.appendChild(el('div', 'a4-gf', 'Muddat tugagach chegirma o\u2018zi olib tashlanadi.'));
 
         // Natija
-        wrap.appendChild(el('div', 'a4-gh', 'Natija'));
-        var c3 = el('div', 'a4-card'); prev.removeAttribute('style'); c3.appendChild(prev); wrap.appendChild(c3);
+        var h3 = el('div', 'a4-gh', 'Natija'); h3.id = 'a4-res-h'; h3.hidden = true; wrap.appendChild(h3);
+        var c3 = el('div', 'a4-card'); c3.id = 'a4-res-c'; c3.hidden = true; prev.removeAttribute('style'); c3.appendChild(prev); wrap.appendChild(c3);
 
         // Tovarlar
         var sw = el('div', 'a4-search', IC.search);
@@ -38481,7 +38479,8 @@ html.lite #adminStoriesModal.a4-sheet .st2-ab-ic::before { animation: none; }
         var n = 0; try { n = (window._bdSelectedIds ? window._bdSelectedIds() : []).length; } catch (e) {}
         var pv = $('a4-pct-v'), ps = $('a4-pct-s'), sv = $('a4-sel-v'), ap = $('a4-apply'), inf = $('a4-inf');
         if (pv) { pv.textContent = v ? ('\u2212' + v + '%') : '0%'; pv.classList.toggle('on', !!v); }
-        if (ps) ps.textContent = v ? (h ? (h >= 24 && h % 24 === 0 ? (h / 24) + ' kun davomida' : h + ' soat davomida') : 'Muddatsiz chegirma') : 'Foizni tanlang';
+        if (ps) ps.textContent = v ? (h ? (h >= 24 && h % 24 === 0 ? (h / 24) + ' kun davomida' : h + ' soat davomida') : 'Muddatsiz') : '';
+        var rh = $('a4-res-h'), rc = $('a4-res-c'); if (rh && rc) { rh.hidden = rc.hidden = !(n && v); }
         if (sv) sv.textContent = String(n);
         var clr = $('a4-sel-clr'); if (clr) clr.hidden = !n;
         var cn = $('bd-count'); if (cn) { var vis = 0; try { vis = window._bdVisibleItems().length; } catch (e) {} cn.textContent = vis + ' ta tovar'; }
@@ -39154,7 +39153,12 @@ html.lite #adminModal .ap2-hero-orders .a6-dot::after { animation: none; }
         var d = DB(); if (!d) return;
         try {
             ref = d.ref('orders').orderByChild('status').equalTo('kutilmoqda');
-            ref.on('value', function (s) { show(s.numChildren()); }, function () { ref = null; });
+            ref.on('value', function (s) {
+                var keys = {}; s.forEach(function (c) { keys[c.key] = 1; var v = c.val() || {}; if (v.uid != null && v.id != null) keys[v.uid + '_' + v.id] = 1; });
+                window._a6NewKeys = keys;
+                try { window.dispatchEvent(new CustomEvent('a6-new', { detail: keys })); } catch (e) {}
+                show(s.numChildren());
+            }, function () { ref = null; });
         } catch (e) { ref = null; }
     }
     window.__a6show = show; // test uchun
@@ -39666,6 +39670,252 @@ html[data-theme="light"] body #productModal.a7 .pm-trust-ic svg { fill: #a8851f 
     function init() { setup(); wrap(); }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
     window.addEventListener('load', function () { init(); setTimeout(wrap, 1500); });
+})();
+</script>
+<style id="a1-ios26-admin8">
+/* ═══ Buyurtmalar: "Yangi" bo'limi · Story oynasi: sodda iOS · Aksiya: ortiqcha yozuvsiz ═══ */
+#a4-res-h[hidden], #a4-res-c[hidden] { display: none !important; }
+#a4-pct-s:empty { display: none; }
+
+/* — Buyurtmalar: Yangi chip + kartadagi belgi — */
+#adminOrdersModal .ao-chip.a8-chip-new { --c: #ff453a; }
+#adminOrdersModal .ao-chip.a8-chip-new.a8-live .ao-dot { position: relative; }
+#adminOrdersModal .ao-chip.a8-chip-new.a8-live .ao-dot::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 1.5px solid #ff453a; animation: a8Ping 1.6s ease-out infinite; }
+#adminOrdersModal .ao-chip.a8-chip-new.is-active { background: #ff453a !important; color: #fff !important; }
+#adminOrdersModal .ao-chip.a8-chip-new.is-active .ao-dot { background: #fff !important; }
+#adminOrdersModal .ao-chip.a8-chip-new.is-active .ao-cnt { color: rgba(255,255,255,.85) !important; }
+#adminOrdersModal .ao-o.a8-new { box-shadow: inset 0 0 0 1.5px rgba(255,69,58,.55), 0 10px 26px -14px rgba(255,69,58,.6) !important; }
+#adminOrdersModal .a8-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 19px; margin-left: 6px; padding: 0 7px; border-radius: 6px; vertical-align: 1px;
+    background: #ff453a; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .1px; line-height: 1; }
+#adminOrdersModal .a8-tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #fff; }
+@keyframes a8Ping { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(1.8); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #adminOrdersModal .ao-chip.a8-chip-new .ao-dot::after { animation: none; } }
+
+/* — Story oynasi: sodda iOS — */
+html body #storyComposerModal.a8c { --s8-card: #1c1c1e; --s8-fill: rgba(118,118,128,.18); --s8-tx: #fff; --s8-tx2: rgba(235,235,245,.6); --s8-sep: rgba(84,84,88,.5); --s8-gold: #e3c463;
+    --s8-goldg: linear-gradient(135deg, #f6dc7c, #d4af37 55%, #a8851f); background: #000 !important; font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; }
+html body #storyComposerModal.a8c .st2-hd { padding: calc(var(--safe-top, 0px) + 14px) 18px 6px !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+html body #storyComposerModal.a8c .st2-hd h2 { font-size: 30px !important; font-weight: 700 !important; letter-spacing: -.6px !important; color: var(--s8-tx) !important; -webkit-text-fill-color: currentColor !important; background: none !important; }
+html body #storyComposerModal.a8c .st2-hd span { display: none !important; }
+html body #storyComposerModal.a8c .st2-hd .close-btn { width: 36px !important; height: 36px !important; border-radius: 50% !important; border: 0 !important; padding: 0 !important; display: grid !important; place-items: center !important;
+    background: var(--s8-fill) !important; color: var(--s8-tx2) !important; font-size: 0 !important; box-shadow: none !important; }
+html body #storyComposerModal.a8c .st2-hd .close-btn svg { width: 14px; height: 14px; }
+html body #storyComposerModal.a8c #story-composer-body { padding: 8px 16px 20px !important; }
+html body #storyComposerModal.a8c .st2-block { margin: 0 0 22px !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+html body #storyComposerModal.a8c .st2-lbl { margin: 0 4px 8px !important; font-size: 13px !important; font-weight: 400 !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--s8-tx2) !important; }
+html body #storyComposerModal.a8c .st2-lbl.a8-hide { display: none !important; }
+/* Rasm / Video */
+html body #storyComposerModal.a8c .st2-picks { gap: 10px !important; }
+html body #storyComposerModal.a8c .st2-pick { min-height: 128px !important; padding: 18px 10px !important; gap: 10px !important; border: 0 !important; border-radius: 22px !important; background: var(--s8-card) !important; box-shadow: none !important;
+    display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; transition: transform .2s, box-shadow .2s !important; }
+html body #storyComposerModal.a8c .st2-pick.on { background: var(--s8-card) !important; box-shadow: inset 0 0 0 2px var(--s8-gold) !important; }
+html body #storyComposerModal.a8c .st2-pick-ic { width: 52px !important; height: 52px !important; border-radius: 16px !important; display: grid !important; place-items: center !important; font-size: 0 !important; color: #1a1405 !important;
+    background: var(--s8-goldg) !important; box-shadow: 0 10px 22px -12px rgba(212,175,55,.9) !important; }
+html body #storyComposerModal.a8c #st2-pick-vid .st2-pick-ic { background: linear-gradient(150deg, #3a3a3e, #2a2a2e) !important; color: var(--s8-gold) !important; box-shadow: inset 0 0 0 .5px rgba(255,255,255,.12) !important; }
+html body #storyComposerModal.a8c .st2-pick-ic::before { content: ""; width: 26px; height: 26px; background: currentColor; -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; }
+html body #storyComposerModal.a8c #st2-pick-img .st2-pick-ic { --m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='4'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.6'/%3E%3Cpath d='M21 15l-5-5L5 21'/%3E%3C/svg%3E"); }
+html body #storyComposerModal.a8c #st2-pick-vid .st2-pick-ic { --m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='5' width='14' height='14' rx='3'/%3E%3Cpath d='M16 10l6-3.5v11L16 14z'/%3E%3C/svg%3E"); }
+html body #storyComposerModal.a8c .st2-pick b { font-size: 16px !important; font-weight: 600 !important; color: var(--s8-tx) !important; }
+html body #storyComposerModal.a8c .st2-pick i { display: none !important; }
+html body #storyComposerModal.a8c .st2-hint { display: none !important; }
+/* Maydonlar */
+html body #storyComposerModal.a8c .st2-field { margin: 0 !important; }
+html body #storyComposerModal.a8c .st2-field > span { display: none !important; }
+html body #storyComposerModal.a8c .st2-input { min-height: 50px; padding: 14px 16px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+    color: var(--s8-tx) !important; font-size: 16px !important; font-weight: 400 !important; }
+html body #storyComposerModal.a8c .st2-input::placeholder { color: rgba(235,235,245,.3) !important; }
+html body #storyComposerModal.a8c .a8-grp { border-radius: 16px; overflow: hidden; background: var(--s8-card); }
+html body #storyComposerModal.a8c .a8-grp > .st2-field + .st2-field { border-top: .5px solid var(--s8-sep); margin-left: 16px !important; }
+html body #storyComposerModal.a8c .a8-grp > .st2-field + .st2-field .st2-input { padding-left: 0 !important; }
+html body #storyComposerModal.a8c #st2-img-url-wrap, html body #storyComposerModal.a8c #st2-url-wrap { margin-top: 10px !important; }
+html body #storyComposerModal.a8c .a8-link { display: inline-flex; align-items: center; gap: 6px; margin: 12px 4px 0; padding: 0; border: 0; background: none; color: var(--s8-gold); font: inherit; font-size: 15px; cursor: pointer; }
+html body #storyComposerModal.a8c .a8-link svg { width: 15px; height: 15px; }
+html body #storyComposerModal.a8c .a8-shut { display: none !important; }
+html body #storyComposerModal.a8c .st2-block:has(#st2-img-url-wrap[style*="none"]) .a8-link { display: none !important; }
+/* Bo'lim */
+html body #storyComposerModal.a8c .st2-rings { gap: 8px !important; margin: 0 -16px !important; padding: 2px 16px 4px !important; }
+html body #storyComposerModal.a8c .st2-ring { flex: 0 0 auto !important; flex-direction: row !important; gap: 7px !important; min-width: 0 !important; width: auto !important; height: 40px !important; padding: 0 15px 0 12px !important;
+    border: 0 !important; border-radius: 999px !important; background: var(--s8-card) !important; box-shadow: none !important; animation: none !important; display: inline-flex !important; align-items: center !important; }
+html body #storyComposerModal.a8c .st2-ring > span { width: 18px; height: 18px; font-size: 0 !important; display: grid; place-items: center; color: var(--s8-gold); }
+html body #storyComposerModal.a8c .st2-ring > span svg { width: 18px; height: 18px; }
+html body #storyComposerModal.a8c .st2-ring i { font-size: 15px !important; font-weight: 500 !important; color: var(--s8-tx) !important; }
+html body #storyComposerModal.a8c .st2-ring .st2-ring-cnt { display: none !important; }
+html body #storyComposerModal.a8c .st2-ring.on { background: var(--s8-goldg) !important; box-shadow: 0 8px 18px -10px rgba(212,175,55,.9) !important; }
+html body #storyComposerModal.a8c .st2-ring.on > span, html body #storyComposerModal.a8c .st2-ring.on i { color: #1a1405 !important; }
+/* Pastki tugma */
+html body #storyComposerModal.a8c .st2-foot { padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)) !important; border: 0 !important; background: rgba(0,0,0,.72) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); box-shadow: inset 0 .5px 0 rgba(255,255,255,.1) !important; }
+html body #storyComposerModal.a8c .st2-save { height: 52px !important; border: 0 !important; border-radius: 999px !important; background: var(--s8-goldg) !important; color: #1a1405 !important;
+    font-family: inherit !important; font-size: 17px !important; font-weight: 600 !important; letter-spacing: -.2px !important; box-shadow: 0 12px 26px -12px rgba(212,175,55,.95) !important; }
+html body #storyComposerModal.a8c .st2-save::after { display: none !important; }
+html body #storyComposerModal.a8c .st2-save:disabled { background: var(--s8-fill) !important; color: var(--s8-tx2) !important; box-shadow: none !important; opacity: 1 !important; }
+html body #storyComposerModal.a8c .st2-up, html body #storyComposerModal.a8c .st2-prev { border-radius: 16px !important; }
+
+html[data-theme="light"] body #storyComposerModal.a8c { --s8-card: #fff; --s8-fill: rgba(118,118,128,.12); --s8-tx: #000; --s8-tx2: rgba(60,60,67,.6); --s8-sep: rgba(60,60,67,.22); --s8-gold: #9c7c20; background: #f2f2f7 !important; }
+html[data-theme="light"] body #storyComposerModal.a8c .st2-input::placeholder { color: rgba(60,60,67,.3) !important; }
+html[data-theme="light"] body #storyComposerModal.a8c #st2-pick-vid .st2-pick-ic { background: #f2f2f7 !important; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.08) !important; }
+html[data-theme="light"] body #storyComposerModal.a8c .st2-foot { background: rgba(242,242,247,.8) !important; box-shadow: inset 0 .5px 0 rgba(0,0,0,.12) !important; }
+html[data-theme="light"] body #storyComposerModal.a8c .st2-pick, html[data-theme="light"] body #storyComposerModal.a8c .st2-ring, html[data-theme="light"] body #storyComposerModal.a8c .a8-grp { box-shadow: 0 1px 2px rgba(0,0,0,.05) !important; }
+html[data-theme="light"] body #storyComposerModal.a8c .st2-pick.on { box-shadow: inset 0 0 0 2px var(--s8-gold) !important; }
+</style>
+<script id="a1-ios26-admin8-js">
+(function () {
+    'use strict';
+    function $(id) { return document.getElementById(id); }
+    function hap(k) { try { if (typeof window._hap === 'function') window._hap(k); } catch (e) {} }
+
+    /* ── 1) Buyurtmalar: "Yangi" bo'limi ── */
+    var ORD = /openAdminOrderDetail\('([^']*)',\s*'([^']*)'\)/;
+    var filter = 'barchasi', autoNew = false;
+    function keys() { return window._a6NewKeys || null; }
+    function isNew(o) { var k = keys(); return !!(k && o && k[o.uI + '_' + o.id] && (o.status || 'kutilmoqda') === 'kutilmoqda'); }
+    function newList() { return (window.allFetchedOrders || []).filter(isNew); }
+
+    function patch() {
+        if (typeof window._aoFilterBar === 'function' && !window._aoFilterBar.__a8) {
+            var fb = window._aoFilterBar;
+            window._aoFilterBar = function () {
+                filter = 'barchasi';
+                var h = fb.apply(this, arguments), i = h.indexOf('</button>');
+                if (i < 0) return h;
+                var chip = '<button type="button" role="tab" aria-selected="false" class="ao-chip a8-chip-new" style="--c:#ff453a" onclick="filterAdminOrders(\'yangi\', this)">' +
+                    '<i class="ao-dot"></i><span>Yangi</span><b class="ao-cnt" data-cnt="yangi"></b></button>';
+                return h.slice(0, i + 9) + chip + h.slice(i + 9);
+            };
+            window._aoFilterBar.__a8 = true;
+        }
+        if (typeof window.filterAdminOrders === 'function' && !window.filterAdminOrders.__a8) {
+            var fo = window.filterAdminOrders;
+            window.filterAdminOrders = function (status, btn) {
+                filter = status;
+                if (status !== 'yangi') return fo.apply(this, arguments);
+                if (!window.allFetchedOrders) return;
+                document.querySelectorAll('#adminOrdersModal .ao-chip').forEach(function (b) { b.classList.remove('is-active'); b.setAttribute('aria-selected', 'false'); });
+                if (btn) {
+                    btn.classList.add('is-active'); btn.setAttribute('aria-selected', 'true');
+                    try { btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+                    hap('selection');
+                }
+                if (typeof window.renderAdminOrdersUI === 'function') window.renderAdminOrdersUI(newList());
+            };
+            window.filterAdminOrders.__a8 = true;
+        }
+        if (typeof window._aoUpdateCounts === 'function' && !window._aoUpdateCounts.__a8) {
+            var uc = window._aoUpdateCounts;
+            window._aoUpdateCounts = function () { var r = uc.apply(this, arguments); counts(); return r; };
+            window._aoUpdateCounts.__a8 = true;
+        }
+    }
+    function counts() {
+        var n = newList().length;
+        document.querySelectorAll('#adminOrdersModal .ao-cnt[data-cnt="yangi"]').forEach(function (el) { el.textContent = n ? n : ''; });
+        var chip = document.querySelector('#adminOrdersModal .a8-chip-new'); if (chip) chip.classList.toggle('a8-live', n > 0);
+        if (autoNew && n > 0 && chip && window.allFetchedOrders) {
+            autoNew = false;
+            setTimeout(function () { window.filterAdminOrders('yangi', chip); }, 0);
+        }
+    }
+    function tag() {
+        document.querySelectorAll('#adminOrdersModal .ao-o').forEach(function (card) {
+            var m = ORD.exec(card.getAttribute('onclick') || ''); if (!m) return;
+            var on = isNew({ uI: m[1], id: m[2], status: (card.className.match(/ao-st-(\S+)/) || [])[1] });
+            if (card.classList.contains('a8-new') === on) return;
+            card.classList.toggle('a8-new', on);
+            var nm = card.querySelector('.ao-o-name'), t = card.querySelector('.a8-tag');
+            if (on && nm && !t) { t = document.createElement('span'); t.className = 'a8-tag'; t.textContent = 'Yangi'; var vip = nm.querySelector('.cst-vip-slot'); nm.insertBefore(t, vip || null); }
+            if (!on && t) t.remove();
+        });
+    }
+    var q = false;
+    function soon() { if (q) return; q = true; setTimeout(function () { q = false; patch(); tag(); counts(); }, 50); }
+    function watchOrders() {
+        var m = $('adminOrdersModal'); if (!m || m.__a8) return; m.__a8 = true;
+        new MutationObserver(function (ms) {
+            for (var i = 0; i < ms.length; i++) {
+                var a = ms[i].addedNodes;
+                for (var j = 0; j < a.length; j++) if (!(a[j].classList && a[j].classList.contains('a8-tag'))) { soon(); return; }
+            }
+        }).observe(m, { childList: true, subtree: true });
+    }
+    window.addEventListener('a6-new', function () {
+        counts(); tag();
+        var m = $('adminOrdersModal');
+        if (filter === 'yangi' && m && getComputedStyle(m).display !== 'none' && typeof window.renderAdminOrdersUI === 'function') window.renderAdminOrdersUI(newList());
+    });
+    // Boshqaruv markazidagi "N ta yangi" kartasidan kirilsa — darhol "Yangi" bo'limi
+    document.addEventListener('click', function (e) {
+        var c = e.target.closest && e.target.closest('#adminModal .ap2-hero-orders');
+        if (c) autoNew = c.classList.contains('a6-has');
+    }, true);
+
+    /* ── 2) Story oynasi: sodda iOS ── */
+    var RI = {
+        aksiyalar: '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+        bugun: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+        mijozlar: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+        dostavka: '<path d="M1 4h14v12H1zM15 9h4l3 3v4h-7"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/>',
+        kafolat: '<path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>',
+        lokatsiya: '<path d="M12 22s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="10" r="2.5"/>',
+        tolov: '<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>',
+        aloqa: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>'
+    };
+    function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
+    var LINK = svg('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>');
+
+    function ph(id, t) { var el = $(id); if (el && el.getAttribute('placeholder') !== t) el.setAttribute('placeholder', t); }
+    function group(block) {
+        if (!block || block.querySelector(':scope > .a8-grp')) return;
+        var f = block.querySelectorAll(':scope > .st2-field'); if (!f.length) return;
+        var g = document.createElement('div'); g.className = 'a8-grp'; block.insertBefore(g, f[0]);
+        f.forEach(function (x) { g.appendChild(x); });
+    }
+    function linkToggle(wrapId, label) {
+        var w = $(wrapId); if (!w || w.__a8) return; w.__a8 = true;
+        var inp = w.querySelector('input'); if (inp && inp.value) return;
+        w.classList.add('a8-shut');
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'a8-link'; b.innerHTML = LINK + label;
+        b.addEventListener('click', function () { w.classList.remove('a8-shut'); b.remove(); hap('selection'); var i = w.querySelector('input'); if (i) i.focus(); });
+        w.parentNode.insertBefore(b, w);
+    }
+    function story() {
+        var M = $('storyComposerModal'); if (!M) return;
+        if (!M.__a8) {
+            M.__a8 = true; M.classList.add('a8c');
+            var cb = M.querySelector('.st2-hd .close-btn'); if (cb) cb.innerHTML = svg('<path d="M6 6l12 12M18 6L6 18"/>').replace('stroke-width="2"', 'stroke-width="3"');
+            var body = $('story-composer-body');
+            if (body) new MutationObserver(function () { storyBody(); }).observe(body, { childList: true, subtree: true });
+        }
+        storyBody();
+    }
+    var busy = false;
+    function storyBody() {
+        if (busy) return; busy = true;
+        try {
+            var body = $('story-composer-body'); if (!body) return;
+            var bl = body.querySelectorAll(':scope > .st2-block');
+            if (bl[0]) { var l0 = bl[0].querySelector('.st2-lbl'); if (l0 && !l0.classList.contains('a8-hide')) l0.classList.add('a8-hide'); }
+            if (bl[1]) { var l1 = bl[1].querySelector('.st2-lbl'); if (l1 && l1.textContent !== 'Bo\'lim') l1.textContent = 'Bo\'lim'; }
+            if (bl[2]) { var l2 = bl[2].querySelector('.st2-lbl'); if (l2 && l2.textContent !== 'Matn') l2.textContent = 'Matn'; group(bl[2]); }
+            ph('st2-caption', 'Yozuv (ixtiyoriy)');
+            ph('st2-link', 'Havola yoki tovar kodi (ixtiyoriy)');
+            ph('st2-img-url', 'https://...');
+            ph('st2-vid-url', 'Video havolasi (mp4)');
+            ph('st2-vid-poster', 'Muqova rasmi havolasi (ixtiyoriy)');
+            var uw = $('st2-url-wrap'); if (uw) group(uw);
+            linkToggle('st2-img-url-wrap', 'Havola orqali qo\'shish');
+            var iw = $('st2-img-url-wrap'); if (iw && !iw.querySelector('.a8-grp')) { var g = document.createElement('div'); g.className = 'a8-grp'; var f = iw.querySelector('input'); if (f) { iw.insertBefore(g, f); g.appendChild(f); } }
+            body.querySelectorAll('.st2-ring[data-ring]').forEach(function (r) {
+                var sp = r.querySelector(':scope > span'), k = r.getAttribute('data-ring');
+                if (sp && !sp.__a8 && RI[k]) { sp.__a8 = true; sp.innerHTML = svg(RI[k]); }
+            });
+        } finally { busy = false; }
+    }
+
+    function init() { patch(); watchOrders(); story(); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    window.addEventListener('load', function () { init(); setTimeout(init, 1500); });
+    new MutationObserver(function () { if ($('storyComposerModal') && !$('storyComposerModal').__a8) story(); if ($('adminOrdersModal') && !$('adminOrdersModal').__a8) watchOrders(); })
+        .observe(document.body, { childList: true });
 })();
 </script>
 </body>
