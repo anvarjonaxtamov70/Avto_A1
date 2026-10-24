@@ -169,126 +169,338 @@
     })();
     </script>
     <!-- ============================================================
-         ⚡ ADAPTIV TEZLIK REJIMI (PERFORMANCE TIER) — eng birinchi ishlaydi
+         ⚡ ADAPTIV TEZLIK REJIMI v2 — 3 DARAJA (low / mid / high)
          ────────────────────────────────────────────────────────────
-         Zaif telefonlarda og'ir GPU effektlari (backdrop-filter blur,
-         doimiy animatsiyalar, soyalar) telefonni qotiradi va qizdiradi.
-         Bu skript qurilma quvvatini aniqlab, zaif bo'lsa <html>'ga
-         "lite" klassini qo'yadi — pastdagi CSS uni yengillashtiradi.
-         Kuchli telefonlarda esa to'liq "premium" ko'rinish saqlanadi.
-         Qo'shimcha: ishlаб turganda FPS pasaysa, avtomatik lite'ga o'tadi.
-         ============================================================ -->
-    <script>
-    (function adaptivePerf(){
-      var root = document.documentElement;
-      try {
-        var lite = false;
-        var reasons = [];
+         Eng birinchi ishlaydi va <html> ga daraja qo'yadi:
+           • high — to'liq premium ko'rinish (hech narsa o'zgarmaydi);
+           • mid  — shisha blur kuchi kamaytiriladi (max 8px), grain o'chadi;
+           • low  — "lite" (blur yo'q, bezak animatsiyalari to'xtaydi).
 
-        // 1) RAM: 2 GB yoki kamroq => zaif
-        //    ⚠️ ILGARI CHEGARA `<= 4` EDI — BU JIDDIY XATO BO'LGAN:
-        //    brauzer `deviceMemory` ni MAXFIYLIK uchun 2 ning darajasiga
-        //    yumaloqlaydi va 8 da to'xtatadi. Ya'ni 4 GB, 5 GB va 6 GB
-        //    telefonlar HAMMASI `4` deb qaytaradi. Natijada o'rta va hatto
-        //    yaxshi telefonlarning KATTA QISMI doimiy "lite" rejimda qolib,
-        //    ilovadagi 77 animatsiyadan 8 tasi ishlagan — spinnerlar esa
-        //    birinchi kadrda muzlab, BUZILGAN ko'rinishga sabab bo'lgan.
-        //    Endi chegara haqiqatan zaif qurilmalarga qaratilgan; asosiy
-        //    himoya esa pastdagi FPS QOROVULI (ishlab turganda o'lchaydi).
-        if (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 2) {
-          lite = true; reasons.push('ram<=2');
+         DARAJA QANDAY ANIQLANADI (faqat PASAYTIRADI, hech qachon oshirmaydi):
+           1) Telegram Android User-Agent'idagi qurilma sinfi
+              (LOW / AVERAGE / HIGH) — Telegram'ning o'zi CPU chastotasi,
+              yadrolar va xotiraga qarab hisoblaydi. ASOSIY belgi.
+           2) iPhone/iPad — high (qorovul kerak bo'lsa pasaytiradi).
+           3) Telegram sinfi yo'q Android — grafik protsessor (WebGL) nomi,
+              RAM va yadrolar soni.
+           4) Trafik tejash / juda sekin tarmoq.
+         Natija telefonda 7 kun saqlanadi -> keyingi ochilishda DARHOL
+         to'g'ri daraja, ekranda "sakrash" yo'q, qayta aniqlash xarajati yo'q.
+
+         FPS QOROVULI (v2):
+           • Faqat ilova to'liq ochilgach (a1-ready) va FAQAT foydalanuvchi
+             skroll/teginish qilayotganda o'lchaydi. Tinch turganda umuman
+             ishlamaydi (0 xarajat).
+           • O'rtacha FPS + "qotgan kadrlar" ulushini ketma-ket 2 ta 3 soniyalik
+             oynada tekshiradi; bir martalik qotish (rasm dekodi) hisobga olinmaydi.
+           • Daraja bosqichma-bosqich pasayadi: high -> mid -> low.
+           • Yangi daraja ko'rinmas paytda qo'llanadi: bo'lim/tovar almashuvi
+             yoki ilova fonga o'tganda. Skroll o'rtasida HECH QACHON emas.
+           • Telefon tez ekani 3 marta tasdiqlansa — qorovul butunlay to'xtaydi.
+
+         QO'LDA TANLASH: Profil -> Ilova -> «Ko'rinish» (Avto / Yengil / To'liq).
+         Qo'lda tanlansa avtomatika va qorovul ishlamaydi.
+
+         Diagnostika (konsol): A1Perf.info()
+         ============================================================ -->
+    <script id="a1-perf-tier">
+    (function adaptivePerf() {
+      'use strict';
+      var root = document.documentElement;
+      var LS_PREF = 'a1_perf_pref';      // 'auto' | 'low' | 'high'
+      var LS_AUTO = 'a1_perf_auto_v2';   // { tier, at, sig, src, reasons }
+      var AUTO_TTL = 7 * 24 * 3600 * 1000;
+      var MID_BLUR_MAX = 8;              // mid darajada blur radiusi chegarasi (px)
+      var RANK = { low: 0, mid: 1, high: 2 };
+      var DOWN = { high: 'mid', mid: 'low', low: 'low' };
+      var ua = navigator.userAgent || '';
+
+      function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+      function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+      function lower(a, b) { return RANK[a] <= RANK[b] ? a : b; }
+      function signature() {
+        var s = ua + '|' + (navigator.hardwareConcurrency || '') + '|' + (navigator.deviceMemory || '') +
+                '|' + (window.screen ? screen.width + 'x' + screen.height : '');
+        var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+        return String(h);
+      }
+
+      /* ---------- GPU nomi bo'yicha daraja (faqat Telegram sinfi yo'q Android) ---------- */
+      function gpuTier() {
+        try {
+          var cv = document.createElement('canvas');
+          var gl = cv.getContext('webgl') || cv.getContext('experimental-webgl');
+          if (!gl) return { tier: 'low', name: 'no-webgl' };
+          var ext = gl.getExtension('WEBGL_debug_renderer_info');
+          var r = String((ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) || '');
+          var lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+          var t = null;
+          if (/Mali-(4\d\d|T\d+|G31|G51|G52)\b|PowerVR Rogue|GE8\d{3}|Adreno[^\d]*(3\d\d|4\d\d|50\d|51\d|60\d|610)\b/i.test(r)) t = 'low';
+          else if (/Mali-G(57|68|71|72|76|77)\b|PowerVR B|Adreno[^\d]*(5[2-4]\d|6[1-4]\d)\b/i.test(r)) t = 'mid';
+          else if (/Mali|Adreno|Xclipse|Immortalis|PowerVR/i.test(r)) t = 'high';
+          return t ? { tier: t, name: r.slice(0, 40) } : null;
+        } catch (e) { return null; }
+      }
+
+      function detect() {
+        var reasons = [], tier = 'high', src = 'default';
+        var isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+        var isAndroid = /Android/i.test(ua);
+        var tgm = ua.match(/Telegram-Android\/[\d.]+\s*\([^)]*;\s*(LOW|AVERAGE|HIGH)\s*\)/i);
+        var mem = navigator.deviceMemory, cores = navigator.hardwareConcurrency;
+
+        if (tgm) {
+          var c = tgm[1].toUpperCase();
+          tier = c === 'LOW' ? 'low' : (c === 'AVERAGE' ? 'mid' : 'high');
+          src = 'telegram'; reasons.push('tg:' + c);
+        } else if (isIOS) {
+          src = 'ios';
+        } else if (isAndroid) {
+          src = 'android';
+          var g = gpuTier();
+          if (g) { tier = lower(tier, g.tier); reasons.push('gpu:' + g.name); }
+          else if (typeof mem === 'number' && mem <= 4) { tier = lower(tier, 'mid'); reasons.push('ram<=4'); }
+          if (typeof cores === 'number' && cores <= 4) { tier = 'low'; reasons.push('cpu<=4'); }
         }
-        // 2) Protsessor yadrolari: 3 yoki kamroq => zaif
-        //    (4 yadro bugun o'rta darajali telefonlarda ham bor — chegara pasaytirildi)
-        if (typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 3) {
-          lite = true; reasons.push('cpu<=3');
-        }
-        // 3) "Harakatni kamaytirish" ENDI lite'ni YOQMAYDI.
-        //    Sabab: bu TEZLIK sozlamasi emas, ACCESSIBILITY tanlovi. Ilovada
-        //    `@media (prefers-reduced-motion: reduce)` qoidalari allaqachon bor
-        //    va ular animatsiyani to'g'ri o'chiradi. Lite esa qo'shimcha
-        //    ravishda shisha blur, soya va rasm effektlarini ham olib tashlaydi —
-        //    bular harakat EMAS, ya'ni bunday foydalanuvchini ilovaning
-        //    ko'rinishidan bekorga mahrum qilardi. Zaiflikni FPS qorovuli aniqlaydi.
-        // 4) Trafik tejash / sekin tarmoq
+        // Umumiy xavfsizlik belgilari (har qanday platformada faqat pasaytiradi)
+        if (typeof mem === 'number' && mem <= 2) { tier = 'low'; reasons.push('ram<=2'); }
+        if (typeof cores === 'number' && cores <= 3) { tier = 'low'; reasons.push('cpu<=3'); }
         var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
         if (conn) {
-          if (conn.saveData) { lite = true; reasons.push('save-data'); }
-          if (typeof conn.effectiveType === 'string' && /(^|\b)(slow-2g|2g|3g)\b/.test(conn.effectiveType)) {
-            lite = true; reasons.push('slow-net:' + conn.effectiveType);
-          }
+          if (conn.saveData) { tier = 'low'; reasons.push('save-data'); }
+          var et = String(conn.effectiveType || '');
+          if (/^(slow-2g|2g)$/.test(et)) { tier = 'low'; reasons.push('net:' + et); }
+          else if (et === '3g') { tier = lower(tier, 'mid'); reasons.push('net:3g'); }
         }
+        return { tier: tier, src: src, reasons: reasons };
+      }
 
-        if (lite) {
-          root.classList.add('lite');
-          root.classList.add('pf-weak');   // HAQIQIY zaif qurilma belgisi (welcome/rasm uchun)
-        } else {
-          // ⚡ BOOT SMOOTHING: zaif BO'LMAGAN telefonlarda ham dastlabki og'ir
-          //    yuklanish (Firebase parse + ko'p rasm dekod + GPU effektlar) oynasida
-          //    'lite' vaqtincha yoqiladi; kontent chizilgach olib tashlanadi.
-          //    Shu tufayli birinchi 1-2 soniyadagi "qotish" yo'qoladi, premium
-          //    ko'rinish esa yuklangach to'liq tiklanadi.
-          root.classList.add('lite');
-          window.__bootLiteOnly = true;
-        }
-        window.__perfLite = lite;
-        window.__perfReasons = reasons;
-
-        // Boot-lite'ni olib tashlovchi funksiya (faqat zaif bo'lmagan telefonlarda).
-        window.__endBootLite = function(){
-          try {
-            // ⚠️ POYGA TUZATILDI: FPS qorovuli ishlab turganda `lite` ni
-            //    QAYTA qo'shishi mumkin (kadr tezligi past bo'lsa). Ilgari bu
-            //    funksiya `__perfLite` ni TEKSHIRMASDAN klassni olib tashlardi,
-            //    shuning uchun qorovulning qarori kutib turgan taymer bilan
-            //    jimgina bekor qilinardi. Endi zaiflik aniqlangan bo'lsa —
-            //    lite JOYIDA QOLADI.
-            if (window.__perfLite) { window.__bootLiteOnly = false; return; }
-            if (window.__bootLiteOnly) {
-              document.documentElement.classList.remove('lite');
-              window.__bootLiteOnly = false;
-            }
-          } catch(e){}
-        };
-        // Xavfsizlik: render bo'lmasa ham, to'liq yuklangach boot-lite'ni yechamiz.
+      function readAuto() {
         try {
-          window.addEventListener('load', function(){
-            if (window.__bootLiteOnly) setTimeout(window.__endBootLite, 3500);
-          });
-        } catch(e){}
-      } catch (e) { /* aniqlash imkonsiz bo'lsa, hech narsa qilmaymiz */ }
+          var b = JSON.parse(lsGet(LS_AUTO) || 'null');
+          if (b && RANK[b.tier] !== undefined && b.sig === signature() && (Date.now() - b.at) < AUTO_TTL) return b;
+        } catch (e) {}
+        return null;
+      }
+      function saveAuto(tier, src, reasons) {
+        lsSet(LS_AUTO, JSON.stringify({ tier: tier, at: Date.now(), sig: signature(), src: src, reasons: reasons || [] }));
+      }
+      function autoTier() {
+        var c = readAuto();
+        if (c) return c;
+        var d = detect();
+        saveAuto(d.tier, d.src, d.reasons);
+        d.at = Date.now();
+        return d;
+      }
 
-      // 5) ADAPTIV FPS QOROVULI — ishlab turganda kadr tezligi pasayib ketsa,
-      //    (zaifligi oldindan bilinmagan telefonlar uchun) avtomatik lite'ga o'tamiz.
-      try {
-        if (!window.__perfLite) {
-          var frames = 0, t0 = 0, slowStreak = 0, started = false, rafId = 0, checks = 0;
-          function probe(ts){
-            if (!started) { started = true; t0 = ts; frames = 0; rafId = requestAnimationFrame(probe); return; }
-            frames++;
-            var dt = ts - t0;
-            if (dt >= 1000) {
-              var fps = frames * 1000 / dt;
-              checks++;
-              if (fps < 40) { slowStreak++; } else { slowStreak = 0; }
-              // Ketma-ket 2 soniya 40 FPS dan past => zaif deb hisoblaymiz
-              if (slowStreak >= 2) {
-                // Ilova ochiq bo'lsa lite keyingi bo'lim almashuvida qo'llanadi (ekranda sakrash bo'lmasin)
-                if (window.__a1ApplyLite) window.__a1ApplyLite(); else document.documentElement.classList.add('lite');
-                window.__perfLite = true;
-                (window.__perfReasons = window.__perfReasons || []).push('low-fps');
-                return; // qorovulni to'xtatamiz
-              }
-              // 8 soniyadan keyin telefon yetarli tez ekan — qorovulni to'xtatamiz
-              if (checks >= 8) return;
-              t0 = ts; frames = 0;
-            }
-            rafId = requestAnimationFrame(probe);
+      /* ---------- MID: shisha blur radiusini kamaytirish (CSSOM orqali) ----------
+         Har bir backdrop-filter qoidasi topiladi va blur(Npx) -> blur(min(N, 8)px).
+         Asl qiymatlar eslab qolinadi — "To'liq" tanlansa aynan tiklanadi.
+         Kelajakda qo'shilgan yangi blur qoidalar ham avtomatik qamraladi. */
+      var midEdits = [], midDone = (window.WeakSet ? new WeakSet() : null), midOn = false;
+      function clampBlur(v) {
+        return v.replace(/blur\(\s*([\d.]+)px\s*\)/g, function (m, n) {
+          var x = parseFloat(n); return x > MID_BLUR_MAX ? 'blur(' + MID_BLUR_MAX + 'px)' : m;
+        });
+      }
+      function edit(st, prop, nv) {
+        midEdits.push([st, prop, st.getPropertyValue(prop), st.getPropertyPriority(prop)]);
+        st.setProperty(prop, nv, st.getPropertyPriority(prop));
+      }
+      function walkRules(list) {
+        for (var i = 0; i < list.length; i++) {
+          var r = list[i];
+          if (r.type === 7) continue;                                     // @keyframes — tegmaymiz
+          if (r.style && !(midDone && midDone.has(r))) {
+            if (midDone) midDone.add(r);
+            var st = r.style;
+            ['backdrop-filter', '-webkit-backdrop-filter'].forEach(function (p) {
+              var v = st.getPropertyValue(p);
+              if (v && v.indexOf('blur(') !== -1) { var nv = clampBlur(v); if (nv !== v) edit(st, p, nv); }
+            });
+            ['--nav-blur', '--header-blur'].forEach(function (p) {
+              var v = st.getPropertyValue(p);
+              var m = v && v.match(/^\s*([\d.]+)px\s*$/);
+              if (m && parseFloat(m[1]) > MID_BLUR_MAX) edit(st, p, MID_BLUR_MAX + 'px');
+            });
           }
-          // Sahifa biroz yuklangach o'lchashni boshlaymiz (boshlang'ich sekinlikni hisobga olmaymiz)
-          window.addEventListener('load', function(){ setTimeout(function(){ requestAnimationFrame(probe); }, 1500); });
+          if (r.cssRules) { try { walkRules(r.cssRules); } catch (e) {} }
         }
-      } catch (e) {}
+      }
+      function applyMid() {
+        if (!midOn) return;
+        var ss = document.styleSheets;
+        for (var i = 0; i < ss.length; i++) { try { walkRules(ss[i].cssRules || []); } catch (e) { /* tashqi CSS (shriftlar) — o'tkazamiz */ } }
+      }
+      function setMid(on) {
+        if (on === midOn) { if (on) applyMid(); return; }
+        midOn = on;
+        if (on) { applyMid(); return; }
+        for (var i = midEdits.length - 1; i >= 0; i--) {
+          var e = midEdits[i]; try { if (e[2]) e[0].setProperty(e[1], e[2], e[3]); else e[0].removeProperty(e[1]); } catch (x) {}
+        }
+        midEdits = []; midDone = (window.WeakSet ? new WeakSet() : null);
+      }
+
+      /* ---------- darajani qo'llash ---------- */
+      var state = { pref: 'auto', tier: 'high', src: '', reasons: [] };
+      function paint(t) {
+        state.tier = t;
+        root.setAttribute('data-perf', t);
+        root.classList.toggle('perf-low', t === 'low');
+        root.classList.toggle('perf-mid', t === 'mid');
+        window.__perfLite = (t === 'low');
+        window.__perfTier = t;
+        if (t === 'low') root.classList.add('lite');
+        else if (!window.__bootLiteOnly) root.classList.remove('lite');
+        if (t !== 'low') root.classList.remove('pf-weak');
+        setMid(t === 'mid');
+      }
+
+      // Boot: daraja
+      try {
+        var p = lsGet(LS_PREF);
+        state.pref = (p === 'low' || p === 'high') ? p : 'auto';
+        root.setAttribute('data-perf-pref', state.pref);
+        if (state.pref === 'auto') {
+          var a = autoTier(); state.tier = a.tier; state.src = a.src; state.reasons = a.reasons || [];
+        } else { state.tier = state.pref; state.src = 'manual'; }
+      } catch (e) { state.tier = 'high'; }
+
+      window.__perfReasons = state.reasons;
+      if (state.tier === 'low') {
+        root.classList.add('lite'); root.classList.add('pf-weak');   // welcome ham qisqaradi
+      } else {
+        // ⚡ BOOT SMOOTHING: og'ir yuklanish oynasida (welcome ortida) 'lite' vaqtincha yoqiladi.
+        root.classList.add('lite');
+        window.__bootLiteOnly = true;
+      }
+      paint(state.tier);
+      // CSS'ning hammasi (body oxiridagi <style> lar ham) o'qilgach mid qoidalarini qo'llaymiz
+      document.addEventListener('DOMContentLoaded', function () { if (midOn) applyMid(); });
+      window.addEventListener('a1-ready', function () { if (midOn) applyMid(); });   // keyin JS qo'shgan uslublar
+
+      // Boot-lite'ni olib tashlovchi funksiya (boot gate va renderProducts chaqiradi)
+      window.__endBootLite = function () {
+        try {
+          if (!window.__bootLiteOnly) return;
+          window.__bootLiteOnly = false;
+          if (!window.__perfLite) root.classList.remove('lite');
+        } catch (e) {}
+      };
+      window.addEventListener('load', function () {
+        if (window.__bootLiteOnly) setTimeout(window.__endBootLite, 3500);
+      });
+
+      /* ---------- "ko'rinmas payt"da qo'llash navbati ---------- */
+      var pending = null;
+      function queue(t) { pending = t; }
+      function flush() { if (pending) { var t = pending; pending = null; paint(t); } }
+      document.addEventListener('pointerdown', function (e) {
+        if (!pending) return;
+        var el = e.target;
+        if (el && el.closest && el.closest('.nav-item, .bottom-nav a, .bottom-nav button, .luxury-card, .similar-card')) flush();
+      }, true);
+      document.addEventListener('visibilitychange', function () { if (document.hidden) flush(); });
+
+      /* ---------- FPS QOROVULI v2 (faqat interaksiya paytida) ---------- */
+      var G = { on: false, raf: 0, last: 0, until: 0, total: 0, frames: 0, jank: 0, bad: 0, good: 0, samples: 0 };
+      function gStop() { G.on = false; if (G.raf) { cancelAnimationFrame(G.raf); G.raf = 0; } }
+      function gEval() {
+        var fps = G.frames * 1000 / G.total, jr = G.jank / G.total;
+        G.total = 0; G.frames = 0; G.jank = 0; G.samples++;
+        var bad = fps < 40 || jr > 0.2;
+        if (bad) { G.good = 0; G.bad++; } else { G.bad = 0; G.good++; }
+        if (G.bad >= 2) {
+          G.bad = 0;
+          var cur = pending || state.tier, nx = DOWN[cur];
+          if (nx !== cur) {
+            state.reasons = (state.reasons || []).concat('fps:' + Math.round(fps) + '/j' + Math.round(jr * 100));
+            window.__perfReasons = state.reasons;
+            saveAuto(nx, 'guard', state.reasons);
+            queue(nx);
+          }
+          if (nx === 'low') gStop();
+        } else if (G.good >= 3 || G.samples >= 20) {
+          gStop();                                   // telefon yetarli tez — qorovul to'xtaydi
+        }
+      }
+      function gFrame(ts) {
+        G.raf = 0;
+        if (!G.on) return;
+        if (G.last) {
+          var d = ts - G.last;
+          if (d > 0 && d < 1000) { G.total += d; G.frames++; if (d > 50) G.jank += d; }
+          if (G.total >= 3000) gEval();
+        }
+        G.last = ts;
+        if (G.on && Date.now() < G.until && !document.hidden) G.raf = requestAnimationFrame(gFrame);
+        else G.last = 0;
+      }
+      function gPoke() {
+        if (!G.on || document.hidden) return;
+        G.until = Date.now() + 1200;
+        if (!G.raf) { G.last = 0; G.raf = requestAnimationFrame(gFrame); }
+      }
+      function gStart() {
+        if (G.on || state.pref !== 'auto' || state.tier === 'low') return;
+        G.on = true; G.bad = 0; G.good = 0; G.samples = 0; G.total = 0; G.frames = 0; G.jank = 0;
+      }
+      ['touchstart', 'touchmove', 'wheel'].forEach(function (ev) {
+        document.addEventListener(ev, gPoke, { passive: true, capture: true });
+      });
+      document.addEventListener('scroll', gPoke, { passive: true, capture: true });
+      var started = false;
+      function startLater(ms) { if (started) return; started = true; setTimeout(gStart, ms); }
+      window.addEventListener('a1-ready', function () { startLater(2000); });
+      window.addEventListener('load', function () { setTimeout(function () { startLater(0); }, 9000); });  // zaxira
+
+      /* ---------- qo'lda tanlash (Profil -> «Ko'rinish») ---------- */
+      var LBL = { auto: 'Avto', low: 'Yengil', high: "To\u2018liq" };
+      var TLBL = { low: 'yengil', mid: "o\u2018rtacha", high: "to\u2018liq" };
+      function setPref(p) {
+        if (p !== 'low' && p !== 'high') p = 'auto';
+        state.pref = p; pending = null; gStop(); started = false;
+        lsSet(LS_PREF, p);
+        root.setAttribute('data-perf-pref', p);
+        var t = p;
+        if (p === 'auto') { var a = autoTier(); t = a.tier; state.src = a.src; state.reasons = a.reasons || []; }
+        else state.src = 'manual';
+        paint(t);
+        if (p === 'auto') startLater(1500);
+        try {
+          if (typeof window.showToast === 'function')
+            window.showToast("Ko\u2018rinish: " + LBL[p] + (p === 'auto' ? ' (' + TLBL[t] + ')' : ''), 'success');
+        } catch (e) {}
+      }
+      function openPicker() {
+        var tg = window.Telegram && window.Telegram.WebApp;
+        var msg = 'Hozir: ' + LBL[state.pref] + (state.pref === 'auto' ? ' \u2014 ' + TLBL[state.tier] : '') +
+                  "\n\nYengil \u2014 blur va bezak animatsiyalarisiz, oddiy telefonlarda ham silliq.\nTo\u2018liq \u2014 barcha effektlar.\nAvto \u2014 telefoningizga qarab o\u2018zi tanlaydi.";
+        try {
+          if (tg && tg.showPopup && tg.isVersionAtLeast && tg.isVersionAtLeast('6.2')) {
+            tg.showPopup({
+              title: "Ko\u2018rinish",
+              message: msg,
+              buttons: [{ id: 'auto', type: 'default', text: 'Avto' }, { id: 'low', type: 'default', text: 'Yengil' }, { id: 'high', type: 'default', text: "To\u2018liq" }]
+            }, function (id) { if (id) setPref(id); });
+            return;
+          }
+        } catch (e) {}
+        setPref(state.pref === 'auto' ? 'low' : (state.pref === 'low' ? 'high' : 'auto'));   // zaxira: aylantirish
+      }
+
+      window.A1Perf = {
+        openPicker: openPicker,
+        setPref: setPref,
+        /** Sinov uchun (konsol): A1Perf.force('mid') — saqlanmaydi */
+        force: function (t) { if (RANK[t] !== undefined) { gStop(); pending = null; paint(t); } },
+        info: function () {
+          return { tier: state.tier, pref: state.pref, src: state.src, reasons: state.reasons, pending: pending,
+                   guard: { on: G.on, samples: G.samples, bad: G.bad, good: G.good }, midRules: midEdits.length, ua: ua };
+        }
+      };
     })();
     </script>
     <!-- ============================================================
@@ -20432,6 +20644,7 @@ document.addEventListener('click', function (e) {
             tile('🛡', 'Kafolat', 'Phase2.openWarranty()', warrBadgeHTML()) +
             tile('🔔', 'Xabarlar', 'Phase2.openNotifs()', '<span class="p2-tile-badge" id="p2-tile-notif-badge"></span>') +
             tile(P.state.theme === 'light' ? '🌙' : '☀️', 'Mavzu', 'Phase2.toggleTheme(event)', '') +
+            (window.A1Perf ? tile('⚡', 'Ko\u2018rinish', 'A1Perf.openPicker()', '') : '') +
             '</div>';
         // balansni animatsiya bilan ko'rsatamiz
         var bal = document.getElementById('p2-cb-bal');
@@ -40423,6 +40636,29 @@ html body #productModal.a7 .a7-slide > img.a1-ph-main.a1-in { opacity: 1; }
     window.addEventListener('a1-ready', all);
 })();
 </script>
+<!-- ================================================================
+     ⚡ ADAPTIV TEZLIK v2 — CSS (skript: <script id="a1-perf-tier"> head'da)
+     ================================================================ -->
+<style id="a1-perf-tier-css">
+/* LOW (html.lite): shisha blur HAMMA JOYDA o'chadi — selektor ro'yxatisiz.
+   Ilgari faqat ro'yxatdagi ~25 element qamralgan, 71 ta blur qoidasi
+   (tovar oynasi, storis, bannerlar, pastki panellar...) lite'da ham ishlardi.
+   3 ta :not(#id) — mavjud eng kuchli blur selektorlaridan (2 ta ID) ustun bo'lish uchun. */
+html.lite body *:not(#a1px1):not(#a1px2):not(#a1px3),
+html.lite body *:not(#a1px1):not(#a1px2):not(#a1px3)::before,
+html.lite body *:not(#a1px1):not(#a1px2):not(#a1px3)::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+/* MID: blur radiusi JS'da kamaytiriladi; bu yerda faqat doimiy repaint qiluvchi grain */
+html.perf-mid body #polish-grain { display: none !important; }
+
+/* Profil -> Ilova -> «Ko'rinish» qatori */
+#pfx-app .p2-tile[onclick^="A1Perf"] { --tic: #ff9f0a; --tm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 2v11h3v9l7-12h-4l4-8z'/%3E%3C/svg%3E"); }
+#pfx-app .p2-tile[onclick^="A1Perf"] .p2-tile-lbl::after { content: " \00B7  Avto"; color: var(--px-tx2); }
+html[data-perf-pref="low"] #pfx-app .p2-tile[onclick^="A1Perf"] .p2-tile-lbl::after { content: " \00B7  Yengil"; }
+html[data-perf-pref="high"] #pfx-app .p2-tile[onclick^="A1Perf"] .p2-tile-lbl::after { content: " \00B7  To\2018liq"; }
+</style>
 </body>
 </html>
 
