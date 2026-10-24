@@ -15864,7 +15864,11 @@ function initReveal() {
     var reduce = false;
     try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e){}
     function disabled(){
-        try { return reduce || document.documentElement.classList.contains('lite') || window.__perfLite; }
+        // 📱 Ilovada (Android ilova / iPhone bosh ekran ilovasi) parallax O'CHIQ:
+        //    har skroll kadrida rasm o'lchamini o'qib, transform yozish butun
+        //    sahifa uslubini qayta hisoblatardi (o'lchovda 400+ marta) — skroll
+        //    va rasmlar ochilishidagi asosiy «tutilish» shu edi.
+        try { return reduce || document.documentElement.classList.contains('lite') || document.documentElement.classList.contains('a1-app') || window.__perfLite; }
         catch(e){ return true; }
     }
 
@@ -33204,7 +33208,9 @@ html.lite body .ai-luxury-btn .shogird-orbit { animation: none !important; }
         var w = sl.clientWidth || 1;
         var idx = Math.round(sl.scrollLeft / w);
         var cur = imgs[idx];
-        badge.style.opacity = (cur && cur.getAttribute('data-partner') === '1') ? '1' : '0';
+        // Slayder har kadrda skroll hodisasi beradi — faqat qiymat o'zgarganda yozamiz
+        var v = (cur && cur.getAttribute('data-partner') === '1') ? '1' : '0';
+        if (badge.__op !== v) { badge.__op = v; badge.style.opacity = v; }
     };
 
     /* ---- Bazani o'qish ---- */
