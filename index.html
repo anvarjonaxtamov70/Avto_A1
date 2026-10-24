@@ -40701,6 +40701,723 @@ html body #productModal.a7 .a7-slide > img.a1-ph-main.a1-in { opacity: 1; }
 })();
 </script>
 <!-- ================================================================
+     ⭐ BAHOLASH VA SHARHLAR v2 (iOS · Avto A1)
+     ----------------------------------------------------------------
+     ASOSIY XATO (tuzatildi): "xarid qilganmi?" tekshiruvi buyurtma
+     `items` kalitlarini `id||variant` deb o'qirdi. Yangi (server)
+     buyurtmalarda kalit — hash ("l_..."), mahsulot id esa
+     `itemDetails[].id` da. Natijada tovarni OLGAN mijoz ham
+     "Izoh qoldirish uchun avval xarid qiling" ko'rardi.
+
+     YANGI OQIM:
+       • Buyurtma "yetkazildi" bo'lganda pastda jonli taklif kartasi
+         chiqadi (yulduzni bosish — darhol baholash oynasi).
+       • Buyurtma tafsilotida «Tovarlarni baholang» bloki.
+       • Tovar oynasida: o'rtacha baho + taqsimot, sizning bahoingiz
+         (tahrirlash), sharhlar ro'yxati.
+       • Baholash oynasi: katta animatsiyali yulduzlar (tortib tanlash,
+         haptic), tezkor teglar, izoh, bir nechta tovar — ketma-ket.
+     Ma'lumot: reviews/{productId}/{uid} (mavjud qoidalar bilan mos).
+     ================================================================ -->
+<style id="a1-reviews-v2-css">
+/* ——— umumiy tokenlar ——— */
+#a1RateModal, #rv-nudge, #pm-review-section, #od-rate-box {
+    --rv-gold: #f5c84c; --rv-gold2: #d9a521; --rv-gold3: #a87a12;
+    --rv-tx: #f5f5f7; --rv-tx2: rgba(235,235,245,.62); --rv-tx3: rgba(235,235,245,.34);
+    --rv-card: #16171b; --rv-card2: #1e1f24; --rv-fill: rgba(120,120,128,.18); --rv-fill2: rgba(120,120,128,.10);
+    --rv-sep: rgba(84,84,88,.40); --rv-red: #ff6b4a; --rv-amber: #ffb340;
+    --rv-spring: cubic-bezier(.34,1.56,.64,1); --rv-ease: cubic-bezier(.32,.72,0,1);
+    --rv-off: rgba(255,255,255,.13);
+}
+html[data-theme="light"] :is(#a1RateModal, #rv-nudge, #pm-review-section, #od-rate-box) {
+    --rv-gold: #f2b705; --rv-gold2: #d29a00; --rv-gold3: #9a6c00;
+    --rv-tx: #1c1c1e; --rv-tx2: rgba(60,60,67,.64); --rv-tx3: rgba(60,60,67,.36);
+    --rv-card: #ffffff; --rv-card2: #f7f6f2; --rv-fill: rgba(120,120,128,.14); --rv-fill2: rgba(120,120,128,.08);
+    --rv-sep: rgba(60,60,67,.14); --rv-off: rgba(60,60,67,.14);
+}
+
+/* ——— YULDUZLAR ——— */
+.rv-stars { display: inline-flex; align-items: center; gap: var(--rv-gap, 6px); touch-action: none; -webkit-user-select: none; user-select: none; }
+.rv-star { position: relative; width: var(--rv-sz, 40px); height: var(--rv-sz, 40px); padding: 0; margin: 0; border: 0; background: none; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; display: grid; place-items: center; transition: transform .35s var(--rv-spring); }
+.rv-star svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rv-star .rv-s-bg path { fill: var(--rv-off); }
+.rv-star .rv-s-fg { transform: scale(0); opacity: 0; transform-origin: 50% 55%;
+    transition: transform .42s var(--rv-spring), opacity .2s ease; filter: drop-shadow(0 3px 8px rgba(245,180,40,.45)); }
+.rv-star.on .rv-s-fg { transform: scale(1); opacity: 1; }
+.rv-star:active { transform: scale(.88); }
+.rv-star.pop { animation: rvPop .55s var(--rv-spring); }
+@keyframes rvPop { 0% { transform: scale(1); } 35% { transform: scale(1.32) rotate(-8deg); } 70% { transform: scale(.94) rotate(3deg); } 100% { transform: scale(1); } }
+.rv-stars.rv-five .rv-star.on .rv-s-fg { animation: rvGlow 1.4s ease-out 1; }
+@keyframes rvGlow { 0% { filter: drop-shadow(0 3px 8px rgba(245,180,40,.45)); } 30% { filter: drop-shadow(0 0 16px rgba(255,210,80,.95)); } 100% { filter: drop-shadow(0 3px 8px rgba(245,180,40,.45)); } }
+/* uchqunlar */
+.rv-burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.rv-burst i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--rv-gold);
+    box-shadow: 0 0 6px rgba(255,200,60,.9); opacity: 0; animation: rvSpark .7s ease-out forwards; }
+@keyframes rvSpark { 0% { transform: translate(0,0) scale(.6); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; } }
+.rv-xl { --rv-sz: 50px; --rv-gap: 10px; }
+.rv-md { --rv-sz: 34px; --rv-gap: 8px; }
+.rv-sm { --rv-sz: 15px; --rv-gap: 2px; }
+.rv-xs { --rv-sz: 12px; --rv-gap: 1.5px; }
+.rv-ro .rv-star { cursor: default; pointer-events: none; }
+.rv-ro .rv-s-fg { transition: none; filter: none; }
+/* o'qish uchun (qisman to'ldirilgan) */
+.rv-avg { position: relative; display: inline-block; line-height: 0; }
+.rv-avg .rv-avg-fg { position: absolute; left: 0; top: 0; overflow: hidden; white-space: nowrap; }
+.rv-avg svg { width: var(--rv-sz, 15px); height: var(--rv-sz, 15px); margin-right: var(--rv-gap, 2px); }
+.rv-avg .rv-avg-bg path { fill: var(--rv-off); }
+.rv-label { margin-top: 12px; min-height: 22px; font: 600 17px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif; letter-spacing: -.2px;
+    color: var(--rv-tx3); transition: color .25s ease, transform .35s var(--rv-spring); }
+.rv-label.l1, .rv-label.l2 { color: var(--rv-red); }
+.rv-label.l3 { color: var(--rv-amber); }
+.rv-label.l4, .rv-label.l5 { color: var(--rv-gold); }
+.rv-label.bump { animation: rvBump .4s var(--rv-spring); }
+@keyframes rvBump { 0% { transform: scale(.86); } 100% { transform: scale(1); } }
+
+/* ——— BAHOLASH OYNASI ——— */
+html body #a1RateModal.modal-standard {
+    background: radial-gradient(120% 50% at 50% -10%, rgba(245,190,60,.16), transparent 60%), #08080a !important;
+    padding-left: 16px !important; padding-right: 16px !important; color: var(--rv-tx);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased;
+}
+html[data-theme="light"] body #a1RateModal.modal-standard { background: radial-gradient(120% 50% at 50% -10%, rgba(245,190,60,.20), transparent 60%), #f6f4ee !important; }
+html body #a1RateModal > .modal-header { background: transparent !important; border: 0 !important; box-shadow: none !important; margin: 2px 0 6px !important; padding: 0 2px !important; }
+html body #a1RateModal > .modal-header h2 { margin: 0 !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif !important; font-size: 17px !important; font-weight: 600 !important; letter-spacing: -.2px !important;
+    color: var(--rv-tx2) !important; -webkit-text-fill-color: var(--rv-tx2) !important; background: none !important; }
+html body #a1RateModal > .modal-header .close-btn { width: 32px !important; height: 32px !important; border-radius: 50% !important; background: var(--rv-fill) !important;
+    color: var(--rv-tx2) !important; border: 0 !important; box-shadow: none !important; font-size: 20px !important; }
+.rv-body { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 4px 2px 24px; }
+.rv-step-in { animation: rvIn .45s var(--rv-ease); }
+@keyframes rvIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+.rv-prog { display: flex; gap: 6px; margin: 2px 0 16px; }
+.rv-prog i { width: 7px; height: 7px; border-radius: 4px; background: var(--rv-fill); transition: width .35s var(--rv-ease), background .3s; }
+.rv-prog i.cur { width: 22px; background: var(--rv-gold); }
+.rv-prog i.done { background: var(--rv-gold2); opacity: .55; }
+.rv-hero { position: relative; width: 112px; height: 112px; border-radius: 28px; overflow: hidden; background: var(--rv-card);
+    box-shadow: 0 18px 40px -18px rgba(0,0,0,.8), inset 0 0 0 .5px rgba(255,255,255,.08); margin: 4px 0 14px; }
+html[data-theme="light"] .rv-hero { box-shadow: 0 16px 34px -18px rgba(90,70,20,.45), inset 0 0 0 .5px rgba(0,0,0,.06); }
+.rv-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rv-hero .rv-hero-ph { width: 100%; height: 100%; display: grid; place-items: center; color: var(--rv-tx3); font-size: 40px; }
+.rv-pname { font: 700 21px/1.25 -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif; letter-spacing: -.45px; color: var(--rv-tx); max-width: 320px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rv-pmeta { margin-top: 6px; font-size: 13px; color: var(--rv-tx2); display: inline-flex; align-items: center; gap: 6px; }
+.rv-pmeta .rv-ok { display: inline-flex; align-items: center; gap: 4px; color: #30d158; font-weight: 600; }
+.rv-q { margin: 24px 0 14px; font-size: 15px; color: var(--rv-tx2); }
+.rv-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 18px 0 0; max-width: 360px;
+    opacity: 0; transform: translateY(8px); transition: opacity .35s ease, transform .45s var(--rv-ease); pointer-events: none; }
+.rv-tags.show { opacity: 1; transform: none; pointer-events: auto; }
+.rv-tag { height: 34px; padding: 0 14px; border-radius: 17px; border: 0; background: var(--rv-fill); color: var(--rv-tx); font-weight: 500; font-size: 14px; line-height: 1;
+    font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .2s, color .2s, transform .3s var(--rv-spring); }
+.rv-tag:active { transform: scale(.93); }
+.rv-tag.on { background: linear-gradient(135deg, #ffe08a, #f2b705 55%, #c98d00); color: #241800; font-weight: 600; }
+.rv-ta-wrap { position: relative; width: 100%; max-width: 420px; margin-top: 18px; }
+.rv-ta { width: 100%; min-height: 96px; resize: none; box-sizing: border-box; padding: 14px 16px 26px; border-radius: 18px; border: 0; outline: none;
+    background: var(--rv-card); color: var(--rv-tx); font-weight: 400; font-size: 16px; line-height: 1.4; font-family: inherit; text-align: left;
+    box-shadow: inset 0 0 0 .5px rgba(255,255,255,.08); transition: box-shadow .2s; }
+html[data-theme="light"] .rv-ta { box-shadow: inset 0 0 0 .5px rgba(0,0,0,.08); }
+.rv-ta:focus { box-shadow: inset 0 0 0 1.5px var(--rv-gold2); }
+.rv-ta::placeholder { color: var(--rv-tx3); }
+.rv-cnt { position: absolute; right: 14px; bottom: 9px; font-size: 11.5px; color: var(--rv-tx3); font-variant-numeric: tabular-nums; }
+.rv-actions { width: 100%; max-width: 420px; margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.rv-btn { height: 52px; border: 0; border-radius: 16px; font-weight: 600; font-size: 17px; line-height: 1; font-family: inherit; letter-spacing: -.2px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; transition: transform .2s ease, opacity .2s, filter .2s; }
+.rv-btn:active { transform: scale(.97); }
+.rv-btn-pri { color: #241800; background: linear-gradient(135deg, #ffe08a 0%, #f2b705 50%, #c98d00 100%); box-shadow: 0 12px 26px -12px rgba(242,183,5,.75), inset 0 1px 0 rgba(255,255,255,.5); }
+.rv-btn-pri[disabled] { opacity: .38; box-shadow: none; filter: saturate(.5); pointer-events: none; }
+.rv-btn-sec { height: 44px; background: transparent; color: var(--rv-tx2); font-weight: 500; font-size: 15px; }
+.rv-btn.busy { opacity: .7; pointer-events: none; }
+/* muvaffaqiyat */
+.rv-done { padding-top: 34px; }
+.rv-done-star { position: relative; width: 120px; height: 120px; margin: 0 auto 22px; }
+.rv-done-star svg { width: 100%; height: 100%; filter: drop-shadow(0 10px 30px rgba(245,180,40,.55)); animation: rvDoneIn .8s var(--rv-spring) both; }
+.rv-done-star .rv-rays { position: absolute; inset: -30px; border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 0 10deg, rgba(255,210,90,.32) 10deg 16deg, transparent 16deg 40deg, rgba(255,210,90,.22) 40deg 45deg, transparent 45deg 70deg, rgba(255,210,90,.3) 70deg 76deg, transparent 76deg 100deg, rgba(255,210,90,.22) 100deg 105deg, transparent 105deg 130deg, rgba(255,210,90,.3) 130deg 136deg, transparent 136deg 160deg, rgba(255,210,90,.22) 160deg 165deg, transparent 165deg 190deg, rgba(255,210,90,.3) 190deg 196deg, transparent 196deg 220deg, rgba(255,210,90,.22) 220deg 225deg, transparent 225deg 250deg, rgba(255,210,90,.3) 250deg 256deg, transparent 256deg 280deg, rgba(255,210,90,.22) 280deg 285deg, transparent 285deg 310deg, rgba(255,210,90,.3) 310deg 316deg, transparent 316deg 340deg, rgba(255,210,90,.22) 340deg 345deg, transparent 345deg);
+    -webkit-mask: radial-gradient(circle, #000 30%, transparent 70%); mask: radial-gradient(circle, #000 30%, transparent 70%);
+    animation: rvSpin 14s linear infinite, rvFade .8s ease both; }
+@keyframes rvDoneIn { 0% { transform: scale(0) rotate(-40deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes rvSpin { to { transform: rotate(360deg); } }
+@keyframes rvFade { from { opacity: 0; } to { opacity: 1; } }
+.rv-done h3 { margin: 0 0 8px; font: 700 26px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif; letter-spacing: -.6px; color: var(--rv-tx); }
+.rv-done p { margin: 0 auto; max-width: 300px; font-size: 15px; line-height: 1.45; color: var(--rv-tx2); }
+
+/* ——— PASTKI TAKLIF KARTASI ——— */
+#rv-nudge { position: fixed; left: 12px; right: 12px; bottom: calc(92px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))); z-index: 1500;
+    display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 12px; border-radius: 22px;
+    background: rgba(30,30,34,.96); color: var(--rv-tx); box-shadow: 0 18px 40px -14px rgba(0,0,0,.7), inset 0 0 0 .5px rgba(255,255,255,.1);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif;
+    transform: translateY(140%); opacity: 0; transition: transform .55s var(--rv-spring), opacity .3s ease; }
+html[data-theme="light"] #rv-nudge { background: rgba(255,255,255,.97); box-shadow: 0 16px 36px -14px rgba(80,60,20,.35), inset 0 0 0 .5px rgba(0,0,0,.06); }
+#rv-nudge.show { transform: none; opacity: 1; }
+#rv-nudge .rvn-img { width: 48px; height: 48px; flex: 0 0 48px; border-radius: 13px; object-fit: cover; background: var(--rv-fill); }
+#rv-nudge .rvn-mid { flex: 1; min-width: 0; text-align: left; }
+#rv-nudge .rvn-t { font-size: 14px; font-weight: 600; letter-spacing: -.15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#rv-nudge .rvn-s { margin-top: 5px; }
+#rv-nudge .rvn-x { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; border: 0; background: var(--rv-fill); color: var(--rv-tx2); font-size: 16px; line-height: 1; cursor: pointer; }
+
+/* ——— TOVAR OYNASI: baholar bo'limi ——— */
+#pm-review-section .rv-pm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+#pm-review-section .rv-pm-head h3 { margin: 0; }
+#pm-review-section .rv-pm-all { border: 0; background: none; color: var(--rv-gold2); font-weight: 500; font-size: 15px; line-height: 1; font-family: inherit; cursor: pointer; padding: 4px 0; }
+html[data-theme="light"] #pm-review-section .rv-pm-all { color: var(--rv-gold3); }
+.rv-card { background: var(--a7-card, var(--rv-card)); border-radius: 22px; padding: 16px; margin-top: 10px; text-align: left;
+    box-shadow: inset 0 0 0 .5px rgba(255,255,255,.06); }
+html[data-theme="light"] .rv-card { box-shadow: 0 1px 0 rgba(0,0,0,.03), inset 0 0 0 .5px rgba(0,0,0,.06); }
+.rv-sum { display: flex; align-items: center; gap: 18px; }
+.rv-sum-big { text-align: center; flex: 0 0 auto; }
+.rv-sum-big b { display: block; font: 700 46px/1 -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif; letter-spacing: -1.5px; color: var(--rv-tx); }
+.rv-sum-big small { display: block; margin-top: 6px; font-size: 12px; color: var(--rv-tx2); }
+.rv-sum-big .rv-avg { margin-top: 7px; }
+.rv-dist { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.rv-dist-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--rv-tx3); font-variant-numeric: tabular-nums; }
+.rv-dist-row span { width: 8px; text-align: right; }
+.rv-dist-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--rv-fill2); overflow: hidden; }
+.rv-dist-bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, #ffd25c, #f2b705); transition: width .8s var(--rv-ease); }
+.rv-cta { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.rv-cta .rv-cta-t { font-size: 16px; font-weight: 600; color: var(--rv-tx); letter-spacing: -.2px; }
+.rv-cta .rv-cta-s { font-size: 13px; color: var(--rv-tx2); margin-bottom: 10px; }
+.rv-mine-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rv-mine-head .rv-k { font-size: 13px; color: var(--rv-tx2); }
+.rv-edit { border: 0; background: var(--rv-fill); color: var(--rv-tx); height: 30px; padding: 0 14px; border-radius: 15px; font-weight: 500; font-size: 13px; line-height: 1; font-family: inherit; cursor: pointer; }
+.rv-note { margin: 10px 4px 0; font-size: 13px; color: var(--rv-tx3); text-align: left; }
+.rv-rev + .rv-rev { margin-top: 14px; padding-top: 14px; border-top: .5px solid var(--rv-sep); }
+.rv-rev-h { display: flex; align-items: center; gap: 10px; }
+.rv-ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #241800;
+    background: linear-gradient(135deg, #ffe08a, #f2b705 60%, #c98d00); }
+.rv-rev-who { flex: 1; min-width: 0; }
+.rv-rev-nm { font-size: 14.5px; font-weight: 600; color: var(--rv-tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-rev-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; color: var(--rv-tx3); }
+.rv-rev-tx { margin-top: 9px; font-size: 14.5px; line-height: 1.45; color: var(--rv-tx); white-space: pre-wrap; word-break: break-word; }
+.rv-rev-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.rv-rev-tags span { font-size: 12px; padding: 4px 9px; border-radius: 10px; background: var(--rv-fill2); color: var(--rv-tx2); }
+.rv-more { width: 100%; margin-top: 12px; height: 40px; border: 0; border-radius: 12px; background: var(--rv-fill2); color: var(--rv-tx); font-weight: 500; font-size: 14px; line-height: 1; font-family: inherit; cursor: pointer; }
+.rv-empty { text-align: center; padding: 22px 12px; }
+.rv-empty .rv-avg { margin-bottom: 10px; }
+.rv-empty b { display: block; font-size: 15px; color: var(--rv-tx); margin-bottom: 4px; }
+.rv-empty span { font-size: 13px; color: var(--rv-tx2); }
+
+/* ——— BUYURTMA TAFSILOTI ——— */
+#od-rate-box:empty { display: none; }
+#od-rate-box { margin: 14px 0 4px; }
+#od-rate-box .rv-card { margin: 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 18px 16px; }
+#od-rate-box .rv-od-t { font-size: 16px; font-weight: 600; color: var(--rv-tx); letter-spacing: -.2px; }
+#od-rate-box .rv-od-s { font-size: 13px; color: var(--rv-tx2); margin-bottom: 10px; }
+#od-rate-box .rv-od-done { display: inline-flex; align-items: center; gap: 6px; color: #30d158; font-weight: 600; font-size: 15px; }
+
+/* ——— zaif telefon / harakatni kamaytirish ——— */
+html.lite .rv-burst, html.lite .rv-done-star .rv-rays { display: none !important; }
+html.lite .rv-star .rv-s-fg { filter: none; }
+@media (prefers-reduced-motion: reduce) {
+    .rv-burst, .rv-done-star .rv-rays { display: none !important; }
+    .rv-star, .rv-star .rv-s-fg, .rv-tags, #rv-nudge, .rv-dist-bar i { transition-duration: .01s !important; }
+    .rv-star.pop, .rv-step-in, .rv-label.bump, .rv-done-star svg { animation: none !important; }
+}
+</style>
+<script id="a1-reviews-v2-js">
+(function () {
+    'use strict';
+    var STAR_D = 'M12 2.4c.38 0 .73.22.9.56l2.5 5.06 5.58.81c.38.06.69.32.81.68.12.36.02.76-.25 1.02l-4.04 3.94.95 5.56c.07.37-.09.75-.39.97-.31.22-.71.25-1.05.07L12 18.47l-4.99 2.62c-.34.18-.74.15-1.05-.07-.3-.22-.46-.6-.39-.97l.95-5.56-4.04-3.94c-.27-.26-.37-.66-.25-1.02.12-.36.43-.62.81-.68l5.58-.81 2.5-5.06c.17-.34.52-.56.9-.56z';
+    var LABELS = ['', 'Juda yomon', 'Yomon', "O\u2018rtacha", 'Yaxshi', "A\u2019lo!"];
+    var TAGS_GOOD = ["Original sifat", "Mashinaga mos keldi", "Tez yetkazildi", "Narxi arzon", "Yaxshi qadoqlangan", "Xizmat zo\u2018r"];
+    var TAGS_BAD = ["Sifati past", "Mos kelmadi", "Kech yetkazildi", "Qadoq shikastlangan", "Narxi qimmat", "Tavsifga mos emas"];
+    var MAX_TEXT = 500;
+    var PROMPT_DAYS = 30;
+
+    /* ---------------- yordamchilar ---------------- */
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(id) { return document.getElementById(id); }
+    function DB() { try { return (typeof db !== 'undefined' && db) ? db : (window.firebase && firebase.database ? firebase.database() : null); } catch (e) { return null; } }
+    function uid() { var u = window.currentUser; return (u === null || u === undefined || u === '') ? '' : String(u); }
+    function products() { try { return (typeof productsDB !== 'undefined' && Array.isArray(productsDB)) ? productsDB : (window.productsDB || []); } catch (e) { return window.productsDB || []; } }
+    function orders() { try { return Array.isArray(window.myOrders) ? window.myOrders : ((typeof myOrders !== 'undefined' && Array.isArray(myOrders)) ? myOrders : []); } catch (e) { return []; } }
+    function prod(id) { var p = products(); for (var i = 0; i < p.length; i++) if (p[i] && String(p[i].id) === String(id)) return p[i]; return null; }
+    function thumb(u, w) { try { return (typeof window._thumb === 'function') ? window._thumb(u, w) : u; } catch (e) { return u; } }
+    function lite() { try { return document.documentElement.classList.contains('lite') || !!window.__perfLite || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
+    function hap(k) { try { if (typeof window._hap === 'function') window._hap(k); } catch (e) {} }
+    function toast(m, t) { try { if (typeof window.showToast === 'function') window.showToast(m, t || 'success'); } catch (e) {} }
+    function myName() {
+        var n = '';
+        try { n = (typeof myProfile !== 'undefined' && myProfile && myProfile.name) ? myProfile.name : ''; } catch (e) {}
+        if (!n) { try { var u = window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user; if (u) n = [u.first_name, u.last_name].filter(Boolean).join(' '); } catch (e) {} }
+        return String(n || 'Mijoz').trim().slice(0, 60);
+    }
+    function activeModalNow() { try { return (typeof activeModal !== 'undefined') ? activeModal : window.activeModal; } catch (e) { return window.activeModal; } }
+    function orderTime(o) { var t = Number(o && (o.deliveredAt || o.updatedAt || o.createdAt)) || parseInt(String(o && o.id || ''), 10) || 0; return t > 1e11 ? t : 0; }
+    function relDate(ts, fallback) {
+        ts = Number(ts) || 0; if (!ts) return fallback || '';
+        var d = Math.floor((Date.now() - ts) / 86400000);
+        if (d <= 0) return 'bugun'; if (d === 1) return 'kecha'; if (d < 7) return d + ' kun oldin';
+        if (d < 30) return Math.floor(d / 7) + ' hafta oldin';
+        try { return new Date(ts).toLocaleDateString('uz-UZ'); } catch (e) { return fallback || ''; }
+    }
+    function starSvg(cls) { return '<svg class="' + cls + '" viewBox="0 0 24 24" aria-hidden="true"><path d="' + STAR_D + '"' + (cls === 'rv-s-fg' || cls === 'rv-gold' ? ' fill="url(#rvGold)"' : '') + '/></svg>'; }
+    function ensureDefs() {
+        if ($('rv-defs')) return;
+        var d = document.createElement('div');
+        d.id = 'rv-defs'; d.setAttribute('aria-hidden', 'true');
+        d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+        d.innerHTML = '<svg width="0" height="0"><defs><linearGradient id="rvGold" x1="0" y1="0" x2="0.4" y2="1">' +
+            '<stop offset="0" stop-color="#FFF1B0"/><stop offset=".38" stop-color="#FFD34E"/><stop offset=".75" stop-color="#F2A900"/><stop offset="1" stop-color="#C77F00"/>' +
+            '</linearGradient></defs></svg>';
+        document.body.appendChild(d);
+    }
+
+    /** O'qish uchun yulduzlar (qisman to'ldirilgan). */
+    function avgHTML(v, size) {
+        v = Math.max(0, Math.min(5, parseFloat(v) || 0));
+        var one = function (cls) { var s = ''; for (var i = 0; i < 5; i++) s += starSvg(cls); return s; };
+        return '<span class="rv-avg ' + (size || 'rv-sm') + '" role="img" aria-label="' + v.toFixed(1) + ' / 5">' +
+            '<span class="rv-avg-bg">' + one('rv-avg-bg') + '</span>' +
+            '<span class="rv-avg-fg" style="width:' + (v / 5 * 100).toFixed(1) + '%">' + one('rv-gold') + '</span></span>';
+    }
+
+    /* ---------------- xarid / buyurtmalar ---------------- */
+    /** Buyurtmadagi mahsulot id'lari (yangi: itemDetails[].id, eski: "id||variant" kalitlari). */
+    function orderProductIds(o) {
+        var out = [], seen = {};
+        function add(id) { id = String(id || ''); if (id && !seen[id]) { seen[id] = 1; out.push(id); } }
+        if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) o.itemDetails.forEach(function (it) { if (it) add(it.id); });
+        else if (o && o.items && typeof o.items === 'object') Object.keys(o.items).forEach(function (k) { if (!/^l_[0-9a-f]{20,}$/.test(k)) add(String(k).split('||')[0]); });
+        return out;
+    }
+    function itemName(o, pid) {
+        if (o && Array.isArray(o.itemDetails)) for (var i = 0; i < o.itemDetails.length; i++) { var it = o.itemDetails[i]; if (it && String(it.id) === String(pid) && it.name) return it.name; }
+        var p = prod(pid); return p ? p.name : 'Tovar';
+    }
+    function deliveredOrders() { return orders().filter(function (o) { return o && o.status === 'yetkazildi'; }); }
+    /** pid -> eng so'nggi yetkazilgan buyurtma. */
+    function purchaseOf(pid) {
+        var best = null;
+        deliveredOrders().forEach(function (o) {
+            if (orderProductIds(o).indexOf(String(pid)) >= 0 && (!best || orderTime(o) >= orderTime(best))) best = o;
+        });
+        return best;
+    }
+    window._a1HasBought = function (pid) { return !!purchaseOf(pid); };
+
+    /* ---------------- sharhlar keshi ---------------- */
+    var cache = {};   // pid -> { list:[], mine:obj|null, at }
+    function fetchReviews(pid, force) {
+        var c = cache[pid];
+        if (c && !force && (Date.now() - c.at) < 60000) return Promise.resolve(c);
+        var d = DB(); if (!d) return Promise.resolve({ list: [], mine: null, at: Date.now() });
+        return d.ref('reviews/' + pid).once('value').then(function (snap) {
+            var v = snap.val() || {}, me = uid(), list = [], mine = null;
+            Object.keys(v).forEach(function (k) {
+                var r = v[k]; if (!r || !(Number(r.rating) > 0)) return;
+                r = Object.assign({}, r, { _k: k, rating: Math.max(1, Math.min(5, Math.round(Number(r.rating)))) });
+                list.push(r);
+                if (me && (k === me || String(r.userId) === me)) mine = r;
+            });
+            list.sort(function (a, b) { return (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0); });
+            cache[pid] = { list: list, mine: mine, at: Date.now() };
+            return cache[pid];
+        }).catch(function () { return cache[pid] || { list: [], mine: null, at: 0 }; });
+    }
+
+    /* ---------------- yulduz tanlagich ---------------- */
+    function burst(btn) {
+        if (lite()) return;
+        var b = btn.querySelector('.rv-burst'); if (!b) return;
+        var h = '';
+        for (var i = 0; i < 8; i++) {
+            var a = (i / 8) * Math.PI * 2 + Math.random() * .4, r = 26 + Math.random() * 14;
+            h += '<i style="--dx:' + (Math.cos(a) * r).toFixed(1) + 'px;--dy:' + (Math.sin(a) * r).toFixed(1) + 'px;animation-delay:' + (Math.random() * 60).toFixed(0) + 'ms"></i>';
+        }
+        b.innerHTML = h;
+        setTimeout(function () { b.innerHTML = ''; }, 800);
+    }
+    /** el ichiga 5 yulduz. opts: { value, size:'rv-xl'|'rv-md', onChange(v), readonly, label:el } */
+    function picker(el, opts) {
+        ensureDefs();
+        opts = opts || {};
+        var h = '<div class="rv-stars ' + (opts.size || 'rv-xl') + (opts.readonly ? ' rv-ro' : '') + '" role="radiogroup" aria-label="Baho">';
+        for (var i = 1; i <= 5; i++) {
+            h += '<button type="button" class="rv-star" role="radio" aria-checked="false" aria-label="' + i + ' yulduz" data-v="' + i + '">' +
+                starSvg('rv-s-bg') + starSvg('rv-s-fg') + '<span class="rv-burst"></span></button>';
+        }
+        h += '</div>';
+        el.innerHTML = h;
+        var wrap = el.firstChild, btns = wrap.querySelectorAll('.rv-star'), value = 0;
+        function paint(v, animate) {
+            for (var i = 0; i < btns.length; i++) {
+                var on = i < v;
+                btns[i].style.transitionDelay = '';
+                var fg = btns[i].querySelector('.rv-s-fg');
+                if (fg) fg.style.transitionDelay = (animate && on) ? (i * 45) + 'ms' : '0ms';
+                btns[i].classList.toggle('on', on);
+                btns[i].setAttribute('aria-checked', i === v - 1 ? 'true' : 'false');
+            }
+            wrap.classList.toggle('rv-five', v === 5 && animate);
+            if (opts.label) {
+                opts.label.textContent = v ? LABELS[v] : (opts.placeholder || '');
+                opts.label.className = 'rv-label' + (v ? ' l' + v : '');
+                if (animate && v) { void opts.label.offsetWidth; opts.label.classList.add('bump'); }
+            }
+        }
+        function set(v, animate, silent) {
+            v = Math.max(0, Math.min(5, v | 0));
+            var changed = v !== value; value = v;
+            paint(v, animate);
+            if (animate && v) {
+                var b = btns[v - 1];
+                b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+                burst(b);
+                hap(v === 5 ? 'success' : 'light');
+            }
+            if (changed && !silent && opts.onChange) opts.onChange(v);
+        }
+        if (!opts.readonly) {
+            var dragging = false, last = 0;
+            var idxAt = function (x) {
+                for (var i = 0; i < btns.length; i++) { var r = btns[i].getBoundingClientRect(); if (x < r.right + 4) return i + 1; }
+                return 5;
+            };
+            wrap.addEventListener('pointerdown', function (e) {
+                dragging = true; last = idxAt(e.clientX);
+                try { wrap.setPointerCapture(e.pointerId); } catch (x) {}
+                paint(last, false);
+                hap('selection');
+            });
+            wrap.addEventListener('pointermove', function (e) {
+                if (!dragging) return;
+                var v = idxAt(e.clientX);
+                if (v !== last) { last = v; paint(v, false); hap('selection'); }
+            });
+            var end = function (e) {
+                if (!dragging) return; dragging = false;
+                var v = e && e.type !== 'pointercancel' ? idxAt(e.clientX) : last;
+                set(v, true);
+            };
+            wrap.addEventListener('pointerup', end);
+            wrap.addEventListener('pointercancel', end);
+            wrap.addEventListener('keydown', function (e) {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { set(Math.min(5, value + 1), true); e.preventDefault(); }
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { set(Math.max(1, value - 1), true); e.preventDefault(); }
+            });
+        }
+        set(opts.value || 0, false, true);
+        return { get: function () { return value; }, set: set };
+    }
+
+    /* ---------------- baholash oynasi ---------------- */
+    var S = null;   // { order, pids:[], i, drafts:{pid:{rating,text,tags}}, saved:0 }
+    function ensureModal() {
+        var m = $('a1RateModal');
+        if (m) return m;
+        m = document.createElement('div');
+        m.id = 'a1RateModal';
+        m.className = 'modal-standard';
+        m.innerHTML = '<div class="modal-header"><h2 id="rv-title">Baholash</h2>' +
+            '<button class="close-btn" aria-label="Yopish" onclick="closeModal()">\u00D7</button></div>' +
+            '<div class="rv-body" id="rv-body"></div>';
+        document.body.appendChild(m);
+        return m;
+    }
+    function open(order, startPid, preset) {
+        if (!order) return;
+        var pids = orderProductIds(order);
+        if (!pids.length) { toast("Bu buyurtmada baholanadigan tovar topilmadi", 'warning'); return; }
+        S = { order: order, pids: pids, i: Math.max(0, pids.indexOf(String(startPid || ''))), drafts: {}, saved: 0, preset: preset || 0 };
+        ensureModal();
+        try { window.openModal('a1RateModal'); } catch (e) { var m = $('a1RateModal'); if (m) m.style.display = 'flex'; }
+        // mavjud baholarni oldindan yuklab, qoralamaga qo'yamiz
+        Promise.all(pids.map(function (p) { return fetchReviews(p); })).then(function (rs) {
+            rs.forEach(function (r, k) { if (r && r.mine) S.drafts[pids[k]] = { rating: r.mine.rating, text: r.mine.text || '', tags: (r.mine.tags || []).slice(), existed: true }; });
+            renderStep();
+        });
+        renderStep(true);
+    }
+    function renderStep(loading) {
+        var body = $('rv-body'); if (!body || !S) return;
+        var pid = S.pids[S.i], p = prod(pid), o = S.order;
+        var d = S.drafts[pid] || (S.drafts[pid] = { rating: 0, text: '', tags: [] });
+        if (S.preset && !d.rating && !d.existed) { d.rating = S.preset; }
+        S.preset = 0;
+        var img = p && (p.img || p.image);
+        var prog = '';
+        if (S.pids.length > 1) {
+            prog = '<div class="rv-prog" aria-label="' + (S.i + 1) + ' / ' + S.pids.length + '">';
+            for (var k = 0; k < S.pids.length; k++) prog += '<i class="' + (k === S.i ? 'cur' : (k < S.i ? 'done' : '')) + '"></i>';
+            prog += '</div>';
+        }
+        $('rv-title').textContent = S.pids.length > 1 ? ('Baholash \u00B7 ' + (S.i + 1) + '/' + S.pids.length) : 'Baholash';
+        body.innerHTML = '<div class="rv-step-in" style="width:100%;display:flex;flex-direction:column;align-items:center">' + prog +
+            '<div class="rv-hero">' + (img ? '<img src="' + esc(thumb(img, 320)) + '" alt="" decoding="async">' : '<div class="rv-hero-ph">\uD83D\uDE97</div>') + '</div>' +
+            '<div class="rv-pname">' + esc(itemName(o, pid)) + '</div>' +
+            '<div class="rv-pmeta"><span class="rv-ok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Yetkazildi</span>' +
+                (o.code ? '<span>\u00B7 #' + esc(o.code) + '</span>' : '') + '</div>' +
+            '<div class="rv-q">' + (d.existed ? 'Bahoingizni o\u2018zgartirishingiz mumkin' : 'Tovar sizga qanchalik yoqdi?') + '</div>' +
+            '<div id="rv-pick"></div><div class="rv-label" id="rv-lbl"></div>' +
+            '<div class="rv-tags" id="rv-tags"></div>' +
+            '<div class="rv-ta-wrap"><textarea id="rv-text" class="rv-ta" maxlength="' + MAX_TEXT + '" rows="3" placeholder="Fikringizni yozing (ixtiyoriy)"></textarea><span class="rv-cnt" id="rv-cnt">0/' + MAX_TEXT + '</span></div>' +
+            '<div class="rv-actions"><button type="button" class="rv-btn rv-btn-pri" id="rv-send"' + (loading ? ' disabled' : '') + '>' + (d.existed ? 'Yangilash' : 'Yuborish') + '</button>' +
+            '<button type="button" class="rv-btn rv-btn-sec" id="rv-skip">' + (S.i < S.pids.length - 1 ? 'Keyingi tovar' : 'Keyinroq') + '</button></div></div>';
+        var ta = $('rv-text'), cnt = $('rv-cnt'), send = $('rv-send');
+        ta.value = d.text || '';
+        cnt.textContent = ta.value.length + '/' + MAX_TEXT;
+        ta.addEventListener('input', function () { d.text = ta.value.slice(0, MAX_TEXT); cnt.textContent = d.text.length + '/' + MAX_TEXT; });
+        function tags(v) {
+            var box = $('rv-tags'); if (!box) return;
+            if (!v) { box.classList.remove('show'); box.innerHTML = ''; return; }
+            var set = v >= 4 ? TAGS_GOOD : TAGS_BAD;
+            d.tags = d.tags.filter(function (t) { return set.indexOf(t) >= 0; });
+            box.innerHTML = set.map(function (t) { return '<button type="button" class="rv-tag' + (d.tags.indexOf(t) >= 0 ? ' on' : '') + '" data-t="' + esc(t) + '">' + esc(t) + '</button>'; }).join('');
+            box.classList.add('show');
+            ta.placeholder = v >= 4 ? 'Nimasi yoqdi? (ixtiyoriy)' : 'Nima yoqmadi? Biz albatta tuzatamiz (ixtiyoriy)';
+        }
+        $('rv-tags').addEventListener('click', function (e) {
+            var b = e.target.closest && e.target.closest('.rv-tag'); if (!b) return;
+            var t = b.getAttribute('data-t'), i = d.tags.indexOf(t);
+            if (i >= 0) d.tags.splice(i, 1); else if (d.tags.length < 4) d.tags.push(t);
+            b.classList.toggle('on', d.tags.indexOf(t) >= 0); hap('selection');
+        });
+        picker($('rv-pick'), {
+            value: d.rating, size: 'rv-xl', label: $('rv-lbl'), placeholder: 'Yulduzni bosing yoki suring',
+            onChange: function (v) { d.rating = v; tags(v); send.disabled = !v || !!loading; }
+        });
+        tags(d.rating);
+        send.disabled = !d.rating || !!loading;
+        send.addEventListener('click', function () { submit(pid, d, send); });
+        $('rv-skip').addEventListener('click', next);
+    }
+    function next() {
+        if (!S) return;
+        if (S.i < S.pids.length - 1) { S.i++; renderStep(); try { $('a1RateModal').scrollTop = 0; } catch (e) {} return; }
+        if (S.saved) renderDone(); else { try { window.closeModal(); } catch (e) {} }
+    }
+    var lastSend = 0;
+    function submit(pid, d, btn) {
+        var me = uid(), base = DB();
+        if (!me || !base) { toast("Xavfsiz ulanish kerak \u2014 ilovani qayta oching", 'warning'); return; }
+        if (!d.rating) { toast("Avval yulduzni tanlang", 'warning'); return; }
+        if (Date.now() - lastSend < 2500) return;
+        lastSend = Date.now();
+        btn.classList.add('busy'); btn.textContent = 'Yuborilmoqda\u2026';
+        var now = new Date();
+        var data = {
+            userId: me, userName: myName(), rating: d.rating,
+            text: String(d.text || '').trim().slice(0, MAX_TEXT),
+            tags: (d.tags || []).slice(0, 4),
+            orderId: String(S.order.id || ''),
+            date: now.toLocaleDateString('uz-UZ'), timestamp: now.getTime()
+        };
+        if (d.existed) data.edited = true;
+        base.ref('reviews/' + pid + '/' + me).set(data).then(function () {
+            d.existed = true; S.saved++;
+            delete cache[pid];
+            hap('success');
+            try { if (typeof window.loadProductRatings === 'function') window.loadProductRatings(); else if (typeof loadProductRatings === 'function') loadProductRatings(); } catch (e) {}
+            try { if (typeof currentReviewProductId !== 'undefined' && String(currentReviewProductId) === String(pid)) window.loadProductReviews(pid); } catch (e) {}
+            refreshOrderBox();
+            if (S.i < S.pids.length - 1) { toast("Saqlandi \u2014 keyingi tovar"); next(); }
+            else renderDone();
+        }).catch(function (err) {
+            btn.classList.remove('busy'); btn.textContent = d.existed ? 'Yangilash' : 'Yuborish';
+            lastSend = 0;
+            var denied = err && /permission/i.test(String(err.code || err.message || ''));
+            toast(denied ? "Saqlanmadi: ulanish tasdiqlanmagan. Ilovani yopib qayta oching." : "Saqlanmadi \u2014 internetni tekshirib, qayta bosing", 'warning');
+            hap('error');
+        });
+    }
+    function renderDone() {
+        var body = $('rv-body'); if (!body) return;
+        ensureDefs();
+        $('rv-title').textContent = 'Rahmat!';
+        var nm = myName().split(' ')[0];
+        body.innerHTML = '<div class="rv-done rv-step-in">' +
+            '<div class="rv-done-star"><span class="rv-rays"></span>' + starSvg('rv-gold') + '</div>' +
+            '<h3>Rahmat' + (nm && nm !== 'Mijoz' ? ', ' + esc(nm) : '') + '!</h3>' +
+            '<p>Bahoingiz boshqa haydovchilarga to\u2018g\u2018ri ehtiyot qism tanlashga yordam beradi.</p>' +
+            '<div class="rv-actions" style="margin:28px auto 0"><button type="button" class="rv-btn rv-btn-pri" id="rv-ok">Tayyor</button></div></div>';
+        $('rv-ok').addEventListener('click', function () { try { window.closeModal(); } catch (e) {} });
+        hap('success');
+    }
+
+    window.A1Rate = {
+        openOrder: function (orderId, pid, preset) {
+            var o = orders().filter(function (x) { return x && String(x.id) === String(orderId); })[0];
+            if (!o || o.status !== 'yetkazildi') { toast("Baholash tovar yetkazilgandan keyin ochiladi", 'warning'); return; }
+            open(o, pid, preset);
+        },
+        openProduct: function (pid, preset) {
+            var o = purchaseOf(pid);
+            if (!o) { toast("Baholash faqat xarid qilingan va yetkazilgan tovar uchun", 'warning'); return; }
+            open(o, pid, preset);
+        }
+    };
+
+    /* ---------------- tovar oynasi: baholar bo'limi ---------------- */
+    var pmState = { pid: null, showAll: false };
+    function revHTML(r) {
+        var nm = String(r.userName || 'Mijoz').trim() || 'Mijoz';
+        var tags = Array.isArray(r.tags) && r.tags.length ? '<div class="rv-rev-tags">' + r.tags.slice(0, 4).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' : '';
+        return '<div class="rv-rev"><div class="rv-rev-h"><div class="rv-ava">' + esc(nm.charAt(0).toUpperCase()) + '</div>' +
+            '<div class="rv-rev-who"><div class="rv-rev-nm">' + esc(nm) + '</div>' +
+            '<div class="rv-rev-meta">' + avgHTML(r.rating, 'rv-xs') + '<span>' + esc(relDate(r.timestamp, r.date)) + (r.edited ? ' \u00B7 tahrirlangan' : '') + '</span></div></div></div>' +
+            tags + (r.text ? '<div class="rv-rev-tx">' + esc(r.text) + '</div>' : '') + '</div>';
+    }
+    function renderPM(pid, data) {
+        var sec = $('pm-review-section'); if (!sec || pmState.pid !== pid) return;
+        ensureDefs();
+        var list = data.list, n = list.length, mine = data.mine, bought = !!purchaseOf(pid), me = uid();
+        var sum = 0, dist = [0, 0, 0, 0, 0, 0];
+        list.forEach(function (r) { sum += r.rating; dist[r.rating]++; });
+        var avg = n ? sum / n : 0;
+        var h = '<div class="rv-pm-head"><h3>Baholar va sharhlar</h3>' + (n > 3 ? '<button type="button" class="rv-pm-all" id="rv-pm-all">' + (pmState.showAll ? 'Kamroq' : 'Barchasi (' + n + ')') + '</button>' : '') + '</div>';
+        if (n) {
+            h += '<div class="rv-card rv-sum"><div class="rv-sum-big"><b>' + (Math.round(avg * 10) / 10).toFixed(1) + '</b>' + avgHTML(avg, 'rv-sm') + '<small>' + n + ' ta baho</small></div><div class="rv-dist">';
+            for (var s = 5; s >= 1; s--) h += '<div class="rv-dist-row"><span>' + s + '</span><div class="rv-dist-bar"><i data-w="' + (n ? (dist[s] / n * 100).toFixed(1) : 0) + '"></i></div></div>';
+            h += '</div></div>';
+        }
+        if (me && mine) {
+            h += '<div class="rv-card"><div class="rv-mine-head"><div><div class="rv-k">Sizning bahoingiz</div><div style="margin-top:6px">' + avgHTML(mine.rating, 'rv-sm') + '</div></div>' +
+                (bought ? '<button type="button" class="rv-edit" id="rv-pm-edit">Tahrirlash</button>' : '') + '</div>' +
+                (mine.text ? '<div class="rv-rev-tx">' + esc(mine.text) + '</div>' : '') + '</div>';
+        } else if (me && bought) {
+            h += '<div class="rv-card rv-cta"><div class="rv-cta-t">Siz bu tovarni xarid qilgansiz</div><div class="rv-cta-s">Baholang \u2014 bu boshqa mijozlarga yordam beradi</div><div id="rv-pm-pick"></div></div>';
+        }
+        if (n) {
+            var shown = list.filter(function (r) { return !mine || r._k !== mine._k; });
+            var cut = pmState.showAll ? shown : shown.slice(0, 3);
+            if (cut.length) h += '<div class="rv-card">' + cut.map(revHTML).join('') + '</div>';
+            if (!pmState.showAll && shown.length > 3) h += '<button type="button" class="rv-more" id="rv-pm-more">Yana ' + (shown.length - 3) + ' ta sharh</button>';
+        } else if (!(me && bought)) {
+            h += '<div class="rv-card rv-empty">' + avgHTML(0, 'rv-md') + '<b>Hali baho yo\u2018q</b><span>Tovarni olgan mijozlar bu yerda baho qoldiradi</span></div>';
+        }
+        if (me && !bought && !mine) h += '<div class="rv-note">Baho qoldirish tovar sizga yetkazilgandan keyin ochiladi.</div>';
+        sec.innerHTML = h;
+        // taqsimot chiziqlari silliq to'ladi
+        requestAnimationFrame(function () { requestAnimationFrame(function () {
+            sec.querySelectorAll('.rv-dist-bar i').forEach(function (i) { i.style.width = i.getAttribute('data-w') + '%'; });
+        }); });
+        var pk = $('rv-pm-pick');
+        if (pk) picker(pk, { size: 'rv-md', onChange: function (v) { if (v) setTimeout(function () { window.A1Rate.openProduct(pid, v); }, 260); } });
+        var ed = $('rv-pm-edit'); if (ed) ed.addEventListener('click', function () { window.A1Rate.openProduct(pid); });
+        var more = $('rv-pm-more'), all = $('rv-pm-all');
+        var toggle = function () { pmState.showAll = !pmState.showAll; renderPM(pid, data); };
+        if (more) more.addEventListener('click', toggle);
+        if (all) all.addEventListener('click', toggle);
+    }
+    window.loadProductReviews = function (productId) {
+        try { if (typeof currentReviewProductId !== 'undefined') currentReviewProductId = productId; } catch (e) {}
+        var sec = $('pm-review-section'); if (!sec) return;
+        pmState = { pid: String(productId), showAll: false };
+        sec.innerHTML = '<div class="rv-pm-head"><h3>Baholar va sharhlar</h3></div>' + (window._skel ? window._skel(2, 70) : '');
+        fetchReviews(String(productId), true).then(function (data) { renderPM(String(productId), data); });
+    };
+
+    /* ---------------- buyurtma tafsiloti ---------------- */
+    var odCur = null;
+    function refreshOrderBox() { if (odCur) renderOrderBox(odCur); }
+    function renderOrderBox(o) {
+        odCur = o;
+        var box = $('od-rate-box');
+        if (!box) {
+            var acts = document.querySelector('#orderDetailModal .mo-acts');
+            if (!acts || !acts.parentNode) return;
+            box = document.createElement('div'); box.id = 'od-rate-box';
+            acts.parentNode.insertBefore(box, acts);
+        }
+        if (!o || o.status !== 'yetkazildi' || !uid()) { box.innerHTML = ''; return; }
+        var pids = orderProductIds(o); if (!pids.length) { box.innerHTML = ''; return; }
+        var oid = String(o.id);
+        Promise.all(pids.map(function (p) { return fetchReviews(p); })).then(function (rs) {
+            if (!odCur || String(odCur.id) !== oid) return;
+            var done = rs.filter(function (r) { return r && r.mine; }).length;
+            ensureDefs();
+            if (done >= pids.length) {
+                box.innerHTML = '<div class="rv-card"><span class="rv-od-done"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Baholaganingiz uchun rahmat</span>' +
+                    '<button type="button" class="rv-edit" id="rv-od-edit" style="margin-top:8px">Bahoni ko\u2018rish / o\u2018zgartirish</button></div>';
+                $('rv-od-edit').addEventListener('click', function () { window.A1Rate.openOrder(oid); });
+                return;
+            }
+            var first = pids.filter(function (p, k) { return !(rs[k] && rs[k].mine); })[0];
+            box.innerHTML = '<div class="rv-card"><div class="rv-od-t">Tovarlarni baholang</div><div class="rv-od-s">' +
+                (pids.length > 1 ? (done ? done + ' / ' + pids.length + ' ta baholandi' : pids.length + ' ta tovar') : 'Tovar sizga yoqdimi?') + '</div><div id="rv-od-pick"></div></div>';
+            picker($('rv-od-pick'), { size: 'rv-md', onChange: function (v) { if (v) setTimeout(function () { window.A1Rate.openOrder(oid, first, v); }, 260); } });
+        });
+    }
+    function wrapOrderDetail() {
+        var o = window._renderOrderCancel;
+        if (typeof o !== 'function' || o.__rv) return;
+        var w = function (order) {
+            var r = o.apply(this, arguments);
+            try { renderOrderBox(order); } catch (e) {}
+            return r;
+        };
+        w.__rv = true;
+        window._renderOrderCancel = w;
+    }
+
+    /* ---------------- yetkazilgandan keyin taklif kartasi ---------------- */
+    var PKEY = function () { return 'a1_rv_prompted_' + uid(); };
+    function prompted() { try { return JSON.parse(localStorage.getItem(PKEY()) || '{}') || {}; } catch (e) { return {}; } }
+    function markPrompted(id) { try { var m = prompted(); m[id] = Date.now(); var ks = Object.keys(m); if (ks.length > 80) delete m[ks[0]]; localStorage.setItem(PKEY(), JSON.stringify(m)); } catch (e) {} }
+    var nudgeBusy = false;
+    function hideNudge() {
+        var n = $('rv-nudge'); if (!n) return;
+        n.classList.remove('show');
+        setTimeout(function () { if (n.parentNode && !n.classList.contains('show')) n.parentNode.removeChild(n); }, 500);
+    }
+    function showNudge(o, pid) {
+        ensureDefs();
+        hideNudge();
+        var p = prod(pid), img = p && (p.img || p.image);
+        var n = document.createElement('div');
+        n.id = 'rv-nudge'; n.setAttribute('role', 'dialog'); n.setAttribute('aria-label', 'Buyurtmani baholash');
+        n.innerHTML = (img ? '<img class="rvn-img" src="' + esc(thumb(img, 120)) + '" alt="">' : '<div class="rvn-img"></div>') +
+            '<div class="rvn-mid"><div class="rvn-t">Yetkazildi! Qanday baholaysiz?</div><div class="rvn-s" id="rvn-pick"></div></div>' +
+            '<button type="button" class="rvn-x" aria-label="Yopish">\u00D7</button>';
+        document.body.appendChild(n);
+        picker($('rvn-pick'), { size: 'rv-sm', onChange: function (v) {
+            if (!v) return;
+            setTimeout(function () { hideNudge(); window.A1Rate.openOrder(o.id, pid, v); }, 280);
+        } });
+        // kichik yulduzlar — barmoq uchun kattaroq
+        var st = n.querySelector('.rv-stars'); if (st) { st.style.setProperty('--rv-sz', '28px'); st.style.setProperty('--rv-gap', '6px'); }
+        n.querySelector('.rvn-x').addEventListener('click', hideNudge);
+        requestAnimationFrame(function () { requestAnimationFrame(function () { n.classList.add('show'); }); });
+        hap('light');
+        setTimeout(function () { if ($('rv-nudge') === n) hideNudge(); }, 20000);
+    }
+    function checkPrompt() {
+        if (nudgeBusy || !window.__a1Booted || !uid() || document.hidden) return;
+        if (activeModalNow()) return;
+        if ($('rv-nudge')) return;
+        var pm = prompted(), now = Date.now();
+        var cand = deliveredOrders().filter(function (o) {
+            var t = orderTime(o);
+            return o && o.id && !pm[String(o.id)] && (!t || now - t < PROMPT_DAYS * 86400000);
+        }).sort(function (a, b) { return orderTime(b) - orderTime(a); })[0];
+        if (!cand) return;
+        var pids = orderProductIds(cand);
+        if (!pids.length) { markPrompted(String(cand.id)); return; }
+        nudgeBusy = true;
+        Promise.all(pids.map(function (p) { return fetchReviews(p); })).then(function (rs) {
+            nudgeBusy = false;
+            markPrompted(String(cand.id));
+            var k = -1; for (var i = 0; i < rs.length; i++) if (!(rs[i] && rs[i].mine)) { k = i; break; }
+            if (k < 0 || activeModalNow()) return;
+            showNudge(cand, pids[k]);
+        }).catch(function () { nudgeBusy = false; });
+    }
+
+    /* ---------------- ishga tushirish ---------------- */
+    function boot() {
+        wrapOrderDetail();
+        // eski (anti-spam) o'ramlari yangi oqimni chetlab o'tmasin
+        window.submitReview = function () { var pid = (typeof currentReviewProductId !== 'undefined') ? currentReviewProductId : null; if (pid) window.A1Rate.openProduct(pid); };
+    }
+    boot();
+    document.addEventListener('DOMContentLoaded', boot);
+    window.addEventListener('a1-ready', function () {
+        boot();
+        setTimeout(checkPrompt, 3500);
+        setInterval(checkPrompt, 8000);   // buyurtma ilova ochiq paytda "yetkazildi" bo'lsa ham
+    });
+})();
+</script>
+<!-- ================================================================
      ⚡ ADAPTIV TEZLIK v2 — CSS (skript: a1-perf-tier, head ichida)
      ================================================================ -->
 <style id="a1-perf-tier-css">
