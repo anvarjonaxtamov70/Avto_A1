@@ -7330,172 +7330,157 @@ html.lite .ad-row { animation: none !important; }
     <div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-shield"></use></svg>Kafolat va yetkazish</h2><div class="a1-hd-acts"><button type="button" class="a1-edit-btn" onclick="ShopInfo.openEditor()" aria-label="Tahrirlash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Tahrirlash</button><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div></div>
     <div id="tr-body"></div>
 </div>
-<div class="modal-standard" id="editModal" style="z-index: 3000; display: none; padding: 0;">
-    <div class="modal-header" style="padding: 20px 20px 15px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 0;">
-        <h2 style="color: #30d158; margin: 0; font-size: 22px;"><svg class="uic" aria-hidden="true"><use href="#i-edit"></use></svg>Tahrirlash</h2>
-        <button class="close-btn" aria-label="Yopish" onclick="closeEditGoBack()">×</button>
+<div class="modal-standard a4-sheet tf-sheet" id="editModal" style="z-index: 3000; display: none;">
+    <div class="modal-header">
+        <div class="a4-tt"><div class="a4-eb"><span class="a4-mono">A1</span>Katalog · Tahrirlash</div><h2>Tahrirlash</h2><p class="a4-sub" id="edit-tf-sub">O'zgartiring va saqlang</p></div>
+        <button class="close-btn" aria-label="Yopish" onclick="closeEditGoBack()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
 
     <input type="hidden" id="edit-id">
 
-    <div style="padding: 20px;">
-        <div style="margin-bottom:18px;">
-            <div style="font-size:11px; font-weight:800; color:#0a84ff; letter-spacing:1.5px; margin-bottom:10px;">👁 MIJOZGA QANDAY KO'RINADI</div>
-            <div id="edit-live-preview" class="live-preview-box"></div>
+    <div class="tf-body">
+
+        <!-- RASMLAR -->
+        <div class="tf-gh">Rasmlar <em>1–3 ta · birinchisi asosiy</em></div>
+        <div class="tf-card tf-photos-card">
+            <div class="tf-photos is-empty" id="edit-tf-photos">
+                <div id="edit-img-previews" class="tf-thumbs"></div>
+                <label class="tf-addtile">
+                    <span class="tf-add-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="4"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/></svg><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></i></span>
+                    <span class="tf-add-tx"><b>Rasm qo'shish</b><small>Galereya yoki kamera — avtomatik yuklanadi</small></span>
+                    <input type="file" id="edit-multi-file" accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp" multiple onchange="handleMultiImgUpload(event,'edit')">
+                </label>
+            </div>
+            <details class="tf-links">
+                <summary><span class="tf-ric" style="--c:#8e8e93"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span><span class="tf-rl">Havola orqali qo'shish</span><svg class="tf-chev" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+                <div class="tf-hr"></div>
+                <div class="tf-row"><span class="tf-lbl">1-rasm</span><input type="url" id="edit-img-url" class="tf-in" placeholder="https://…" oninput="updateImgPreviews('edit')"></div>
+                <div class="tf-hr"></div>
+                <div class="tf-row"><span class="tf-lbl">2-rasm</span><input type="url" id="edit-img-url2" class="tf-in" placeholder="ixtiyoriy" oninput="updateImgPreviews('edit')"></div>
+                <div class="tf-hr"></div>
+                <div class="tf-row"><span class="tf-lbl">3-rasm</span><input type="url" id="edit-img-url3" class="tf-in" placeholder="ixtiyoriy" oninput="updateImgPreviews('edit')"></div>
+            </details>
         </div>
-        <div class="admin-form-group">
-            <div style="font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 18px; letter-spacing: 1.5px;">📝 ASOSIY MA'LUMOTLAR</div>
-            
-            <div class="admin-input-wrap">
-                <i>🏷️</i>
-                <input type="text" id="edit-name" class="admin-input" placeholder="Tovar nomi (mas: Kalotka)" oninput="updateLivePreview('edit')" style="padding-right:50px;">
-                <button type="button" class="field-mic-btn" onclick="startVoice('edit-name')" title="Ovozdan yozish">🎤</button>
-            </div>
-            
-            <div class="admin-input-wrap">
-                <i>💰</i>
-                <input type="text" inputmode="numeric" id="edit-price" class="admin-input" placeholder="Narxi (so'mda, mas: 150 000)" oninput="formatPriceInput(this)">
-            </div>
 
-            <div class="admin-input-wrap">
-                <i>🔖</i>
-                <input type="text" id="edit-code" class="admin-input" placeholder="Artikul / OEM kod (ixtiyoriy)" oninput="updateLivePreview('edit')" style="padding-right:50px;">
-                <button type="button" class="field-scan-btn" onclick="scanBarcode('edit')" title="Shtrix-kod skaner">📷</button>
+        <!-- JONLI KO'RINISH -->
+        <div class="tf-gh">Mijoz shunday ko'radi</div>
+        <div id="edit-live-preview" class="tf-preview"></div>
+
+        <!-- ASOSIY -->
+        <div class="tf-gh">Asosiy</div>
+        <div class="tf-card">
+            <label class="tf-row"><span class="tf-lbl">Nomi</span><input type="text" id="edit-name" class="tf-in" placeholder="mas: Kalotka" autocomplete="off" oninput="updateLivePreview('edit')"><button type="button" class="tf-ibtn" onclick="startVoice('edit-name')" aria-label="Ovozdan yozish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 10.5v.5a7 7 0 0 0 14 0v-.5"/><path d="M12 18v3.5"/></svg></button></label>
+            <div class="tf-hr"></div>
+            <label class="tf-row"><span class="tf-lbl">Narxi</span><input type="text" inputmode="numeric" id="edit-price" class="tf-in tf-num" placeholder="0" autocomplete="off" oninput="formatPriceInput(this)"><span class="tf-suf">so'm</span></label>
+            <div class="tf-hr"></div>
+            <label class="tf-row"><span class="tf-lbl">Artikul</span><input type="text" id="edit-code" class="tf-in" placeholder="OEM kod (ixtiyoriy)" autocomplete="off" oninput="updateLivePreview('edit')"><button type="button" class="tf-ibtn" onclick="scanBarcode('edit')" aria-label="Shtrix-kod skaner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5V5a2 2 0 0 1 2-2h2.5M16.5 3H19a2 2 0 0 1 2 2v2.5M21 16.5V19a2 2 0 0 1-2 2h-2.5M7.5 21H5a2 2 0 0 1-2-2v-2.5"/><path d="M7 8v8M10 8v8M13.5 8v8M17 8v8"/></svg></button></label>
+        </div>
+
+        <!-- OMBOR -->
+        <div class="tf-gh">Ombor</div>
+        <div class="tf-card">
+            <div class="tf-row tf-row-seg"><span class="tf-lbl">Birlik</span>
+                <div class="tf-seg" data-for="edit-unit"><button type="button" data-v="dona">Dona</button><button type="button" data-v="komplekt">Komplekt</button></div>
+                <select id="edit-unit" class="tf-hidden-sel" tabindex="-1" aria-hidden="true"><option value="dona">1 dona</option><option value="komplekt">Nabor (Kompl)</option></select>
             </div>
-
-            <!-- 🔥 FLASH SALE (IXTIYORIY — shtrix-kod kabi, to'ldirilmasa ham tovar saqlanadi) -->
-            <div style="background:rgba(255,69,58,0.06); border:1px dashed rgba(255,69,58,0.35); border-radius:14px; padding:12px; margin-bottom:15px;">
-                <div style="font-size:11px; font-weight:800; color:#ff453a; letter-spacing:0.5px; margin-bottom:10px;">🔥 FLASH CHEGIRMA (ixtiyoriy)</div>
-                <div class="admin-input-wrap">
-                    <i>💸</i>
-                    <input type="text" inputmode="numeric" id="edit-flash-price" class="admin-input" placeholder="Flash narxi (so'mda, asl narxdan kam)" oninput="formatPriceInput(this)">
-                </div>
-                <div class="admin-input-wrap" style="margin-bottom:0;">
-                    <i>⏱️</i>
-                    <input type="number" inputmode="decimal" id="edit-flash-hours" class="admin-input" placeholder="Necha soat davom etadi (mas: 24)" step="0.5" min="0">
-                </div>
-                <div style="font-size:10px; color:var(--text-muted); margin-top:8px;">Bo'sh qoldirilsa — flash chegirma yo'q. To'ldirsangiz, mijozga countdown bilan ko'rinadi.</div>
+            <div class="tf-hr"></div>
+            <div class="tf-row tf-row-seg"><span class="tf-lbl">Turi</span>
+                <div class="tf-seg" data-for="edit-prod-type"><button type="button" data-v="oddiy">Oddiy</button><button type="button" data-v="razmerli">Razmerli</button></div>
+                <select id="edit-prod-type" class="tf-hidden-sel" tabindex="-1" aria-hidden="true" onchange="toggleEditProductTypeFields()"><option value="oddiy">Oddiy tovar</option><option value="razmerli">Razmerli</option></select>
             </div>
-
-
-            <div style="display: flex; gap: 12px; margin-bottom: 15px;">
-                <div class="admin-input-wrap" style="flex: 1; margin-bottom: 0;">
-                    <i>📦</i>
-                    <select id="edit-unit" class="admin-input" style="padding-left: 48px; color: var(--luxury-gold);">
-                        <option value="dona">1 dona</option>
-                        <option value="komplekt">Nabor (Kompl)</option>
-                    </select>
-                </div>
-                <div class="admin-input-wrap" style="flex: 1; margin-bottom: 0;">
-                    <i>⚙️</i>
-                    <select id="edit-prod-type" class="admin-input" style="padding-left: 48px; color: #007aff;" onchange="toggleEditProductTypeFields()">
-                        <option value="oddiy">Oddiy tovar</option>
-                        <option value="razmerli">Razmerli</option>
-                    </select>
+            <div id="edit-oddiy-fields">
+                <div class="tf-hr"></div>
+                <div class="tf-row"><span class="tf-lbl">Qoldiq</span>
+                    <div class="tf-stepper">
+                        <button type="button" onclick="tfStep('edit-stock',-1)" aria-label="Kamaytirish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+                        <input type="number" inputmode="numeric" pattern="[0-9]*" id="edit-stock" value="10" min="0" aria-label="Skladdagi qoldiq">
+                        <button type="button" onclick="tfStep('edit-stock',1)" aria-label="Ko'paytirish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                    </div>
                 </div>
             </div>
-
-            <div id="edit-oddiy-fields" class="admin-input-wrap" style="margin-bottom: 0;">
-                <i>📊</i>
-                <input type="number" inputmode="numeric" pattern="[0-9]*" id="edit-stock" class="admin-input" placeholder="Skladdagi qoldiq (dona)" value="10">
-            </div>
-
-            <div id="edit-razmerli-fields" style="display: none; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 16px; margin-top: 15px; border: 1px dashed var(--luxury-gold);">
-                <span class="luxury-input-label" style="color: var(--luxury-gold); margin-top: 0;">MARKANI TANLANG</span>
-                <select id="edit-prod-brand" class="admin-input" style="margin-bottom: 15px; padding-left: 15px;" onchange="updateEditBrandModels()">
-                    <option value="">-- Marka tanlang --</option>
-                    <option value="gaz">GAZ (Universal razmerlar)</option>
-                    <option value="daewoo">Daewoo</option>
-                    <option value="chevy">Chevrolet</option>
-                    <option value="uaz">UAZ</option>
-                </select>
-
+            <div id="edit-razmerli-fields" style="display:none;">
+                <div class="tf-hr"></div>
+                <label class="tf-row"><span class="tf-lbl">Marka</span>
+                    <select id="edit-prod-brand" class="tf-sel" onchange="updateEditBrandModels()">
+                        <option value="">Tanlang</option>
+                        <option value="gaz">GAZ (Universal)</option>
+                        <option value="daewoo">Daewoo</option>
+                        <option value="chevy">Chevrolet</option>
+                        <option value="uaz">UAZ</option>
+                    </select><svg class="tf-chev" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </label>
                 <div id="edit-brand-models-box" style="display:none;">
-                    <span class="luxury-input-label" style="margin-top: 0;">MASHINA MODELI</span>
-                    <select id="edit-prod-model" class="admin-input" style="margin-bottom: 15px; padding-left: 15px;"></select>
+                    <div class="tf-hr"></div>
+                    <label class="tf-row"><span class="tf-lbl">Model</span><select id="edit-prod-model" class="tf-sel"></select><svg class="tf-chev" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></label>
                 </div>
-
-                <span class="luxury-input-label" style="margin-top: 0;">RAZMERLAR VA QOLDIQ</span>
-                <div id="edit-sizes-container"></div>
-                <button type="button" onclick="addEditSizeField()" style="width:100%; padding:12px; background: rgba(212, 175, 55, 0.15); color: var(--luxury-gold); border: 1px dashed var(--luxury-gold); border-radius: 12px; cursor: pointer; font-weight: 800; margin-top: 10px; transition: 0.2s;">+ YANGI RAZMER</button>
+                <div class="tf-hr"></div>
+                <div class="tf-sizes-h"><span>Razmer</span><span>Soni</span></div>
+                <div id="edit-sizes-container" class="tf-sizes">
+                </div>
+                <button type="button" class="tf-addrow" onclick="addEditSizeField()"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></i>Razmer qo'shish</button>
             </div>
         </div>
 
-    <div class="admin-form-group" style="border-left-color: #a855f7;">
-    <div style="font-size: 11px; font-weight: 800; color: #a855f7; margin-bottom: 18px; letter-spacing: 1.5px;">📸 RASMLAR (1-3 TA)</div>
-    
-    <div class="admin-input-wrap">
-        <i>🔗</i>
-        <input type="text" id="edit-img-url" class="admin-input" placeholder="1-rasm linki" oninput="updateImgPreviews('edit')">
-    </div>
-    <div class="admin-input-wrap">
-        <i>🔗</i>
-        <input type="text" id="edit-img-url2" class="admin-input" placeholder="2-rasm linki (Ixtiyoriy)" oninput="updateImgPreviews('edit')">
-    </div>
-    <div class="admin-input-wrap">
-        <i>🔗</i>
-        <input type="text" id="edit-img-url3" class="admin-input" placeholder="3-rasm linki (Ixtiyoriy)" oninput="updateImgPreviews('edit')">
-    </div>
-    
-    <!-- Preview -->
-    <div id="edit-img-previews" style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;"></div>
-    
-    <!-- Qurilmadan yuklash -->
-    <div style="margin-top: 15px; position: relative; overflow: hidden; border: 2px dashed rgba(212, 175, 55, 0.4); border-radius: 16px; padding: 20px; text-align: center; cursor: pointer; background: rgba(212,175,55,0.03);">
-        <span style="font-size: 28px; display: block; margin-bottom: 6px;">📤</span>
-        <div style="color: var(--luxury-gold); font-weight: 700; font-size: 13px;">Qurilmadan yuklash</div>
-        <input type="file" accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp" multiple onchange="handleMultiImgUpload(event,'edit')" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10;">
-    </div>
-</div>
-
-        <div class="admin-form-group" style="border-left-color: #007aff;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <span style="font-size: 11px; font-weight: 800; color: #007aff; letter-spacing: 1.5px;">✨ AI SOTUVCHI MENEJER</span>
+        <!-- FLASH CHEGIRMA -->
+        <div class="tf-gh">Aksiya</div>
+        <div class="tf-card tf-flash" id="edit-tf-flash">
+            <label class="tf-row">
+                <span class="tf-ric" style="--c:#ff453a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22c4.4 0 7-2.9 7-6.8 0-3.9-2.6-6.4-4.4-8.7-.4 2-1.4 3.2-2.6 3.8C12 7 10.6 4.3 8.4 2.5 8.6 6 5 8.7 5 14.9 5 19 7.6 22 12 22z"/></svg></span>
+                <span class="tf-rl">Flash chegirma<small>Mijozga taymer bilan ko'rinadi</small></span>
+                <input type="checkbox" class="tf-switch" id="edit-tf-flash-sw" onchange="tfFlash('edit',this.checked)">
+            </label>
+            <div class="tf-flash-body">
+                <div class="tf-hr"></div>
+                <label class="tf-row"><span class="tf-lbl">Yangi narx</span><input type="text" inputmode="numeric" id="edit-flash-price" class="tf-in tf-num" placeholder="asl narxdan kam" autocomplete="off" oninput="formatPriceInput(this); updateLivePreview('edit')"><span class="tf-suf">so'm</span></label>
+                <div class="tf-hr"></div>
+                <label class="tf-row"><span class="tf-lbl">Muddat</span><input type="number" inputmode="decimal" id="edit-flash-hours" class="tf-in tf-num" placeholder="24" step="0.5" min="0" oninput="tfHoursSync('edit')"><span class="tf-suf">soat</span></label>
+                <div class="tf-pills" id="edit-tf-hours"><button type="button" class="tf-pill" data-h="6" onclick="tfHours('edit',6)">6 soat</button><button type="button" class="tf-pill" data-h="12" onclick="tfHours('edit',12)">12 soat</button><button type="button" class="tf-pill" data-h="24" onclick="tfHours('edit',24)">1 kun</button><button type="button" class="tf-pill" data-h="48" onclick="tfHours('edit',48)">2 kun</button><button type="button" class="tf-pill" data-h="72" onclick="tfHours('edit',72)">3 kun</button></div>
             </div>
-            
-            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px; font-weight: 600;">Ishlab chiqarilgan joy:</div>
-            <div style="display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap;" id="edit-origin-chips">
-                <span class="chip origin-chip selected" data-origin="Original" onclick="selectOrigin(this, 'edit')" style="background: rgba(212,175,55,0.15); color: var(--luxury-gold); border-color: var(--luxury-gold);">🌟 Original</span>
-                <span class="chip origin-chip" data-origin="Rossiya" onclick="selectOrigin(this, 'edit')">🇷🇺 Rossiya</span>
-                <span class="chip origin-chip" data-origin="Xitoy (Zavodskoy)" onclick="selectOrigin(this, 'edit')">🇨🇳 Xitoy</span>
+        </div>
+        <div class="tf-gf">O'chiq bo'lsa — chegirma yo'q. Muddat tugagach narx avtomatik asl holiga qaytadi.</div>
+
+        <!-- TAVSIF -->
+        <div class="tf-gh">Tavsif</div>
+        <div class="tf-card">
+            <div class="tf-row tf-row-seg"><span class="tf-lbl">Ishlab chiq.</span>
+                <div class="tf-seg" id="edit-origin-chips">
+                    <span class="chip origin-chip selected" data-origin="Original" onclick="selectOrigin(this, 'edit')">Original</span>
+                    <span class="chip origin-chip" data-origin="Rossiya" onclick="selectOrigin(this, 'edit')">Rossiya</span>
+                    <span class="chip origin-chip" data-origin="Xitoy (Zavodskoy)" onclick="selectOrigin(this, 'edit')">Xitoy</span>
+                </div>
             </div>
-
-            <button type="button" onclick="generateAiDescription('edit')" style="width: 100%; padding: 15px; border-radius: 14px; background: rgba(0, 122, 255, 0.1); border: 1px solid rgba(0, 122, 255, 0.3); color: #007aff; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; margin-bottom: 15px;">
-                <span style="font-size: 22px;">🤖</span> Chiroyli ta'rif yozdirish
-            </button>
-
-            <button type="button" onclick="startVoice('edit-desc')" style="width:100%; padding:12px; border-radius:14px; background:rgba(48,209,88,0.1); border:1px solid rgba(48,209,88,0.3); color:#30d158; font-weight:800; cursor:pointer; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:8px;">🎤 Ovoz bilan ayting</button>
-
-            <textarea id="edit-desc" class="admin-input" style="height: 100px; resize: none; padding: 15px; border-color: rgba(0, 122, 255, 0.3); background: rgba(0,0,0,0.5); font-size: 13px;" placeholder="AI yozgan matn shu yerda paydo bo'ladi (yoki o'zingiz yozing)..."></textarea>
-
-            <!-- 🔎 QIDIRUV SO'ZLARI — «add» formasidagi bilan bir xil -->
-            <label style="display:block; font-size:11px; font-weight:800; color:var(--text-muted); margin:14px 0 6px;">QIDIRUV SO'ZLARI (ixtiyoriy)</label>
-            <input type="text" id="edit-aliases" class="admin-input" placeholder="masalan: maslo, масло, moy, oil">
-            <div style="font-size:10.5px; color:var(--text-muted); margin-top:5px; line-height:1.5;">Mijoz shu so'zlar bilan ham topadi. Xato yozilgan nomni qidiruv o'zi topadi — bu yerga faqat <b>boshqa nomlarni</b> yozing.</div>
+            <div class="tf-hr"></div>
+            <textarea id="edit-desc" class="tf-ta" rows="4" placeholder="Tovar haqida qisqacha — yoki AI yozib bersin"></textarea>
+            <div class="tf-ai">
+                <button type="button" class="tf-chipbtn tf-ai-gen" onclick="generateAiDescription('edit')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg><span>AI bilan yozish</span></button>
+                <button type="button" class="tf-chipbtn tf-ai-mic" onclick="startVoice('edit-desc')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 10.5v.5a7 7 0 0 0 14 0v-.5"/><path d="M12 18v3.5"/></svg><span>Ovoz bilan</span></button>
+            </div>
         </div>
 
-        <div class="admin-form-group" style="border-left-color: #30d158; padding-bottom: 5px;">
-            <div style="font-size: 11px; font-weight: 800; color: #30d158; margin-bottom: 15px; letter-spacing: 1.5px;">🚘 KATEGORIYANI TANLANG</div>
-            
-            <div id="edit-model-chips"></div>
+        <div class="tf-gh">Qidiruv so'zlari</div>
+        <div class="tf-card">
+            <label class="tf-row"><input type="text" id="edit-aliases" class="tf-in tf-in-full" placeholder="maslo, масло, moy, oil" autocomplete="off"></label>
+        </div>
+        <div class="tf-gf">Mijoz shu so'zlar bilan ham topadi. Xato yozilgan nomni qidiruv o'zi topadi — faqat <b>boshqa nomlarni</b> yozing.</div>
+
+        <!-- KATEGORIYA -->
+        <div class="tf-gh">Kategoriya <em id="edit-tf-catn"></em></div>
+        <div class="tf-card tf-cats-card">
+            <div id="edit-model-chips" class="tf-cats"></div>
+        </div>
+        <div class="tf-gf">Tovar mos keladigan mashina modellarini belgilang — bir nechtasini tanlash mumkin.</div>
+
+        <div class="tf-gh">Amallar</div>
+        <div class="tf-card">
+            <button type="button" class="tf-row tf-act" onclick="cloneProductFromEdit()"><span class="tf-ric" style="--c:#0a84ff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.5" y="8.5" width="12" height="12" rx="3"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg></span><span class="tf-rl">Nusxa olib yangi qo'shish</span><svg class="tf-chev" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <div class="tf-hr tf-hr-ic"></div>
+            <button type="button" class="tf-row tf-act tf-danger" onclick="deleteProduct()"><span class="tf-ric" style="--c:#ff453a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12.5a2 2 0 0 0 2 1.5h7a2 2 0 0 0 2-1.5L18.5 7M9 7V4.5h6V7"/></svg></span><span class="tf-rl">Tovarni o'chirish</span></button>
         </div>
     </div>
 
-<div class="sticky-admin-footer" style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; gap: 10px;">
-            <button onclick="saveEditProduct(true)" style="flex: 1; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 16px; font-weight: 700; font-size: 14px; cursor: pointer; transition: 0.2s;">
-                ⏳ Qoralama
-            </button>
-            <button onclick="saveEditProduct(false)" style="flex: 1.5; background: linear-gradient(135deg, #F0D060 0%, #C9A84C 45%, #96720A 100%); color: #000; border: none; padding: 16px; border-radius: 16px; font-weight: 800; font-size: 14px; box-shadow: 0 5px 15px rgba(212,175,55,0.3); cursor: pointer; transition: 0.2s;">
-                ✅ Yangilash
-            </button>
-        </div>
-        <button onclick="cloneProductFromEdit()" style="width: 100%; background: rgba(10,132,255,0.08); color: #0a84ff; border: 1px dashed rgba(10,132,255,0.4); padding: 16px; border-radius: 16px; font-weight: 700; font-size: 14px; cursor: pointer; transition: 0.2s;">
-            📋 Nusxa olib yangi qo'shish
-        </button>
-        <button onclick="deleteProduct()" style="width: 100%; background: rgba(255, 69, 58, 0.05); color: #ff453a; border: 1px dashed rgba(255,69,58,0.4); padding: 16px; border-radius: 16px; font-weight: 700; font-size: 14px; cursor: pointer; transition: 0.2s;">
-            🗑 Tovarni o'chirish
-        </button>
+    <div class="tf-dock">
+        <button type="button" class="tf-btn tf-sec" onclick="saveEditProduct(true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span>Qoralama</span></button>
+        <button type="button" class="tf-btn tf-pri" onclick="saveEditProduct(false)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Saqlash</span></button>
     </div>
 </div>
 
@@ -7711,174 +7696,149 @@ html.lite .ad-row { animation: none !important; }
 </div>
 
 
-   <div class="modal-standard" id="addProductModal" style="z-index: 3000; display: none; padding: 0;">
-    <div class="modal-header" style="padding: 20px 20px 15px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 0;">
-        <h2 style="color: var(--luxury-gold); margin: 0; font-size: 22px;"><svg class="uic" aria-hidden="true"><use href="#i-plus"></use></svg>Yangi Tovar</h2>
-        <button class="close-btn" aria-label="Yopish" onclick="tryCloseAddProduct()">×</button>
+<div class="modal-standard a4-sheet tf-sheet" id="addProductModal" style="z-index: 3000; display: none;">
+    <div class="modal-header">
+        <div class="a4-tt"><div class="a4-eb"><span class="a4-mono">A1</span>Katalog · Yangi</div><h2>Yangi tovar</h2><p class="a4-sub">Rasm, narx va kategoriya</p></div>
+        <button class="close-btn" aria-label="Yopish" onclick="tryCloseAddProduct()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
 
-    <div style="padding: 20px;">
-        <!-- RASMLAR — eng tepada (admin avval rasmni yuklaydi, keyin ma'lumotlarni to'ldiradi) -->
-        <div class="admin-form-group">
-            <div class="apx-head">
-                <div class="apx-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></div>
-                <div class="apx-tx"><b>Rasmlar</b><span>Birinchi qadam · 1–3 ta</span></div>
-            </div>
+    <div class="tf-body">
 
-            <!-- Galereyadan yuklash — eng yuqorida -->
-            <div class="apx-upload" style="margin-bottom:14px;">
-                <div class="apx-up-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/></svg></div>
-                <div class="apx-up-t">Galereyadan rasm yuklash</div>
-                <div class="apx-up-s">Rasm tanlang — avtomatik link olinadi</div>
-                <input type="file" id="add-multi-file" accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp" multiple onchange="handleMultiImgUpload(event,'add')" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10;">
+        <!-- RASMLAR -->
+        <div class="tf-gh">Rasmlar <em>1–3 ta · birinchisi asosiy</em></div>
+        <div class="tf-card tf-photos-card">
+            <div class="tf-photos is-empty" id="add-tf-photos">
+                <div id="add-img-previews" class="tf-thumbs"></div>
+                <label class="tf-addtile">
+                    <span class="tf-add-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="4"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/></svg><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></i></span>
+                    <span class="tf-add-tx"><b>Rasm qo'shish</b><small>Galereya yoki kamera — avtomatik yuklanadi</small></span>
+                    <input type="file" id="add-multi-file" accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp" multiple onchange="handleMultiImgUpload(event,'add')">
+                </label>
             </div>
-
-            <div id="add-img-previews" style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;"></div>
-
-            <!-- Link orqali (ixtiyoriy) -->
-            <div class="admin-input-wrap">
-                <input type="text" id="add-img-url" class="admin-input" placeholder="Yoki rasm linki (ixtiyoriy)" oninput="updateImgPreviews('add')">
-            </div>
-            <div class="admin-input-wrap">
-                <input type="text" id="add-img-url2" class="admin-input" placeholder="2-rasm linki (ixtiyoriy)" oninput="updateImgPreviews('add')">
-            </div>
-            <div class="admin-input-wrap" style="margin-bottom:0;">
-                <input type="text" id="add-img-url3" class="admin-input" placeholder="3-rasm linki (ixtiyoriy)" oninput="updateImgPreviews('add')">
-            </div>
+            <details class="tf-links">
+                <summary><span class="tf-ric" style="--c:#8e8e93"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span><span class="tf-rl">Havola orqali qo'shish</span><svg class="tf-chev" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+                <div class="tf-hr"></div>
+                <div class="tf-row"><span class="tf-lbl">1-rasm</span><input type="url" id="add-img-url" class="tf-in" placeholder="https://…" oninput="updateImgPreviews('add')"></div>
+                <div class="tf-hr"></div>
+                <div class="tf-row"><span class="tf-lbl">2-rasm</span><input type="url" id="add-img-url2" class="tf-in" placeholder="ixtiyoriy" oninput="updateImgPreviews('add')"></div>
+                <div class="tf-hr"></div>
+                <div class="tf-row"><span class="tf-lbl">3-rasm</span><input type="url" id="add-img-url3" class="tf-in" placeholder="ixtiyoriy" oninput="updateImgPreviews('add')"></div>
+            </details>
         </div>
 
-        <div style="margin-bottom:16px;">
-            <div class="apx-sub" style="margin-bottom:9px;">Mijozga qanday ko'rinadi</div>
-            <div id="add-live-preview" class="live-preview-box"></div>
+        <!-- JONLI KO'RINISH -->
+        <div class="tf-gh">Mijoz shunday ko'radi</div>
+        <div id="add-live-preview" class="tf-preview"></div>
+
+        <!-- ASOSIY -->
+        <div class="tf-gh">Asosiy</div>
+        <div class="tf-card">
+            <label class="tf-row"><span class="tf-lbl">Nomi</span><input type="text" id="add-name" class="tf-in" placeholder="mas: Kalotka" autocomplete="off" oninput="updateLivePreview('add')"><button type="button" class="tf-ibtn" onclick="startVoice('add-name')" aria-label="Ovozdan yozish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 10.5v.5a7 7 0 0 0 14 0v-.5"/><path d="M12 18v3.5"/></svg></button></label>
+            <div class="tf-hr"></div>
+            <label class="tf-row"><span class="tf-lbl">Narxi</span><input type="text" inputmode="numeric" id="add-price" class="tf-in tf-num" placeholder="0" autocomplete="off" oninput="formatPriceInput(this)"><span class="tf-suf">so'm</span></label>
+            <div class="tf-hr"></div>
+            <label class="tf-row"><span class="tf-lbl">Artikul</span><input type="text" id="add-code" class="tf-in" placeholder="OEM kod (ixtiyoriy)" autocomplete="off" oninput="updateLivePreview('add')"><button type="button" class="tf-ibtn" onclick="scanBarcode('add')" aria-label="Shtrix-kod skaner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5V5a2 2 0 0 1 2-2h2.5M16.5 3H19a2 2 0 0 1 2 2v2.5M21 16.5V19a2 2 0 0 1-2 2h-2.5M7.5 21H5a2 2 0 0 1-2-2v-2.5"/><path d="M7 8v8M10 8v8M13.5 8v8M17 8v8"/></svg></button></label>
         </div>
-        <div class="admin-form-group">
-            <div class="apx-head">
-                <div class="apx-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h2"/><path d="M17 4h2a1 1 0 0 1 1 1v2"/><path d="M20 17v2a1 1 0 0 1-1 1h-2"/><path d="M7 20H5a1 1 0 0 1-1-1v-2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="9" x2="13" y2="9"/><line x1="8" y1="15" x2="14" y2="15"/></svg></div>
-                <div class="apx-tx"><b>Asosiy ma'lumotlar</b><span>Nomi · narxi · artikul</span></div>
+
+        <!-- OMBOR -->
+        <div class="tf-gh">Ombor</div>
+        <div class="tf-card">
+            <div class="tf-row tf-row-seg"><span class="tf-lbl">Birlik</span>
+                <div class="tf-seg" data-for="add-unit"><button type="button" data-v="dona">Dona</button><button type="button" data-v="komplekt">Komplekt</button></div>
+                <select id="add-unit" class="tf-hidden-sel" tabindex="-1" aria-hidden="true"><option value="dona">1 dona</option><option value="komplekt">Nabor (Kompl)</option></select>
             </div>
-            
-            <div class="admin-input-wrap">
-                <input type="text" id="add-name" class="admin-input" placeholder="Tovar nomi (mas: Kalotka)" oninput="updateLivePreview('add')" style="padding-right:50px;">
-                <button type="button" class="field-mic-btn" onclick="startVoice('add-name')" title="Ovozdan yozish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg></button>
+            <div class="tf-hr"></div>
+            <div class="tf-row tf-row-seg"><span class="tf-lbl">Turi</span>
+                <div class="tf-seg" data-for="admin-prod-type"><button type="button" data-v="oddiy">Oddiy</button><button type="button" data-v="razmerli">Razmerli</button></div>
+                <select id="admin-prod-type" class="tf-hidden-sel" tabindex="-1" aria-hidden="true" onchange="toggleProductTypeFields()"><option value="oddiy">Oddiy tovar</option><option value="razmerli">Razmerli</option></select>
             </div>
-            
-            <div class="admin-input-wrap">
-                <input type="text" inputmode="numeric" id="add-price" class="admin-input" placeholder="Narxi (so'mda, mas: 150 000)" oninput="formatPriceInput(this)">
-            </div>
-
-            <div class="admin-input-wrap">
-                <input type="text" id="add-code" class="admin-input" placeholder="Artikul / OEM kod (ixtiyoriy)" oninput="updateLivePreview('add')" style="padding-right:50px;">
-                <button type="button" class="field-scan-btn" onclick="scanBarcode('add')" title="Shtrix-kod skaner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg></button>
-            </div>
-
-            <!-- FLASH CHEGIRMA (ixtiyoriy) -->
-            <div class="apx-flash">
-                <div class="apx-sub" style="color:#ff6b61; margin-top:0; margin-bottom:12px;">Flash chegirma (ixtiyoriy)</div>
-                <div class="admin-input-wrap">
-                    <input type="text" inputmode="numeric" id="add-flash-price" class="admin-input" placeholder="Flash narxi (asl narxdan kam)" oninput="formatPriceInput(this)">
-                </div>
-                <div class="admin-input-wrap" style="margin-bottom:0;">
-                    <input type="number" inputmode="decimal" id="add-flash-hours" class="admin-input" placeholder="Necha soat davom etadi (mas: 24)" step="0.5" min="0">
-                </div>
-                <div style="font-size:11px; color:var(--text-muted); margin-top:10px; line-height:1.45;">Bo'sh qoldirilsa — flash chegirma yo'q. To'ldirsangiz, mijozga countdown bilan ko'rinadi.</div>
-            </div>
-
-
-            <div style="display: flex; gap: 12px; margin-bottom: 15px;">
-                <div class="admin-input-wrap" style="flex: 1; margin-bottom: 0;">
-                    <select id="add-unit" class="admin-input" style="color: var(--luxury-gold);">
-                        <option value="dona">1 dona</option>
-                        <option value="komplekt">Nabor (Kompl)</option>
-                    </select>
-                </div>
-                <div class="admin-input-wrap" style="flex: 1; margin-bottom: 0;">
-                    <select id="admin-prod-type" class="admin-input" style="color: #0a84ff;" onchange="toggleProductTypeFields()">
-                        <option value="oddiy">Oddiy tovar</option>
-                        <option value="razmerli">Razmerli</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="admin-oddiy-fields" class="admin-input-wrap" style="margin-bottom: 0;">
-                <input type="number" inputmode="numeric" pattern="[0-9]*" id="add-stock" class="admin-input" placeholder="Skladdagi qoldiq (dona)" value="10">
-            </div>
-
-            <div id="admin-razmerli-fields" style="display: none; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 16px; margin-top: 15px; border: 1px dashed var(--luxury-gold);">
-                <span class="luxury-input-label" style="color: var(--luxury-gold); margin-top: 0;">MARKANI TANLANG</span>
-                <select id="admin-prod-brand" class="admin-input" style="margin-bottom: 15px; padding-left: 15px;" onchange="updateBrandModels()">
-                    <option value="">-- Marka tanlang --</option>
-                    <option value="gaz">GAZ (Universal razmerlar)</option>
-                    <option value="daewoo">Daewoo</option>
-                    <option value="chevy">Chevrolet</option>
-                    <option value="uaz">UAZ</option>
-                </select>
-
-                <div id="admin-brand-models-box" style="display:none;">
-                    <span class="luxury-input-label" style="margin-top: 0;">MASHINA MODELI</span>
-                    <select id="admin-prod-model" class="admin-input" style="margin-bottom: 15px; padding-left: 15px;"></select>
-                </div>
-
-                <span class="luxury-input-label" style="margin-top: 0;">RAZMERLAR VA QOLDIQ</span>
-                <div id="admin-sizes-container">
-                    <div class="size-input-row" style="display:flex; gap:8px; margin-bottom:8px;">
-                        <input type="text" placeholder="Razmer (mas: 92.5)" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;" class="size-name">
-                        <input type="number" placeholder="Soni" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;" class="size-stock">
-                        <button type="button" onclick="this.parentElement.remove()" style="background:rgba(255,69,58,0.2); color:#ff453a; border:1px solid rgba(255,69,58,0.5); border-radius:12px; padding:0 15px; cursor:pointer; font-weight:bold; font-size:16px;">×</button>
+            <div id="admin-oddiy-fields">
+                <div class="tf-hr"></div>
+                <div class="tf-row"><span class="tf-lbl">Qoldiq</span>
+                    <div class="tf-stepper">
+                        <button type="button" onclick="tfStep('add-stock',-1)" aria-label="Kamaytirish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+                        <input type="number" inputmode="numeric" pattern="[0-9]*" id="add-stock" value="10" min="0" aria-label="Skladdagi qoldiq">
+                        <button type="button" onclick="tfStep('add-stock',1)" aria-label="Ko'paytirish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
                     </div>
                 </div>
-                <button type="button" onclick="addSizeField()" style="width:100%; padding:12px; background: rgba(212, 175, 55, 0.15); color: var(--luxury-gold); border: 1px dashed var(--luxury-gold); border-radius: 12px; cursor: pointer; font-weight: 800; margin-top: 10px; transition: 0.2s;">+ YANGI RAZMER</button>
+            </div>
+            <div id="admin-razmerli-fields" style="display:none;">
+                <div class="tf-hr"></div>
+                <label class="tf-row"><span class="tf-lbl">Marka</span>
+                    <select id="admin-prod-brand" class="tf-sel" onchange="updateBrandModels()">
+                        <option value="">Tanlang</option>
+                        <option value="gaz">GAZ (Universal)</option>
+                        <option value="daewoo">Daewoo</option>
+                        <option value="chevy">Chevrolet</option>
+                        <option value="uaz">UAZ</option>
+                    </select><svg class="tf-chev" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </label>
+                <div id="admin-brand-models-box" style="display:none;">
+                    <div class="tf-hr"></div>
+                    <label class="tf-row"><span class="tf-lbl">Model</span><select id="admin-prod-model" class="tf-sel"></select><svg class="tf-chev" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5 6.5 6.5 1.5 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></label>
+                </div>
+                <div class="tf-hr"></div>
+                <div class="tf-sizes-h"><span>Razmer</span><span>Soni</span></div>
+                <div id="admin-sizes-container" class="tf-sizes">
+                        <div class="size-input-row"><input type="text" placeholder="Razmer (mas: 92.5)" class="size-name"><input type="number" placeholder="Soni" class="size-stock"><button type="button" onclick="this.parentElement.remove()" aria-label="O'chirish">×</button></div>
+                </div>
+                <button type="button" class="tf-addrow" onclick="addSizeField()"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></i>Razmer qo'shish</button>
             </div>
         </div>
 
-        <div class="admin-form-group">
-            <div class="apx-head">
-                <div class="apx-ic" style="color:#0a84ff;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M19 14l.7 1.8L21.5 16.5 19.7 17.2 19 19l-.7-1.8L16.5 16.5 18.3 15.8 19 14z"/></svg></div>
-                <div class="apx-tx"><b>AI sotuvchi menejer</b><span>Tavsif avtomatik yoziladi</span></div>
+        <!-- FLASH CHEGIRMA -->
+        <div class="tf-gh">Aksiya</div>
+        <div class="tf-card tf-flash" id="add-tf-flash">
+            <label class="tf-row">
+                <span class="tf-ric" style="--c:#ff453a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22c4.4 0 7-2.9 7-6.8 0-3.9-2.6-6.4-4.4-8.7-.4 2-1.4 3.2-2.6 3.8C12 7 10.6 4.3 8.4 2.5 8.6 6 5 8.7 5 14.9 5 19 7.6 22 12 22z"/></svg></span>
+                <span class="tf-rl">Flash chegirma<small>Mijozga taymer bilan ko'rinadi</small></span>
+                <input type="checkbox" class="tf-switch" id="add-tf-flash-sw" onchange="tfFlash('add',this.checked)">
+            </label>
+            <div class="tf-flash-body">
+                <div class="tf-hr"></div>
+                <label class="tf-row"><span class="tf-lbl">Yangi narx</span><input type="text" inputmode="numeric" id="add-flash-price" class="tf-in tf-num" placeholder="asl narxdan kam" autocomplete="off" oninput="formatPriceInput(this); updateLivePreview('add')"><span class="tf-suf">so'm</span></label>
+                <div class="tf-hr"></div>
+                <label class="tf-row"><span class="tf-lbl">Muddat</span><input type="number" inputmode="decimal" id="add-flash-hours" class="tf-in tf-num" placeholder="24" step="0.5" min="0" oninput="tfHoursSync('add')"><span class="tf-suf">soat</span></label>
+                <div class="tf-pills" id="add-tf-hours"><button type="button" class="tf-pill" data-h="6" onclick="tfHours('add',6)">6 soat</button><button type="button" class="tf-pill" data-h="12" onclick="tfHours('add',12)">12 soat</button><button type="button" class="tf-pill" data-h="24" onclick="tfHours('add',24)">1 kun</button><button type="button" class="tf-pill" data-h="48" onclick="tfHours('add',48)">2 kun</button><button type="button" class="tf-pill" data-h="72" onclick="tfHours('add',72)">3 kun</button></div>
             </div>
-            
-            <div class="apx-sub" style="margin-top:0;">Ishlab chiqarilgan joy</div>
-            <div style="display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap;" id="add-origin-chips">
-                <span class="chip origin-chip selected" data-origin="Original" onclick="selectOrigin(this, 'add')" style="background: rgba(212,175,55,0.15); color: var(--luxury-gold); border-color: var(--luxury-gold);">Original</span>
-                <span class="chip origin-chip" data-origin="Rossiya" onclick="selectOrigin(this, 'add')">Rossiya</span>
-                <span class="chip origin-chip" data-origin="Xitoy (Zavodskoy)" onclick="selectOrigin(this, 'add')">Xitoy</span>
+        </div>
+        <div class="tf-gf">O'chiq bo'lsa — chegirma yo'q. Muddat tugagach narx avtomatik asl holiga qaytadi.</div>
+
+        <!-- TAVSIF -->
+        <div class="tf-gh">Tavsif</div>
+        <div class="tf-card">
+            <div class="tf-row tf-row-seg"><span class="tf-lbl">Ishlab chiq.</span>
+                <div class="tf-seg" id="add-origin-chips">
+                    <span class="chip origin-chip selected" data-origin="Original" onclick="selectOrigin(this, 'add')">Original</span>
+                    <span class="chip origin-chip" data-origin="Rossiya" onclick="selectOrigin(this, 'add')">Rossiya</span>
+                    <span class="chip origin-chip" data-origin="Xitoy (Zavodskoy)" onclick="selectOrigin(this, 'add')">Xitoy</span>
+                </div>
             </div>
-
-            <button type="button" class="apx-btn apx-btn-ai" onclick="generateAiDescription('add')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/></svg>
-                Chiroyli ta'rif yozdirish
-            </button>
-
-            <button type="button" class="apx-btn apx-btn-voice" onclick="startVoice('add-desc')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                Ovoz bilan ayting
-            </button>
-
-            <textarea id="add-desc" class="admin-input" style="height: 100px; resize: none; font-size: 13.5px;" placeholder="AI yozgan matn shu yerda paydo bo'ladi (yoki o'zingiz yozing)..."></textarea>
-
-            <!-- 🔎 QIDIRUV SO'ZLARI — mijoz butunlay BOSHQA so'z bilan qidirsa.
-                 Xato yozilgan nomni qidiruv o'zi topadi (harf masofasi), lekin
-                 «масло» va «moy» kabi boshqa-boshqa so'zlarni algoritm bila
-                 olmaydi — ularni shu yerga yozib qo'yish kerak. -->
-            <label style="display:block; font-size:11px; font-weight:800; color:var(--text-muted); margin:14px 0 6px;">QIDIRUV SO'ZLARI (ixtiyoriy)</label>
-            <input type="text" id="add-aliases" class="admin-input" placeholder="masalan: maslo, масло, moy, oil">
-            <div style="font-size:10.5px; color:var(--text-muted); margin-top:5px; line-height:1.5;">Mijoz shu so'zlar bilan ham topadi. Xato yozilgan nomni qidiruv o'zi topadi — bu yerga faqat <b>boshqa nomlarni</b> yozing.</div>
+            <div class="tf-hr"></div>
+            <textarea id="add-desc" class="tf-ta" rows="4" placeholder="Tovar haqida qisqacha — yoki AI yozib bersin"></textarea>
+            <div class="tf-ai">
+                <button type="button" class="tf-chipbtn tf-ai-gen" onclick="generateAiDescription('add')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg><span>AI bilan yozish</span></button>
+                <button type="button" class="tf-chipbtn tf-ai-mic" onclick="startVoice('add-desc')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 10.5v.5a7 7 0 0 0 14 0v-.5"/><path d="M12 18v3.5"/></svg><span>Ovoz bilan</span></button>
+            </div>
         </div>
 
-        <div class="admin-form-group" style="padding-bottom: 8px;">
-            <div class="apx-head">
-                <div class="apx-ic" style="color:#30d158;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"/><path d="M5 11h14a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z"/><circle cx="7.5" cy="14" r="1"/><circle cx="16.5" cy="14" r="1"/></svg></div>
-                <div class="apx-tx"><b>Kategoriyani tanlang</b><span>Mos mashina modellari</span></div>
-            </div>
-            
-            <div id="add-model-chips"></div>
+        <div class="tf-gh">Qidiruv so'zlari</div>
+        <div class="tf-card">
+            <label class="tf-row"><input type="text" id="add-aliases" class="tf-in tf-in-full" placeholder="maslo, масло, moy, oil" autocomplete="off"></label>
         </div>
+        <div class="tf-gf">Mijoz shu so'zlar bilan ham topadi. Xato yozilgan nomni qidiruv o'zi topadi — faqat <b>boshqa nomlarni</b> yozing.</div>
+
+        <!-- KATEGORIYA -->
+        <div class="tf-gh">Kategoriya <em id="add-tf-catn"></em></div>
+        <div class="tf-card tf-cats-card">
+            <div id="add-model-chips" class="tf-cats"></div>
+        </div>
+        <div class="tf-gf">Tovar mos keladigan mashina modellarini belgilang — bir nechtasini tanlash mumkin.</div>
+
     </div>
 
-    <div class="sticky-admin-footer">
-        <button class="btn-checkout" onclick="saveNewProduct()" style="box-shadow: 0 10px 30px rgba(212,175,55,0.4); border-radius: 20px; font-size: 16px; padding: 20px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-            Saqlash
-        </button>
+    <div class="tf-dock">
+        <button type="button" class="tf-btn tf-pri" onclick="saveNewProduct()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Saqlash</span></button>
     </div>
 </div>
 
@@ -41480,6 +41440,522 @@ html[data-perf="low"] #pfx-app .p2-tile[onclick^="A1Perf"] .p2-tile-lbl::after {
 html[data-perf-pref="low"] #pfx-app .p2-tile[onclick^="A1Perf"] .p2-tile-lbl::after { content: " \00B7  Yengil"; }
 html[data-perf-pref="high"] #pfx-app .p2-tile[onclick^="A1Perf"] .p2-tile-lbl::after { content: " \00B7  To\2018liq"; }
 </style>
+<style id="a1-ios26-product">
+/* ═══════════════════════════════════════════════════════════════════
+   iOS 26 · Avto A1 — Tovar qo'shish / Tahrirlash
+   «Inset grouped» ro'yxatlar, segmentlar, kalit, stepper, rasm plitkalari
+   va oltin «Saqlash» kapsulasi. Ranglar a3/a4 qatlam tokenlaridan olinadi.
+   ═══════════════════════════════════════════════════════════════════ */
+.tf-sheet { --tf-r: 16px; --tf-in: 16px; }
+html body .modal-standard.tf-sheet, html[data-theme] body .modal-standard.tf-sheet { overscroll-behavior: contain; scroll-behavior: smooth; }
+html body .tf-sheet > .modal-header, html[data-theme] body .tf-sheet > .modal-header { margin-bottom: 6px !important; }
+html body .tf-sheet > .modal-header .a4-tt h2 { font-size: 32px !important; }
+.tf-sheet .a4-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.tf-body { padding: 0 0 6px; font-family: var(--a3-font); color: var(--a3-tx); }
+
+/* Guruh sarlavhasi / izoh */
+.tf-gh { display: flex; align-items: baseline; gap: 8px; margin: 24px 16px 7px; font: 400 13px/1.2 var(--a3-font); letter-spacing: -.05px; text-transform: uppercase; color: var(--a3-tx2); }
+.tf-gh:first-child { margin-top: 10px; }
+.tf-gh em { margin-left: auto; font-style: normal; text-transform: none; letter-spacing: 0; color: var(--a3-tx3); }
+.tf-gh em[id] { color: var(--a3-gold); font-weight: 600; }
+.tf-gf { margin: 7px 16px 0; font: 400 13px/1.38 var(--a3-font); color: var(--a3-tx2); }
+.tf-gf b { color: var(--a3-tx); font-weight: 600; }
+
+/* Karta + qatorlar */
+.tf-card { position: relative; border-radius: var(--tf-r); background: var(--a3-card); overflow: hidden; animation: a3Rise .45s var(--a3-ease) both; }
+html[data-theme="light"] .tf-card, html[data-theme="light"] .tf-preview > * { box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.tf-hr { height: .5px; margin-left: 16px; background: var(--a4-hair); }
+.tf-hr-ic { margin-left: 58px; }
+.tf-row {
+    display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 16px; box-sizing: border-box; position: relative;
+    font: 400 17px/1.2 var(--a3-font); letter-spacing: -.35px; color: var(--a3-tx); cursor: text; -webkit-tap-highlight-color: transparent;
+}
+.tf-lbl { flex: 0 0 86px; min-width: 0; font: 400 16.5px/1.2 var(--a3-font); letter-spacing: -.3px; color: var(--a3-tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-rl { flex: 1; min-width: 0; font: 400 17px/1.2 var(--a3-font); letter-spacing: -.35px; color: var(--a3-tx); }
+.tf-rl small { display: block; margin-top: 2px; font: 400 13px/1.25 var(--a3-font); letter-spacing: -.05px; color: var(--a3-tx2); }
+.tf-ric { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--c, #8e8e93); color: #fff; }
+.tf-ric svg { width: 17px; height: 17px; }
+.tf-suf { flex: 0 0 auto; font: 400 16px/1 var(--a3-font); color: var(--a3-tx2); }
+.tf-chev { flex: 0 0 8px; width: 8px; height: 13px; color: var(--a3-tx3); transition: transform .3s var(--a3-ease); }
+
+/* Matn maydonlari */
+html body .tf-sheet .tf-in, html[data-theme] body .tf-sheet .tf-in {
+    flex: 1 1 auto; width: 100% !important; min-width: 0; height: 48px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+    background: transparent !important; box-shadow: none !important; outline: 0 !important; transform: none !important;
+    color: var(--a3-tx) !important; -webkit-text-fill-color: var(--a3-tx) !important; caret-color: var(--a3-gold);
+    font: 400 17px/1.2 var(--a3-font) !important; letter-spacing: -.35px !important; text-align: left !important; -webkit-appearance: none; appearance: none;
+}
+html body .tf-sheet .tf-in::placeholder, html body .tf-sheet .tf-ta::placeholder { color: var(--a3-tx3) !important; -webkit-text-fill-color: var(--a3-tx3) !important; opacity: 1; font-weight: 400; }
+html body .tf-sheet .tf-num { font-variant-numeric: tabular-nums; font-weight: 500 !important; }
+html body .tf-sheet .tf-in-full { padding: 0 !important; }
+.tf-sheet input[type="number"]::-webkit-outer-spin-button, .tf-sheet input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.tf-sheet input[type="number"] { -moz-appearance: textfield; }
+.tf-row:focus-within .tf-lbl { color: var(--a3-gold); }
+
+.tf-ibtn {
+    flex: 0 0 34px; width: 34px; height: 34px; margin-right: -4px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+    background: var(--a3-fill); color: var(--a3-gold); -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a3-spring), background-color .2s;
+}
+.tf-ibtn svg { width: 17px; height: 17px; }
+.tf-ibtn:active { transform: scale(.86); background: var(--a3-goldbg); }
+
+/* Segment boshqaruvi */
+.tf-hidden-sel { display: none !important; }
+.tf-row-seg { min-height: 52px; cursor: default; }
+html body .tf-sheet .tf-seg, html[data-theme] body .tf-sheet .tf-seg {
+    flex: 1 1 auto; min-width: 0; display: flex !important; flex-wrap: nowrap !important; gap: 0 !important; margin: 0 !important; padding: 2px !important;
+    border-radius: 9px; background: var(--a3-fill); position: relative;
+}
+html body .tf-sheet .tf-seg > button, html body .tf-sheet .tf-seg > .chip, html[data-theme] body .tf-sheet .tf-seg > .chip {
+    flex: 1 1 0; min-width: 0; height: 30px !important; margin: 0 !important; padding: 0 6px !important; border: 0 !important; border-radius: 7px !important; display: grid !important; place-items: center;
+    background: transparent !important; box-shadow: none !important; color: var(--a3-tx) !important; font: 500 14px/1 var(--a3-font) !important; letter-spacing: -.15px !important;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; -webkit-tap-highlight-color: transparent; transform: none !important; animation: none !important;
+    transition: background-color .25s var(--a3-ease), box-shadow .25s, color .2s !important;
+}
+html body .tf-sheet .tf-seg > button.on, html body .tf-sheet .tf-seg > .chip.selected, html[data-theme] body .tf-sheet .tf-seg > .chip.selected {
+    background: var(--a4-thumb) !important; font-weight: 600 !important; box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04) !important;
+}
+html:not([data-theme="light"]) body .tf-sheet .tf-seg > button.on, html:not([data-theme="light"]) body .tf-sheet .tf-seg > .chip.selected { background: #636366 !important; }
+.tf-sheet .tf-seg > *:active { opacity: .6; }
+
+/* Stepper */
+.tf-stepper { margin-left: auto; display: flex; align-items: center; height: 34px; border-radius: 9px; background: var(--a3-fill); overflow: hidden; }
+.tf-stepper button { width: 44px; height: 34px; padding: 0; border: 0; background: transparent; color: var(--a3-tx); display: grid; place-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tf-stepper button svg { width: 15px; height: 15px; }
+.tf-stepper button:active { background: var(--a3-fill); }
+html body .tf-sheet .tf-stepper input, html[data-theme] body .tf-sheet .tf-stepper input {
+    width: 54px !important; height: 34px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; outline: 0;
+    border-left: .5px solid var(--a4-hair) !important; border-right: .5px solid var(--a4-hair) !important;
+    background: transparent !important; color: var(--a3-tx) !important; -webkit-text-fill-color: var(--a3-tx) !important; font: 600 16px/1 var(--a3-font) !important;
+    text-align: center !important; font-variant-numeric: tabular-nums;
+}
+
+/* Tanlash (select) qatorlari */
+html body .tf-sheet .tf-sel, html[data-theme] body .tf-sheet .tf-sel {
+    flex: 1; min-width: 0; height: 48px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; outline: 0;
+    color: var(--a3-tx2) !important; -webkit-text-fill-color: var(--a3-tx2) !important; font: 400 17px/1.2 var(--a3-font) !important; letter-spacing: -.35px;
+    -webkit-appearance: none; appearance: none; text-align: right; text-align-last: right; direction: rtl; cursor: pointer;
+}
+.tf-sel option { direction: ltr; color: #000; }
+label.tf-row:has(.tf-sel) { cursor: pointer; }
+
+/* Razmerlar */
+.tf-sizes-h { display: flex; gap: 10px; padding: 12px 52px 4px 16px; font: 400 12.5px/1 var(--a3-font); text-transform: uppercase; letter-spacing: .1px; color: var(--a3-tx2); }
+.tf-sizes-h span { flex: 1; }
+.tf-sizes { padding: 4px 0 2px; }
+html body .tf-sheet .tf-sizes .size-input-row, html[data-theme] body .tf-sheet .tf-sizes .size-input-row {
+    display: flex !important; align-items: center; gap: 10px !important; margin: 0 !important; padding: 5px 16px !important; animation: a3Rise .3s var(--a3-ease) both;
+}
+html body .tf-sheet .tf-sizes .size-input-row input, html[data-theme] body .tf-sheet .tf-sizes .size-input-row input {
+    flex: 1 1 0 !important; min-width: 0; height: 40px !important; margin: 0 !important; padding: 0 12px !important; border: 0 !important; border-radius: 10px !important; box-shadow: none !important; outline: 0;
+    background: var(--a3-fill) !important; color: var(--a3-tx) !important; -webkit-text-fill-color: var(--a3-tx) !important; font: 500 16px/1 var(--a3-font) !important; font-variant-numeric: tabular-nums;
+}
+html body .tf-sheet .tf-sizes .size-input-row input:focus { box-shadow: inset 0 0 0 1.5px rgba(201,168,76,.6) !important; }
+html body .tf-sheet .tf-sizes .size-input-row input::placeholder { color: var(--a3-tx3) !important; -webkit-text-fill-color: var(--a3-tx3) !important; }
+html body .tf-sheet .tf-sizes .size-input-row > button, html[data-theme] body .tf-sheet .tf-sizes .size-input-row > button {
+    flex: 0 0 26px; width: 26px !important; height: 26px !important; min-width: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important;
+    background: var(--a4-red) !important; color: transparent !important; font-size: 0 !important; box-shadow: none !important; position: relative; cursor: pointer; transition: transform .3s var(--a3-spring) !important;
+}
+.tf-sheet .tf-sizes .size-input-row > button::before { content: ""; position: absolute; left: 7px; right: 7px; top: 50%; height: 2.4px; margin-top: -1.2px; border-radius: 2px; background: #fff; }
+.tf-sheet .tf-sizes .size-input-row > button:active { transform: scale(.82); }
+.tf-addrow {
+    width: 100%; min-height: 50px; margin: 0; padding: 0 16px; border: 0; background: transparent; display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
+    color: var(--a3-gold); font: 400 17px/1 var(--a3-font); letter-spacing: -.35px; -webkit-tap-highlight-color: transparent;
+}
+.tf-addrow:active { background: var(--a3-fill); }
+.tf-addrow i { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--a4-green); color: #fff; }
+.tf-addrow i svg { width: 14px; height: 14px; }
+
+/* iOS kaliti */
+.tf-switch {
+    -webkit-appearance: none; appearance: none; flex: 0 0 51px; width: 51px; height: 31px; margin: 0; border-radius: 16px; position: relative; cursor: pointer; outline: 0;
+    background: var(--a3-fill); transition: background-color .3s var(--a3-ease); -webkit-tap-highlight-color: transparent;
+}
+.tf-switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff;
+    box-shadow: 0 3px 8px rgba(0,0,0,.15), 0 1px 1px rgba(0,0,0,.16); transition: transform .35s var(--a3-spring);
+}
+.tf-switch:checked { background: var(--tf-sw, var(--a4-green)); }
+.tf-switch:checked::after { transform: translateX(20px); }
+.tf-switch:active::after { width: 31px; }
+.tf-switch:checked:active::after { transform: translateX(16px); }
+.tf-flash { --tf-sw: linear-gradient(135deg, #ff7a45, #ff453a); }
+.tf-flash > label.tf-row { min-height: 60px; cursor: pointer; }
+.tf-flash-body { max-height: 0; overflow: hidden; opacity: 0; transition: max-height .45s var(--a3-ease), opacity .3s; }
+.tf-flash.on .tf-flash-body { max-height: 260px; opacity: 1; }
+.tf-pills { display: flex; gap: 8px; padding: 2px 16px 14px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.tf-pills::-webkit-scrollbar { display: none; }
+.tf-pill {
+    flex: 0 0 auto; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; cursor: pointer; background: var(--a3-fill); color: var(--a3-tx);
+    font: 500 14px/1 var(--a3-font); letter-spacing: -.15px; -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a3-spring), background-color .2s, color .2s;
+}
+.tf-pill:active { transform: scale(.92); }
+.tf-pill.on { background: rgba(255,69,58,.16); color: var(--a4-red); font-weight: 600; box-shadow: inset 0 0 0 1px rgba(255,69,58,.35); }
+
+/* Tavsif */
+html body .tf-sheet .tf-ta, html[data-theme] body .tf-sheet .tf-ta {
+    display: block; width: 100% !important; min-height: 112px; box-sizing: border-box; margin: 0 !important; padding: 13px 16px 8px !important; border: 0 !important; border-radius: 0 !important;
+    background: transparent !important; box-shadow: none !important; outline: 0; resize: none; color: var(--a3-tx) !important; -webkit-text-fill-color: var(--a3-tx) !important;
+    caret-color: var(--a3-gold); font: 400 16px/1.45 var(--a3-font) !important; letter-spacing: -.25px;
+}
+.tf-ai { display: flex; gap: 8px; padding: 4px 12px 12px; }
+.tf-chipbtn {
+    flex: 1 1 0; min-width: 0; height: 38px; padding: 0 12px; border: 0; border-radius: 19px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;
+    background: var(--a3-fill); color: var(--a3-tx); font: 600 14.5px/1 var(--a3-font); letter-spacing: -.2px; -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a3-spring), opacity .2s;
+}
+.tf-chipbtn svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.tf-chipbtn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-chipbtn:active { transform: scale(.95); opacity: .8; }
+.tf-ai-gen { flex-grow: 1.35; background: var(--a3-goldbg); color: var(--a3-gold); box-shadow: inset 0 0 0 1px rgba(201,168,76,.3); }
+
+/* Rasmlar */
+.tf-photos { display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 16px; }
+.tf-thumbs { display: contents; }
+.tf-thumb, .tf-photos .img-thumb-wrap, .tf-photos .up-prog {
+    position: relative; flex: 0 0 auto; width: 92px !important; height: 92px !important; margin: 0 !important; border-radius: 16px !important; animation: a3Rise .35s var(--a3-ease) both;
+}
+.tf-thumb-img { display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: #fff; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a3-spring); }
+.tf-thumb-img:active { transform: scale(.94); }
+.tf-thumb-img img, .tf-photos .img-thumb-wrap img { display: block; width: 100% !important; height: 100% !important; object-fit: cover; border: 0 !important; border-radius: 16px !important; }
+.tf-thumb.is-main .tf-thumb-img { box-shadow: 0 0 0 2px var(--a3-card), 0 0 0 4px var(--a3-gold2); cursor: default; }
+.tf-thumb.is-bad .tf-thumb-img { box-shadow: 0 0 0 2px var(--a3-card), 0 0 0 4px var(--a4-red); }
+.tf-badge {
+    position: absolute; left: 6px; bottom: 6px; height: 20px; padding: 0 7px 0 5px; border-radius: 10px; display: inline-flex; align-items: center; gap: 3px; pointer-events: none;
+    background: var(--a3-grad); color: var(--a3-ink); font: 700 11px/1 var(--a3-font); letter-spacing: -.1px; box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+.tf-badge svg { width: 11px; height: 11px; }
+.tf-badge-n { padding: 0; width: 20px; justify-content: center; background: rgba(0,0,0,.55); color: #fff; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.tf-del {
+    position: absolute; top: -7px; right: -7px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; z-index: 2;
+    background: #3a3a3c; color: #fff; box-shadow: 0 0 0 2.5px var(--a3-card), 0 2px 6px rgba(0,0,0,.3); transition: transform .3s var(--a3-spring);
+}
+html[data-theme="light"] .tf-del { background: #8e8e93; }
+.tf-del svg { width: 12px; height: 12px; }
+.tf-del:active { transform: scale(.82); background: var(--a4-red); }
+.tf-photos .img-thumb-wrap .img-ctrl, .tf-photos .img-thumb-wrap .img-move-row { display: none !important; }
+html body .tf-sheet .tf-photos .up-prog { display: grid !important; place-items: center; overflow: hidden; background: var(--a3-fill) !important; border: 0 !important; }
+.tf-photos .up-prog .up-pct { position: relative; z-index: 1; font: 700 15px/1 var(--a3-font); color: var(--a3-tx); font-variant-numeric: tabular-nums; }
+.tf-photos .up-prog .up-bar { position: absolute; left: 0; bottom: 0; height: 4px !important; background: var(--a3-grad) !important; transition: width .2s; }
+
+.tf-addtile {
+    position: relative; flex: 0 0 92px; width: 92px; height: 92px; box-sizing: border-box; border-radius: 16px; display: grid; place-items: center; cursor: pointer; overflow: hidden;
+    background: var(--a3-goldbg); box-shadow: inset 0 0 0 1.5px rgba(201,168,76,.4); color: var(--a3-gold); -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a3-spring), background-color .2s;
+}
+.tf-addtile:active { transform: scale(.95); }
+.tf-addtile input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 3; font-size: 0; }
+.tf-add-ic { position: relative; width: 34px; height: 34px; display: grid; place-items: center; }
+.tf-add-ic > svg { width: 30px; height: 30px; }
+.tf-add-ic i { position: absolute; right: -6px; bottom: -5px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--a3-grad); color: var(--a3-ink); box-shadow: 0 0 0 2px var(--a3-card); }
+.tf-add-ic i svg { width: 11px; height: 11px; }
+.tf-add-tx { display: none; }
+.tf-photos.is-full .tf-addtile { display: none; }
+.tf-photos.is-empty { padding: 12px; }
+.tf-photos.is-empty .tf-addtile {
+    flex: 1 1 100%; width: auto; height: auto; min-height: 92px; padding: 16px; display: flex; align-items: center; justify-content: flex-start; gap: 16px;
+    background: linear-gradient(135deg, rgba(246,220,126,.10), rgba(160,124,28,.06)); box-shadow: inset 0 0 0 1.5px rgba(201,168,76,.35);
+}
+.tf-photos.is-empty .tf-add-ic { flex: 0 0 56px; width: 56px; height: 56px; border-radius: 16px; background: var(--a3-grad); color: var(--a3-ink); box-shadow: 0 6px 16px rgba(160,124,28,.32), inset 0 1px 0 rgba(255,255,255,.4); }
+.tf-photos.is-empty .tf-add-ic > svg { width: 27px; height: 27px; }
+.tf-photos.is-empty .tf-add-ic i { right: -5px; bottom: -5px; width: 20px; height: 20px; background: var(--a3-card); color: var(--a3-gold); box-shadow: 0 0 0 2px var(--a3-card), inset 0 0 0 1.5px var(--a3-gold2); }
+.tf-photos.is-empty .tf-add-tx { display: block; min-width: 0; text-align: left; }
+.tf-add-tx b { display: block; font: 600 17px/1.2 var(--a3-font); letter-spacing: -.35px; color: var(--a3-tx); }
+.tf-add-tx small { display: block; margin-top: 3px; font: 400 13.5px/1.3 var(--a3-font); color: var(--a3-tx2); }
+
+.tf-links { border-top: .5px solid var(--a4-hair); }
+.tf-links > summary { list-style: none; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tf-links > summary::-webkit-details-marker { display: none; }
+.tf-links > summary:active { background: var(--a3-fill); }
+.tf-links > summary .tf-rl { font-size: 16px; color: var(--a3-tx2); }
+.tf-links[open] > summary .tf-chev { transform: rotate(90deg); }
+.tf-links .tf-row .tf-lbl { flex-basis: 64px; color: var(--a3-tx2); }
+
+/* Jonli ko'rinish */
+.tf-preview { animation: a3Rise .45s var(--a3-ease) both; }
+.tf-pv { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: var(--tf-r); background: var(--a3-card); position: relative; overflow: hidden; }
+.tf-pv::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(201,168,76,.18); }
+.tf-pv-img { position: relative; flex: 0 0 78px; width: 78px; height: 78px; border-radius: 14px; overflow: hidden; background: #fff; }
+.tf-pv-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tf-pv-pct { position: absolute; left: 5px; top: 5px; height: 18px; padding: 0 6px; border-radius: 9px; background: var(--a4-red); color: #fff; font: 700 11px/18px var(--a3-font); font-variant-numeric: tabular-nums; }
+.tf-pv-tx { flex: 1; min-width: 0; }
+.tf-pv-tx > b { display: block; font: 600 16.5px/1.25 var(--a3-font); letter-spacing: -.3px; color: var(--a3-tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-pv-tx > b.dim { color: var(--a3-tx3); }
+.tf-pv-code { display: inline-block; margin-top: 4px; padding: 2px 7px; border-radius: 6px; background: var(--a3-fill); font: 500 12px/1.3 ui-monospace, "SF Mono", Menlo, monospace; color: var(--a3-tx2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
+.tf-pv-pr { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.tf-pv-pr strong { font: 700 18px/1 var(--a3-display); letter-spacing: -.4px; color: var(--a3-gold); }
+.tf-pv-pr strong.hot { color: var(--a4-red); }
+.tf-pv-pr s { font: 400 14px/1 var(--a3-font); color: var(--a3-tx3); }
+.tf-pv-timer, .tf-pv-warn { display: flex; align-items: center; gap: 5px; margin-top: 6px; font: 500 12.5px/1.25 var(--a3-font); color: var(--a4-red); }
+.tf-pv-warn { color: #ff9f0a; }
+.tf-pv-timer svg, .tf-pv-warn svg { width: 13px; height: 13px; flex: 0 0 auto; }
+.tf-pv-empty { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: var(--tf-r); background: var(--a3-card); font: 400 14px/1.4 var(--a3-font); color: var(--a3-tx2); }
+.tf-pv-empty span { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--a3-fill); color: var(--a3-tx2); }
+.tf-pv-empty svg { width: 19px; height: 19px; }
+
+/* Kategoriya */
+.tf-cats { padding: 2px 16px 14px; }
+html body .tf-sheet .tf-cats .apx-sub, html[data-theme] body .tf-sheet .tf-cats .apx-sub {
+    margin: 14px 0 9px !important; padding: 0 !important; font: 600 13px/1.2 var(--a3-font) !important; letter-spacing: -.05px !important; text-transform: none; color: var(--a3-tx2) !important;
+}
+html body .tf-sheet .tf-cats > div, html[data-theme] body .tf-sheet .tf-cats > div { gap: 8px !important; padding-bottom: 4px !important; border: 0 !important; }
+html body .tf-sheet .tf-cats .model-chip, html[data-theme] body .tf-sheet .tf-cats .model-chip {
+    display: inline-flex !important; align-items: center; gap: 5px; height: 34px !important; margin: 0 !important; padding: 0 14px !important; border: 0 !important; border-radius: 17px !important;
+    background: var(--a3-fill) !important; color: var(--a3-tx) !important; box-shadow: none !important; font: 500 14.5px/1 var(--a3-font) !important; letter-spacing: -.2px !important;
+    cursor: pointer; transform: none; animation: none !important; -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a3-spring), background-color .2s, color .2s !important;
+}
+html body .tf-sheet .tf-cats .model-chip:active { transform: scale(.92) !important; }
+html body .tf-sheet .tf-cats .model-chip.selected, html[data-theme] body .tf-sheet .tf-cats .model-chip.selected {
+    background: var(--a3-grad) !important; color: var(--a3-ink) !important; font-weight: 600 !important; box-shadow: 0 4px 12px rgba(160,124,28,.28), inset 0 1px 0 rgba(255,255,255,.3) !important;
+}
+.tf-sheet .tf-cats .model-chip.selected::before {
+    content: ""; width: 12px; height: 12px; margin-left: -3px; background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Amallar (tahrirlash) */
+.tf-act { width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; margin: 0; }
+.tf-act:active { background: var(--a3-fill); }
+.tf-act.tf-danger .tf-rl { color: var(--a4-red); }
+.tf-act .tf-rl { color: var(--a3-tx); }
+
+/* Pastki panel */
+.tf-dock {
+    position: sticky; bottom: 0; z-index: 6; display: flex; gap: 10px; margin: 18px -16px 0; padding: 14px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to bottom, rgba(10,10,11,0), var(--a4-bg) 30%);
+}
+html[data-theme="light"] .tf-dock { background: linear-gradient(to bottom, rgba(242,242,247,0), var(--a4-bg) 30%); }
+.tf-btn {
+    appearance: none; border: 0; cursor: pointer; height: 54px; padding: 0 22px; border-radius: 27px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font: 600 17px/1 var(--a3-font); letter-spacing: -.35px; -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a3-spring), opacity .2s, filter .2s;
+}
+.tf-btn svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.tf-btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-btn:active { transform: scale(.96); }
+.tf-pri { position: relative; overflow: hidden; flex: 1 1 auto; min-width: 0; background: var(--a3-grad); color: var(--a3-ink); box-shadow: 0 10px 26px rgba(160,124,28,.36), inset 0 1px 0 rgba(255,255,255,.38); }
+.tf-pri::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; transform: skewX(-20deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); animation: tfSheen 5s ease-in-out 1.2s infinite; pointer-events: none; }
+.tf-sec { flex: 0 0 auto; background: var(--a3-card); color: var(--a3-tx); box-shadow: inset 0 0 0 .5px var(--a4-hair); }
+.tf-sec svg { color: #a855f7; }
+@keyframes tfSheen { 0%, 70% { left: -60%; } 100% { left: 130%; } }
+@media (max-width: 360px) { .tf-sec { padding: 0 16px; } .tf-sec svg { display: none; } .tf-lbl { flex-basis: 74px; font-size: 15.5px; } }
+html.lite .tf-pri::after, html[data-perf="low"] .tf-pri::after { display: none; }
+@media (prefers-reduced-motion: reduce) { .tf-card, .tf-preview, .tf-thumb, .tf-pri::after { animation: none !important; } }
+
+/* Eski id-darajadagi qoidalarni (#addProductModal …, #editModal …) zararsizlantirish */
+html body #addProductModal.tf-sheet > .modal-header, html body #editModal.tf-sheet > .modal-header,
+html[data-theme] body #addProductModal.tf-sheet > .modal-header, html[data-theme] body #editModal.tf-sheet > .modal-header { padding: 6px 4px 0 !important; border: 0 !important; }
+html body #addProductModal.tf-sheet > .modal-header .a4-tt h2, html body #editModal.tf-sheet > .modal-header .a4-tt h2 { font: 800 32px/1.08 var(--a3-display) !important; letter-spacing: -1.1px !important; }
+html body #addProductModal.tf-sheet .tf-seg > .origin-chip { font-weight: 500 !important; }
+html body #addProductModal.tf-sheet .tf-seg > .origin-chip.selected { font-weight: 600 !important; }
+html body #addProductModal.tf-sheet .tf-sizes .size-input-row input { border-radius: 10px !important; }
+</style>
+<script id="a1-ios26-product-js">
+/* ═══════════════════════════════════════════════════════════════════
+   iOS 26 · Avto A1 — Tovar qo'shish / Tahrirlash (#addProductModal, #editModal)
+   Eski funksiyalar (saqlash, yuklash, AI, ovoz, skaner) o'zgarmaydi —
+   bu qatlam faqat ko'rinishni boshqaradi: segmentlar, flash kaliti,
+   rasm plitkalari, jonli ko'rinish va kategoriya sanog'i.
+   ═══════════════════════════════════════════════════════════════════ */
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var MODAL = { add: 'addProductModal', edit: 'editModal' };
+    var hap = function (k) { try { if (typeof window._hap === 'function') window._hap(k || 'selection'); } catch (e) {} };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var num = function (v) { return (typeof window.parsePrice === 'function') ? window.parsePrice(v) : (parseInt(String(v || '').replace(/[^\d]/g, ''), 10) || 0); };
+    var fmt = function (n) { return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+    var urls = function (k) { try { return window.readImgUrls(k); } catch (e) { return []; } };
+    var ph = function (t) { try { return window._brandPlaceholder(t); } catch (e) { return ''; } };
+    var dirty = function () { window._formDirty = true; };
+    var SV = function (d, w) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; };
+    var IC = {
+        x: SV('<path d="M7 7l10 10M17 7L7 17"/>', 2.8),
+        star: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.1 1.1 5.9L12 16.6l-5.3 2.9 1.1-5.9-4.4-4.1 6-.8z"/></svg>',
+        flame: SV('<path d="M12 22c4.4 0 7-2.9 7-6.8 0-3.9-2.6-6.4-4.4-8.7-.4 2-1.4 3.2-2.6 3.8C12 7 10.6 4.3 8.4 2.5 8.6 6 5 8.7 5 14.9 5 19 7.6 22 12 22z"/>', 2.2),
+        warn: SV('<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.5v.01"/>', 2.2)
+    };
+
+    /* ── Segment boshqaruvi (yashirin <select> bilan sinxron) ── */
+    function syncSegs(k) {
+        var m = $(MODAL[k]); if (!m) return;
+        m.querySelectorAll('.tf-seg[data-for]').forEach(function (seg) {
+            var sel = $(seg.getAttribute('data-for')); if (!sel) return;
+            seg.querySelectorAll('button[data-v]').forEach(function (b) {
+                var on = b.getAttribute('data-v') === sel.value;
+                b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+        });
+    }
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('.tf-seg[data-for] button[data-v]'); if (!b) return;
+        var seg = b.parentElement, sel = $(seg.getAttribute('data-for')); if (!sel) return;
+        if (sel.value !== b.getAttribute('data-v')) {
+            sel.value = b.getAttribute('data-v');
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            dirty(); hap('selection');
+        }
+        var k = seg.closest('#editModal') ? 'edit' : 'add';
+        syncSegs(k);
+    });
+
+    /* ── Qoldiq stepper ── */
+    window.tfStep = function (id, d) {
+        var i = $(id); if (!i) return;
+        var v = Math.max(0, (parseInt(i.value, 10) || 0) + d);
+        i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); hap('selection');
+    };
+
+    /* ── Flash chegirma kaliti ── */
+    function flashEls(k) { return { card: $(k + '-tf-flash'), sw: $(k + '-tf-flash-sw'), fp: $(k + '-flash-price'), fh: $(k + '-flash-hours') }; }
+    window.tfFlash = function (k, on) {
+        var f = flashEls(k); if (!f.card) return;
+        f.card.classList.toggle('on', !!on);
+        if (on) {
+            if (f.fh && !f.fh.value) f.fh.value = 24;
+            setTimeout(function () { try { f.fp && f.fp.focus({ preventScroll: true }); } catch (e) {} }, 260);
+        } else { if (f.fp) f.fp.value = ''; if (f.fh) f.fh.value = ''; }
+        tfHoursSync(k); dirty(); hap('light');
+        window.updateLivePreview && window.updateLivePreview(k);
+    };
+    window.tfHours = function (k, h) {
+        var f = flashEls(k); if (!f.fh) return;
+        f.fh.value = h; tfHoursSync(k); dirty(); hap('selection');
+    };
+    function tfHoursSync(k) {
+        var f = flashEls(k), box = $(k + '-tf-hours'); if (!box || !f.fh) return;
+        var v = parseFloat(String(f.fh.value).replace(',', '.')) || 0;
+        box.querySelectorAll('.tf-pill').forEach(function (p) { p.classList.toggle('on', Number(p.getAttribute('data-h')) === v); });
+    }
+    window.tfHoursSync = tfHoursSync;
+    function syncFlash(k) {
+        var f = flashEls(k); if (!f.sw) return;
+        var on = !!((f.fp && f.fp.value.trim()) || (f.fh && f.fh.value.trim()));
+        f.sw.checked = on; f.card.classList.toggle('on', on); tfHoursSync(k);
+    }
+
+    /* ── Ishlab chiqarilgan joy — inline uslublarni olib tashlaymiz ── */
+    var origSelectOrigin = window.selectOrigin;
+    if (typeof origSelectOrigin === 'function' && !origSelectOrigin.__tf) {
+        window.selectOrigin = function (el, type) {
+            var r = origSelectOrigin.apply(this, arguments);
+            var box = $(type + '-origin-chips');
+            if (box && box.classList.contains('tf-seg')) box.querySelectorAll('.origin-chip').forEach(function (c) { c.removeAttribute('style'); });
+            return r;
+        };
+        window.selectOrigin.__tf = 1;
+    }
+
+    /* ── Rasm plitkalari ── */
+    function photosState(k) {
+        var wrap = $(k + '-tf-photos'), box = $(k + '-img-previews'); if (!wrap || !box) return;
+        var n = box.children.length;
+        wrap.classList.toggle('is-empty', n === 0);
+        wrap.classList.toggle('is-full', urls(k).length >= 3 && !box.querySelector('.up-prog'));
+    }
+    window.updateImgPreviews = function (k) {
+        var list = urls(k), box = $(k + '-img-previews');
+        if (box) {
+            box.innerHTML = list.map(function (u, i) {
+                var main = i === 0;
+                return '<div class="tf-thumb' + (main ? ' is-main' : '') + '">' +
+                    '<button type="button" class="tf-thumb-img" ' + (main ? 'aria-label="Asosiy rasm"' : 'onclick="setMainImg(\'' + k + '\',' + i + ')" aria-label="Asosiy qilish"') + '>' +
+                    '<img src="' + esc(u) + '" alt="" loading="lazy" onerror="this.closest(\'.tf-thumb\').classList.add(\'is-bad\');this.src=window._brandPlaceholder(\'Xato\')"></button>' +
+                    (main ? '<span class="tf-badge">' + IC.star + 'Asosiy</span>' : '<span class="tf-badge tf-badge-n">' + (i + 1) + '</span>') +
+                    '<button type="button" class="tf-del" onclick="removeImg(\'' + k + '\',' + i + ')" aria-label="Rasmni o\u2018chirish">' + IC.x + '</button>' +
+                    '</div>';
+            }).join('');
+        }
+        photosState(k);
+        if (typeof window.updateLivePreview === 'function') window.updateLivePreview(k);
+    };
+    ['add', 'edit'].forEach(function (k) {
+        var box = $(k + '-img-previews');
+        if (box && window.MutationObserver) new MutationObserver(function () { photosState(k); }).observe(box, { childList: true });
+    });
+
+    /* ── Jonli ko'rinish (mijoz kartasi) ── */
+    window.updateLivePreview = function (k) {
+        var box = $(k + '-live-preview'); if (!box) return;
+        var v = function (id) { var e = $(k + '-' + id); return e ? e.value.trim() : ''; };
+        var name = v('name'), price = num(v('price')), code = v('code'), img = urls(k)[0] || '';
+        var fp = num(v('flash-price')), fh = parseFloat(String(v('flash-hours')).replace(',', '.')) || 0;
+        if (!name && !price && !img) {
+            box.innerHTML = '<div class="tf-pv-empty"><span>' + SV('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', 1.8) + '</span>Rasm, nom va narxni kiriting — mijozga qanday ko\u2018rinishi shu yerda chiqadi</div>';
+            return;
+        }
+        var flashOk = fp > 0 && price > 0 && fp < price && fh > 0;
+        var flashBad = fp > 0 && price > 0 && fp >= price;
+        var pct = flashOk ? Math.round((1 - fp / price) * 100) : 0;
+        var mainName = (name || 'Tovar nomi').split('\u00b7')[0].trim();
+        box.innerHTML =
+            '<div class="tf-pv">' +
+                '<div class="tf-pv-img"><img src="' + esc(img || ph('Rasm')) + '" alt="" onerror="this.src=window._brandPlaceholder(\'Rasm\')">' +
+                    (flashOk ? '<span class="tf-pv-pct">\u2212' + pct + '%</span>' : '') + '</div>' +
+                '<div class="tf-pv-tx">' +
+                    '<b' + (name ? '' : ' class="dim"') + '>' + esc(mainName) + '</b>' +
+                    (code ? '<span class="tf-pv-code">' + esc(code) + '</span>' : '') +
+                    '<div class="tf-pv-pr">' +
+                        (flashOk ? '<strong class="hot">' + fmt(fp) + ' so\u2018m</strong><s>' + fmt(price) + '</s>' : '<strong>' + fmt(price) + ' so\u2018m</strong>') +
+                    '</div>' +
+                    (flashOk ? '<span class="tf-pv-timer">' + IC.flame + fmt(fh) + ' soat davomida</span>' : '') +
+                    (flashBad ? '<span class="tf-pv-warn">' + IC.warn + 'Flash narx asl narxdan kam bo\u2018lishi kerak</span>' : '') +
+                '</div>' +
+            '</div>';
+    };
+
+    /* ── Kategoriya sanog'i ── */
+    function syncCats(k) {
+        var box = $(k + '-model-chips'), out = $(k + '-tf-catn'); if (!box || !out) return;
+        var n = box.querySelectorAll('.model-chip.selected').length;
+        out.textContent = n ? n + ' ta tanlandi' : '';
+    }
+    ['add', 'edit'].forEach(function (k) {
+        var box = $(k + '-model-chips'); if (!box) return;
+        box.addEventListener('click', function (e) {
+            if (!e.target.closest('.model-chip')) return;
+            setTimeout(function () { syncCats(k); }, 0); dirty(); hap('selection');
+        });
+    });
+
+    /* ── Hammasini sinxronlash ── */
+    function sync(k) {
+        syncSegs(k); syncFlash(k); photosState(k); syncCats(k);
+        var box = $(k + '-origin-chips'); if (box) box.querySelectorAll('.origin-chip').forEach(function (c) { c.removeAttribute('style'); });
+    }
+    function toTop(k) { var m = $(MODAL[k]); if (m) m.scrollTop = 0; }
+    window.tfSync = sync;
+
+    function wrap(name, after) {
+        var f = window[name];
+        if (typeof f !== 'function' || f.__tf) return;
+        var w = function () { var r = f.apply(this, arguments); try { after.apply(this, arguments); } catch (e) {} return r; };
+        w.__tf = 1; window[name] = w;
+    }
+    function install() {
+        wrap('resetAddForm', function () { sync('add'); });
+        wrap('fillAddFormFromProduct', function () { sync('add'); });
+        wrap('openAddProduct', function () { sync('add'); toTop('add'); });
+        wrap('cloneProductFromEdit', function () { sync('add'); toTop('add'); });
+        wrap('toggleProductTypeFields', function () { syncSegs('add'); });
+        wrap('toggleEditProductTypeFields', function () { syncSegs('edit'); });
+        wrap('openEditModal', function () {
+            var idEl = $('edit-id'), id = idEl ? idEl.value : '';
+            var list = (typeof productsDB !== 'undefined' && Array.isArray(productsDB)) ? productsDB : (window.productsDB || []);
+            var p = list.find(function (x) { return String(x.id) === String(id); });
+            // Birlik ilgari tahrirlashda yuklanmas edi — endi tovarniki tiklanadi
+            var u = $('edit-unit'); if (u && p) u.value = p.unit === 'komplekt' ? 'komplekt' : 'dona';
+            var sub = $('edit-tf-sub');
+            if (sub) sub.textContent = p ? ((p.is_draft ? 'Qoralama' : 'Katalogda') + (p.code ? ' \u00b7 ' + p.code : '') + ' \u00b7 ID ' + p.id) : 'O\u2018zgartiring va saqlang';
+            sync('edit'); toTop('edit');
+            window._formDirty = false;
+        });
+    }
+    install();
+    window.addEventListener('load', function () { install(); sync('add'); sync('edit'); });
+    sync('add'); sync('edit');
+    try { window.updateLivePreview('add'); } catch (e) {}
+})();
+
+</script>
 </body>
 </html>
 
