@@ -41917,8 +41917,18 @@ html body #addProductModal.tf-sheet .tf-sizes .size-input-row input { border-rad
     });
 
     /* ── Hammasini sinxronlash ── */
+    var stripEmoji = function (s) { return String(s || '').replace(/[\u2600-\u27BF\uFE0F\u200D]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/g, '').replace(/\s+/g, ' ').trim(); };
+    function tidy(k) {
+        // Kategoriya guruh nomlaridagi emoji (ba'zi qurilmalarda «▯» bo'lib chiqadi) olib tashlanadi
+        document.querySelectorAll('#' + k + '-model-chips .apx-sub').forEach(function (h) { var t = stripEmoji(h.textContent); if (t !== h.textContent) h.textContent = t; });
+        // Razmer qatorlari — qisqa, kesilmaydigan placeholderlar
+        document.querySelectorAll('#' + MODAL[k] + ' .tf-sizes .size-input-row').forEach(function (r) {
+            var a = r.querySelector('.size-name'), b = r.querySelector('.size-stock');
+            if (a) a.setAttribute('placeholder', 'mas: 92.5'); if (b) b.setAttribute('placeholder', '0');
+        });
+    }
     function sync(k) {
-        syncSegs(k); syncFlash(k); photosState(k); syncCats(k);
+        syncSegs(k); syncFlash(k); photosState(k); syncCats(k); tidy(k);
         var box = $(k + '-origin-chips'); if (box) box.querySelectorAll('.origin-chip').forEach(function (c) { c.removeAttribute('style'); });
     }
     function toTop(k) { var m = $(MODAL[k]); if (m) m.scrollTop = 0; }
@@ -41935,6 +41945,9 @@ html body #addProductModal.tf-sheet .tf-sizes .size-input-row input { border-rad
         wrap('fillAddFormFromProduct', function () { sync('add'); });
         wrap('openAddProduct', function () { sync('add'); toTop('add'); });
         wrap('cloneProductFromEdit', function () { sync('add'); toTop('add'); });
+        wrap('addSizeField', function () { tidy('add'); });
+        wrap('addEditSizeField', function () { tidy('edit'); });
+        wrap('buildCatalog', function () { tidy('add'); tidy('edit'); });
         wrap('toggleProductTypeFields', function () { syncSegs('add'); });
         wrap('toggleEditProductTypeFields', function () { syncSegs('edit'); });
         wrap('openEditModal', function () {
