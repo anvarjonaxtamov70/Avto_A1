@@ -6299,7 +6299,12 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             <h2 class="login-title">Xush kelibsiz!</h2>
             <p class="login-sub">Avto A1 do'koniga kirish uchun ism va telefon raqamingizni qoldiring — buyurtmalaringiz shu raqamga bog'lanadi.</p>
 
-            <div class="login-field">
+            <div class="login-seg" id="login-mode" role="tablist" hidden>
+                <button type="button" data-m="login" role="tab" onclick="window._loginSetMode && window._loginSetMode('login')">Kirish</button>
+                <button type="button" data-m="register" role="tab" onclick="window._loginSetMode && window._loginSetMode('register')">Ro'yxatdan o'tish</button>
+            </div>
+
+            <div class="login-field" id="login-name-field">
                 <label for="login-name" class="login-label">Ismingiz</label>
                 <input type="text" id="login-name" placeholder="Masalan: Anvar" class="luxury-input" autocomplete="name" oninput="window._loginClearErr && window._loginClearErr('login-name')">
                 <span class="login-err" id="err-login-name"></span>
@@ -6311,6 +6316,21 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
                 <span class="login-err" id="err-login-phone"></span>
             </div>
 
+            <div class="login-field login-pw" id="login-pass-field" hidden>
+                <label for="login-pass" class="login-label">Parol</label>
+                <div class="login-pw-wrap">
+                    <input type="password" id="login-pass" placeholder="Kamida 6 ta belgi" class="luxury-input" autocomplete="current-password" maxlength="64" oninput="window._loginClearErr && window._loginClearErr('login-pass')" onkeydown="if(event.key==='Enter'){event.preventDefault();manualLogin();}">
+                    <button type="button" class="login-eye" aria-label="Parolni ko'rsatish" onclick="window._loginToggleEye && window._loginToggleEye()"></button>
+                </div>
+                <span class="login-err" id="err-login-pass"></span>
+            </div>
+
+            <div class="login-field login-pw" id="login-pass2-field" hidden>
+                <label for="login-pass2" class="login-label">Parolni takrorlang</label>
+                <input type="password" id="login-pass2" placeholder="Parolni qayta kiriting" class="luxury-input" autocomplete="new-password" maxlength="64" oninput="window._loginClearErr && window._loginClearErr('login-pass2')" onkeydown="if(event.key==='Enter'){event.preventDefault();manualLogin();}">
+                <span class="login-err" id="err-login-pass2"></span>
+            </div>
+
             <button id="login-submit-btn" class="btn-add-cart login-btn" style="justify-content: center !important; font-size: 16px !important; margin-top: 6px !important;" onclick="manualLogin()">
                 Tizimga kirish
             </button>
@@ -6319,6 +6339,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
                 Ma'lumotlaringiz xavfsiz saqlanadi
             </div>
+            <button type="button" class="login-forgot" id="login-forgot" hidden onclick="window._loginForgot && window._loginForgot()">Parolni unutdingizmi?</button>
         </div>
     </div>
 <div class="toast-container" id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -8981,9 +9002,24 @@ document.addEventListener('touchmove', function(e) {
     //    Telegram — custom token (window._authReady kutiladi).
     //    Brauzer/APK — anonim kirish (barqaror uid, LOCAL persistence).
     //    Firebase user obyektini (yoki null) qaytaradi.
+    // ⏳ Firebase saqlangan sessiyani (LOCAL persistence) ASINXRON tiklaydi.
+    //    Sahifa ochilishi bilan `currentUser` hali null bo'ladi — shu paytda
+    //    signInAnonymously() chaqirilsa, telefon+parol bilan kirgan mijoz
+    //    yangi anonim hisobga almashib ketardi. Shuning uchun avval kutamiz.
+    window._authSettled = function () {
+        if (window.__authSettledP) return window.__authSettledP;
+        window.__authSettledP = new Promise(function (res) {
+            try {
+                var un = firebase.auth().onAuthStateChanged(function (u) { try { un(); } catch (e) {} res(u || null); });
+            } catch (e) { res(null); }
+            setTimeout(function () { res(null); }, 4000);
+        });
+        return window.__authSettledP;
+    };
     window._ensureAuth = async function () {
         try {
             if (!(window.firebase && firebase.auth)) return null;
+            if (!firebase.auth().currentUser) { try { await window._authSettled(); } catch (e) {} }
             var cur = firebase.auth().currentUser;
             if (cur) return cur;
             if (typeof tg !== 'undefined' && tg.initData) {
@@ -9267,6 +9303,7 @@ document.addEventListener('touchmove', function(e) {
         // qiymati baribir `false` bo'ladi — u faqat TELEGRAM admin auth'ini
         // bildiradi; anonim kirish alohida (window._ensureAuth) boshqariladi.
         if (!(tg && tg.initData)) {
+            try { await window._authSettled(); } catch (e) {}
             try {
                 if (firebase.auth && firebase.auth().currentUser == null &&
                     typeof firebase.auth().signInAnonymously === 'function') {
@@ -9434,7 +9471,7 @@ const Haptics = {
         updateProfileUI();
     }
 
-    window.manualLogin = function() {
+    window._manualLoginLegacy = function() {
         let nameEl = document.getElementById('login-name');
         let phoneEl = document.getElementById('login-phone');
         let nameVal = nameEl.value.trim();
@@ -42146,6 +42183,290 @@ html[data-theme="light"].a1-app body #login-screen { background: radial-gradient
     var t = ls.querySelector('.login-title'); if (t) t.textContent = 'Ro\u2018yxatdan o\u2018tish';
     var sub = ls.querySelector('.login-sub'); if (sub) sub.textContent = 'Ism va telefon raqamingizni kiriting \u2014 buyurtmalar, keshbek va yetkazib berish shu raqamga bog\u2018lanadi.';
     var btn = document.getElementById('login-submit-btn'); if (btn && !btn.dataset.busy) btn.textContent = 'Davom etish';
+})();
+
+</script>
+<style id="a1-auth-pw">
+/* ═══ Telefon + parol bilan kirish — segment, parol maydoni, «unutdim», chiqish ═══ */
+#login-screen .login-seg { display: flex; gap: 0; margin: 0 0 18px; padding: 2px; border-radius: 10px; background: var(--a3-fill, rgba(118,118,128,.24)); }
+#login-screen .login-seg[hidden], #login-screen .login-field[hidden], #login-screen .login-forgot[hidden] { display: none !important; }
+#login-screen .login-seg button {
+    flex: 1 1 0; height: 34px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+    color: var(--a3-tx, #f5f5f7); font: 500 14.5px/1 var(--a3-font, -apple-system, sans-serif); letter-spacing: -.15px; -webkit-tap-highlight-color: transparent;
+    transition: background-color .25s, box-shadow .25s;
+}
+#login-screen .login-seg button.on { background: #636366; font-weight: 600; box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04); }
+html[data-theme="light"] #login-screen .login-seg button.on { background: #fff; color: #1c1c1e; }
+html[data-theme="light"] #login-screen .login-seg button { color: #1c1c1e; }
+#login-screen .login-pw-wrap { position: relative; }
+#login-screen .login-pw-wrap .luxury-input { padding-right: 50px !important; }
+#login-screen .login-eye {
+    position: absolute; right: 6px; top: 50%; width: 38px; height: 38px; margin-top: -19px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; background: transparent;
+    color: var(--text-muted, #8a8a8a); -webkit-tap-highlight-color: transparent;
+}
+#login-screen .login-eye::before {
+    content: ""; position: absolute; inset: 9px; background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+#login-screen .login-eye.on { color: var(--luxury-gold, #C9A84C); }
+#login-screen .login-eye.on::after { content: ""; position: absolute; left: 9px; right: 9px; top: 50%; height: 2px; margin-top: -1px; background: currentColor; border-radius: 2px; transform: rotate(-40deg); }
+#login-screen .login-forgot {
+    display: block; margin: 12px auto 0; padding: 6px 10px; border: 0; background: none; cursor: pointer;
+    color: var(--luxury-gold, #C9A84C); font: 600 13.5px/1.2 var(--a3-font, -apple-system, sans-serif); -webkit-tap-highlight-color: transparent;
+}
+.a1-logout-grp { margin-top: 14px; overflow: hidden; }
+.a1-logout-btn {
+    display: block; width: 100%; min-height: 50px; padding: 0 16px; border: 0; background: transparent; cursor: pointer; text-align: center;
+    color: var(--a4-red, #ff453a); font: 400 16.5px/1 var(--a3-font, -apple-system, sans-serif); letter-spacing: -.3px; -webkit-tap-highlight-color: transparent;
+}
+.a1-logout-btn:active { background: var(--px-fill, rgba(118,118,128,.2)); }
+
+</style>
+<script id="a1-auth-pw-js">
+/* ═══════════════════════════════════════════════════════════════════
+   🔐 Avto A1 — Telefon + parol bilan kirish (ilova va brauzer)
+   Telegram ichida hech narsa o'zgarmaydi (u yerda Telegram o'zi tasdiqlaydi).
+
+   • Ro'yxatdan o'tish: ism + telefon + o'zi o'ylab topgan parol.
+   • Kirish: telefon + parol. Bir raqamga faqat BITTA hisob — Firebase
+     Authentication raqamni (ichki email sifatida) yagona saqlaydi.
+   • Parol Firebase'da xavfsiz (hash) saqlanadi — bizning bazaga yozilmaydi.
+   • Avval anonim kirgan mijoz parol o'rnatganda hisobi (uid, buyurtmalar,
+     keshbek) O'ZGARMAYDI — anonim hisob parolli hisobga bog'lanadi.
+   • Firebase Console'da «Email/Password» yoqilmagan bo'lsa — eski (anonim)
+     kirish yo'li avtomatik ishlaydi, ilova to'xtab qolmaydi.
+   ═══════════════════════════════════════════════════════════════════ */
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var DOMAIN = 'tel.avtoa1.app';
+    var OFF_KEY = 'a1_pw_off_until';
+    var inTelegram = function () { try { return !!(window.tg && tg.initData); } catch (e) { return false; } };
+    var auth = function () { try { return (window.firebase && firebase.auth) ? firebase.auth() : null; } catch (e) { return null; } };
+    var digitsOf = function (v) { return String(v || '').replace(/[^0-9]/g, ''); };
+    var emailOf = function (digits) { return digits + '@' + DOMAIN; };
+    var hap = function (k) { try { if (k === 'ok') Haptics.success(); else Haptics.warning(); } catch (e) {} };
+    var pwOff = function () { try { return Date.now() < (parseInt(localStorage.getItem(OFF_KEY), 10) || 0); } catch (e) { return false; } };
+    var setPwOff = function () { try { localStorage.setItem(OFF_KEY, String(Date.now() + 6 * 3600 * 1000)); } catch (e) {} };
+
+    if (inTelegram()) return;
+
+    /* ── Xato ko'rsatish: parol maydoni ichki o'ramda, shuning uchun .login-field ni topamiz ── */
+    var fieldOf = function (el) { return el && (el.closest ? el.closest('.login-field') : null) || (el && el.parentNode); };
+    window._loginSetErr = function (id, msg) {
+        var el = $(id), err = $('err-' + id), f = fieldOf(el);
+        if (f) f.classList.add('has-err');
+        if (err) err.textContent = msg || '';
+    };
+    window._loginClearErr = function (id) { var f = fieldOf($(id)); if (f) f.classList.remove('has-err'); };
+
+    /* ── Rejim: kirish / ro'yxatdan o'tish ── */
+    var mode = 'register', upgrade = false;
+    var TXT = {
+        register: { t: 'Ro\u2018yxatdan o\u2018tish', s: 'Ism, telefon raqam va o\u2018zingiz o\u2018ylab topgan parolni kiriting. Keyingi safar raqam va parol bilan kirasiz.', b: 'Ro\u2018yxatdan o\u2018tish' },
+        login: { t: 'Kirish', s: 'Telefon raqamingiz va parolingizni kiriting.', b: 'Kirish' },
+        upgrade: { t: 'Parol o\u2018rnating', s: 'Hisobingiz xavfsizligi uchun parol o\u2018ylab toping. Buyurtmalar va keshbek saqlanib qoladi.', b: 'Parolni saqlash' }
+    };
+    function paint() {
+        var key = (mode === 'register' && upgrade) ? 'upgrade' : mode;
+        var t = document.querySelector('#login-screen .login-title'); if (t) t.textContent = TXT[key].t;
+        var s = document.querySelector('#login-screen .login-sub'); if (s) s.textContent = TXT[key].s;
+        var b = $('login-submit-btn'); if (b && b.dataset.busy !== '1') b.textContent = TXT[key].b;
+        var seg = $('login-mode');
+        if (seg) { seg.hidden = false; seg.querySelectorAll('button').forEach(function (x) { var on = x.getAttribute('data-m') === mode; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); }); }
+        var show = function (id, on) { var e = $(id); if (e) e.hidden = !on; };
+        show('login-name-field', mode === 'register');
+        show('login-pass-field', true);
+        show('login-pass2-field', mode === 'register');
+        show('login-forgot', mode === 'login');
+        var p = $('login-pass'); if (p) p.setAttribute('autocomplete', mode === 'login' ? 'current-password' : 'new-password');
+        ['login-name', 'login-phone', 'login-pass', 'login-pass2'].forEach(window._loginClearErr);
+    }
+    window._loginSetMode = function (m) { mode = m === 'login' ? 'login' : 'register'; paint(); try { Haptics.tap && Haptics.tap(); } catch (e) {} };
+    window._loginToggleEye = function () {
+        var on = $('login-pass') && $('login-pass').type === 'password';
+        ['login-pass', 'login-pass2'].forEach(function (id) { var e = $(id); if (e) e.type = on ? 'text' : 'password'; });
+        var b = document.querySelector('#login-screen .login-eye'); if (b) { b.classList.toggle('on', on); b.setAttribute('aria-label', on ? 'Parolni yashirish' : 'Parolni ko\u2018rsatish'); }
+    };
+    window._loginForgot = function () {
+        var msg = 'Parolni tiklash uchun do\u2018kon bilan bog\u2018laning \u2014 raqamingizni tekshirib, yangi parol o\u2018rnatishga yordam beramiz.';
+        try {
+            if (window.ShopInfo && ShopInfo.tgUrl && window.confirm(msg + '\n\nTelegram orqali yozasizmi?')) { window.a1OpenExternal ? a1OpenExternal(ShopInfo.tgUrl()) : (location.href = ShopInfo.tgUrl()); return; }
+            if (!(window.ShopInfo && ShopInfo.tgUrl)) window.alert(msg);
+        } catch (e) { try { window.alert(msg); } catch (e2) {} }
+    };
+
+    /* ── Firebase xato kodlari → tushunarli matn ── */
+    function explain(e) {
+        var c = (e && e.code) || '';
+        if (/email-already-in-use|credential-already-in-use|provider-already-linked/.test(c)) return ['login-phone', 'Bu raqam allaqachon ro\u2018yxatdan o\u2018tgan \u2014 \u00abKirish\u00bb orqali kiring', 'login'];
+        if (/invalid-credential|wrong-password|user-not-found|invalid-login-credentials|invalid-email/.test(c)) return ['login-pass', 'Telefon raqam yoki parol noto\u2018g\u2018ri'];
+        if (/too-many-requests/.test(c)) return ['login-pass', 'Juda ko\u2018p urinish. Birozdan keyin qayta urinib ko\u2018ring'];
+        if (/network-request-failed/.test(c)) return ['login-phone', 'Internet aloqasini tekshiring'];
+        if (/weak-password/.test(c)) return ['login-pass', 'Parol kamida 6 ta belgidan iborat bo\u2018lsin'];
+        if (/user-disabled/.test(c)) return ['login-phone', 'Bu hisob bloklangan. Do\u2018kon bilan bog\u2018laning'];
+        return ['login-phone', 'Xatolik yuz berdi. Qayta urinib ko\u2018ring'];
+    }
+
+    function busy(on) {
+        var b = $('login-submit-btn'); if (!b) return;
+        b.dataset.busy = on ? '1' : '0';
+        b.classList.toggle('is-loading', on);
+        if (on) b.textContent = mode === 'login' ? 'Kirilmoqda\u2026' : 'Saqlanmoqda\u2026'; else paint();
+    }
+
+    function hideScreen() {
+        var ls = $('login-screen'); if (!ls) return;
+        ls.classList.add('login-leaving');
+        setTimeout(function () { ls.classList.add('hidden'); ls.classList.remove('login-leaving'); }, 280);
+    }
+
+    /* ── Muvaffaqiyatli kirishdan keyin: profil, ro'yxat hodisasi, ma'lumotlarni yuklash ── */
+    async function finish(u, name, phone, isNew) {
+        var prevUser = window.currentUser;
+        var DB = (typeof db !== 'undefined' && db.ref) ? db : (window.firebase && firebase.database ? firebase.database() : null);
+        if (!isNew && DB) {
+            try {
+                var snap = await DB.ref('users/' + u.uid + '/profile').once('value');
+                var pr = snap.val() || {};
+                if (pr.name) name = pr.name;
+                if (!phone && pr.phone) phone = pr.phone;
+            } catch (e) {}
+        }
+        name = name || 'Mijoz';
+        try { localStorage.setItem('avto_a1_user', JSON.stringify({ id: u.uid, name: name, phone: phone })); } catch (e) {}
+        // Boshqa hisobdan (yoki boshqa uid bilan) ma'lumotlar allaqachon yuklangan bo'lsa —
+        // tinglovchilarni tozalash uchun sahifani qayta ochamiz (eng ishonchli yo'l).
+        if (prevUser && String(prevUser) !== String(u.uid) && window._a1UserInited) {
+            hap('ok');
+            try { sessionStorage.setItem('a1_welcome', name); } catch (e) {}
+            location.reload();
+            return;
+        }
+        window.currentUser = u.uid;
+        try { myProfile.name = name; myProfile.phone = phone; } catch (e) {}
+        if (DB) {
+            var w = DB.ref('users/' + u.uid + '/profile').update(isNew ? { name: name, phone: phone } : { phone: phone });
+            if (isNew) {
+                try { localStorage.setItem('avto_registration_pending', JSON.stringify({ uid: String(u.uid), name: name, phone: phone })); } catch (e) {}
+                w.then(function () { if (window._registerCustomerOnce) return window._registerCustomerOnce({ name: name, phone: phone }); })
+                 .catch(function (e) { if (window._dwarn) window._dwarn('[profil] ro\u2018yxatdan o\u2018tish yozilmadi:', e); });
+            } else { w.catch(function () {}); }
+        }
+        hap('ok');
+        hideScreen();
+        busy(false);
+        try { updateProfileUI(); } catch (e) {}
+        try { showToast((isNew ? 'Xush kelibsiz, ' : 'Qaytganingiz bilan, ') + name + '!', 'success'); } catch (e) {}
+        if (!window._a1UserInited) { try { initUserData(); } catch (e) {} }
+    }
+
+    /* ── Asosiy: «Kirish» / «Ro'yxatdan o'tish» tugmasi ── */
+    window.manualLogin = async function () {
+        var b = $('login-submit-btn'); if (b && b.dataset.busy === '1') return;
+        var name = ($('login-name') || {}).value ? $('login-name').value.trim() : '';
+        var phone = ($('login-phone') || {}).value ? $('login-phone').value.trim() : '';
+        var pass = ($('login-pass') || {}).value || '';
+        var pass2 = ($('login-pass2') || {}).value || '';
+        var d = digitsOf(phone);
+        var ok = true, first = null;
+        var bad = function (id, msg) { window._loginSetErr(id, msg); ok = false; if (!first) first = id; };
+        if (mode === 'register' && !name) bad('login-name', 'Ismingizni kiriting');
+        if (d.length < 12) bad('login-phone', 'To\u2018liq raqam kiriting: +998 90 123 45 67');
+        if (pass.length < 6) bad('login-pass', 'Parol kamida 6 ta belgidan iborat bo\u2018lsin');
+        else if (mode === 'register' && pass !== pass2) bad('login-pass2', 'Parollar bir xil emas');
+        if (!ok) { hap('err'); try { $(first).focus(); } catch (e) {} return; }
+
+        var A = auth();
+        if (!A) { window._manualLoginLegacy && window._manualLoginLegacy(); return; }
+        busy(true);
+        try { await window._authSettled(); } catch (e) {}
+        var email = emailOf(d), u = null;
+        try {
+            if (mode === 'register') {
+                var cur = A.currentUser;
+                if (cur && cur.isAnonymous) {
+                    // Anonim hisob parolli hisobga aylanadi — uid va barcha ma'lumotlar saqlanadi
+                    var cred = firebase.auth.EmailAuthProvider.credential(email, pass);
+                    u = (await cur.linkWithCredential(cred)).user;
+                } else {
+                    u = (await A.createUserWithEmailAndPassword(email, pass)).user;
+                }
+            } else {
+                u = (await A.signInWithEmailAndPassword(email, pass)).user;
+            }
+        } catch (e) {
+            if (e && e.code === 'auth/operation-not-allowed') {
+                // Firebase Console'da Email/Password hali yoqilmagan — eski yo'l (ilova to'xtamasin)
+                if (window._dwarn) window._dwarn('[auth] Email/Password provayderi yoqilmagan — anonim kirishga o\u2018tildi');
+                setPwOff();
+                busy(false);
+                if (upgrade) { hideScreen(); return; }
+                if ($('login-name') && !$('login-name').value.trim()) $('login-name').value = 'Mijoz';
+                if (window._manualLoginLegacy) window._manualLoginLegacy();
+                return;
+            }
+            var x = explain(e);
+            busy(false);
+            if (x[2]) { mode = x[2]; paint(); }
+            window._loginSetErr(x[0], x[1]);
+            hap('err');
+            return;
+        }
+        try { await finish(u, name, phone, mode === 'register'); } catch (e) { busy(false); }
+    };
+
+    /* ── Hisobdan chiqish ── */
+    window.a1Logout = function () {
+        var go = function () {
+            try { localStorage.removeItem('avto_a1_user'); localStorage.removeItem('avto_registration_pending'); } catch (e) {}
+            var A = auth();
+            Promise.resolve(A ? A.signOut() : null).catch(function () {}).then(function () { location.reload(); });
+        };
+        try { if (window.confirm('Hisobdan chiqasizmi? Qayta kirish uchun telefon raqam va parol kerak bo\u2018ladi.')) go(); } catch (e) { go(); }
+    };
+    function logoutRow() {
+        var app = $('pfx-app'); if (!app || $('a1-logout-grp')) return;
+        var g = document.createElement('div'); g.className = 'pfx-grp a1-logout-grp'; g.id = 'a1-logout-grp';
+        g.innerHTML = '<button type="button" class="a1-logout-btn" onclick="a1Logout()">Hisobdan chiqish</button>';
+        app.parentNode.insertBefore(g, app.nextSibling);
+    }
+
+    /* ── Ekranni boshlash ── */
+    function start() {
+        var ls = $('login-screen'); if (!ls) return;
+        logoutRow();
+        try {
+            var wn = sessionStorage.getItem('a1_welcome');
+            if (wn) { sessionStorage.removeItem('a1_welcome'); setTimeout(function () { try { showToast('Qaytganingiz bilan, ' + wn + '!', 'success'); } catch (e) {} }, 900); }
+        } catch (e) {}
+        if (pwOff()) return;   // provayder yoqilmagan — eski ekran o'zgarishsiz
+        paint();
+        // Avval anonim (parolsiz) kirgan mijoz — bir marta parol o'rnatish taklif qilinadi
+        if (window.currentUser && window._authSettled) {
+            window._authSettled().then(function (u) {
+                if (!u || !u.isAnonymous || pwOff()) return;
+                var saved = {}; try { saved = JSON.parse(localStorage.getItem('avto_a1_user') || '{}'); } catch (e) {}
+                upgrade = true; mode = 'register';
+                if ($('login-name') && saved.name) $('login-name').value = saved.name;
+                if ($('login-phone') && saved.phone) { $('login-phone').value = saved.phone; try { window._loginFormatPhone($('login-phone')); } catch (e) {} }
+                paint();
+                ls.classList.remove('hidden');
+            });
+        } else if (!window.currentUser) {
+            // Yangi qurilma: oldin shu qurilmada kirgan bo'lsa — darhol «Kirish» rejimi
+            try { if (localStorage.getItem('a1_had_account') === '1') { mode = 'login'; paint(); } } catch (e) {}
+        }
+    }
+    // Ma'lumotlar yuklanganini belgilaymiz (hisob almashtirishda qayta yuklash uchun)
+    var origInit = window.initUserData;
+    if (typeof origInit === 'function' && !origInit.__pw) {
+        window.initUserData = function () { window._a1UserInited = true; return origInit.apply(this, arguments); };
+        window.initUserData.__pw = 1;
+    }
+    try { if (window.currentUser) { window._a1UserInited = true; localStorage.setItem('a1_had_account', '1'); } } catch (e) {}
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 
 </script>
