@@ -12019,6 +12019,34 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         return el;
     }
     window._reshowModal = _reshowModal;
+    // 🏠 To'liq bosh menyuga qaytish (ilovada buyurtmadan keyin).
+    //    Telegram'da buyurtmadan keyin mini app YOPILADI (tg.close) va keyingi
+    //    ochilishda hammasi yangidan boshlanadi. Ilovada esa «yopish» yo'q —
+    //    shuning uchun barcha oynalar yopiladi, savat qayta chiziladi va
+    //    bosh sahifa ko'rsatiladi (aks holda savat eski buyurtma bilan qolardi).
+    window.a1ResetToHome = function () {
+        try {
+            document.querySelectorAll('.modal-standard').forEach(function (m) {
+                if (m.style.display && m.style.display !== 'none') {
+                    try { if (window._modalCancelClose) window._modalCancelClose(m); } catch (e) {}
+                    m.style.display = 'none';
+                }
+            });
+            var sh = document.getElementById('coSheet');
+            if (sh) { sh.classList.remove('open', 'on', 'show'); sh.style.display = 'none'; setTimeout(function () { sh.style.display = ''; }, 400); }
+            activeModal = null;
+            if (Array.isArray(window._modalStack)) window._modalStack.length = 0;
+            document.body.style.overflow = '';
+            historyStack = ['main-menu'];
+            try { window.history.replaceState({ section: 'main-menu' }, ''); } catch (e) {}
+            showSection('main-menu');
+            if (typeof window.updateNav === 'function') window.updateNav('nav-home');
+            try { if (typeof window.renderCartItems === 'function') window.renderCartItems(); } catch (e) {}
+            try { updateCartBadge(); } catch (e) {}
+            updateBtns();
+            var c = document.querySelector('.container'); if (c) c.scrollTop = 0;
+        } catch (e) { try { location.reload(); } catch (e2) {} }
+    };
     function goHome() { if(activeModal) closeModal(); if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); } updateNav('nav-home'); }
 
         // 🧭 MUKAMMAL NAVIGATSIYA VA OYNALARNI YOPISH XARITASI (Qotishlarga qarshi)
@@ -13116,6 +13144,14 @@ window.confirmOrder = async (paymentMethod) => {
         var _closed = false;
         var _doClose = function () {
             if (_closed) return; _closed = true;
+            var _inTg = false; try { _inTg = !!(tg && tg.initData); } catch (e) {}
+            if (!_inTg) {
+                // Ilova / brauzer: yopiladigan narsa yo'q — toza bosh sahifaga qaytamiz.
+                // (Karta to'lovida chekni yuborish uchun Telegram alohida ochiladi.)
+                try { if (window.a1ResetToHome) window.a1ResetToHome(); } catch (e) {}
+                try { if (paymentMethod && paymentMethod.indexOf('Karta') !== -1) setTimeout(function () { tg.openTelegramLink((window.ShopInfo && ShopInfo.tgUrl()) || "https://t.me/anvaraxtamov2004"); }, 400); } catch (e) {}
+                return;
+            }
             try { if (paymentMethod && paymentMethod.indexOf('Karta') !== -1) tg.openTelegramLink((window.ShopInfo && ShopInfo.tgUrl()) || "https://t.me/anvaraxtamov2004"); } catch (e) {}
             try { tg.close(); } catch (e) {}
         };
@@ -42276,6 +42312,31 @@ html[data-theme="light"] #login-screen .login-seg button { color: #1c1c1e; }
 }
 .a1-logout-btn:active { background: var(--px-fill, rgba(118,118,128,.2)); }
 
+#login-screen .login-tg-box { margin-top: 14px; text-align: center; }
+#login-screen .login-or { display: flex; align-items: center; gap: 10px; margin: 2px 0 12px; color: var(--text-muted, #8a8a8a); font: 500 12.5px/1 var(--a3-font, -apple-system, sans-serif); }
+#login-screen .login-or::before, #login-screen .login-or::after { content: ""; flex: 1; height: .5px; background: rgba(120,120,128,.35); }
+#login-screen .login-tg {
+    width: 100%; height: 50px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 14px; cursor: pointer;
+    background: #2AABEE; color: #fff; font: 600 16px/1 var(--a3-font, -apple-system, sans-serif); letter-spacing: -.2px; -webkit-tap-highlight-color: transparent;
+    box-shadow: 0 8px 20px rgba(42,171,238,.28); transition: transform .25s cubic-bezier(.34,1.45,.64,1);
+}
+#login-screen .login-tg:active { transform: scale(.97); }
+#login-screen .login-tg svg { width: 21px; height: 21px; }
+#login-screen .login-tg-hint { margin: 9px 4px 0; font: 400 12px/1.4 var(--a3-font, -apple-system, sans-serif); color: var(--text-muted, #8a8a8a); }
+#login-screen .login-card.tg-waiting > :not(#login-tg-wait) { display: none !important; }
+#login-tg-wait { text-align: center; padding: 6px 2px 0; }
+#login-tg-wait[hidden] { display: none !important; }
+#login-tg-wait .tgw-ic { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; background: #2AABEE; color: #fff; box-shadow: 0 10px 26px rgba(42,171,238,.35); }
+#login-tg-wait .tgw-ic svg { width: 32px; height: 32px; margin-left: -2px; }
+#login-tg-wait h3 { margin: 0 0 6px; font: 700 21px/1.2 var(--a3-display, -apple-system, sans-serif); letter-spacing: -.4px; color: var(--text-main, #fff); }
+#login-tg-wait p { margin: 0; font: 400 14px/1.45 var(--a3-font, -apple-system, sans-serif); color: var(--text-muted, #8a8a8a); }
+#login-tg-wait .tgw-code { margin: 18px auto 12px; padding: 12px 0; border-radius: 16px; background: rgba(118,118,128,.16); }
+#login-tg-wait .tgw-code small { display: block; font: 500 12px/1 var(--a3-font, sans-serif); color: var(--text-muted, #8a8a8a); text-transform: uppercase; letter-spacing: .5px; }
+#login-tg-wait .tgw-code b { display: block; margin-top: 6px; font: 800 36px/1 var(--a3-display, sans-serif); letter-spacing: 8px; color: var(--text-main, #fff); font-variant-numeric: tabular-nums; }
+#login-tg-wait .tgw-st { margin: 0 0 14px; font-size: 13px; }
+#login-tg-wait .tgw-st.bad { color: #ff9f0a; }
+html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-wait .tgw-code b { color: #1c1c1e; }
+
 </style>
 <script id="a1-auth-pw-js">
 /* ═══════════════════════════════════════════════════════════════════
@@ -42401,7 +42462,8 @@ html[data-theme="light"] #login-screen .login-seg button { color: #1c1c1e; }
         window.currentUser = u.uid;
         try { myProfile.name = name; myProfile.phone = phone; } catch (e) {}
         if (DB) {
-            var w = DB.ref('users/' + u.uid + '/profile').update(isNew ? { name: name, phone: phone } : { phone: phone });
+            var w = isNew ? DB.ref('users/' + u.uid + '/profile').update({ name: name, phone: phone })
+                          : (phone ? DB.ref('users/' + u.uid + '/profile').update({ phone: phone }) : Promise.resolve());
             if (isNew) {
                 try { localStorage.setItem('avto_registration_pending', JSON.stringify({ uid: String(u.uid), name: name, phone: phone })); } catch (e) {}
                 w.then(function () { if (window._registerCustomerOnce) return window._registerCustomerOnce({ name: name, phone: phone }); })
@@ -42470,6 +42532,90 @@ html[data-theme="light"] #login-screen .login-seg button { color: #1c1c1e; }
         }
         try { await finish(u, name, phone, mode === 'register'); } catch (e) { busy(false); }
     };
+
+
+    /* ── 📱 TELEGRAM ORQALI KIRISH (ilova ↔ mini app — BITTA hisob) ──
+       Ilova tasodifiy kod yaratadi va botni ochadi: t.me/avtoa1bot?start=login_<kod>.
+       Mijoz botda «✅ Ha, kirish» ni bosadi -> bot tasdiqni yozadi -> Worker
+       (/tg-login-poll) bir martalik Firebase token beradi -> ilova AYNAN
+       Telegram hisobiga kiradi: profil rasmi, buyurtmalar, keshbek umumiy. */
+    var TG_BOT = 'avtoa1bot';
+    var tgf = null;
+    var hex = function (n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); };
+    var codeOf = function (nonce) { return String(parseInt(nonce.slice(0, 6), 16) % 9000 + 1000); };
+    var tgLink = function () { return 'https://t.me/' + TG_BOT + '?start=login_' + tgf.nonce; };
+    var openTg = function () { try { if (window.a1OpenExternal) a1OpenExternal(tgLink()); else location.href = tgLink(); } catch (e) {} };
+    function tgUI() {
+        var card = document.querySelector('#login-screen .login-card'); if (!card || $('login-tg-btn')) return;
+        var btn = $('login-submit-btn');
+        var wrap = document.createElement('div'); wrap.className = 'login-tg-box';
+        wrap.innerHTML = '<div class="login-or"><span>yoki</span></div>' +
+            '<button type="button" class="login-tg" id="login-tg-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.3-.2 1.6l4.7 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.5-1.5zM9.8 14.6l-.4 3.8-1.4-4.6 10.3-6.5-8.5 7.3z"/></svg>Telegram orqali kirish</button>' +
+            '<p class="login-tg-hint">Telegram\u2019dagi mini app bilan bir xil hisob: rasm, buyurtmalar va keshbek.</p>';
+        if (btn && btn.parentNode) btn.parentNode.insertBefore(wrap, btn.nextSibling);
+        var w = document.createElement('div'); w.id = 'login-tg-wait'; w.hidden = true;
+        w.innerHTML = '<div class="tgw-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.3-.2 1.6l4.7 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.5-1.5z"/></svg></div>' +
+            '<h3>Telegram\u2019da tasdiqlang</h3><p>Botda <b>\u00ab\u2705 Ha, kirish\u00bb</b> tugmasini bosing va shu yerga qayting.</p>' +
+            '<div class="tgw-code"><small>Tekshiruv kodi</small><b id="tgw-code">0000</b></div>' +
+            '<p class="tgw-st" id="tgw-st">Tasdiq kutilmoqda\u2026</p>' +
+            '<button type="button" class="login-tg" id="tgw-open">Telegram\u2019ni ochish</button>' +
+            '<button type="button" class="login-forgot" id="tgw-cancel">Bekor qilish</button>';
+        card.appendChild(w);
+        $('login-tg-btn').onclick = tgStart;
+        $('tgw-open').onclick = openTg;
+        $('tgw-cancel').onclick = function () { tgStop(); };
+    }
+    function tgShow(on) {
+        var card = document.querySelector('#login-screen .login-card'); if (card) card.classList.toggle('tg-waiting', !!on);
+        var w = $('login-tg-wait'); if (w) w.hidden = !on;
+    }
+    function tgStatus(t, bad) { var e = $('tgw-st'); if (e) { e.textContent = t; e.classList.toggle('bad', !!bad); } }
+    function tgStop(msg) {
+        if (tgf) { clearTimeout(tgf.t); tgf = null; }
+        tgShow(false);
+        if (msg) window._loginSetErr('login-phone', msg);
+    }
+    function tgStart() {
+        tgStop();
+        tgf = { nonce: hex(16), started: Date.now(), t: 0, busy: false };
+        var c = $('tgw-code'); if (c) c.textContent = codeOf(tgf.nonce);
+        tgStatus('Tasdiq kutilmoqda\u2026');
+        tgShow(true);
+        try { Haptics.tap && Haptics.tap(); } catch (e) {}
+        openTg();
+        tgf.t = setTimeout(tgPoll, 2500);
+    }
+    async function tgPoll() {
+        var f = tgf; if (!f || f.busy) return;
+        if (Date.now() - f.started > 5 * 60 * 1000) { tgStop('Vaqt tugadi. \u00abTelegram orqali kirish\u00bb ni qayta bosing'); return; }
+        f.busy = true;
+        try {
+            var resp = await fetch(TG_PROXY + '/tg-login-poll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nonce: f.nonce }) });
+            var data = await resp.json().catch(function () { return null; });
+            if (f !== tgf) return;
+            if (resp.status === 404) { tgStop('Telegram orqali kirish hali yoqilmagan. Telefon va parol bilan kiring'); return; }
+            if (resp.status === 410) { tgStop('Tasdiq eskirgan. Qayta urinib ko\u2018ring'); return; }
+            if (data && data.ok && data.token) {
+                tgStatus('Kirilmoqda\u2026');
+                var A = auth();
+                var cred = await A.signInWithCustomToken(data.token);
+                var u = (cred && cred.user) || A.currentUser;
+                tgf = null;
+                try { localStorage.setItem('a1_had_account', '1'); } catch (e) {}
+                await finish(u, data.name || '', '', false);
+                tgShow(false);
+                return;
+            }
+        } catch (e) {
+            if (f === tgf) tgStatus('Internet aloqasini tekshiring\u2026', true);
+        } finally { f.busy = false; }
+        if (f === tgf) f.t = setTimeout(tgPoll, document.hidden ? 4000 : 2000);
+    }
+    // Telegram'dan qaytganda — darhol tekshiramiz
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && tgf && !tgf.busy) { clearTimeout(tgf.t); tgPoll(); }
+    });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tgUI); else tgUI();
 
     /* ── Hisobdan chiqish ── */
     window.a1Logout = function () {

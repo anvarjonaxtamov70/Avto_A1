@@ -2716,10 +2716,79 @@ async def owner_free_chat(message: types.Message, state: FSMContext):
 # =====================================================================
 # HANDLERLAR
 # =====================================================================
+# =====================================================================
+# 📱 ILOVAGA TELEGRAM ORQALI KIRISH
+#   Android/iPhone ilovada «Telegram orqali kirish» bosilganda ilova tasodifiy
+#   kod (nonce) yaratib, t.me/<bot>?start=login_<nonce> ni ochadi. Bu yerda
+#   mijoz kirishni TUGMA bilan tasdiqlaydi (begona havola orqali hisobni
+#   o'g'irlashning oldini olish uchun) va ekranda ilovadagi 4 xonali kod
+#   ko'rsatiladi. Tasdiqlangach `tg_login/<nonce>` yoziladi; Worker
+#   (/tg-login-poll) uni bir martalik o'qib, Firebase custom token beradi —
+#   ilova mijozning AYNAN Telegram hisobiga (profil rasmi, buyurtmalar,
+#   keshbek) kiradi.
+# =====================================================================
+_APP_LOGIN_RE = re.compile(r"^login_([0-9a-f]{32})$")
+
+
+def app_login_code(nonce):
+    """Ilova ekranidagi bilan bir xil 4 xonali tekshiruv kodi."""
+    return str(int(nonce[:6], 16) % 9000 + 1000)
+
+
+async def maybe_app_login_start(message):
+    parts = (message.text or "").split(maxsplit=1)
+    m = _APP_LOGIN_RE.match(parts[1].strip()) if len(parts) > 1 else None
+    if not m:
+        return False
+    nonce = m.group(1)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Ha, kirish", callback_data=f"tgl:ok:{nonce}"),
+        InlineKeyboardButton(text="❌ Yo'q", callback_data=f"tgl:no:{nonce}"),
+    ]])
+    await message.answer(
+        "📱 <b>Avto A1 ilovasiga kirish</b>\n\n"
+        f"Ilovadagi kod: <b>{app_login_code(nonce)}</b>\n\n"
+        "Kod ilovadagi bilan bir xil bo'lsa — «✅ Ha, kirish» ni bosing. "
+        "Bu havolani o'zingiz ilovadan ochmagan bo'lsangiz, <b>rad eting</b>.",
+        parse_mode="HTML", reply_markup=kb)
+    return True
+
+
+@dp.callback_query(F.data.startswith("tgl:"))
+async def app_login_callback(callback: types.CallbackQuery):
+    parts = (callback.data or "").split(":")
+    if len(parts) != 3 or not re.fullmatch(r"[0-9a-f]{32}", parts[2]):
+        await callback.answer()
+        return
+    action, nonce = parts[1], parts[2]
+    if action != "ok":
+        await callback.message.edit_text("❌ Kirish rad etildi.")
+        await callback.answer()
+        return
+    u = callback.from_user
+    ok, _status = await firebase_put(f"tg_login/{nonce}", {
+        "uid": str(u.id),
+        "name": (u.first_name or "")[:80],
+        "username": (u.username or "")[:64],
+        "at": int(time.time() * 1000),
+    })
+    if ok:
+        await callback.message.edit_text(
+            "✅ Tasdiqlandi! Endi Avto A1 ilovasiga qayting — u o'zi ochiladi.")
+    else:
+        await callback.message.edit_text(
+            "⚠️ Hozir tasdiqlab bo'lmadi. Ilovada «Telegram orqali kirish» ni qayta bosing.")
+    await callback.answer()
+
+
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
+
+    # 📱 Ilovadan kelgan «Telegram orqali kirish» havolasi
+    if await maybe_app_login_start(message):
+        return
 
     # 👔 XO'JAYIN: mijoz oqimi (til tanlash / ro'yxatdan o'tish / menyu)
     #    unga umuman kerak emas. Kunda bir marta salom, tugmalarsiz.
