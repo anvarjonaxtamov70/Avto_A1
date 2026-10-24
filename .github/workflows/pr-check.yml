@@ -79,6 +79,16 @@ jobs:
       - name: Adaptiv tezlik rejimi sinovi
         run: node .github/test-perf-tier.js
 
+      # ⚡ Deploy'dagi ixchamlashtirish ishlashini oldindan tekshiramiz:
+      # build xatosiz o'tadi va chiqqan har bir JS fayl sintaktik toza.
+      - name: Ixchamlashtirish sinovi (build-site)
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund terser@5.51.2
+          mkdir -p /tmp/site && cp index.html sw.js /tmp/site/
+          node .github/build-site.js /tmp/site
+          for f in /tmp/site/assets/js/*.js; do node --check "$f"; done
+          grep -q 'assets/js/' /tmp/site/index.html
+
       - name: Python sintaksisi (bot)
         run: |
           python3 -m py_compile bot/bot.py bot/ai_agent.py bot/fb_utils.py \

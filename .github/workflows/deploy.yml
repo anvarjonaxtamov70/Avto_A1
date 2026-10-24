@@ -44,6 +44,23 @@ jobs:
             --exclude 'music_bot' \
             ./ _site/
 
+      # ⚡ IXCHAMLASHTIRISH: _site/index.html dagi JS/CSS ixchamlanadi, katta
+      # skriptlar assets/js/*.<hash>.js ga chiqariladi (repodagi asl fayl o'zgarmaydi).
+      # Muammo bo'lsa o'chirish: Settings -> Secrets and variables -> Actions ->
+      # Variables -> A1_SKIP_BUILD = 1 (keyingi deploy asl faylni chiqaradi).
+      - name: Node.js o'rnatish
+        if: ${{ vars.A1_SKIP_BUILD != '1' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Ixchamlashtirish (build-site)
+        if: ${{ vars.A1_SKIP_BUILD != '1' }}
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund terser@5.51.2
+          node .github/build-site.js _site
+          for f in _site/assets/js/*.js; do node --check "$f"; done
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
