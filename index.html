@@ -20466,7 +20466,15 @@ document.addEventListener('click', function (e) {
        🔗 6. REFERRAL
        ============================================================ */
     function genCode(uid) {
-        var base = Math.abs(parseInt(uid) || Date.now()).toString(36).toUpperCase();
+        var n = parseInt(uid);
+        // Ilova/brauzer mijozining uid'i raqam emas (Firebase anonim uid) — undan
+        // barqaror xesh olamiz (ilgari Date.now() ishlatilardi, kod tasodifiy edi).
+        if (!(n > 0) || String(n) !== String(uid)) {
+            var h = 2166136261, str = String(uid || Date.now());
+            for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+            n = h;
+        }
+        var base = Math.abs(n).toString(36).toUpperCase();
         return 'A1' + base.slice(-5).padStart(5, '0');
     }
     function ensureReferralCode() {
@@ -20477,6 +20485,9 @@ document.addEventListener('click', function (e) {
             saveRemote();
         }
         // kod -> uid xaritasi (referral ishlashi uchun)
+        // Har sync'da (sekundiga o'nlab marta) qayta urinmaslik uchun — bir sessiyada bir marta
+        if (P._rcTried === P.state.referralCode + '|' + P.uid) return;
+        P._rcTried = P.state.referralCode + '|' + P.uid;
         if (hasFB()) {
             // ⚠️ Avval mavjudligini tekshiramiz: qoidalar refcodes'ni faqat BIR marta
             // yozishga ruxsat beradi (!data.exists()). Har yuklanishda qayta .set() qilish
@@ -24233,6 +24244,14 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
                 updatedAt: Date.now()
             };
             if (VIP.sinceMs) payload.since = VIP.sinceMs;
+            // ⚠ CHEKSIZ SIKL TUZATISHI: bu yozuv users/{uid} tinglovchisini qayta
+            //    ishga tushiradi -> profil qayta chiziladi -> yana persist(). Ilgari
+            //    har safar yangi `updatedAt` bilan yozilgani uchun sikl hech qachon
+            //    to'xtamasdi (ilova ro'yxatdan o'tishdan keyin qotib qolardi).
+            //    Endi faqat daraja ma'lumoti HAQIQATAN o'zgarganda yoziladi.
+            var sig = window.currentUser + '|' + JSON.stringify([payload.tier, payload.level, payload.isVip, payload.spent, payload.orders, payload.since || 0]);
+            if (persist._sig === sig) return;
+            persist._sig = sig;
             DB().ref('users/' + window.currentUser + '/profile/vip').update(payload).catch(function () {});
         } catch (e) {}
     }
