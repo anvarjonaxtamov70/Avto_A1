@@ -538,7 +538,43 @@ def test_audit_faqat_kerak_bolganda_yoziladi():
 
 def test_prompt_bloki_yozish_yoqligini_aytadi():
     txt = ai_agent.owner_tools_prompt_block()
-    assert "O'QIY" in txt and "TO'QIMA" in txt
+    assert "o'qiy olasiz" in txt and "Taxmin qilmang" in txt
+
+
+def test_prompt_hurmat_va_aniqlik_qoidalari():
+    """Xo'jayinga «Siz» bilan, raqam faqat vositadan."""
+    txt = ai_agent.owner_tools_prompt_block()
+    assert "«Siz»" in txt and "«Sen»" in txt
+    assert "vosita natijasidan" in txt
+    assert "Senda" not in txt and "TO'QIMA" not in txt   # eski "sen"lab gapirish yo'q
+
+
+def test_raqam_savolida_vosita_majburiy():
+    """force_tool=True -> birinchi aylanish tool_choice="required"."""
+    seen = []
+
+    async def groq(messages, tools=None, tool_choice=None, temperature=0.5, **k):
+        seen.append(tool_choice)
+        return FakeMsg("Javob")
+
+    ai_agent.init(firebase_get=fake_get, firebase_patch=fake_patch,
+                  groq_raw=groq, is_owner=lambda uid: int(uid) == OWNER)
+    run(ai_agent.run_agent([{"role": "user", "content": "qancha qoldi"}], OWNER, force_tool=True))
+    assert seen and seen[0] == "required", seen
+
+
+def test_required_rad_etilsa_auto_bilan_qayta():
+    seen = []
+
+    async def groq(messages, tools=None, tool_choice=None, temperature=0.5, **k):
+        seen.append(tool_choice)
+        return None if tool_choice == "required" else FakeMsg("Javob")
+
+    ai_agent.init(firebase_get=fake_get, firebase_patch=fake_patch,
+                  groq_raw=groq, is_owner=lambda uid: int(uid) == OWNER)
+    res = run(ai_agent.run_agent([{"role": "user", "content": "qancha qoldi"}], OWNER, force_tool=True))
+    assert seen[:2] == ["required", "auto"], seen
+    assert res.text == "Javob"
 
 
 # =====================================================================
