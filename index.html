@@ -245,6 +245,11 @@
       var MID_BLUR_MAX = 8;              // mid darajada blur radiusi chegarasi (px)
       var RANK = { low: 0, mid: 1, high: 2 };
       var DOWN = { high: 'mid', mid: 'low', low: 'low' };
+      // 📱 Ilovada (Android ilova / iPhone bosh ekran ilovasi) qorovul «yengil»
+      //    rejimga TUSHIRMAYDI: u deyarli barcha animatsiyalarni o'chirardi.
+      //    Ilovadagi qotish sabablari endi alohida tuzatilgan (a1-app-perf).
+      var APP = root.classList.contains('a1-app');
+      if (APP) DOWN = { high: 'mid', mid: 'mid', low: 'low' };
       var ua = navigator.userAgent || '';
 
       function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -316,6 +321,8 @@
       function readAuto() {
         try {
           var b = JSON.parse(lsGet(LS_AUTO) || 'null');
+          // Ilovada qorovul ilgari saqlab qo'ygan pasaytirish e'tiborga olinmaydi
+          if (APP && b && b.src === 'guard') return null;
           if (b && RANK[b.tier] !== undefined && b.sig === signature() && (Date.now() - b.at) < (b.ttl || AUTO_TTL)) return b;
         } catch (e) {}
         return null;
@@ -1957,11 +1964,6 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
         }
         /* 📱 Ilova rejimi: welcome'da asosiy oqimni band qiladigan effektlar yo'q
            (harflardagi blur, A1 ustidan nur, shesterna soyasi) — faqat transform/opacity. */
-        html.a1-app #welcome-screen .wl-gear { filter: none !important; }
-        html.a1-app #welcome-screen .wl-icon::before { content: ""; position: absolute; inset: -18%; border-radius: 50%; background: radial-gradient(circle, rgba(240,208,96,.22), transparent 62%); pointer-events: none; }
-        html.a1-app #welcome-screen .wl-ch { filter: none !important; }
-        html.a1-app #welcome-screen .wl-mono { animation: wlMonoIn 0.7s cubic-bezier(0.34, 1.4, 0.5, 1) 0.55s forwards !important; background-position: 200% 0, 0 0 !important; }
-        html.a1-app .welcome-fade-out .wl-stage { filter: none !important; }
         .header { text-align: center; padding: 10px 20px 20px; }
         .header h1 { font-size: 26px; font-weight: 800; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
         /* 💎 Premium TILLA tasdiq nishoni (avval ko'k Twitter-uslubida edi — palitra bilan ziddiyat).
@@ -42691,9 +42693,6 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
    (shisha o'rniga zich, yarim shaffof fon).
    ═══════════════════════════════════════════════════════════════════ */
 html.a1-app body #polish-grain { display: none !important; }
-html.a1-app body .cmp-rock,
-html.a1-app body .a1-spark-big, html.a1-app body .a1-spark-sm, html.a1-app body .a1-spark-xs,
-html.a1-app body .shogird-orbit { animation: none !important; }
 /* Shisha o'rniga zich fon (blur JS orqali o'chiriladi) */
 html.a1-app body .bottom-nav { background: rgba(22,22,24,.97) !important; }
 html.a1-app[data-theme="light"] body .bottom-nav { background: rgba(250,249,246,.97) !important; }
@@ -42762,27 +42761,35 @@ html.a1-app body * { -webkit-tap-highlight-color: transparent; }
             var bl = node.querySelectorAll('[style*="backdrop"]'); for (var j = 0; j < bl.length; j++) noInlineGlass(bl[j]);
         }
     }
-    /* 3) Bezak uchun CHEKSIZ animatsiyalar (kartadagi yaltiroq, storis halqasi
-          porlashi, yurak/taqqoslash tebranishi, AI tugmasi orbitasi …) — ilovada
-          to'xtatiladi. O'lchovda ular skroll paytida har kadrda 8 000+ marta
-          uslub qayta hisoblatgan. Yuklanish belgilari (aylanuvchi spinner,
-          skelet, welcome shesternasi) TEGILMAYDI. */
+    /* 3) Bezak uchun cheksiz animatsiyalar (kartadagi yaltiroq, storis halqasi,
+          tebranish, AI tugmasi orbitasi …) ishlaydi, faqat SKROLL paytida bir
+          lahzaga to'xtab turadi — barmoq qo'yib yuborilgach ~0.2s da davom etadi.
+          Shunda ro'yxat silliq aylanadi, tinch turganda esa hammasi «tirik».
+          Yuklanish belgilari (spinner, skelet, shesterna) hech qachon to'xtamaydi. */
     var KEEP = /^(wlGearIdle|wlGearIn|gearSpin|wlIndet|wlLoad|skeleton-loading|skelShimmer|shimmerSlide|p2Shimmer|gold-loading|hourglass-anim|pulse-text|dotPulse|sgDot|a1Spin|aibSpin|aoSpin|mpSpin|ordlSpin|ordlSpinR|rvSpin|mapLocateSpin)$/;
-    var STOP = /^(a10Shine|ringGlow|a1FabSpin|cmpRock|a1Twinkle|storyRingSpin|a3Spin|lyRingSpin|gold-shimmer)$/;
-    function calmAnimations() {
-        if (!document.getAnimations) return;
+    var held = null, resumeT = 0;
+    function holdAnimations() {
+        if (held || !document.getAnimations) return;
+        held = [];
         try {
             document.getAnimations().forEach(function (a) {
-                var n = a.animationName; if (!n || KEEP.test(n) || a.playState === 'paused') return;
+                var n = a.animationName; if (!n || KEEP.test(n) || a.playState !== 'running') return;
                 var t = a.effect && a.effect.getTiming ? a.effect.getTiming() : null;
                 if (!t || t.iterations !== Infinity) return;
-                var dur = typeof t.duration === 'number' ? t.duration : 0;
-                if (STOP.test(n) || dur >= 2000) { try { a.currentTime = 0; } catch (e) {} a.pause(); }
+                a.pause(); held.push(a);
             });
         } catch (e) {}
     }
-    var calmT = 0;
-    function calmSoon() { if (calmT) return; calmT = setTimeout(function () { calmT = 0; calmAnimations(); }, 250); }
+    function releaseAnimations() {
+        var list = held; held = null;
+        if (list) list.forEach(function (a) { try { if (a.playState === 'paused') a.play(); } catch (e) {} });
+    }
+    document.addEventListener('scroll', function () {
+        holdAnimations();
+        clearTimeout(resumeT);
+        resumeT = setTimeout(releaseAnimations, 220);
+    }, { passive: true, capture: true });
+    function calmSoon() {}
 
     noGlass();
     scan(document.body);
@@ -42794,9 +42801,7 @@ html.a1-app body * { -webkit-tap-highlight-color: transparent; }
         }).observe(document.documentElement, { childList: true, subtree: true });
     } catch (e) {}
     window.addEventListener('load', function () { noGlass(); calmSoon(); });
-    window.addEventListener('a1-ready', calmSoon);
-    setTimeout(function () { noGlass(); calmAnimations(); }, 2500);
-    setTimeout(calmAnimations, 6000);
+    setTimeout(noGlass, 2500);
 })();
 </script>
 <style id="a1-install-hint">
