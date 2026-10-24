@@ -9490,12 +9490,14 @@ const Haptics = {
                         }));
                     } catch (e) {}
                 }
-                var _profileWrite = Promise.reject(new Error('Firebase mavjud emas'));
+                // (Oldindan Promise.reject yaratilmaydi — u «ushlanmagan xato» bo'lib chiqardi)
+                var _profileWrite = null;
                 try {
                     if (typeof db !== 'undefined' && db.ref) {
                         _profileWrite = db.ref('users/' + window.currentUser + '/profile').update({ name: nameVal, phone: phoneVal });
                     }
                 } catch (e) { _profileWrite = Promise.reject(e); }
+                if (!_profileWrite) _profileWrite = Promise.reject(new Error('Firebase mavjud emas'));
                 // Anonymous authning o'zi ro'yxatdan o'tish EMAS. Faqat ism/telefon
                 // profili muvaffaqiyatli yozilgandan keyin server hodisasini yaratamiz.
                 _profileWrite.then(function () {
