@@ -301,7 +301,9 @@
         } else if (isAndroid) {
           src = 'android';
           var g = gpuTier();
-          if (g) { tier = lower(tier, g.tier); reasons.push('gpu:' + g.name); }
+          // Ilovada faqat haqiqatan zaif GPU pasaytiradi — aks holda blur radiusi
+          // Telegram'dagidan farq qilib qolardi
+          if (g && !(APP && g.tier === 'mid')) { tier = lower(tier, g.tier); reasons.push('gpu:' + g.name); }
           else if (typeof mem === 'number' && mem <= 4) { tier = lower(tier, 'mid'); reasons.push('ram<=4'); }
           if (typeof cores === 'number' && cores <= 4) { tier = 'low'; reasons.push('cpu<=4'); }
         }
@@ -322,7 +324,7 @@
         try {
           var b = JSON.parse(lsGet(LS_AUTO) || 'null');
           // Ilovada qorovul ilgari saqlab qo'ygan pasaytirish e'tiborga olinmaydi
-          if (APP && b && b.src === 'guard') return null;
+          if (APP && b && (b.src === 'guard' || (b.src === 'android' && b.tier === 'mid'))) return null;
           if (b && RANK[b.tier] !== undefined && b.sig === signature() && (Date.now() - b.at) < (b.ttl || AUTO_TTL)) return b;
         } catch (e) {}
         return null;
@@ -15917,7 +15919,7 @@ function initReveal() {
         //    har skroll kadrida rasm o'lchamini o'qib, transform yozish butun
         //    sahifa uslubini qayta hisoblatardi (o'lchovda 400+ marta) — skroll
         //    va rasmlar ochilishidagi asosiy «tutilish» shu edi.
-        try { return reduce || document.documentElement.classList.contains('lite') || document.documentElement.classList.contains('a1-app') || window.__perfLite; }
+        try { return reduce || document.documentElement.classList.contains('lite') || window.__perfLite; }
         catch(e){ return true; }
     }
 
@@ -21517,7 +21519,6 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
     // 📱 Ilovada kerak emas: u yerda cheksiz bezak animatsiyalari va grain umuman
     //    o'chiq (a1-app-perf), body sinfini almashtirish esa har skroll boshida
     //    butun sahifa uslubini qayta hisoblatib, «tutilish» berardi.
-    if (document.documentElement.classList.contains('a1-app')) return;
     // Skroll boshlanganda body.is-scrolling qo'shamiz, tugagach (140ms jim) olib tashlaymiz.
     var t = null, on = false;
     function start(){ if(!on){ document.body.classList.add('is-scrolling'); on = true; } }
@@ -42684,33 +42685,10 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
 
 </script>
 <style id="a1-app-perf">
-/* ═══════════════════════════════════════════════════════════════════
-   📱 Ilova rejimi (Android ilova + iPhone/iPad bosh ekran ilovasi) — SILLIQLIK
-   Qotishlarning asosiy manbalari WebView'da:
-     1) backdrop-filter (shisha blur) — har bir kartadagi yurak tugmasi, pastki
-        menyu, sarlavha: har kadrda ostidagi tasvirni qayta xiralashtiradi;
-     2) to'liq ekranli «grain» qatlami;
-     3) SVG ichidagi cheksiz animatsiyalar (asosiy oqimda qayta chiziladi);
-     4) rasm dekodlash asosiy oqimda.
-   Bu qatlam ularni ilovada o'chiradi; ko'rinish deyarli o'zgarmaydi
-   (shisha o'rniga zich, yarim shaffof fon).
-   ═══════════════════════════════════════════════════════════════════ */
-html.a1-app body #polish-grain { display: none !important; }
-/* Shisha o'rniga zich fon (blur JS orqali o'chiriladi) */
-html.a1-app body .bottom-nav { background: rgba(22,22,24,.97) !important; }
-html.a1-app[data-theme="light"] body .bottom-nav { background: rgba(250,249,246,.97) !important; }
-html.a1-app body .header.hx { background-color: rgba(10,10,11,.96) !important; }
-html.a1-app[data-theme="light"] body .header.hx { background-color: rgba(244,238,226,.96) !important; }
-html.a1-app body .btn-wishlist { background: rgba(20,20,22,.62) !important; }
-html.a1-app[data-theme="light"] body .btn-wishlist { background: rgba(255,255,255,.85) !important; }
-html.a1-app body #productModal.a7 .a7-gl { background: rgba(20,20,22,.6) !important; }
-html.a1-app body #shogird-launcher { background-color: rgba(28,28,30,.96) !important; }
-/* Skroll konteyneri — o'z GPU qatlamida, chekkada «cho'zilmaydi» */
-html.a1-app body .container { will-change: scroll-position; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-/* Rasmlar: yuklanguncha joy egallab turadi (sakrash yo'q) va yumshoq paydo bo'ladi */
-html.a1-app body .luxury-card img { background-color: rgba(255,255,255,.04); }
-/* Bosilganda kulrang «flash» yo'q */
-html.a1-app body * { -webkit-tap-highlight-color: transparent; }
+/* 📱 Ilova (Android/iPhone) ko'rinishi Telegram mini app bilan AYNAN bir xil:
+   shisha (blur), fonlar, grain — hech biri ilovada o'zgartirilmaydi.
+   Faqat matn o'lchami tizim shrift sozlamasidan qat'i nazar bir xil qilinadi. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 </style>
 <script id="a1-app-perf-js">
 /* 📱 Ilova rejimi — silliqlik (JS qismi) */
@@ -42757,11 +42735,9 @@ html.a1-app body * { -webkit-tap-highlight-color: transparent; }
     function scan(node) {
         if (!node || node.nodeType !== 1) return;
         if (node.tagName === 'IMG') fixImg(node);
-        else if (node.tagName === 'STYLE') { setTimeout(noGlass, 0); }
-        noInlineGlass(node);
+
         if (node.querySelectorAll) {
             var im = node.querySelectorAll('img'); for (var i = 0; i < im.length; i++) fixImg(im[i]);
-            var bl = node.querySelectorAll('[style*="backdrop"]'); for (var j = 0; j < bl.length; j++) noInlineGlass(bl[j]);
         }
     }
     /* 3) Bezak uchun cheksiz animatsiyalar (kartadagi yaltiroq, storis halqasi,
@@ -42792,7 +42768,7 @@ html.a1-app body * { -webkit-tap-highlight-color: transparent; }
         clearTimeout(resumeT);
         resumeT = setTimeout(releaseAnimations, 220);
     }, { passive: true, capture: true });
-    noGlass();
+    noGlass = function () {};   // shisha effektlari Telegram'dagidek saqlanadi
     scan(document.body);
     try {
         new MutationObserver(function (ms) {
