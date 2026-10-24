@@ -25,6 +25,7 @@
 const SW_VERSION = 'a1-v1';
 const SHELL_CACHE = SW_VERSION + '-shell';   // HTML (offline zaxira)
 const ASSET_CACHE = SW_VERSION + '-assets';  // CDN: firebase, shriftlar
+const BUILD_CACHE = SW_VERSION + '-build';   // deploy'da yasalgan assets/js/*.<hash>.js
 
 /** Faqat shu manbalar keshlanadi. Boshqasiga TEGILMAYDI. */
 const ASSET_HOSTS = [
@@ -78,13 +79,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2) Ruxsat berilgan CDN manbalari — keshdan darhol, fonda yangilash.
+  // 2) O'zimizning ixchamlangan JS fayllar (assets/js/NN-nom.<hash>.js).
+  //    Nomida hash bor -> mazmuni HECH QACHON o'zgarmaydi -> doim keshdan.
+  //    Yangi deploy = yangi nom, eski nusxa avtomatik o'chiriladi.
+  if (url.origin === self.location.origin && /\/assets\/js\/[^/]+\.[0-9a-f]{10}\.js$/.test(url.pathname)) {
+    event.respondWith(cacheFirstImmutable(req, url));
+    return;
+  }
+
+  // 3) Ruxsat berilgan CDN manbalari — keshdan darhol, fonda yangilash.
   if (ASSET_HOSTS.indexOf(url.hostname) >= 0) {
     event.respondWith(staleWhileRevalidate(req));
     return;
   }
 
-  // 3) Qolgan hamma narsa (Firebase RTDB, Worker, rasm hostlari) — tegilmaydi.
+  // 4) Qolgan hamma narsa (Firebase RTDB, Worker, rasm hostlari) — tegilmaydi.
   //    Ular doim jonli bo'lishi kerak.
 });
 
@@ -133,4 +142,25 @@ async function staleWhileRevalidate(req) {
   const fresh = await update;
   if (fresh) return fresh;
   return new Response('', { status: 504, statusText: 'offline' });
+}
+
+/** Hash'li fayl: keshda bo'lsa darhol; bo'lmasa tarmoqdan olib saqlaydi va
+ *  shu fayl nomining ESKI versiyalarini (boshqa hash) o'chiradi. */
+async function cacheFirstImmutable(req, url) {
+  const cache = await caches.open(BUILD_CACHE);
+  const hit = await cache.match(req, { ignoreSearch: true });
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res && res.ok) {
+    try {
+      await cache.put(req, res.clone());
+      const base = url.pathname.replace(/\.[0-9a-f]{10}\.js$/, '.');   // ".../07-nom."
+      const keys = await cache.keys();
+      await Promise.all(keys.map((k) => {
+        const p = new URL(k.url).pathname;
+        return (p !== url.pathname && p.indexOf(base) === 0) ? cache.delete(k) : null;
+      }));
+    } catch (e) {}
+  }
+  return res;
 }
