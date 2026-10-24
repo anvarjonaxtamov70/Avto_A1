@@ -8541,9 +8541,51 @@ window.currentUser = null;
     window.AVTO_BUILD = 'v2026.05.30-7';
     try { _dlog('%c[Avto A1] BUILD ' + window.AVTO_BUILD + ' — ' + new Date().toISOString(), 'color:#C9A84C;font-weight:bold;'); } catch(e){}
     // 🛡 Telegram WebApp himoyali yuklash — brauzerda yoki Telegram yuklanmasa ham xato bermaydi
+    // 📱 ANDROID ILOVA (APK) — Capacitor qobig'i User-Agent oxiriga «AvtoA1App» qo'shadi.
+    //    Ilovada Telegram yo'q: telegram-web-app.js baribir window.Telegram.WebApp
+    //    yaratadi, lekin uning showConfirm/showAlert'i Telegram tashqarisida XATO
+    //    otadi, openTelegramLink esa butun ilovani t.me sahifasiga olib ketadi.
+    //    Shuning uchun ilovada Telegram obyekti ishlatilmaydi — pastdagi to'liq
+    //    «stub» ishlaydi (tasdiq/ogohlantirish — native oyna, havolalar — tashqi ilova).
+    window.A1_APP = (function () {
+        try {
+            if (/\bAvtoA1App\b/.test(navigator.userAgent || '')) return true;
+            return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        } catch (e) { return false; }
+    })();
+    if (window.A1_APP) { try { document.documentElement.classList.add('a1-app'); } catch (e) {} }
+    // Ilovada tashqi havola (t.me, tel:, Instagram, xarita) — tizim ochadi
+    // (Telegram ilovasi, qo'ng'iroq, brauzer). Capacitor o'z domenidan tashqari
+    // har qanday manzilni avtomatik tashqi ilovaga uzatadi.
+    window.a1OpenExternal = function (url) {
+        if (!url) return;
+        window.location.href = url;   // Capacitor tutib oladi -> Intent.ACTION_VIEW
+    };
+    window._a1IsExternal = function (href) {
+        try {
+            if (/^(tel|tg|mailto|sms|geo|intent|whatsapp|market):/i.test(href)) return true;
+            var u = new URL(href, location.href);
+            return /^https?:$/.test(u.protocol) && u.host !== location.host;
+        } catch (e) { return false; }
+    };
+    if (window.A1_APP) {
+        // target="_blank" havolalar va window.open — ilova ichida emas, tashqi ilovada ochiladi
+        document.addEventListener('click', function (e) {
+            var a = e.target && e.target.closest && e.target.closest('a[href]');
+            if (!a || e.defaultPrevented) return;
+            var href = a.getAttribute('href') || '';
+            if (!href || href.charAt(0) === '#' || /^javascript:/i.test(href) || a.hasAttribute('download')) return;
+            if (window._a1IsExternal(href)) { e.preventDefault(); window.a1OpenExternal(a.href || href); }
+        }, true);
+        var _wopen = window.open;
+        window.open = function (url) {
+            if (url && window._a1IsExternal(String(url))) { window.a1OpenExternal(String(url)); return null; }
+            return _wopen.apply(window, arguments);
+        };
+    }
     let tg;
     try {
-        tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+        tg = (!window.A1_APP && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
     } catch(e) { tg = null; }
     if (!tg) {
         // Brauzerda yoki Telegram script bloklangan bo'lsa — bo'sh "stub" yaratamiz
@@ -8562,9 +8604,33 @@ window.currentUser = null;
                 impactOccurred: function(style){ try { if (typeof navigator!=='undefined' && navigator.vibrate) navigator.vibrate(style === 'heavy' ? 20 : style === 'medium' ? 15 : style === 'soft' ? 8 : 10); } catch(e){} },
                 selectionChanged: function(){ try { if (typeof navigator!=='undefined' && navigator.vibrate) navigator.vibrate(5); } catch(e){} }
             },
-            BackButton: { show: function(){}, hide: function(){}, onClick: function(){} },
-            MainButton: { show: function(){}, hide: function(){}, onClick: function(){}, setText: function(){} },
+            BackButton: { show: function(){}, hide: function(){}, onClick: function(){}, offClick: function(){}, isVisible: false },
+            MainButton: { show: function(){}, hide: function(){}, onClick: function(){}, offClick: function(){}, setText: function(){} },
             close: function(){}, sendData: function(){},
+            // Telegram API'ning qolgan qismi — chaqirilsa ham xato bermaydi.
+            // (Ilgari yo'q edi: masalan `tg.onEvent('backButtonClicked', …)` himoyasiz
+            //  chaqiriladi va stub rejimida butun skript blokini to'xtatib qo'yardi.)
+            initData: '',
+            onEvent: function(){}, offEvent: function(){},
+            setHeaderColor: function(){}, setBackgroundColor: function(){}, setBottomBarColor: function(){},
+            enableClosingConfirmation: function(){}, disableClosingConfirmation: function(){},
+            enableVerticalSwipes: function(){}, disableVerticalSwipes: function(){}, enableSwipeBack: function(){},
+            requestFullscreen: function(){}, exitFullscreen: function(){}, isFullscreen: false,
+            safeAreaInset: null, contentSafeAreaInset: null,
+            // Tasdiq / ogohlantirish — native (Android) oyna
+            showConfirm: function(msg, cb){ var ok = false; try { ok = window.confirm(String(msg || '')); } catch(e){} if (typeof cb === 'function') setTimeout(function(){ cb(ok); }, 0); },
+            showAlert: function(msg, cb){ try { window.alert(String(msg || '')); } catch(e){} if (typeof cb === 'function') setTimeout(cb, 0); },
+            showPopup: function(p, cb){
+                p = p || {}; var bs = p.buttons || [{ id: 'ok', type: 'ok' }];
+                var text = (p.title ? p.title + '\n\n' : '') + (p.message || '');
+                var main = bs.filter(function(b){ return b.type !== 'cancel' && b.type !== 'close'; })[0] || bs[0];
+                var cancel = bs.filter(function(b){ return b.type === 'cancel' || b.type === 'close'; })[0];
+                var id = main && main.id;
+                try { if (bs.length > 1) { if (!window.confirm(text)) id = cancel ? cancel.id : ''; } else window.alert(text); } catch(e){}
+                if (typeof cb === 'function') setTimeout(function(){ cb(id); }, 0);
+            },
+            openLink: function(url){ window.a1OpenExternal(url); },
+            openTelegramLink: function(url){ window.a1OpenExternal(url); },
             colorScheme: 'dark', themeParams: {},
             platform: 'browser', version: '0.0'
         };
@@ -8598,6 +8664,9 @@ window.currentUser = null;
     // unda `initData`/`showAlert` yo'q, shuning uchun o'sha qo'riqchilar
     // avvalgidek xavfsiz zaxira yo'lga tushadi (xatti-harakat o'zgarmaydi).
     window.tg = tg;
+    // Ilovada `window.Telegram.WebApp` ga to'g'ridan-to'g'ri murojaat qiluvchi
+    // joylar ham shu xavfsiz stub'ni ko'rsin.
+    if (window.A1_APP) { try { window.Telegram = { WebApp: tg }; } catch (e) {} }
 
     // 📳 HAPTIC ZAXIRASI (navigator.vibrate) — XAVFSIZ va MARKAZIY.
     //    Muammo: telegram-web-app.js BRAUZERDA ham window.Telegram.WebApp yaratadi,
@@ -41773,6 +41842,27 @@ html body #productModal.a7 .a7-thumbs { display: none !important; }
 html body #productModal.a7 .a7-count.on { display: inline-flex !important; bottom: 38px; background: rgba(18,18,22,.5); }
 html body #productModal.a7 .pmz-tip, html body #productModal.a7 .pmz-tip.pmz-tip { bottom: 36px !important; }
 
+/* ═══ Android ilova (APK) — kirish ekrani ═══
+   Ilovada birinchi ochilishda ro'yxatdan o'tish to'liq ekran: do'kon orqasida
+   xira ko'rinmaydi, tepada Avto A1 belgisi, pastda xavfsizlik izohi. */
+html.a1-app body #login-screen, html.a1-app.lite body #login-screen {
+    background: radial-gradient(120% 60% at 50% 0%, rgba(201,168,76,.16), transparent 60%), var(--a3-page, #0a0a0b) !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    flex-direction: column; justify-content: center; gap: 22px;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+}
+html.a1-app body #login-screen .login-card { background: var(--a3-card, #1c1c1e) !important; border: 0 !important; box-shadow: 0 20px 50px rgba(0,0,0,.35) !important; text-align: left; padding: 26px 20px 22px !important; }
+html.a1-app body #login-screen .login-logo { display: none !important; }
+html.a1-app body #login-screen .login-title { font-size: 26px !important; letter-spacing: -.6px; }
+html.a1-app body #login-screen .login-trust { justify-content: center; }
+.a1-app-brand { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.a1-app-brand i { width: 76px; height: 76px; border-radius: 22px; display: grid; place-items: center; font: 800 30px/1 var(--a3-display, sans-serif); font-style: normal; letter-spacing: -1px;
+    background: var(--a3-grad, linear-gradient(135deg,#f6dc7e,#d4af37 48%,#a07c1c)); color: var(--a3-ink, #1a1405); box-shadow: 0 14px 34px rgba(160,124,28,.38), inset 0 1px 0 rgba(255,255,255,.4); }
+.a1-app-brand b { font: 800 22px/1.1 var(--a3-display, sans-serif); letter-spacing: -.5px; color: var(--a3-tx, #fff); display: inline-flex; align-items: center; gap: 6px; }
+.a1-app-brand b svg { width: 20px; height: 20px; color: #1D9BF0; }
+.a1-app-brand span { font: 400 14px/1.3 var(--a3-font, sans-serif); color: var(--a3-tx2, #999); }
+html[data-theme="light"].a1-app body #login-screen { background: radial-gradient(120% 60% at 50% 0%, rgba(201,168,76,.18), transparent 60%), var(--a3-page, #f4eee2) !important; }
+
 </style>
 <script id="a1-ios26-product-js">
 /* ═══════════════════════════════════════════════════════════════════
@@ -42022,6 +42112,18 @@ html body #productModal.a7 .pmz-tip, html body #productModal.a7 .pmz-tip.pmz-tip
     }
     wrap(); window.addEventListener('load', function () { wrap(); setTimeout(wrap, 1500); });
     window.addEventListener('resize', fit);
+})();
+
+/* ── Android ilova (APK): kirish ekrani matni va belgisi ── */
+(function () {
+    if (!window.A1_APP) return;
+    var ls = document.getElementById('login-screen'); if (!ls || ls.__a1app) return; ls.__a1app = 1;
+    var brand = document.createElement('div'); brand.className = 'a1-app-brand';
+    brand.innerHTML = '<i>A1</i><b>Avto A1<svg viewBox="0 0 24 24" aria-label="Rasmiy do\u2018kon"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3 3.2.1z"/><path d="M7.8 12.3l2.8 2.8 5.6-5.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></b><span>Ehtiyot qismlar do\u2018koni</span>';
+    ls.insertBefore(brand, ls.firstChild);
+    var t = ls.querySelector('.login-title'); if (t) t.textContent = 'Ro\u2018yxatdan o\u2018tish';
+    var sub = ls.querySelector('.login-sub'); if (sub) sub.textContent = 'Ism va telefon raqamingizni kiriting \u2014 buyurtmalar, keshbek va yetkazib berish shu raqamga bog\u2018lanadi.';
+    var btn = document.getElementById('login-submit-btn'); if (btn && !btn.dataset.busy) btn.textContent = 'Davom etish';
 })();
 
 </script>

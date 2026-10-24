@@ -1,0 +1,97 @@
+# 📱 Avto A1 — Android ilova (APK) yig'ish
+# Ilova Capacitor qobig'i: saytni (GitHub Pages) ochadi, shuning uchun saytdagi
+# har bir o'zgarish ilovada ham darhol ko'rinadi — APK'ni qayta yig'ish faqat
+# android-app/ o'zgarganda kerak.
+#
+# Imzo: repo Secrets'da A1_KEYSTORE_BASE64, A1_KEYSTORE_PASSWORD, A1_KEY_ALIAS
+# bo'lsa — imzolangan release APK chiqadi (main'da Releases'ga ham qo'yiladi).
+# Bo'lmasa — imzosiz release + sinov uchun debug APK artifact sifatida.
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['android-app/**', '.github/workflows/android-apk.yml']
+  pull_request:
+    paths: ['android-app/**', '.github/workflows/android-apk.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android-app
+    env:
+      A1_VERSION_CODE: ${{ github.run_number }}
+      HAS_KEY: ${{ secrets.A1_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: android-app/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Bog'liqliklar
+        run: npm ci --no-audit --no-fund
+
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      - name: Imzo kaliti
+        if: env.HAS_KEY == 'true'
+        run: |
+          echo "${{ secrets.A1_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/a1.jks"
+          echo "A1_KEYSTORE_FILE=$RUNNER_TEMP/a1.jks" >> "$GITHUB_ENV"
+
+      - name: APK yig'ish
+        working-directory: android-app/android
+        env:
+          A1_KEYSTORE_PASSWORD: ${{ secrets.A1_KEYSTORE_PASSWORD }}
+          A1_KEY_PASSWORD: ${{ secrets.A1_KEYSTORE_PASSWORD }}
+          A1_KEY_ALIAS: ${{ secrets.A1_KEY_ALIAS }}
+        run: |
+          chmod +x gradlew
+          if [ "$HAS_KEY" = "true" ]; then ./gradlew --no-daemon assembleRelease; else ./gradlew --no-daemon assembleRelease assembleDebug; fi
+          mkdir -p ../out
+          V="1.0.${A1_VERSION_CODE}"
+          if [ "$HAS_KEY" = "true" ]; then
+            cp app/build/outputs/apk/release/app-release.apk "../out/Avto-A1-${V}.apk"
+          else
+            cp app/build/outputs/apk/release/app-release-unsigned.apk "../out/Avto-A1-${V}-unsigned.apk"
+            cp app/build/outputs/apk/debug/app-debug.apk "../out/Avto-A1-${V}-debug.apk"
+          fi
+          ls -la ../out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avto-a1-apk-${{ github.run_number }}
+          path: android-app/out/*.apk
+          retention-days: 30
+
+      - name: Release (faqat main + imzolangan)
+        if: env.HAS_KEY == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-v1.0.${{ github.run_number }}
+          name: Avto A1 — Android 1.0.${{ github.run_number }}
+          body: |
+            Avto A1 Android ilovasi. Telefonda yuklab oling va o'rnating
+            («Noma'lum manbalardan o'rnatish»ga ruxsat bering).
+          files: android-app/out/*.apk
