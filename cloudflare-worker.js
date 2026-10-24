@@ -519,6 +519,7 @@ export default {
     if (path === "/order-status") return handleOrderStatus(request, env, execCtx);
     if (path === "/order-notify") return handleOrderNotify(request, env);
     if (path === "/customer-register") return handleCustomerRegister(request, env);
+    if (path === "/tg-login-poll") return handleTgLoginPoll(request, env);
     if (path === "/referral") return handleReferralSecure(request, env);
     if (path === "/referral-qualify") return handleReferralQualifySecure(request, env);
     if (path === "/stock-commit") return handleDeprecatedStockCommit(request, env);
@@ -3488,5 +3489,41 @@ async function handleSendMessageSecure(request, env) {
     const response = errorResponse(err);
     if (response.status === 429) response.headers.set("Retry-After", String(err.extra && err.extra.retryAfter || 60));
     return response;
+  }
+}
+
+// ===================== 📱 Ilovaga Telegram orqali kirish =====================
+// Ilova tasodifiy `nonce` (32 hex) yaratib t.me/<bot>?start=login_<nonce> ni
+// ochadi. Bot mijoz «✅ Ha, kirish» ni bosganda `tg_login/<nonce>` ga
+// { uid: TelegramID, name, at } yozadi. Ilova shu endpoint'ni so'rab turadi:
+// yozuv paydo bo'lsa u BIR MARTA o'qiladi (o'chiriladi) va Telegram ID uchun
+// Firebase custom token qaytariladi — ilova mini app bilan AYNAN bir hisobga
+// kiradi (profil rasmi, buyurtmalar, keshbek umumiy bo'ladi).
+// Xavfsizlik: nonce 128-bit tasodifiy, faqat ilovada bo'ladi; bot tasdiq
+// tugmasi va ilovadagi 4 xonali kodni ko'rsatadi; yozuv 10 daqiqada eskiradi;
+// `tg_login` mijozlar uchun o'qib/yozib bo'lmaydi (database.rules.json).
+const TG_LOGIN_TTL_MS = 10 * 60 * 1000;
+async function handleTgLoginPoll(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const nonce = String(body.nonce || "");
+    if (!/^[0-9a-f]{32}$/.test(nonce)) return json({ ok: false, error: "nonce noto'g'ri" }, 400);
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const path = "tg_login/" + nonce;
+    const got = await rtdbGetEtag(ctx.dbUrl, path, token);
+    const rec = got && got.value;
+    if (!rec || typeof rec !== "object") return json({ ok: true, pending: true });
+    // Bir martalik: avval o'chiramiz (ETag bilan — ikki so'rov bir yozuvni ishlata olmaydi)
+    const del = await rtdbPut(ctx.dbUrl, path, null, token, got.etag);
+    if (!del.ok) return json({ ok: true, pending: true });   // boshqa so'rov allaqachon ishlatdi
+    if (!(Number(rec.at) > Date.now() - TG_LOGIN_TTL_MS)) return json({ ok: false, error: "eskirgan" }, 410);
+    const uid = requireSafeUid(rec.uid, 400);
+    if (!/^\d{3,20}$/.test(uid)) return json({ ok: false, error: "uid noto'g'ri" }, 400);
+    await assertNotBlocked(uid, env);
+    const customToken = await createFirebaseCustomToken(uid, env);
+    return json({ ok: true, token: customToken, uid, name: String(rec.name || "").slice(0, 80) });
+  } catch (e) {
+    return errorResponse(e);
   }
 }
