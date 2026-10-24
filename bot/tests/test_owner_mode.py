@@ -341,14 +341,88 @@ def test_dokon_tugmasi_mijozga_bor():
     assert kb is not None, "mijoz do'kon tugmasini yo'qotdi"
 
 
-def test_mijoz_menyusi_bir_marta_olib_tashlanadi():
-    """Osilib qolgan doimiy klaviatura bir marta o'chiriladi, keyin bezovta qilmaydi."""
+def _kb_texts(kb):
+    rows = (kb.kwargs or {}).get("keyboard") or []
+    return [btn.kwargs.get("text") for row in rows for btn in row]
+
+
+def test_xojayin_paneli_bir_marta_yuboriladi():
+    """Xo'jayinga birinchi javobda PANEL yuboriladi, keyin bezovta qilmaydi
+    (Telegram doimiy klaviaturani o'zi eslab qoladi)."""
     B._owner_kb_cleared.discard(OWNER)
     birinchi = B._owner_reply_markup(OWNER)
     ikkinchi = B._owner_reply_markup(OWNER)
-    assert type(birinchi).__name__ == "ReplyKeyboardRemove", \
-        "birinchi javobda klaviatura olib tashlanmadi"
-    assert ikkinchi is None, "klaviatura qayta-qayta yuborilyapti"
+    assert birinchi is not None and B.OWNER_BTN["report"] in _kb_texts(birinchi), \
+        "birinchi javobda xo'jayin paneli yuborilmadi"
+    assert ikkinchi is None, "panel qayta-qayta yuborilyapti"
+
+
+def test_xojayin_panelida_hamma_tugma_bor():
+    texts = _kb_texts(B.owner_menu())
+    for key, txt in B.OWNER_BTN.items():
+        assert txt in texts, f"panelda «{key}» tugmasi yo'q"
+    assert B.owner_menu().kwargs.get("is_persistent") is True
+    # Tugma matni mijoz menyusi matnlari bilan to'qnashmasin
+    for txt in texts:
+        assert txt not in B.SHOP_BUTTONS and txt not in B.CONTACT_BUTTONS
+
+
+def test_panel_tugmalari_AI_ga_ketmaydi():
+    """owner_free_chat panel tugmasini handle_ai_chat dan OLDIN ushlashi kerak."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "bot.py"), encoding="utf-8").read()
+    boshi = src.index("async def owner_free_chat")
+    tana = src[boshi:src.index("async def ", boshi + 10)]
+    assert tana.index("OWNER_BUTTON_TEXTS") < tana.index("handle_ai_chat(")
+
+
+def test_tugma_emoji_variantisiz_ham_taniladi():
+    for key, txt in B.OWNER_BTN.items():
+        assert B.OWNER_BUTTON_TEXTS[B._btn_norm(txt.replace("\ufe0f", ""))] == key
+
+
+def test_egasi_har_doim_admin():
+    """Fayl importi/storis uchun egasi ADMIN_IDS da bo'lmasa ham admin."""
+    assert B._is_admin(OWNER)
+    assert not B._is_admin(STRANGER)
+    assert not B._is_admin("tg_url_123")
+
+
+def test_fayl_importi_admin_tekshiruvi_egani_qamraydi():
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "bot.py"), encoding="utf-8").read()
+    boshi = src.index("async def handle_document_import")
+    tana = src[boshi:src.index("async def ", boshi + 10)]
+    assert "_is_admin(" in tana and "not in ADMIN_IDS" not in tana
+
+
+def test_son_ajratish():
+    """Kurs/foiz/narx yozilishining har xil shakllari."""
+    P = B._parse_num
+    assert P("12800") == 12800
+    assert P("12 800") == 12800
+    assert P("12 800 so'm") == 12800
+    assert P("12,800") == 12800
+    assert P("12,5") == 12.5
+    assert P("$12.50") == 12.5
+    assert P("1.250,50") == 1250.5
+    assert P("1,250.50") == 1250.5
+    assert P("1 250 000") == 1250000
+    assert P("15%") == 15
+    assert P("nan") is None and P("") is None and P("abc") is None
+
+
+def test_ustun_tanish():
+    cols = ["№", "Наименование товара", "Артикул", "Кол-во", "Цена, $", "Марка авто"]
+    assert B._pick_col(cols, B._COL_NAME) == "Наименование товара"
+    assert B._pick_col(cols, B._COL_PRICE, exclude=("Наименование товара",)) == "Цена, $"
+    assert B._pick_col(cols, B._COL_STOCK) == "Кол-во"
+    assert B._pick_col(cols, B._COL_CODE) == "Артикул"
+    uz = ["Mahsulot nomi", "Narxi (so'm)", "Soni", "Mashina"]
+    assert B._pick_col(uz, B._COL_NAME) == "Mahsulot nomi"
+    assert B._pick_col(uz, B._COL_PRICE, exclude=("Mahsulot nomi",)) == "Narxi (so'm)"
+    assert B._pick_col(uz, B._COL_STOCK) == "Soni"
+    assert B._pick_col(uz, B._COL_CAR) == "Mashina"
 
 
 # =====================================================================

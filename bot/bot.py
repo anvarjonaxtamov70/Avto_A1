@@ -255,6 +255,18 @@ def _is_owner(user_id):
     return uid is not None and uid == OWNER_TG_ID
 
 
+def _is_admin(user_id):
+    """Admin = ADMIN_IDS ro'yxatidagilar YOKI do'kon egasi.
+
+    ⚠ ILGARI fayl importi va storis faqat `ADMIN_IDS` ni tekshirardi. Server
+    muhitida `ADMIN_IDS` da egasining id'si bo'lmasa (OWNER_TG_ID alohida
+    o'zgaruvchi), xo'jayin Excel yuborganda «hujjatlarni o'qiy olmayman»
+    javobini olardi. Endi egasi har doim admin hisoblanadi.
+    """
+    uid = _safe_int(user_id)
+    return uid is not None and (uid in ADMIN_IDS or uid == OWNER_TG_ID)
+
+
 # Xo'jayinga ismi bilan murojaat qilinganini tuzatish uchun.
 # «Anvar Axtamov» (do'kon egasi haqidagi javob) TEGILMAYDI — faqat
 # murojaat shaklidagi «Anvar» / «Anvarjon» o'zgartiriladi.
@@ -304,6 +316,8 @@ def _owner_identity_block(user_id=None, display_name=""):
             "- Suhbat tarixida ilgari ismi bilan murojaat qilingan bo'lsa ham — "
             "unga TAQLID QILMA, shu qoidaga amal qil.",
             "- Ohang: hurmatli, ishonchli, qisqa — o'z rahbariga hisobot bergandek.",
+            "- Unga doim «Siz» deb murojaat qiling. «Sen», kinoya, dag'al yoki "
+            "ko'cha so'zlari MUMKIN EMAS.",
             "",
             "DO'KON HAQIDA (shaxsiyat):",
             f"- Do'kon egasi (xo'jayini) — {SHOP_OWNER_NAME}. Ya'ni AYNAN siz "
@@ -458,7 +472,7 @@ TEXTS = {
                          "Bir necha soniyadan so'ng qayta yozsangiz, albatta javob beraman."),
 
         # ---- Bot ILGARI JIM QOLGAN holatlar ----
-        "voice_reply": ("Ovozli xabarni hozir tinglay olmayman 🙏\n\n"
+        "voice_reply": ("Ovozli xabarni tushuna olmadim 🙏\n\n"
                         "Qanday zapchast kerakligini <b>yozib</b> yuboring yoki "
                         "qismning <b>rasmini</b> tashlang — darrov topib beraman."),
         "sticker_reply": ("😊 Rahmat! Zapchast kerak bo'lsa nomini yozing yoki rasmini yuboring — "
@@ -556,7 +570,7 @@ TEXTS = {
                          "Напишите через несколько секунд — обязательно отвечу."),
 
         # ---- Ситуации, где бот РАНЬШЕ МОЛЧАЛ ----
-        "voice_reply": ("Голосовые сообщения я пока не слушаю 🙏\n\n"
+        "voice_reply": ("Не удалось разобрать голосовое сообщение 🙏\n\n"
                         "<b>Напишите</b>, какая деталь нужна, или пришлите её <b>фото</b> — "
                         "сразу найду."),
         "sticker_reply": ("😊 Спасибо! Если нужна запчасть — напишите название или пришлите фото, "
@@ -909,6 +923,11 @@ async def groq_raw(messages, model=None, temperature=0.5, max_retries=3,
                     )
                 return resp.choices[0].message
             except Exception as e:
+                if tool_choice == "required" and not _model_is_gone(e):
+                    # "required" ni model qo'llamasa — qayta urinish behuda;
+                    # agent darhol "auto" bilan qayta so'raydi.
+                    logging.warning("Groq «%s» tool_choice=required xato: %s", candidate, e)
+                    return None
                 if _model_is_gone(e):
                     logging.error(
                         "Groq modeli «%s» MAVJUD EMAS (o'chirilgan yoki nomi xato): %s "
@@ -1398,6 +1417,7 @@ async def process_ai_admin_tasks(bot: Bot):
 # FSM
 # =====================================================================
 class ImportState(StatesGroup):
+    currency = State()   # narxlar dollardami yoki so'mda (tugma bilan)
     rate = State()
     markup = State()
 
@@ -1410,137 +1430,534 @@ class Register(StatesGroup):
 
 
 # =====================================================================
-# EXCEL / CSV IMPORT
+# EXCEL / CSV IMPORT (+ boshqa fayllar)
+# ---------------------------------------------------------------------
+# OQIM (xo'jayin/admin):
+#   1) Fayl yuboriladi -> yuklab olinadi -> OLDINDAN KO'RIB chiqiladi:
+#      nechta tovar, qaysi ustunlar topildi, namuna qator.
+#   2) «Narxlar qaysi valyutada?» -> [💵 Dollar] [🇺🇿 So'm] tugmalari.
+#   3) Dollar bo'lsa — kurs so'raladi ("12 800", "12800 so'm" ham bo'ladi).
+#   4) Ustama foizi — tugmalar [0% 10% 15% 20% 25% 30%] yoki yozib.
+#   5) Tovarlar QORALAMA sifatida qo'shiladi (mijozga ko'rinmaydi).
+#
+# ⚠ ILGARI nima buzuq edi:
+#   • egasi `ADMIN_IDS` da bo'lmasa — «hujjatlarni o'qiy olmayman» javobi;
+#   • `.xls` o'qilmasdi (xlrd yo'q edi), fayl nomi bo'lmasa — xato;
+#   • faqat dollar narx; «Mahsulot»/«Narx (so'm)»/«Soni» kabi ustunlar
+#     tanilmasdi; artikul ustuni «mashina» deb olinardi;
+#   • kurs/foizda "12 800 so'm" yoki "15%" yozilsa — rad etilardi;
+#   • PDF/Word/rasm-fayl yuborilsa — shunchaki «faqat Excel» deyilardi.
 # =====================================================================
-# ⚠️ `~F.animation`: Telegram GIF (animation) xabarida `document` maydoni ham
-#    to'ldiriladi. Bu filtr bo'lmasa GIF shu importer'ga tushib ketardi.
-@dp.message(F.document, ~F.animation)
-async def handle_document_import(message: types.Message, state: FSMContext, bot: Bot):
-    if message.from_user.id not in ADMIN_IDS:
-        # Ilgari bu yerda shunchaki `return` bor edi: mijoz fayl yuborsa bot
-        # BUTUNLAY JIM qolardi (handler ishga tushdi, lekin javob yo'q) va
-        # mijoz "bot ishlamayapti" deb o'ylardi. Endi yo'l ko'rsatamiz.
-        lang = await get_user_lang(message.from_user.id)
-        await message.reply(t(lang, "document_reply"), parse_mode="HTML")
-        return
+TG_FILE_LIMIT = 20 * 1024 * 1024          # Bot API get_file chegarasi
+_EXCEL_EXT = (".xlsx", ".xlsm", ".xls", ".csv")
+_IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".bmp", ".gif")
+_TEXT_EXT = (".txt",)
 
-    document = message.document
-    file_name = document.file_name.lower()
-    if not file_name.endswith((".xlsx", ".xls", ".csv")):
-        await message.answer("Faqat Excel (.xlsx, .xls) yoki CSV yuboring.")
-        return
+_COL_NAME = ("наименование", "наимен", "название", "товар", "name", "tovar", "nomi", "nom",
+             "mahsulot", "maxsulot", "detal", "zapchast", "product", "item", "описание")
+_COL_PRICE = ("цена", "стоимость", "price", "narx", "narhi", "cost", "сум", "so'm", "som",
+              "usd", "$", "dollar")
+_COL_STOCK = ("кол-во", "колич", "остат", "qoldiq", "soni", "miqdor", "dona", "qty",
+              "quantity", "stock", "count", "шт")
+_COL_CODE = ("артикул", "artikul", "kod", "код", "code", "oem", "sku", "part")
+_COL_CAR = ("машина", "авто", "марка", "модель", "mashina", "avto", "model", "car", "rusum")
 
-    msg = await message.answer("Fayl qabul qilindi, yuklanmoqda...")
+
+def _parse_num(raw):
+    """«1 250 000», «12,5», «$12.50», «45 000 so'm», «1.250,50» -> float yoki None."""
+    s = str(raw if raw is not None else "").strip().lower()
+    if not s or s in ("nan", "none", "-"):
+        return None
+    s = re.sub(r"[^\d.,\-]", "", s.replace("\u00a0", "").replace(" ", ""))
+    if not s or not re.search(r"\d", s):
+        return None
+    if "," in s and "." in s:
+        # Oxirgi ajratkich — o'nlik; qolgani minglik
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif "," in s:
+        head, _, tail = s.rpartition(",")
+        s = (head.replace(",", "") + tail) if (len(tail) == 3 and head) else s.replace(",", ".")
+    elif s.count(".") > 1:
+        s = s.replace(".", "")
     try:
-        file = await bot.get_file(document.file_id)
-        safe_name = re.sub(r"[^\w._-]", "", file_name)
-        file_path = os.path.join(DOWNLOADS_DIR, f"{document.file_id}_{safe_name}")
-        await bot.download_file(file.file_path, file_path)
-        await state.update_data(file_path=file_path, file_name=file_name)
-        await msg.edit_text(
-            "Fayl yuklandi!\n\n"
-            "<b>1-QADAM:</b> Bugungi <b>dollar kursini</b> yozing\n<i>(masalan: 12800)</i>",
-            parse_mode="HTML",
-        )
-        await state.set_state(ImportState.rate)
-    except Exception as e:
-        logging.error(f"Fayl yuklashda xato: {e}")
-        await msg.edit_text(f"Fayl yuklashda xato: {e}")
-
-
-@dp.message(ImportState.rate, not_a_command)
-async def process_rate(message: types.Message, state: FSMContext):
-    try:
-        usd_rate = float(message.text.replace(",", ".").replace(" ", ""))
+        v = float(s)
     except ValueError:
-        await message.answer("Kursni faqat son bilan kiriting (masalan: 12800)")
-        return
-    await state.update_data(usd_rate=usd_rate)
-    await message.answer(
-        f"Kurs: <b>{usd_rate:,.0f}</b> so'm\n\n"
-        "<b>2-QADAM:</b> <b>Ustama foizini</b> kiriting\n<i>(masalan: 15)</i>",
-        parse_mode="HTML",
-    )
-    await state.set_state(ImportState.markup)
+        return None
+    return v if math.isfinite(v) else None
 
 
-def parse_excel_file(file_path, usd_rate, markup_pct, next_id, partiya_nomi):
-    # pandas FAQAT shu yerda kerak — startda emas, faqat Excel import qilinganda
-    # yuklanadi. Bu botning doimiy (baseline) xotira sarfini ~150MB kamaytiradi
-    # (Render 512MB bepul tarifda OOM oldini oladi).
+def _pick_col(cols, keys, exclude=()):
+    for c in cols:
+        cl = str(c).lower().strip()
+        if c in exclude or not cl or cl == "nan":
+            continue
+        if any(k in cl for k in keys):
+            return c
+    return None
+
+
+def _read_table(file_path):
+    """Faylni o'qib, sarlavha qatori topilgan jadvalni qaytaradi (pandas DataFrame)."""
     import pandas as pd
-    try:
-        try:
-            df = pd.read_excel(file_path, header=None)
-        except Exception:
-            try:
-                df = pd.read_csv(file_path, header=None, sep=",")
-            except Exception:
-                df = pd.read_csv(file_path, header=None, sep=";")
-
-        header_idx = 0
-        for i, row in df.iterrows():
-            row_str = " ".join([str(x).lower() for x in row.values])
-            if any(k in row_str for k in ["наименование", "name", "tovar", "nomi", "товар", "цена", "price"]):
-                header_idx = i
+    low = file_path.lower()
+    frames = []
+    if low.endswith(".csv"):
+        for sep in (",", ";", "\t"):
+            for enc in ("utf-8-sig", "cp1251"):
+                try:
+                    df = pd.read_csv(file_path, header=None, sep=sep, encoding=enc, dtype=str)
+                    if df.shape[1] >= 2:
+                        frames.append(df)
+                        break
+                except Exception:
+                    continue
+            if frames:
                 break
+    else:
+        try:
+            sheets = pd.read_excel(file_path, header=None, sheet_name=None, dtype=str)
+            frames = [df for df in sheets.values() if df is not None and not df.empty]
+        except Exception:
+            # Ba'zan .xls aslida CSV/HTML bo'ladi — CSV sifatida ham urinib ko'ramiz
+            for sep in (",", ";", "\t"):
+                try:
+                    df = pd.read_csv(file_path, header=None, sep=sep, dtype=str, encoding="cp1251")
+                    if df.shape[1] >= 2:
+                        frames.append(df)
+                        break
+                except Exception:
+                    continue
+    if not frames:
+        raise ValueError("faylni o'qib bo'lmadi (format buzuq yoki bo'sh)")
 
-        df.columns = df.iloc[header_idx]
-        df = df.iloc[header_idx + 1:].reset_index(drop=True)
-        df.columns = [str(c).lower().strip() for c in df.columns]
+    best = None
+    for df in frames:
+        for i in range(min(20, len(df))):
+            row = [str(x).lower() for x in df.iloc[i].values]
+            line = " ".join(row)
+            if any(k in line for k in _COL_NAME) and any(k in line for k in _COL_PRICE):
+                body = df.iloc[i + 1:].reset_index(drop=True)
+                body.columns = [str(c).strip() for c in df.iloc[i].values]
+                if best is None or len(body) > len(best):
+                    best = body
+                break
+    if best is None:
+        df = frames[0]
+        cols = " · ".join(str(x) for x in df.iloc[0].values[:8]) if len(df) else ""
+        raise LookupError(cols)
+    return best
 
-        name_col = next((c for c in df.columns if any(k in str(c) for k in ["наименование", "name", "tovar", "nomi", "товар"])), None)
-        price_col = next((c for c in df.columns if any(k in str(c) for k in ["цена", "price", "narx", "$", "usd"])), None)
-        car_col = next((c for c in df.columns if any(k in str(c) for k in ["авто", "машина", "марка", "артикул", "model"])), None)
 
+def analyze_import_file(file_path):
+    """Oldindan ko'rish: ustunlar, tovarlar soni, valyuta taxmini, namuna."""
+    try:
+        df = _read_table(file_path)
+    except LookupError as e:
+        return {"success": False, "error_type": "columns", "columns": str(e)}
+    except Exception as e:
+        return {"success": False, "error_type": "exception", "error": str(e)}
+    cols = list(df.columns)
+    name_col = _pick_col(cols, _COL_NAME)
+    price_col = _pick_col(cols, _COL_PRICE, exclude=(name_col,))
+    if not name_col or not price_col:
+        return {"success": False, "error_type": "columns", "columns": " · ".join(cols[:10])}
+    stock_col = _pick_col(cols, _COL_STOCK, exclude=(name_col, price_col))
+    code_col = _pick_col(cols, _COL_CODE, exclude=(name_col, price_col, stock_col))
+    car_col = _pick_col(cols, _COL_CAR, exclude=(name_col, price_col, stock_col, code_col))
+
+    prices, sample = [], None
+    for _, row in df.iterrows():
+        nm = str(row[name_col]).strip()
+        pv = _parse_num(row[price_col])
+        if not nm or nm.lower() == "nan" or not pv or pv <= 0:
+            continue
+        prices.append(pv)
+        if sample is None:
+            sample = (nm, pv)
+    if not prices:
+        return {"success": False, "error_type": "empty", "columns": " · ".join(cols[:10])}
+
+    ph = str(price_col).lower()
+    if any(k in ph for k in ("$", "usd", "dollar", "доллар")):
+        guess = "usd"
+    elif any(k in ph for k in ("сум", "so'm", "som", "uzs", "сўм")):
+        guess = "uzs"
+    else:
+        med = sorted(prices)[len(prices) // 2]
+        guess = "uzs" if med >= 1000 else "usd"
+    return {
+        "success": True, "count": len(prices), "guess": guess,
+        "cols": {"name": name_col, "price": price_col, "stock": stock_col,
+                 "code": code_col, "car": car_col},
+        "sample": sample,
+    }
+
+
+def parse_excel_file(file_path, usd_rate, markup_pct, next_id, partiya_nomi, currency="usd"):
+    """Faylni QORALAMA tovarlarga aylantiradi.
+
+    currency="usd": narx = dollar * kurs * (1 + ustama); "uzs": narx = so'm * (1 + ustama).
+    Yakuniy narx 1000 so'mga yuqoriga yaxlitlanadi (do'kon narxlari shunday).
+    """
+    try:
+        df = _read_table(file_path)
+    except LookupError as e:
+        return {"success": False, "error_type": "columns", "columns": str(e)}
+    except Exception as e:
+        return {"success": False, "error_type": "exception", "error": str(e)}
+    try:
+        cols = list(df.columns)
+        name_col = _pick_col(cols, _COL_NAME)
+        price_col = _pick_col(cols, _COL_PRICE, exclude=(name_col,))
         if not name_col or not price_col:
-            return {"success": False, "error_type": "columns", "columns": ", ".join([str(c) for c in df.columns])}
+            return {"success": False, "error_type": "columns", "columns": " · ".join(cols[:10])}
+        stock_col = _pick_col(cols, _COL_STOCK, exclude=(name_col, price_col))
+        code_col = _pick_col(cols, _COL_CODE, exclude=(name_col, price_col, stock_col))
+        car_col = _pick_col(cols, _COL_CAR, exclude=(name_col, price_col, stock_col, code_col))
 
-        new_products = []
+        factor = (usd_rate if currency == "usd" else 1.0) * (1 + markup_pct / 100)
+        new_products, skipped = [], 0
         for _, row in df.iterrows():
             name = str(row[name_col]).strip()
-            if name.lower() == "nan" or not name:
+            if not name or name.lower() == "nan":
                 continue
-            raw_price = str(row[price_col]).replace(",", ".").replace(" ", "").strip()
-            try:
-                price_usd = float(raw_price)
-            except ValueError:
+            price_in = _parse_num(row[price_col])
+            if not price_in or price_in <= 0:
+                skipped += 1
                 continue
-            if price_usd <= 0:
-                continue
-
-            final_price = int(math.ceil((price_usd * usd_rate * (1 + markup_pct / 100)) / 1000) * 1000)
-            car_model = str(row[car_col]).strip() if car_col else "Ko'rsatilmagan"
-            if car_model.lower() == "nan":
+            final_price = int(math.ceil((price_in * factor) / 1000) * 1000)
+            stock = 10
+            if stock_col is not None:
+                sv = _parse_num(row[stock_col])
+                if sv is not None and sv >= 0:
+                    stock = int(sv)
+            car_model = str(row[car_col]).strip() if car_col is not None else ""
+            if not car_model or car_model.lower() == "nan":
                 car_model = "Ko'rsatilmagan"
-
-            new_products.append({
-                "id": next_id, "name": name, "price": final_price, "unit": "dona",
+            code = str(row[code_col]).strip() if code_col is not None else ""
+            if code.lower() == "nan":
+                code = ""
+            item = {
+                "id": next_id, "name": name[:160], "price": final_price, "unit": "dona",
                 "desc": f"Mashina: {car_model}", "category": "umumiy", "categories": ["umumiy"],
                 "brand": "Umumiy", "model": "Umumiy", "img": "", "images": [],
-                "product_type": "oddiy", "stock": 10, "is_draft": True,
+                "product_type": "oddiy", "stock": stock, "is_draft": True,
                 "batch_id": partiya_nomi, "has_conflict": False,
-            })
+            }
+            if code:
+                item["code"] = code[:60]
+            new_products.append(item)
             next_id += 1
-
-        return {"success": True, "new_products": new_products}
+        return {"success": True, "new_products": new_products, "skipped": skipped}
     except Exception as e:
         return {"success": False, "error_type": "exception", "error": str(e)}
 
 
-@dp.message(ImportState.markup, not_a_command)
-async def process_markup_pandas(message: types.Message, state: FSMContext, bot: Bot):
+def import_template_bytes():
+    """Xo'jayinga yuboriladigan NAMUNA Excel (openpyxl)."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tovarlar"
+    ws.append(["Nomi", "Narxi", "Soni", "Mashina", "Artikul"])
+    for c in ws[1]:
+        c.font = Font(bold=True)
+        c.fill = PatternFill("solid", fgColor="F2C94C")
+    ws.append(["Kolodka oldi", 12.5, 8, "Cobalt", "96549788"])
+    ws.append(["Svecha NGK", 3.2, 40, "Gentra", "BKR6E"])
+    ws.append(["Amortizator orqa", 27, 4, "Nexia 3", ""])
+    for col, w in zip("ABCDE", (34, 12, 10, 18, 16)):
+        ws.column_dimensions[col].width = w
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+async def send_import_template(chat_id, caption=None):
+    from aiogram.types import BufferedInputFile
+    data = await asyncio.to_thread(import_template_bytes)
+    await bot.send_document(
+        chat_id, BufferedInputFile(data, filename="AvtoA1_namuna.xlsx"),
+        caption=caption or (
+            "📥 <b>Namuna fayl</b>\n\n"
+            "Ustunlar: <b>Nomi</b>, <b>Narxi</b> (shart), <b>Soni</b>, <b>Mashina</b>, "
+            "<b>Artikul</b> (ixtiyoriy).\n"
+            "Narx dollarda ham, so'mda ham bo'lishi mumkin — yuborganingizdan keyin "
+            "so'rayman. Ruscha sarlavhalar (Наименование, Цена, Кол-во) ham tushuniladi."),
+        parse_mode="HTML",
+    )
+
+
+def _import_cur_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💵 Dollar ($)", callback_data="imp:cur:usd"),
+         InlineKeyboardButton(text="🇺🇿 So'm", callback_data="imp:cur:uzs")],
+        [InlineKeyboardButton(text="✖️ Bekor qilish", callback_data="imp:cancel")],
+    ])
+
+
+def _import_markup_kb():
+    row = [InlineKeyboardButton(text=f"{p}%", callback_data=f"imp:mk:{p}") for p in (0, 10, 15)]
+    row2 = [InlineKeyboardButton(text=f"{p}%", callback_data=f"imp:mk:{p}") for p in (20, 25, 30)]
+    return InlineKeyboardMarkup(inline_keyboard=[row, row2, [
+        InlineKeyboardButton(text="✖️ Bekor qilish", callback_data="imp:cancel")]])
+
+
+async def _import_cleanup(state):
+    data = await state.get_data()
+    fp = data.get("file_path")
     try:
-        markup_pct = float(message.text.replace(",", "."))
-    except ValueError:
-        await message.answer("Foizni faqat son bilan kiriting (masalan: 15)")
+        if fp and os.path.exists(fp):
+            os.remove(fp)
+    except Exception as e:
+        logging.warning(f"Vaqtinchalik faylni o'chirishda xato: {e}")
+    await state.clear()
+
+
+def _fname_of(document):
+    name = (getattr(document, "file_name", None) or "").strip()
+    if not name:
+        mt = str(getattr(document, "mime_type", "") or "")
+        ext = {"text/csv": ".csv", "application/vnd.ms-excel": ".xls",
+               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+               "application/pdf": ".pdf", "text/plain": ".txt"}.get(mt, "")
+        name = "fayl" + ext
+    return name
+
+
+# ⚠ `~F.animation`: Telegram GIF (animation) xabarida `document` maydoni ham
+#    to'ldiriladi. Bu filtr bo'lmasa GIF shu importer'ga tushib ketardi.
+@dp.message(F.document, ~F.animation)
+async def handle_document_import(message: types.Message, state: FSMContext, bot: Bot):
+    uid = message.from_user.id
+    document = message.document
+    file_name = _fname_of(document)
+    low = file_name.lower()
+
+    if not _is_admin(uid):
+        # Mijoz fayl yuborsa — yo'l ko'rsatamiz (ilgari jim qolardi).
+        lang = await get_user_lang(uid)
+        await message.reply(t(lang, "document_reply"), parse_mode="HTML")
         return
 
+    size = int(getattr(document, "file_size", 0) or 0)
+    if size > TG_FILE_LIMIT:
+        await message.answer(
+            f"Xo'jayin, fayl juda katta ({size / 1048576:.1f} MB). Telegram botlarga "
+            "20 MB gacha fayl beradi. Faylni bo'lib yoki Excel'da ortiqcha "
+            "varaqlarni o'chirib qayta yuboring.")
+        return
+
+    if low.endswith(_IMAGE_EXT):
+        await message.answer(
+            "Xo'jayin, bu rasm fayl ko'rinishida keldi. Tahlil qilishim uchun uni "
+            "oddiy <b>rasm</b> sifatida yuboring (📎 → Galereya). Storis uchun izohga "
+            "#kategoriya yozing.", parse_mode="HTML")
+        return
+
+    if low.endswith(_TEXT_EXT) and _is_owner(uid):
+        # Matnli fayl (ro'yxat, eslatma) — o'qib AI ga topshiramiz.
+        try:
+            buf = await bot.download(document.file_id)
+            raw = buf.read() if hasattr(buf, "read") else bytes(buf or b"")
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                text = raw.decode("cp1251", errors="replace")
+            text = text.strip()[:6000]
+            if not text:
+                await message.answer("Xo'jayin, fayl bo'sh ekan.")
+                return
+            note = (message.caption or "Shu fayl mazmunini ko'rib chiqing.").strip()
+            await handle_ai_chat(message, state,
+                                 text_override=f"{note}\n\n[«{file_name}» fayl matni]\n{text}")
+        except Exception as e:
+            logging.error(f"TXT faylni o'qishda xato: {e}")
+            await message.answer("Xo'jayin, faylni o'qib bo'lmadi. Qayta yuborib ko'ring.")
+        return
+
+    if not low.endswith(_EXCEL_EXT):
+        ext = (os.path.splitext(low)[1] or "").upper().lstrip(".") or "bu"
+        await message.answer(
+            f"Xo'jayin, {ext} faylni hozircha o'qiy olmayman. Narxlar ro'yxatini "
+            "<b>Excel (.xlsx, .xls)</b> yoki <b>CSV</b> ko'rinishida yuboring — "
+            "namuna faylni pastda yubordim.", parse_mode="HTML")
+        try:
+            await send_import_template(message.chat.id)
+        except Exception as e:
+            logging.warning(f"Namuna fayl yuborilmadi: {e}")
+        return
+
+    await state.clear()
+    msg = await message.answer("📥 Fayl qabul qilindi, o'qiyapman…")
+    file_path = None
+    try:
+        file = await bot.get_file(document.file_id)
+        safe_name = re.sub(r"[^\w._-]", "", low) or "fayl.xlsx"
+        file_path = os.path.join(DOWNLOADS_DIR, f"{document.file_id[:40]}_{safe_name}")
+        await bot.download_file(file.file_path, file_path)
+        info = await asyncio.to_thread(analyze_import_file, file_path)
+    except Exception as e:
+        logging.error(f"Fayl yuklashda xato: {e}")
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+        await msg.edit_text("Xo'jayin, faylni yuklab bo'lmadi. Internet yoki fayl "
+                            f"buzilgan bo'lishi mumkin — qayta yuboring.\n\n<i>{html.escape(str(e))[:200]}</i>",
+                            parse_mode="HTML")
+        return
+
+    if not info.get("success"):
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+        et = info.get("error_type")
+        if et in ("columns", "empty"):
+            found = html.escape(str(info.get("columns") or "—"))[:400]
+            why = ("«Nomi» va «Narxi» ustunlari topilmadi" if et == "columns"
+                   else "narxi to'g'ri yozilgan tovar topilmadi")
+            await msg.edit_text(
+                f"Xo'jayin, {why}.\n\nFayldagi sarlavhalar: <i>{found}</i>\n\n"
+                "Birinchi qatorda ustun nomlari bo'lsin: <b>Nomi</b>, <b>Narxi</b> "
+                "(ixtiyoriy: Soni, Mashina, Artikul). Namuna faylni yubordim.",
+                parse_mode="HTML")
+            try:
+                await send_import_template(message.chat.id)
+            except Exception as e:
+                logging.warning(f"Namuna fayl yuborilmadi: {e}")
+        else:
+            await msg.edit_text("Xo'jayin, faylni o'qib bo'lmadi: "
+                                f"<i>{html.escape(str(info.get('error') or ''))[:200]}</i>",
+                                parse_mode="HTML")
+        return
+
+    c = info["cols"]
+    def _col(v):
+        return f"«{html.escape(str(v))[:40]}»" if v is not None else "—"
+    sample = info.get("sample")
+    sample_txt = (f"\nNamuna: <i>{html.escape(sample[0])[:60]}</i> — {sample[1]:g}" if sample else "")
+    guess = "dollar" if info["guess"] == "usd" else "so'm"
+    await state.update_data(file_path=file_path, file_name=file_name, guess=info["guess"])
+    await state.set_state(ImportState.currency)
+    await msg.edit_text(
+        f"📄 <b>{html.escape(file_name)[:60]}</b>\n"
+        f"✅ <b>{info['count']} ta tovar</b> topildi\n\n"
+        f"• Nomi: {_col(c['name'])}\n• Narxi: {_col(c['price'])}\n"
+        f"• Soni: {_col(c['stock']) if c['stock'] is not None else '— (har biriga 10 dona)'}\n"
+        f"• Mashina: {_col(c['car'])}\n• Artikul: {_col(c['code'])}"
+        f"{sample_txt}\n\n"
+        f"<b>Narxlar qaysi valyutada?</b> <i>(menimcha — {guess})</i>",
+        parse_mode="HTML", reply_markup=_import_cur_kb())
+
+
+@dp.callback_query(F.data.startswith("imp:"))
+async def import_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Import tugmalari: valyuta, ustama foizi, bekor qilish."""
+    if not _is_admin(callback.from_user.id):
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    cur_state = await state.get_state()
+    if not cur_state or not str(cur_state).startswith("ImportState"):
+        await callback.answer("Bu import eskirgan — faylni qayta yuboring.", show_alert=True)
+        return
+    if parts[1] == "cancel":
+        await _import_cleanup(state)
+        await callback.answer("Bekor qilindi")
+        try:
+            await callback.message.edit_text("Import bekor qilindi, xo'jayin.")
+        except Exception:
+            pass
+        return
+    if parts[1] == "cur" and len(parts) > 2:
+        cur = "usd" if parts[2] == "usd" else "uzs"
+        await state.update_data(currency=cur)
+        await callback.answer()
+        if cur == "usd":
+            await state.set_state(ImportState.rate)
+            await callback.message.edit_text(
+                "💵 Narxlar dollarda.\n\n<b>Bugungi dollar kursini</b> yozing\n"
+                "<i>(masalan: 12800 yoki 12 800 so'm)</i>", parse_mode="HTML")
+        else:
+            await state.update_data(usd_rate=1)
+            await state.set_state(ImportState.markup)
+            await callback.message.edit_text(
+                "🇺🇿 Narxlar so'mda.\n\n<b>Ustama foizini</b> tanlang yoki yozing:",
+                parse_mode="HTML", reply_markup=_import_markup_kb())
+        return
+    if parts[1] == "mk" and len(parts) > 2 and str(cur_state).endswith("markup"):
+        await callback.answer()
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        await _run_import(callback.message, state, float(_parse_num(parts[2]) or 0))
+        return
+    await callback.answer()
+
+
+@dp.message(ImportState.currency, not_a_command)
+async def process_currency_text(message: types.Message, state: FSMContext):
+    """Valyutani tugma o'rniga yozib yuborsa ham tushunamiz."""
+    txt = (message.text or "").lower()
+    if any(k in txt for k in ("$", "dollar", "доллар", "usd")):
+        await state.update_data(currency="usd")
+        await state.set_state(ImportState.rate)
+        await message.answer("Bugungi <b>dollar kursini</b> yozing <i>(masalan: 12800)</i>", parse_mode="HTML")
+    elif any(k in txt for k in ("so'm", "som", "сум", "uzs", "sum")):
+        await state.update_data(currency="uzs", usd_rate=1)
+        await state.set_state(ImportState.markup)
+        await message.answer("<b>Ustama foizini</b> tanlang yoki yozing:", parse_mode="HTML",
+                             reply_markup=_import_markup_kb())
+    else:
+        await message.answer("Xo'jayin, tugmani bosing: dollar yoki so'm?", reply_markup=_import_cur_kb())
+
+
+@dp.message(ImportState.rate, not_a_command)
+async def process_rate(message: types.Message, state: FSMContext):
+    usd_rate = _parse_num(message.text)
+    if not usd_rate or not (1000 <= usd_rate <= 100000):
+        await message.answer("Kursni son bilan yozing, xo'jayin (masalan: 12800)")
+        return
+    await state.update_data(usd_rate=usd_rate)
+    await message.answer(
+        f"Kurs: <b>{usd_rate:,.0f}</b> so'm\n\n<b>Ustama foizini</b> tanlang yoki yozing:".replace(",", " "),
+        parse_mode="HTML", reply_markup=_import_markup_kb(),
+    )
+    await state.set_state(ImportState.markup)
+
+
+@dp.message(ImportState.markup, not_a_command)
+async def process_markup_pandas(message: types.Message, state: FSMContext, bot: Bot):
+    markup_pct = _parse_num((message.text or "").replace("%", ""))
+    if markup_pct is None or not (0 <= markup_pct <= 500):
+        await message.answer("Foizni son bilan yozing, xo'jayin (masalan: 15)",
+                             reply_markup=_import_markup_kb())
+        return
+    await _run_import(message, state, markup_pct)
+
+
+async def _run_import(message, state, markup_pct):
+    """Yakuniy bosqich: faylni o'qib, tovarlarni QORALAMA sifatida qo'shadi."""
     user_data = await state.get_data()
     file_path = user_data.get("file_path")
-    usd_rate = float(user_data.get("usd_rate", 12600))
-    msg = await message.answer("Fayl fonda o'qilmoqda, bot qotmaydi...")
-
+    currency = user_data.get("currency") or "usd"
+    usd_rate = float(user_data.get("usd_rate") or (12600 if currency == "usd" else 1))
+    if not file_path or not os.path.exists(file_path):
+        await state.clear()
+        await message.answer("Xo'jayin, fayl topilmadi (bot qayta ishga tushgan bo'lishi mumkin). "
+                             "Faylni qayta yuboring.")
+        return
+    msg = await message.answer("⏳ Tovarlar qo'shilmoqda…")
     try:
         partiya_nomi = f"Partiya_{time.strftime('%d_%m_%Y_%H_%M')}"
         # products'ni o'qish -> ID hisoblash -> yozishni LOCK ostida bajaramiz.
@@ -1553,12 +1970,12 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
                     next_id, next_index = product_offsets(raw_products)
 
             result = await asyncio.to_thread(
-                parse_excel_file, file_path, usd_rate, markup_pct, next_id, partiya_nomi
+                parse_excel_file, file_path, usd_rate, markup_pct, next_id, partiya_nomi, currency
             )
 
             if not result["success"]:
                 if result.get("error_type") == "columns":
-                    await msg.edit_text(f"'Nomi' yoki 'Narxi' ustuni topilmadi!\n\nO'qilgan ustunlar:\n{result['columns']}")
+                    await msg.edit_text(f"«Nomi» yoki «Narxi» ustuni topilmadi.\n\nUstunlar: {result['columns']}")
                 else:
                     await msg.edit_text(f"Xatolik: {result['error']}")
                 return
@@ -1566,30 +1983,34 @@ async def process_markup_pandas(message: types.Message, state: FSMContext, bot: 
             new_products = result["new_products"]
             if new_products:
                 # Butun massivni qayta yozmaymiz — har bir yangi mahsulot bo'sh
-                # slotga ETag (if-match) bilan ATOMIK qo'shiladi, shunda admin
-                # boshqa mahsulotlarga kiritgan o'zgarishlar (tahrir/o'chirish/qo'shish)
-                # ustidan yozib yuborilmaydi (#3).
+                # slotga ETag (if-match) bilan ATOMIK qo'shiladi (#3).
                 async with aiohttp.ClientSession() as session:
                     ok = await firebase_append_products(session, new_products, next_index)
                 if not ok:
                     await msg.edit_text("Mahsulotlar bazaga yozilmadi (Firebase xatosi). Qayta urinib ko'ring.")
                     return
 
+        if not new_products:
+            await msg.edit_text("Xo'jayin, qo'shiladigan tovar topilmadi (narxlar bo'sh yoki noto'g'ri).")
+            return
+        prices = [p["price"] for p in new_products]
+        fmt = lambda v: f"{v:,}".replace(",", " ")
+        cur_txt = (f"kurs {fmt(int(usd_rate))} so'm, " if currency == "usd" else "so'mda, ")
+        skipped = result.get("skipped") or 0
         await msg.edit_text(
-            f"<b>{len(new_products)} ta tovar</b> bazaga qo'shildi!\n\n"
-            "'Qoralamalar' bo'limidan tasdiqlashingiz mumkin.",
+            f"✅ <b>{len(new_products)} ta tovar</b> qoralamaga qo'shildi\n\n"
+            f"• Partiya: <code>{partiya_nomi}</code>\n"
+            f"• Hisob: {cur_txt}ustama {markup_pct:g}%\n"
+            f"• Narxlar: {fmt(min(prices))} — {fmt(max(prices))} so'm\n"
+            + (f"• Narxi yo'q qatorlar o'tkazib yuborildi: {skipped} ta\n" if skipped else "")
+            + "\nMijozlar hali ko'rmaydi. Mini App → Admin → <b>Qoralamalar</b> bo'limida "
+              "rasm qo'shib, tasdiqlang.",
             parse_mode="HTML",
         )
     except Exception as e:
         await msg.edit_text(f"Xatolik: {e}")
     finally:
-        # #7: vaqtinchalik fayl muvaffaqiyat/xato — har holatda ham o'chiriladi
-        try:
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-        except Exception as e:
-            logging.warning(f"Vaqtinchalik faylni o'chirishda xato: {e}")
-        await state.clear()
+        await _import_cleanup(state)
 
 
 # =====================================================================
@@ -2090,18 +2511,164 @@ def shop_kb_for(user_id, lang):
     return shop_inline_kb(lang)
 
 
-# Xo'jayinning chatida mijoz menyusi (pastdagi DOIMIY klaviatura) osilib
-# qolgan bo'lishi mumkin — Telegram uni faqat yangi reply_markup bilan
-# olib tashlaydi. Har jarayonda bir marta `ReplyKeyboardRemove()` yuboramiz.
+# =====================================================================
+# 👔 XO'JAYIN PANELI — pastdagi doimiy tugmalar
+# ---------------------------------------------------------------------
+# Ilgari xo'jayinga hech qanday tugma ko'rsatilmasdi (faqat mijoz menyusi
+# olib tashlanardi) — u har narsani yozib so'rashi kerak edi. Endi eng
+# ko'p kerak bo'ladigan ishlar bitta bosishda. Tugmalar AI ga ketmaydi:
+# har biri bazadan TO'G'RIDAN-TO'G'RI aniq ma'lumot oladi.
+# =====================================================================
+OWNER_BTN = {
+    "report": "📊 Hisobot",
+    "orders": "📦 Yangi buyurtmalar",
+    "low": "⚠️ Kam qolganlar",
+    "drafts": "📝 Qoralamalar",
+    "import": "📥 Excel yuklash",
+    "story": "🖼 Storis",
+    "undo": "↩️ Oxirgi o'zgarishni qaytarish",
+    "help": "❓ Yordam",
+}
+def _btn_norm(txt):
+    """Emoji variant belgisi (U+FE0F) ni olib tashlaymiz — ba'zi Telegram
+    mijozlari tugma matnini usiz qaytaradi."""
+    return str(txt or "").replace("\ufe0f", "").strip()
+
+
+OWNER_BUTTON_TEXTS = {_btn_norm(v): k for k, v in OWNER_BTN.items()}
+
+
+def owner_menu():
+    """Xo'jayinning doimiy klaviaturasi."""
+    b = OWNER_BTN
+    rows = [
+        [KeyboardButton(text=b["report"]), KeyboardButton(text=b["orders"])],
+        [KeyboardButton(text=b["low"]), KeyboardButton(text=b["drafts"])],
+        [KeyboardButton(text=b["import"]), KeyboardButton(text=b["story"])],
+        [KeyboardButton(text=b["undo"]), KeyboardButton(text=b["help"])],
+    ]
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=True,
+                               input_field_placeholder="Buyruq yozing yoki 🎙 ovoz yuboring…")
+
+
+# Panel har jarayonda xo'jayinga BIR MARTA yuboriladi (Telegram uni
+# o'zi eslab qoladi). Keyingi javoblarda `None` — klaviatura joyida qoladi.
 _owner_kb_cleared = set()
 
 
 def _owner_reply_markup(user_id):
-    """Xo'jayinga: birinchi javobda klaviaturani olib tashlaymiz, keyin — hech narsa."""
+    """Xo'jayinga: birinchi javobda panelni yuboramiz, keyin — hech narsa."""
     if user_id in _owner_kb_cleared:
         return None
     _owner_kb_cleared.add(user_id)
-    return ReplyKeyboardRemove()
+    return owner_menu()
+
+
+def _som(v):
+    try:
+        return f"{int(round(float(v))):,}".replace(",", " ") + " so'm"
+    except (TypeError, ValueError):
+        return "—"
+
+
+OWNER_HELP = (
+    "<b>Xo'jayin, men nimalar qila olaman:</b>\n\n"
+    "📊 <b>Hisobot</b> — bugungi/haftalik savdo, ombor holati\n"
+    "📦 <b>Yangi buyurtmalar</b> — kutilayotganlar ro'yxati\n"
+    "⚠️ <b>Kam qolganlar</b> — tugayotgan va tugagan tovarlar\n"
+    "📝 <b>Qoralamalar</b> — hali mijozga ko'rinmayotgan tovarlar\n"
+    "📥 <b>Excel yuklash</b> — narxlar ro'yxatini fayl bilan qo'shish\n"
+    "🖼 <b>Storis</b> — storis kategoriyalari\n"
+    "↩️ <b>Qaytarish</b> — oxirgi AI o'zgarishini bekor qilish\n\n"
+    "<b>Shunchaki yozing yoki 🎙 ovoz yuboring:</b>\n"
+    "• «Cobalt kolodkasi qancha qoldi?»\n"
+    "• «Bugun qancha savdo bo'ldi?»\n"
+    "• «Gentra svechasi narxini 45 000 qil»\n"
+    "• «Amortizatorlarga 10% chegirma qo'y, 3 kunga»\n\n"
+    "O'zgartirishlar faqat siz ✅ tugmasini bosganingizdan keyin bajariladi."
+)
+
+
+async def _owner_quick(message, kind):
+    """Panel tugmalari uchun TO'G'RIDAN-TO'G'RI ma'lumot (AI siz, aniq)."""
+    uid = message.from_user.id
+    try:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    except Exception:
+        pass
+    if kind == "orders":
+        res = await ai_agent.quick_read(uid, "list_orders", {"status": "kutilmoqda", "limit": 15})
+        rows = (res or {}).get("buyurtmalar") or []
+        if not res or not res.get("ok"):
+            return "Xo'jayin, buyurtmalarni hozir olib bo'lmadi — birozdan so'ng qayta bosing."
+        if not rows:
+            return "✅ Xo'jayin, yangi (kutilayotgan) buyurtma yo'q."
+        lines = [f"📦 <b>Kutilayotgan buyurtmalar: {res.get('jami_topildi', len(rows))} ta</b>\n"]
+        for r in rows:
+            lines.append(
+                f"• <b>{html.escape(str(r.get('kod') or ''))}</b> — {html.escape(str(r.get('mijoz') or 'Mijoz'))[:30]}"
+                f"\n   {_som(r.get('summa_som'))} · {int(r.get('tovar_soni') or 0)} dona"
+                + (f" · {html.escape(str(r.get('sana')))}" if r.get("sana") else "")
+                + (f" · 📞 {html.escape(str(r.get('telefon')))}" if r.get("telefon") else ""))
+        lines.append("\nHolatni buyurtma kartochkasidagi tugmalar bilan o'zgartirasiz.")
+        return "\n".join(lines)
+    if kind == "low":
+        res = await ai_agent.quick_read(uid, "low_stock", {"threshold": 3, "limit": 20})
+        if not res or not res.get("ok"):
+            return "Xo'jayin, omborni hozir o'qib bo'lmadi — birozdan so'ng qayta bosing."
+        low, out = res.get("kam_qolgan") or [], res.get("tugagan") or []
+        if not low and not out:
+            return "✅ Xo'jayin, kam qolgan tovar yo'q — ombor joyida."
+        lines = [f"⚠️ <b>Kam qolgan: {res.get('kam_qolgan_soni', 0)} ta · tugagan: {res.get('tugagan_soni', 0)} ta</b>"]
+        if low:
+            lines.append("\n<b>Kam qolgan (≤3):</b>")
+            lines += [f"• {html.escape(str(p.get('nom')))[:50]} — <b>{p.get('qoldiq')}</b> dona" for p in low[:15]]
+        if out:
+            lines.append("\n<b>Tugagan:</b>")
+            lines += [f"• {html.escape(str(p.get('nom')))[:50]}" for p in out[:15]]
+            if res.get("tugagan_soni", 0) > 15:
+                lines.append(f"… va yana {res['tugagan_soni'] - 15} ta")
+        return "\n".join(lines)
+    if kind == "drafts":
+        res = await ai_agent.quick_read(uid, "list_drafts", {"limit": 10})
+        if not res or not res.get("ok"):
+            return "Xo'jayin, qoralamalarni hozir o'qib bo'lmadi."
+        n = res.get("jami_qoralama", 0)
+        if not n:
+            return "✅ Xo'jayin, qoralama yo'q — hamma tovar mijozlarga ko'rinadi."
+        lines = [f"📝 <b>Qoralamalar: {n} ta</b> (mijozga ko'rinmaydi)\n"]
+        for b in (res.get("partiyalar") or [])[:6]:
+            lines.append(f"• {html.escape(str(b.get('partiya')))} — {b.get('soni')} ta")
+        lines.append("\nMini App → Admin → <b>Qoralamalar</b> bo'limida rasm qo'shib tasdiqlang.")
+        return "\n".join(lines)
+    return None
+
+
+async def owner_button(message: types.Message, state: FSMContext, key: str):
+    """Xo'jayin paneli tugmasi bosildi."""
+    if key == "report":
+        await owner_report_command(message)
+    elif key in ("orders", "low", "drafts"):
+        txt = await _owner_quick(message, key)
+        await message.answer(txt or "Xo'jayin, ma'lumot topilmadi.", parse_mode="HTML",
+                             reply_markup=_owner_reply_markup(message.from_user.id))
+    elif key == "import":
+        await message.answer(
+            "📥 <b>Excel yuklash</b>\n\nNarxlar ro'yxatini <b>.xlsx</b>, <b>.xls</b> yoki "
+            "<b>.csv</b> fayl qilib shu chatga yuboring (📎 → Fayl). Men ustunlarni o'zim "
+            "topaman, keyin valyuta, kurs va ustamani so'rayman. Tovarlar avval "
+            "<b>qoralama</b> bo'lib qo'shiladi.", parse_mode="HTML")
+        try:
+            await send_import_template(message.chat.id)
+        except Exception as e:
+            logging.warning(f"Namuna fayl yuborilmadi: {e}")
+    elif key == "story":
+        await story_categories_command(message)
+    elif key == "undo":
+        await owner_undo_command(message)
+    else:
+        await message.answer(OWNER_HELP, parse_mode="HTML", reply_markup=owner_menu())
+        _owner_kb_cleared.add(message.from_user.id)
 
 
 @dp.message(
@@ -2113,7 +2680,7 @@ def _owner_reply_markup(user_id):
 async def owner_free_chat(message: types.Message, state: FSMContext):
     """Xo'jayinning ERKIN suhbati — mijoz handlerlaridan OLDIN turadi.
 
-    ⚠️ NEGA ALOHIDA HANDLER KERAK:
+    ⚠ NEGA ALOHIDA HANDLER KERAK:
     Ilgari xo'jayinning matni mijoz uchun yozilgan handlerlarga tushardi.
     Eng yomoni: `/start` dan keyin u `Register.lang` holatida qolsa, nima
     yozsa ham «tilni tanlang» javobini olardi va AI ga MUTLAQO yetib
@@ -2127,15 +2694,19 @@ async def owner_free_chat(message: types.Message, state: FSMContext):
         await state.clear()
 
     txt = (message.text or "").strip()
-    # Eski doimiy klaviaturaning tugmasi bosilgan bo'lsa — AI ga yubormaymiz,
-    # klaviaturani butunlay olib tashlaymiz.
+    # 👔 Panel tugmasi — AI ga emas, to'g'ridan-to'g'ri bajaramiz.
+    if _btn_norm(txt) in OWNER_BUTTON_TEXTS:
+        await owner_button(message, state, OWNER_BUTTON_TEXTS[_btn_norm(txt)])
+        return
+    # Eski mijoz menyusining tugmasi bosilgan bo'lsa — AI ga yubormaymiz,
+    # o'rniga xo'jayin panelini qo'yamiz.
     if txt in SHOP_BUTTONS or txt in CONTACT_BUTTONS \
             or txt in LANG_BUTTONS or txt in REGISTER_BUTTONS:
         _owner_kb_cleared.add(message.from_user.id)
         await message.answer(
-            "Mijoz menyusi olib tashlandi, xo'jayin. Endi shunchaki yozing — "
-            "men bajaraman.",
-            reply_markup=ReplyKeyboardRemove(),
+            "Xo'jayin, mijoz menyusi o'rniga sizning panelingiz qo'yildi. "
+            "Tugmani bosing yoki shunchaki yozing — men bajaraman.",
+            reply_markup=owner_menu(),
         )
         return
 
@@ -2156,14 +2727,13 @@ async def start_command(message: types.Message, state: FSMContext):
         greet = await _owner_needs_greeting(user_id)
         if greet:
             await message.answer(
-                "Assalomu alaykum, xo'jayin. Buyruqlaringizni kutaman — "
-                "shunchaki yozing.",
-                reply_markup=ReplyKeyboardRemove(),
+                "Assalomu alaykum, Xo'jayin. Pastdagi paneldan foydalaning yoki "
+                "shunchaki yozing / 🎙 ovoz yuboring — bajaraman.",
+                reply_markup=owner_menu(),
             )
             await _mark_owner_greeted(user_id)
         else:
-            await message.answer("Tinglayman, xo'jayin.",
-                                 reply_markup=ReplyKeyboardRemove())
+            await message.answer("Tinglayman, Xo'jayin.", reply_markup=owner_menu())
         _owner_kb_cleared.add(user_id)
         return
 
@@ -2209,6 +2779,10 @@ async def help_command(message: types.Message):
     "menga shunchaki yozing" degan tushuntirish ham yo'q edi. Endi bitta
     joyda: nima qila olishim, buyruqlar va aloqa raqami.
     """
+    if _is_owner(message.from_user.id):
+        _owner_kb_cleared.add(message.from_user.id)
+        await message.answer(OWNER_HELP, parse_mode="HTML", reply_markup=owner_menu())
+        return
     lang = await get_user_lang(message.from_user.id)
     text = t(lang, "help", shop=esc(shop_label(lang)), phone=esc(SHOP_PHONE))
     if message.from_user.id in ADMIN_IDS:
@@ -2466,7 +3040,7 @@ async def contact_handler(message: types.Message):
 @dp.message(Command("storis", "kategoriyalar"))
 async def story_categories_command(message: types.Message):
     # Admin storis hashteglarini yoddan bilishi shart emas — shu buyruq ro'yxatni ko'rsatadi.
-    if message.from_user.id not in ADMIN_IDS:
+    if not _is_admin(message.from_user.id):
         # Mijoz bu yashirin buyruqni tasodifan yozsa — ilgari JIMLIK edi.
         lang = await get_user_lang(message.from_user.id)
         await message.answer(t(lang, "unknown_command"), parse_mode="HTML")
@@ -2490,7 +3064,7 @@ async def story_categories_command(message: types.Message):
 # =====================================================================
 @dp.message((F.photo | F.video) & F.caption.startswith("#"))
 async def handle_stories(message: types.Message, bot: Bot):
-    if message.from_user.id not in ADMIN_IDS:
+    if not _is_admin(message.from_user.id):
         # 🔇 QOLGAN JIMLIK TESHIGI TUZATILDI.
         # Bu handler "rasm/video + '#' bilan boshlanadigan izoh" ni ushlaydi.
         # Mijoz ham shunday yozishi juda ehtimol ("#gazel kerak", "#kalotka").
@@ -3063,6 +3637,17 @@ def _ensure_ai_session(user_id, lang, display_name="", extra="", owner_greet=Fal
     return ai_sessions[user_id]
 
 
+@dp.message(Command("panel", "menu"))
+async def owner_panel_command(message: types.Message):
+    """Xo'jayin panelini (doimiy tugmalarni) qayta ko'rsatadi."""
+    if not _is_owner(message.from_user.id):
+        lang = await get_user_lang(message.from_user.id)
+        await message.answer(t(lang, "unknown_command"), parse_mode="HTML")
+        return
+    _owner_kb_cleared.add(message.from_user.id)
+    await message.answer("Xo'jayin, panel tayyor 👇", reply_markup=owner_menu())
+
+
 @dp.message(Command("orqaga", "undo"))
 async def owner_undo_command(message: types.Message):
     """Oxirgi AI o'zgarishini qaytarish. FAQAT do'kon egasiga.
@@ -3098,7 +3683,10 @@ async def unknown_command(message: types.Message, state: FSMContext):
 
 
 @dp.message(F.text)
-async def handle_ai_chat(message: types.Message, state: FSMContext):
+async def handle_ai_chat(message: types.Message, state: FSMContext, text_override: str = None):
+    # `text_override` — ovozli xabar matni yoki .txt fayl mazmuni (handler
+    # o'zi chaqirganda). Oddiy matnli xabarda u None bo'ladi.
+    user_text = text_override if text_override is not None else (message.text or "")
     lang = DEFAULT_LANG
     if await state.get_state() is not None:
         # Ilgari shu yerda quruq `return` bor edi — ya'ni handler xabarni
@@ -3136,7 +3724,7 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         extra = ""
         if use_agent:
             extra = ai_agent.owner_tools_prompt_block()
-        elif owner and _looks_like_business_question(message.text):
+        elif owner and _looks_like_business_question(user_text):
             # 💡 Baza faqat savol biznesga tegishli bo'lganda o'qiladi.
             snap = await _owner_analytics_snapshot()
             if snap:
@@ -3146,7 +3734,7 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
         # (mijoz tilni almashtirsa ham), suhbat tarixi esa saqlanib qoladi.
         _ensure_ai_session(user_id, lang, _tg_display_name(message.from_user), extra,
                            owner_greet=owner_greet)
-        ai_sessions[user_id].append({"role": "user", "content": message.text})
+        ai_sessions[user_id].append({"role": "user", "content": user_text})
 
         bot_reply = None
         agent_res = None   # agent ishlamasa ham pastda xavfsiz tekshiriladi
@@ -3156,8 +3744,11 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
             #    16 xabar" qirqishi `tool_calls` bilan `tool` juftligini ajratib
             #    qo'ysa, Groq keyingi navbatda 400 xato beradi va AI butunlay
             #    o'lib qolardi.
+            # 🎯 Raqam/tovar/buyurtma haqidagi savolda vosita chaqirish MAJBURIY —
+            #    model «xotiradan» raqam to'qimasin.
             agent_res = await ai_agent.run_owner_agent(
-                ai_sessions[user_id], user_id)
+                ai_sessions[user_id], user_id,
+                force_tool=_looks_like_business_question(user_text))
             bot_reply = agent_res.text if (agent_res.text or "").strip() else None
             if bot_reply is None:
                 # Agent ishlamadi (Groq xatosi yoki tool sxemasi rad etildi) —
@@ -3165,7 +3756,7 @@ async def handle_ai_chat(message: types.Message, state: FSMContext):
                 logging.warning("Agent javob bermadi — oddiy suhbatga qaytilyapti "
                                 "(uid=%s)", user_id)
                 fb_extra = ""
-                if _looks_like_business_question(message.text):
+                if _looks_like_business_question(user_text):
                     snap = await _owner_analytics_snapshot()
                     if snap:
                         fb_extra = _owner_snapshot_block(snap)
@@ -3518,11 +4109,75 @@ async def order_outbox_watchdog():
 # (storis, import, rasm tahlili) avval ishlaydi, bu yerga faqat "boshqa
 # hech kim ushlamagan" xabarlar tushadi.
 # =====================================================================
+# 🎙 OVOZLI XABAR -> MATN (Groq Whisper). Ilgari bot ovozni umuman
+#    tinglamasdi — xo'jayin esa asosan ovoz bilan gaplashadi.
+STT_ENABLED = os.getenv("STT_ENABLED", "1") != "0"
+STT_MODEL = os.getenv("GROQ_STT_MODEL", "whisper-large-v3")
+STT_MAX_SEC = int(os.getenv("STT_MAX_SEC", "90"))            # mijoz uchun
+STT_MAX_SEC_OWNER = int(os.getenv("STT_MAX_SEC_OWNER", "300"))
+# Whisper'ga lug'at ishorasi: mashina va zapchast nomlarini to'g'riroq yozadi.
+_STT_HINT = {
+    "uz": ("Avto A1 avtozapchast do'koni. Cobalt, Gentra, Nexia, Damas, Spark, Lacetti, "
+           "Matiz, Malibu, Captiva, Labo, Tico. Kolodka, amortizator, svecha, filtr, moy, "
+           "kalotka, narx, qoldiq, buyurtma, chegirma, so'm, dona."),
+    "ru": ("Магазин автозапчастей Avto A1. Cobalt, Gentra, Nexia, Damas, Spark, Lacetti, "
+           "Matiz. Колодки, амортизатор, свечи, фильтр, масло, цена, остаток, заказ, скидка."),
+}
+
+
+async def transcribe_voice(file_id, lang):
+    """Ovozni matnga aylantiradi. Muvaffaqiyatsizlikda None."""
+    if groq_client is None or not STT_ENABLED:
+        return None
+    try:
+        buf = await bot.download(file_id)
+        data = buf.read() if hasattr(buf, "read") else bytes(buf or b"")
+        if not data:
+            return None
+        kw = {"file": ("voice.ogg", data), "model": STT_MODEL, "temperature": 0.0,
+              "response_format": "json"}
+        if lang in _STT_HINT:
+            kw["language"] = lang
+            kw["prompt"] = _STT_HINT[lang]
+        res = await groq_client.audio.transcriptions.create(**kw)
+        text = (getattr(res, "text", None) or (res.get("text") if isinstance(res, dict) else "") or "").strip()
+        return text or None
+    except Exception as e:
+        logging.error(f"Ovozni matnga aylantirishda xato: {e}")
+        return None
+
+
 @dp.message(StateFilter(None), F.voice | F.video_note | F.audio)
-async def handle_voice_like(message: types.Message):
-    """Ovozli xabar / doiracha / audio — endi javobsiz qolmaydi."""
-    lang = await get_user_lang(message.from_user.id)
-    kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
+async def handle_voice_like(message: types.Message, state: FSMContext):
+    """Ovozli xabar / doiracha — matnga aylantirib, AI ga yuboramiz.
+
+    Musiqa/audio fayl (F.audio) matnga aylantirilmaydi — u gap emas.
+    Aylantirib bo'lmasa — avvalgidek tushunarli javob.
+    """
+    uid = message.from_user.id
+    lang = await get_user_lang(uid)
+    media = message.voice or message.video_note
+    if media is not None and groq_client is not None and STT_ENABLED:
+        dur = int(getattr(media, "duration", 0) or 0)
+        limit = STT_MAX_SEC_OWNER if _is_owner(uid) else STT_MAX_SEC
+        if dur > limit:
+            await message.reply(
+                (f"Xo'jayin, ovoz juda uzun ({dur} s). {limit // 60} daqiqagacha bo'laklab yuboring."
+                 if _is_owner(uid) else
+                 (f"Голосовое слишком длинное. Отправьте до {limit} сек." if lang == "ru"
+                  else f"Ovozli xabar juda uzun. {limit} soniyagacha yuboring.")))
+            return
+        if not _rate_limited(uid, "stt"):
+            try:
+                await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+            except Exception:
+                pass
+            text = await transcribe_voice(media.file_id, lang)
+            if text:
+                await message.reply(f"🎙 <i>{html.escape(text[:700])}</i>", parse_mode="HTML")
+                await handle_ai_chat(message, state, text_override=text)
+                return
+    kb = shop_kb_for(uid, lang)   # xo'jayinga tugma yo'q
     await message.reply(t(lang, "voice_reply"), parse_mode="HTML", reply_markup=kb)
 
 
@@ -3862,9 +4517,11 @@ async def setup_bot_commands():
     # ishlatolmaydi (handler `_is_owner` ni tekshiradi), ro'yxatda turishi
     # esa chalkashlik keltirardi.
     owner_extra = admin_extra + [
+        BotCommand(command="panel", description="Xo'jayin paneli (tugmalar)"),
         BotCommand(command="orqaga", description="Oxirgi AI o'zgarishini qaytarish"),
     ]
-    for aid in ADMIN_IDS:
+    # Egasi ADMIN_IDS da bo'lmasa ham o'z buyruqlarini ko'rsin.
+    for aid in sorted(set(ADMIN_IDS) | {OWNER_TG_ID}):
         try:
             await bot.set_my_commands(
                 owner_extra if _is_owner(aid) else admin_extra,

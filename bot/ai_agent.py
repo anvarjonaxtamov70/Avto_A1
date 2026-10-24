@@ -1955,7 +1955,7 @@ def _tool_result_text(result):
 # =====================================================================
 #  AGENT HALQASI
 # =====================================================================
-async def run_agent(messages, user_id, temperature=0.3):
+async def run_agent(messages, user_id, temperature=0.2, force_tool=False):
     """Tool calling halqasi. `AgentResult` qaytaradi.
 
     ⚠️ MUHIM: `messages` NUSXA olinadi. Vosita (`tool`) xabarlari asosiy
@@ -1980,8 +1980,17 @@ async def run_agent(messages, user_id, temperature=0.3):
     specs = groq_tool_specs(include_mutating=allow_write)
 
     for round_i in range(MAX_TOOL_ROUNDS):
-        msg = await _deps.groq_raw(work, tools=specs, tool_choice="auto",
+        # 🎯 Raqam/tovar savolida BIRINCHI aylanishda vosita chaqirish majburiy
+        #    ("required") — model bazaga qaramay "xotiradan" javob bermasin.
+        #    Model/provayder "required" ni qo'llamasa — oddiy "auto" bilan
+        #    qayta urinamiz (javobsiz qolmaslik uchun).
+        choice = "required" if (force_tool and round_i == 0) else "auto"
+        msg = await _deps.groq_raw(work, tools=specs, tool_choice=choice,
                                    temperature=temperature)
+        if msg is None and choice == "required":
+            logging.warning("Agent: tool_choice=required rad etildi — auto bilan qayta")
+            msg = await _deps.groq_raw(work, tools=specs, tool_choice="auto",
+                                       temperature=temperature)
         if msg is None:
             logging.error("Agent: Groq javob bermadi (aylanish %s)", round_i + 1)
             return AgentResult(None, ctx.calls, ctx.pending)
@@ -2033,9 +2042,9 @@ async def run_agent(messages, user_id, temperature=0.3):
     return AgentResult((final.content or "").strip(), ctx.calls, ctx.pending)
 
 
-async def run_owner_agent(messages, user_id, temperature=0.3):
+async def run_owner_agent(messages, user_id, temperature=0.2, force_tool=False):
     """Xo'jayin uchun agent navbati + audit yozuvi."""
-    res = await run_agent(messages, user_id, temperature=temperature)
+    res = await run_agent(messages, user_id, temperature=temperature, force_tool=force_tool)
     calls = res.calls
     # Audit: har bir o'qishni yozish shovqin bo'ladi, shuning uchun faqat
     # (a) xato bo'lganda, (b) o'zgartirish TAKLIF qilinganda, (c) ataylab
@@ -2185,6 +2194,23 @@ async def undo_last(user_id):
     return token, header + render_plan_preview(undo, prec.get("warning")), ""
 
 
+async def quick_read(user_id, name, args=None):
+    """Panel tugmalari uchun: bitta O'QISH vositasini AI siz bajaradi.
+
+    Yozish vositalari bu yo'l bilan HECH QACHON chaqirilmaydi.
+    Xato bo'lsa None qaytadi.
+    """
+    spec = TOOLS.get(name)
+    if _deps is None or spec is None or spec.mutating:
+        return None
+    try:
+        ctx = TurnContext(_deps, user_id)
+        return await execute_tool(ctx, name, json.dumps(args or {}))
+    except Exception as e:
+        logging.error("quick_read(%s) xato: %s", name, e)
+        return None
+
+
 # =====================================================================
 #  PROMPT BLOKI
 # =====================================================================
@@ -2198,40 +2224,50 @@ def owner_tools_prompt_block():
     write_on = bool(WRITE_ENABLED and _deps is not None and _deps.can_write())
     lines = [
         "\n\n=== JONLI BAZAGA ULANISH (faqat xo'jayin uchun) ===",
-        "Senda do'kon bazasi bilan ishlaydigan vositalar bor: ombor, tovar, "
+        "Sizda do'kon bazasi bilan ishlaydigan vositalar bor: ombor, tovar, "
         "narx, qoldiq, buyurtma, mijoz, savdo hisoboti.",
-        "QOIDALAR:",
-        "- Raqam yoki tovar haqidagi savolda TAXMIN QILMA — mos vositani chaqir.",
-        "- Vosita bergan raqamdan boshqa raqamni O'ZINGDAN TO'QIMA.",
+        "ANIQLIK QOIDALARI:",
+        "- Raqam, narx, qoldiq, buyurtma yoki tovar haqidagi HAR QANDAY savolda "
+        "avval mos vositani chaqiring. Taxmin qilmang.",
+        "- Javobdagi har bir raqam vosita natijasidan olinsin. Vositada yo'q "
+        "raqamni yozmang, yaxlitlamang, o'zgartirmang.",
         "- Bir savolga bitta-ikkita maqsadli chaqiruv kifoya; hamma vositani "
-        "ketma-ket chaqirmа.",
-        "- Vosita bo'sh natija bersa — buni to'g'ridan ayt («bunday tovar yo'q»), "
-        "o'ylab topma.",
-        "- Javob QISQA: kerakli raqam va 1-2 gaplik xulosa. Uzun ro'yxatni "
-        "so'ralmasa keltirmа.",
+        "ketma-ket chaqirmang.",
+        "- Vosita bo'sh natija bersa — ochiq ayting («bunday tovar bazada yo'q»). "
+        "O'ylab topmang. Qidiruvda topilmasa — boshqacha yozilishini (ruscha, "
+        "qisqartma) bir marta sinab ko'ring.",
+        "- Bir nechta mos tovar chiqsa — qaysi biri ekanini so'rang, o'zingiz tanlamang.",
+        "JAVOB SHAKLI:",
+        "- Avval to'g'ridan-to'g'ri javob (raqam/natija), keyin kerak bo'lsa 1-2 "
+        "qatorlik izoh. Uzun ro'yxatni so'ralmasa keltirmang.",
+        "- Pul: «1 250 000 so'm» ko'rinishida. Soni: «12 dona».",
+        "HURMAT:",
+        "- Xo'jayinga har doim «Siz» deb, hurmat bilan murojaat qiling. «Sen», "
+        "kinoya, dag'al yoki ko'cha so'zlari, ortiqcha hazil — mumkin emas.",
+        "- Xato qilsangiz yoki bilmasangiz — kechirim so'rab, ochiq ayting.",
     ]
     if write_on:
         lines += [
             "",
             "O'ZGARTIRISH (narx, qoldiq, holat, chegirma):",
-            "- Avval kerakli tovarni `search_products` bilan topib `id` sini ol. "
-            "Id'ni O'YLAB TOPMA.",
+            "- Avval kerakli tovarni `search_products` bilan topib `id` sini oling. "
+            "Id'ni o'ylab topmang.",
             "- O'zgartirish vositasi natijasi «TASDIQ_KUTILMOQDA» bo'ladi. Bu "
             "degani amal HALI BAJARILMADI: xo'jayinga tugma yuboriladi va u "
             "bosgandagina bajariladi.",
             "- Shu sababli «bajardim», «o'zgartirdim», «narx yangilandi» deb "
-            "HECH QACHON yozma. To'g'ri javob: «Narxni 1 200 000 ga "
+            "HECH QACHON yozmang. To'g'ri javob: «Narxni 1 200 000 so'mga "
             "o'zgartirishni tayyorladim — pastdagi tugma bilan tasdiqlang».",
             "- Xo'jayin nimani xohlayotgani ANIQ bo'lmasa (qaysi tovar, qaysi "
-            "razmer, qancha) — avval SO'RA, taxmin bilan o'zgartirish "
-            "tayyorlama.",
+            "razmer, qancha) — avval so'rang, taxmin bilan o'zgartirish "
+            "tayyorlamang.",
             "- Bir necha tovarga bir xil foiz qo'shish kerak bo'lsa "
-            "`bulk_adjust_price` ishlat (bittalab emas).",
+            "`bulk_adjust_price` ishlating (bittalab emas).",
         ]
     else:
         lines += [
-            "- Hozir faqat O'QIY olasan. Xo'jayin narx/qoldiq o'zgartirishni "
-            "so'rasa — buni Mini App'dagi «Ombor» bo'limidan qilishini ayt.",
+            "- Hozir faqat o'qiy olasiz. Xo'jayin narx/qoldiq o'zgartirishni "
+            "so'rasa — buni Mini App'dagi «Ombor» bo'limidan qilish mumkinligini ayting.",
         ]
     lines.append("=== TUGADI ===\n")
     return "\n".join(lines)
