@@ -3,6 +3,35 @@
 <head>  
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- 📱 Ilova sifatida o'rnatish (iPhone/iPad «Bosh ekranga qo'shish», Android) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0a0a0b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Avto A1">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <script>
+      /* 📱 Ilova rejimini ENG BIRINCHI aniqlaymiz (welcome animatsiyasi boshlanishidan oldin):
+         a1-native — Android ilova (Capacitor, User-Agent «AvtoA1App»);
+         a1-pwa    — iPhone/iPad/Android «Bosh ekranga qo'shilgan» ilova;
+         a1-app    — ikkalasi ham (Telegram'siz ilova rejimi). */
+      (function () {
+        try {
+          var r = document.documentElement, ua = navigator.userAgent || '';
+          var nat = /\bAvtoA1App\b/.test(ua);
+          var pwa = !nat && (window.navigator.standalone === true ||
+                    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches));
+          var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+          if (nat) r.classList.add('a1-native');
+          if (pwa) r.classList.add('a1-pwa');
+          if (nat || pwa) r.classList.add('a1-app');
+          if (ios) r.classList.add('a1-ios');
+          window.A1_NATIVE = nat; window.A1_PWA = pwa;
+        } catch (e) {}
+      })();
+    </script>
     <!-- 🚫 KESH O'CHIRISH: Telegram WebView eski HTML'ni keshda ushlab, yangi
          deploy'dan keyin ham eski ko'rinishni ko'rsatib turardi. Bu teglar
          WebView'ga har ochilganda YANGI HTML tortishni buyuradi. -->
@@ -1768,8 +1797,14 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             inset: 0;
             width: 100%; height: 100%;
             overflow: visible;
-            will-change: transform;
             filter: drop-shadow(0 0 10px rgba(240, 208, 96, 0.35)) drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55));
+        }
+        /* ⚡ Aylanish SVG'da emas, uni o'rab turgan HTML qatlamida: brauzer uni
+           GPU kompozitorida aylantiradi — ilova yuklanayotganda (JS band bo'lsa ham)
+           shesterna qotmaydi. Soya (filter) aylanmaydigan ichki SVG'da qoladi. */
+        .wl-gear-rot {
+            position: absolute; inset: 0; display: block;
+            will-change: transform; transform: translateZ(0);
             /* 1) start: tez aylanib sekinlashadi  2) keyin: sokin doimiy aylanish */
             animation:
                 wlGearIn 1.7s cubic-bezier(0.16, 0.84, 0.3, 1) 0.1s both,
@@ -1912,6 +1947,13 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
             }
             .wl-ch { filter: none !important; }
         }
+        /* 📱 Ilova rejimi: welcome'da asosiy oqimni band qiladigan effektlar yo'q
+           (harflardagi blur, A1 ustidan nur, shesterna soyasi) — faqat transform/opacity. */
+        html.a1-app #welcome-screen .wl-gear { filter: none !important; }
+        html.a1-app #welcome-screen .wl-icon::before { content: ""; position: absolute; inset: -18%; border-radius: 50%; background: radial-gradient(circle, rgba(240,208,96,.22), transparent 62%); pointer-events: none; }
+        html.a1-app #welcome-screen .wl-ch { filter: none !important; }
+        html.a1-app #welcome-screen .wl-mono { animation: wlMonoIn 0.7s cubic-bezier(0.34, 1.4, 0.5, 1) 0.55s forwards !important; background-position: 200% 0, 0 0 !important; }
+        html.a1-app .welcome-fade-out .wl-stage { filter: none !important; }
         .header { text-align: center; padding: 10px 20px 20px; }
         .header h1 { font-size: 26px; font-weight: 800; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
         /* 💎 Premium TILLA tasdiq nishoni (avval ko'k Twitter-uslubida edi — palitra bilan ziddiyat).
@@ -6353,12 +6395,12 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
   <div class="wl-aura" aria-hidden="true"></div>
   <div class="wl-stage" aria-hidden="true">
     <div class="wl-icon">
-      <svg class="wl-gear" viewBox="0 0 100 100" focusable="false">
+      <span class="wl-gear-rot"><svg class="wl-gear" viewBox="0 0 100 100" focusable="false">
         <defs><linearGradient id="wlGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F0D060"/><stop offset=".5" stop-color="#C9A84C"/><stop offset="1" stop-color="#96720A"/></linearGradient></defs>
         <path class="wl-gear-body" fill-rule="evenodd" d="M44.29 9.90L45.82 3.19A47 47 0 0 1 54.18 3.19L55.71 9.90A40.5 40.5 0 0 1 65.11 12.42L69.79 7.37A47 47 0 0 1 77.03 11.55L74.99 18.13A40.5 40.5 0 0 1 81.87 25.01L88.45 22.97A47 47 0 0 1 92.63 30.21L87.58 34.89A40.5 40.5 0 0 1 90.10 44.29L96.81 45.82A47 47 0 0 1 96.81 54.18L90.10 55.71A40.5 40.5 0 0 1 87.58 65.11L92.63 69.79A47 47 0 0 1 88.45 77.03L81.87 74.99A40.5 40.5 0 0 1 74.99 81.87L77.03 88.45A47 47 0 0 1 69.79 92.63L65.11 87.58A40.5 40.5 0 0 1 55.71 90.10L54.18 96.81A47 47 0 0 1 45.82 96.81L44.29 90.10A40.5 40.5 0 0 1 34.89 87.58L30.21 92.63A47 47 0 0 1 22.97 88.45L25.01 81.87A40.5 40.5 0 0 1 18.13 74.99L11.55 77.03A47 47 0 0 1 7.37 69.79L12.42 65.11A40.5 40.5 0 0 1 9.90 55.71L3.19 54.18A47 47 0 0 1 3.19 45.82L9.90 44.29A40.5 40.5 0 0 1 12.42 34.89L7.37 30.21A47 47 0 0 1 11.55 22.97L18.13 25.01A40.5 40.5 0 0 1 25.01 18.13L22.97 11.55A47 47 0 0 1 30.21 7.37L34.89 12.42A40.5 40.5 0 0 1 44.29 9.90ZM50 16.5A33.5 33.5 0 1 0 50 83.5A33.5 33.5 0 1 0 50 16.5Z"/>
         <circle class="wl-gear-ring" cx="50" cy="50" r="29.5"/>
         <circle class="wl-gear-dot" cx="50" cy="23.5" r="1.1"/>
-      </svg>
+      </svg></span>
       <span class="wl-mono">A1</span>
     </div>
     <div class="wl-title"><span class="wl-word"><span class="wl-ch" style="--i:0">A</span><span class="wl-ch" style="--i:1">s</span><span class="wl-ch" style="--i:2">s</span><span class="wl-ch" style="--i:3">a</span><span class="wl-ch" style="--i:4">l</span><span class="wl-ch" style="--i:5">o</span><span class="wl-ch" style="--i:6">m</span><span class="wl-ch" style="--i:7">u</span></span><span class="wl-word"><span class="wl-ch" style="--i:9">a</span><span class="wl-ch" style="--i:10">l</span><span class="wl-ch" style="--i:11">a</span><span class="wl-ch" style="--i:12">y</span><span class="wl-ch" style="--i:13">k</span><span class="wl-ch" style="--i:14">u</span><span class="wl-ch" style="--i:15">m</span></span></div>
@@ -8571,6 +8613,7 @@ window.currentUser = null;
     window.A1_APP = (function () {
         try {
             if (/\bAvtoA1App\b/.test(navigator.userAgent || '')) return true;
+            if (window.A1_PWA) return true;   // iPhone/iPad/Android «Bosh ekranga qo'shilgan» ilova
             return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
         } catch (e) { return false; }
     })();
@@ -8589,7 +8632,7 @@ window.currentUser = null;
             return /^https?:$/.test(u.protocol) && u.host !== location.host;
         } catch (e) { return false; }
     };
-    if (window.A1_APP) {
+    if (window.A1_APP && !window.A1_PWA) {
         // target="_blank" havolalar va window.open — ilova ichida emas, tashqi ilovada ochiladi
         document.addEventListener('click', function (e) {
             var a = e.target && e.target.closest && e.target.closest('a[href]');
@@ -15821,7 +15864,11 @@ function initReveal() {
     var reduce = false;
     try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e){}
     function disabled(){
-        try { return reduce || document.documentElement.classList.contains('lite') || window.__perfLite; }
+        // 📱 Ilovada (Android ilova / iPhone bosh ekran ilovasi) parallax O'CHIQ:
+        //    har skroll kadrida rasm o'lchamini o'qib, transform yozish butun
+        //    sahifa uslubini qayta hisoblatardi (o'lchovda 400+ marta) — skroll
+        //    va rasmlar ochilishidagi asosiy «tutilish» shu edi.
+        try { return reduce || document.documentElement.classList.contains('lite') || document.documentElement.classList.contains('a1-app') || window.__perfLite; }
         catch(e){ return true; }
     }
 
@@ -21418,6 +21465,10 @@ html[data-theme="light"] .card-stock-low{ color:#9A6A0A; background:rgba(154,122
 </style>
 <script>
   (function scrollPerf(){
+    // 📱 Ilovada kerak emas: u yerda cheksiz bezak animatsiyalari va grain umuman
+    //    o'chiq (a1-app-perf), body sinfini almashtirish esa har skroll boshida
+    //    butun sahifa uslubini qayta hisoblatib, «tutilish» berardi.
+    if (document.documentElement.classList.contains('a1-app')) return;
     // Skroll boshlanganda body.is-scrolling qo'shamiz, tugagach (140ms jim) olib tashlaymiz.
     var t = null, on = false;
     function start(){ if(!on){ document.body.classList.add('is-scrolling'); on = true; } }
@@ -22710,7 +22761,7 @@ html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border
      vaqtlarni qaytaramiz (faqat transform/opacity — yuk sezilmaydi). */
   html.lite body #welcome-screen .wl-aura     { animation-duration: 2.6s !important; animation-delay: 0s !important; }
   html.lite body #welcome-screen .wl-icon     { animation-duration: 0.95s !important; animation-delay: 0.1s !important; }
-  html.lite body #welcome-screen .wl-gear     { animation-duration: 1.7s, 9s !important; animation-delay: 0.1s, 1.8s !important; animation-iteration-count: 1, infinite !important; }
+  html.lite body #welcome-screen .wl-gear-rot { animation-duration: 1.7s, 9s !important; animation-delay: 0.1s, 1.8s !important; animation-iteration-count: 1, infinite !important; }
   html.lite body #welcome-screen .wl-mono     { animation-duration: 0.7s, 1.1s !important; animation-delay: 0.55s, 1.5s !important; }
   html.lite body #welcome-screen .wl-ch       { animation-duration: 0.75s !important; animation-delay: calc(0.6s + var(--i) * 38ms) !important; }
   html.lite body #welcome-screen .wl-sub      { animation-duration: 0.7s !important; animation-delay: 1.35s !important; }
@@ -22721,7 +22772,8 @@ html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border
      blur va nur o'chiriladi. */
   html.pf-weak body #welcome-screen .wl-aura     { animation-duration: 0.6s !important; }
   html.pf-weak body #welcome-screen .wl-icon     { animation-duration: 0.45s !important; animation-delay: 0s !important; }
-  html.pf-weak body #welcome-screen .wl-gear     { filter: none !important; animation-duration: 0.9s, 9s !important; animation-delay: 0s, 0.9s !important; animation-iteration-count: 1, infinite !important; }
+  html.pf-weak body #welcome-screen .wl-gear { filter: none !important; }
+  html.pf-weak body #welcome-screen .wl-gear-rot { animation-duration: 0.9s, 9s !important; animation-delay: 0s, 0.9s !important; animation-iteration-count: 1, infinite !important; }
   html.pf-weak body #welcome-screen .wl-mono     { animation-duration: 0.35s, 0.01s !important; animation-delay: 0.15s, 0s !important; }
   html.pf-weak body #welcome-screen .wl-ch       { filter: none !important; animation-duration: 0.4s !important; animation-delay: calc(0.15s + var(--i) * 12ms) !important; }
   html.pf-weak body #welcome-screen .wl-sub      { animation-duration: 0.4s !important; animation-delay: 0.35s !important; }
@@ -33156,7 +33208,9 @@ html.lite body .ai-luxury-btn .shogird-orbit { animation: none !important; }
         var w = sl.clientWidth || 1;
         var idx = Math.round(sl.scrollLeft / w);
         var cur = imgs[idx];
-        badge.style.opacity = (cur && cur.getAttribute('data-partner') === '1') ? '1' : '0';
+        // Slayder har kadrda skroll hodisasi beradi — faqat qiymat o'zgarganda yozamiz
+        var v = (cur && cur.getAttribute('data-partner') === '1') ? '1' : '0';
+        if (badge.__op !== v) { badge.__op = v; badge.style.opacity = v; }
     };
 
     /* ---- Bazani o'qish ---- */
@@ -42469,6 +42523,189 @@ html[data-theme="light"] #login-screen .login-seg button { color: #1c1c1e; }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 
+</script>
+<style id="a1-app-perf">
+/* ═══════════════════════════════════════════════════════════════════
+   📱 Ilova rejimi (Android ilova + iPhone/iPad bosh ekran ilovasi) — SILLIQLIK
+   Qotishlarning asosiy manbalari WebView'da:
+     1) backdrop-filter (shisha blur) — har bir kartadagi yurak tugmasi, pastki
+        menyu, sarlavha: har kadrda ostidagi tasvirni qayta xiralashtiradi;
+     2) to'liq ekranli «grain» qatlami;
+     3) SVG ichidagi cheksiz animatsiyalar (asosiy oqimda qayta chiziladi);
+     4) rasm dekodlash asosiy oqimda.
+   Bu qatlam ularni ilovada o'chiradi; ko'rinish deyarli o'zgarmaydi
+   (shisha o'rniga zich, yarim shaffof fon).
+   ═══════════════════════════════════════════════════════════════════ */
+html.a1-app body #polish-grain { display: none !important; }
+html.a1-app body .cmp-rock,
+html.a1-app body .a1-spark-big, html.a1-app body .a1-spark-sm, html.a1-app body .a1-spark-xs,
+html.a1-app body .shogird-orbit { animation: none !important; }
+/* Shisha o'rniga zich fon (blur JS orqali o'chiriladi) */
+html.a1-app body .bottom-nav { background: rgba(22,22,24,.97) !important; }
+html.a1-app[data-theme="light"] body .bottom-nav { background: rgba(250,249,246,.97) !important; }
+html.a1-app body .header.hx { background-color: rgba(10,10,11,.96) !important; }
+html.a1-app[data-theme="light"] body .header.hx { background-color: rgba(244,238,226,.96) !important; }
+html.a1-app body .btn-wishlist { background: rgba(20,20,22,.62) !important; }
+html.a1-app[data-theme="light"] body .btn-wishlist { background: rgba(255,255,255,.85) !important; }
+html.a1-app body #productModal.a7 .a7-gl { background: rgba(20,20,22,.6) !important; }
+html.a1-app body #shogird-launcher { background-color: rgba(28,28,30,.96) !important; }
+/* Skroll konteyneri — o'z GPU qatlamida, chekkada «cho'zilmaydi» */
+html.a1-app body .container { will-change: scroll-position; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* Rasmlar: yuklanguncha joy egallab turadi (sakrash yo'q) va yumshoq paydo bo'ladi */
+html.a1-app body .luxury-card img { background-color: rgba(255,255,255,.04); }
+/* Bosilganda kulrang «flash» yo'q */
+html.a1-app body * { -webkit-tap-highlight-color: transparent; }
+</style>
+<script id="a1-app-perf-js">
+/* 📱 Ilova rejimi — silliqlik (JS qismi) */
+(function () {
+    'use strict';
+    var root = document.documentElement;
+    if (!root.classList.contains('a1-app')) return;
+
+    /* 1) Barcha shisha (backdrop-filter) effektlarini o'chiramiz — CSSOM orqali,
+          !important va id'li qoidalar ham qamraladi. Keyin qo'shilgan uslublar
+          (JS kiritgan <style>) ham qayta tekshiriladi. */
+    var done = window.WeakSet ? new WeakSet() : null;
+    function walk(list) {
+        for (var i = 0; i < list.length; i++) {
+            var r = list[i];
+            if (r.type === 7) continue;                      // @keyframes
+            if (r.style && !(done && done.has(r))) {
+                if (done) done.add(r);
+                var st = r.style;
+                ['backdrop-filter', '-webkit-backdrop-filter'].forEach(function (p) {
+                    var v = st.getPropertyValue(p);
+                    if (v && v !== 'none') st.setProperty(p, 'none', st.getPropertyPriority(p));
+                });
+                if (st.getPropertyValue('--nav-blur')) st.setProperty('--nav-blur', '0px');
+                if (st.getPropertyValue('--header-blur')) st.setProperty('--header-blur', '0px');
+            }
+            if (r.cssRules) { try { walk(r.cssRules); } catch (e) {} }
+        }
+    }
+    function noGlass() {
+        var ss = document.styleSheets;
+        for (var i = 0; i < ss.length; i++) { try { walk(ss[i].cssRules || []); } catch (e) {} }
+    }
+    // Elementlarning o'zidagi (inline) blur ham
+    function noInlineGlass(el) {
+        try {
+            if (el.style && (el.style.backdropFilter || el.style.webkitBackdropFilter)) { el.style.backdropFilter = 'none'; el.style.webkitBackdropFilter = 'none'; }
+        } catch (e) {}
+    }
+
+    /* 2) Rasmlar asosiy oqimni to'xtatmasdan (fon oqimida) dekodlansin */
+    function fixImg(img) { try { if (img.decoding !== 'async') img.decoding = 'async'; } catch (e) {} }
+
+    function scan(node) {
+        if (!node || node.nodeType !== 1) return;
+        if (node.tagName === 'IMG') fixImg(node);
+        else if (node.tagName === 'STYLE') { setTimeout(noGlass, 0); }
+        noInlineGlass(node);
+        if (node.querySelectorAll) {
+            var im = node.querySelectorAll('img'); for (var i = 0; i < im.length; i++) fixImg(im[i]);
+            var bl = node.querySelectorAll('[style*="backdrop"]'); for (var j = 0; j < bl.length; j++) noInlineGlass(bl[j]);
+        }
+    }
+    /* 3) Bezak uchun CHEKSIZ animatsiyalar (kartadagi yaltiroq, storis halqasi
+          porlashi, yurak/taqqoslash tebranishi, AI tugmasi orbitasi …) — ilovada
+          to'xtatiladi. O'lchovda ular skroll paytida har kadrda 8 000+ marta
+          uslub qayta hisoblatgan. Yuklanish belgilari (aylanuvchi spinner,
+          skelet, welcome shesternasi) TEGILMAYDI. */
+    var KEEP = /^(wlGearIdle|wlGearIn|gearSpin|wlIndet|wlLoad|skeleton-loading|skelShimmer|shimmerSlide|p2Shimmer|gold-loading|hourglass-anim|pulse-text|dotPulse|sgDot|a1Spin|aibSpin|aoSpin|mpSpin|ordlSpin|ordlSpinR|rvSpin|mapLocateSpin)$/;
+    var STOP = /^(a10Shine|ringGlow|a1FabSpin|cmpRock|a1Twinkle|storyRingSpin|a3Spin|lyRingSpin|gold-shimmer)$/;
+    function calmAnimations() {
+        if (!document.getAnimations) return;
+        try {
+            document.getAnimations().forEach(function (a) {
+                var n = a.animationName; if (!n || KEEP.test(n) || a.playState === 'paused') return;
+                var t = a.effect && a.effect.getTiming ? a.effect.getTiming() : null;
+                if (!t || t.iterations !== Infinity) return;
+                var dur = typeof t.duration === 'number' ? t.duration : 0;
+                if (STOP.test(n) || dur >= 2000) { try { a.currentTime = 0; } catch (e) {} a.pause(); }
+            });
+        } catch (e) {}
+    }
+    var calmT = 0;
+    function calmSoon() { if (calmT) return; calmT = setTimeout(function () { calmT = 0; calmAnimations(); }, 250); }
+
+    noGlass();
+    scan(document.body);
+    calmSoon();
+    try {
+        new MutationObserver(function (ms) {
+            for (var i = 0; i < ms.length; i++) { var a = ms[i].addedNodes; for (var k = 0; k < a.length; k++) scan(a[k]); }
+            calmSoon();
+        }).observe(document.documentElement, { childList: true, subtree: true });
+    } catch (e) {}
+    window.addEventListener('load', function () { noGlass(); calmSoon(); });
+    window.addEventListener('a1-ready', calmSoon);
+    setTimeout(function () { noGlass(); calmAnimations(); }, 2500);
+    setTimeout(calmAnimations, 6000);
+})();
+</script>
+<style id="a1-install-hint">
+/* 📲 «Ilova sifatida o'rnatish» taklifi (iPhone/iPad Safari, Android Chrome) */
+#a1-inst { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 99990; display: flex; align-items: center; gap: 12px;
+    max-width: 520px; margin: 0 auto; padding: 14px 14px 14px 16px; border-radius: 20px; box-sizing: border-box;
+    background: #1c1c1e; color: #f5f5f7; box-shadow: 0 18px 40px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.08);
+    font: 400 14px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, sans-serif; transform: translateY(140%); transition: transform .45s cubic-bezier(.32,.72,0,1); }
+#a1-inst.on { transform: none; }
+html[data-theme="light"] #a1-inst { background: #fff; color: #1c1c1e; box-shadow: 0 18px 40px rgba(0,0,0,.18), inset 0 0 0 .5px rgba(0,0,0,.06); }
+#a1-inst img { flex: 0 0 48px; width: 48px; height: 48px; border-radius: 12px; }
+#a1-inst .tx { flex: 1; min-width: 0; }
+#a1-inst b { display: block; font-weight: 600; font-size: 15px; letter-spacing: -.2px; }
+#a1-inst span { color: rgba(235,235,245,.62); }
+html[data-theme="light"] #a1-inst span { color: rgba(60,60,67,.64); }
+#a1-inst svg { width: 16px; height: 16px; vertical-align: -3px; color: #0a84ff; }
+#a1-inst .go { flex: 0 0 auto; height: 34px; padding: 0 14px; border: 0; border-radius: 17px; cursor: pointer; font: 600 14px/1 inherit;
+    background: linear-gradient(135deg, #f6dc7e, #d4af37 48%, #a07c1c); color: #1a1405; }
+#a1-inst .x { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; background: rgba(118,118,128,.24); color: inherit; font-size: 16px; line-height: 28px; }
+</style>
+<script id="a1-install-hint-js">
+(function () {
+    'use strict';
+    var root = document.documentElement, ua = navigator.userAgent || '';
+    if (root.classList.contains('a1-app')) return;                 // allaqachon ilova
+    var KEY = 'a1_inst_hint_until';
+    var later = function (days) { try { localStorage.setItem(KEY, String(Date.now() + days * 864e5)); } catch (e) {} };
+    var snoozed = function () { try { return Date.now() < (parseInt(localStorage.getItem(KEY), 10) || 0); } catch (e) { return true; } };
+    var inTelegram = function () { try { return !!((window.tg && tg.initData) || window.TelegramWebviewProxy || /Telegram/i.test(ua)); } catch (e) { return false; } };
+    var isIOS = root.classList.contains('a1-ios');
+    var isSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(ua);
+    var deferred = null;
+    window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; });
+
+    var SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Ulashish"><path d="M12 15V3M7.5 7.5 12 3l4.5 4.5"/><path d="M8 10H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-2"/></svg>';
+    function show() {
+        if (document.getElementById('a1-inst')) return;
+        var ls = document.getElementById('login-screen');
+        if (ls && !ls.classList.contains('hidden')) { setTimeout(show, 4000); return; }   // avval ro'yxatdan o'tsin
+        var b = document.createElement('div'); b.id = 'a1-inst'; b.setAttribute('role', 'dialog'); b.setAttribute('aria-label', 'Ilovani o\u2018rnatish');
+        var body = deferred
+            ? '<span>Telefoningizga ilova sifatida o\u2018rnating \u2014 tezroq ochiladi.</span>'
+            : '<span>Pastdagi ' + SHARE + ' <b style="display:inline;font-size:inherit">Ulashish</b> \u2192 \u00abBosh ekranga qo\u2018shish\u00bb (\u00abНа экран «Домой»\u00bb).</span>';
+        b.innerHTML = '<img src="icons/icon-192.png" alt=""><div class="tx"><b>Avto A1 ilovasi</b>' + body + '</div>' +
+            (deferred ? '<button type="button" class="go">O\u2018rnatish</button>' : '') +
+            '<button type="button" class="x" aria-label="Yopish">\u2715</button>';
+        document.body.appendChild(b);
+        requestAnimationFrame(function () { requestAnimationFrame(function () { b.classList.add('on'); }); });
+        var close = function (days) { later(days); b.classList.remove('on'); setTimeout(function () { b.remove(); }, 450); };
+        b.querySelector('.x').onclick = function () { close(14); };
+        var go = b.querySelector('.go');
+        if (go) go.onclick = function () {
+            var d = deferred; deferred = null;
+            if (!d) return close(14);
+            d.prompt(); (d.userChoice || Promise.resolve()).then(function () { close(60); });
+        };
+    }
+    function maybe() {
+        if (snoozed() || inTelegram()) return;
+        if (isSafari || deferred) show();
+    }
+    window.addEventListener('load', function () { setTimeout(maybe, 6000); });
+})();
 </script>
 </body>
 </html>

@@ -49,4 +49,17 @@ const splash = svg(2732, 2732,
     await sharp(Buffer.from(s)).png().toFile(path.join(OUT, name));
     console.log('✓', name);
   }
+  // 🌐 Sayt / iPhone «Bosh ekranga qo'shish» ikonkalari -> repo ildizidagi icons/
+  const WEB = path.join(__dirname, '..', '..', 'icons');
+  fs.mkdirSync(WEB, { recursive: true });
+  const maskable = svg(1024, 1024,
+    `<rect width="1024" height="1024" fill="url(#glow)"/><g transform="translate(512 528) scale(.78) translate(-512 -545)"><g fill="url(#gold)">${MARK}</g>${SWOOSH}</g>`, GOLD + BG);
+  const web = [
+    ['apple-touch-icon.png', iconOnly, 180], ['icon-192.png', iconOnly, 192], ['icon-512.png', iconOnly, 512],
+    ['icon-maskable-512.png', maskable, 512],
+  ];
+  for (const [name, s, size] of web) {
+    await sharp(Buffer.from(s)).resize(size, size).png({ compressionLevel: 9 }).toFile(path.join(WEB, name));
+    console.log('✓ icons/' + name);
+  }
 })().catch((e) => { console.error(e); process.exit(1); });
