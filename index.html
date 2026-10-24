@@ -10306,6 +10306,47 @@ document.addEventListener('visibilitychange', function() {
         }
     }
 
+// ⚡ LAZY KATALOG: bitta mashina bo'limini (#<slug>-parts) joriy ma'lumot bilan chizadi.
+function _a1FillGridNow(c) {
+    let catName = c.id.replace('-parts', ''); 
+    let items = displayDB.filter(x => x.category === catName || (x.categories && x.categories.includes(catName))); 
+    
+    if(items.length > 0) {
+        c.innerHTML = items.map(x => cardHTML(x)).join(''); 
+    } else {
+        c.innerHTML = `<div style="grid-column: span 2;">` + window._emptyState({
+            icon: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>',
+            title: "Hali tovarlar yo'q",
+            desc: "Bu mashina uchun tez orada tovarlar qo'shiladi. Qidiruv orqali boshqa qismlarni topishingiz mumkin.",
+            btnText: "Qidirib ko'rish",
+            btnAction: "var si=document.getElementById('searchInput'); if(si){si.focus(); searchProducts();}"
+        }) + `</div>`;
+    }
+    c.__a1Ver = window.__a1GridVer;
+}
+/** Bo'limni kerak bo'lsa chizadi. force=true — har holda (ko'rinib turgan bo'lim).
+ *  Avval ko'rilgan bo'lim bo'lsa, kartalar qayta "suzib chiqmaydi" (joyida yangilanadi). */
+window._a1FillGrid = function (c, force) {
+    if (typeof c === 'string') c = document.getElementById(c);
+    if (!c || !c.id || c.id.slice(-6) !== '-parts') return false;
+    if (!window.__a1GridVer) return false;                               // ma'lumot hali kelmagan
+    if (!force && c.__a1Ver === window.__a1GridVer) return false;        // allaqachon yangi
+    var seen = !!c.querySelector('.luxury-card.active');
+    _a1FillGridNow(c);
+    if (seen) c.querySelectorAll('.luxury-card').forEach(function (el) { el.classList.add('reveal-item', 'active'); });
+    else if (!force) { try { initReveal(); } catch (e) {} }             // birinchi ochilish: suzib chiqish animatsiyasi
+    return true;
+};
+/** Zaxira: bo'lim showSection'dan boshqa yo'l bilan ochilsa ham bo'sh/eskirgan qolmasin. */
+function _a1WatchGrid(c) {
+    if (c.__a1Obs || !window.MutationObserver) return;
+    c.__a1Obs = new MutationObserver(function () {
+        if (c.classList.contains('hidden') || c.__a1Ver === window.__a1GridVer) return;
+        if (window._a1FillGrid(c)) { try { if (window._catDecorateVisible) window._catDecorateVisible(); } catch (e) {} }
+    });
+    c.__a1Obs.observe(c, { attributes: true, attributeFilter: ['class'] });
+}
+
 // Oynani birinchi marta ochgandagi yoki tovar yangilangandagi chizish
     function renderProducts() {
         // 🔥 Muddati tugagan flash chegirmalarni asl narxga qaytaramiz (har renderда)
@@ -10316,25 +10357,17 @@ document.addEventListener('visibilitychange', function() {
             hc.innerHTML = hi.map(x => cardHTML(x)).join(''); 
         }
         
-        // Katalog papkalariga tovarlarni chizish
-        document.querySelectorAll('.items-grid').forEach(c => { 
-            let id = c.id; 
-            if(id.endsWith('-parts')) { 
-                let catName = id.replace('-parts', ''); 
-                let items = displayDB.filter(x => x.category === catName || (x.categories && x.categories.includes(catName))); 
-                
-                if(items.length > 0) {
-                    c.innerHTML = items.map(x => cardHTML(x)).join(''); 
-                } else {
-                    c.innerHTML = `<div style="grid-column: span 2;">` + window._emptyState({
-                        icon: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>',
-                        title: "Hali tovarlar yo'q",
-                        desc: "Bu mashina uchun tez orada tovarlar qo'shiladi. Qidiruv orqali boshqa qismlarni topishingiz mumkin.",
-                        btnText: "Qidirib ko'rish",
-                        btnAction: "var si=document.getElementById('searchInput'); if(si){si.focus(); searchProducts();}"
-                    }) + `</div>`;
-                }
-            } 
+        // Katalog papkalariga (mashina bo'limlari) tovarlarni chizish.
+        // ⚡ LAZY: faqat KO'RINIB turgan bo'lim darhol chiziladi. Yashirin bo'limlar
+        //    shunchaki "eskirgan" bo'lib qoladi va mijoz o'sha bo'limni OCHGANDA
+        //    chiziladi (_a1FillGrid). Ilgari har yangilanishda 267 ta kartochka
+        //    qayta chizilardi (zaif telefonda ~200 ms qotish), endi ~12 ta.
+        window.__a1GridVer = (window.__a1GridVer || 0) + 1;
+        document.querySelectorAll('.items-grid').forEach(c => {
+            if (!c.id || !c.id.endsWith('-parts')) return;
+            _a1WatchGrid(c);
+            if (c.classList.contains('hidden')) return;      // ochilganda chiziladi
+            window._a1FillGrid(c, true);
         });
         
         // 🔥 MANA SHU QATOR QO'SHILDI: Tovarlar chizilgach, ularni "suzib chiqishi" uchun motorni yoqamiz
@@ -10949,7 +10982,7 @@ window.clearAppCache = () => {
     if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(() => _recalcNavIndicator(60));
     }
-    function showSection(id) { document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); d.classList.remove('animate-slide-up'); }); let t = document.getElementById(id); if(t) { t.classList.remove('hidden'); t.classList.add('animate-slide-up'); } if (historyStack[historyStack.length - 1] !== id) { historyStack.push(id); window.history.pushState({ section: id }, ""); } let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (id === 'main-menu') ? 'block' : 'none'; if(searchActive) exitSearch(); updateBtns(); }
+    function showSection(id) { document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); d.classList.remove('animate-slide-up'); }); let t = document.getElementById(id); if (t && window._a1FillGrid) { try { window._a1FillGrid(t); } catch(e){} } if(t) { t.classList.remove('hidden'); t.classList.add('animate-slide-up'); } if (historyStack[historyStack.length - 1] !== id) { historyStack.push(id); window.history.pushState({ section: id }, ""); } let sC = document.querySelector('.slider-container'); if(sC) sC.style.display = (id === 'main-menu') ? 'block' : 'none'; if(searchActive) exitSearch(); updateBtns(); }
     function showCatalog() { if(activeModal) closeModal(); updateNav('nav-catalog'); showSection('katalog-menu'); }
        function showProfile() { 
     if(activeModal) closeModal(); 
@@ -12144,7 +12177,9 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                 historyStack.pop();
                 let pId = historyStack[historyStack.length - 1];
                 document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); });
+                let _a1f = false; try { _a1f = !!(window._a1FillGrid && window._a1FillGrid(pId)); } catch(e){}   // ⚡ lazy bo'lim
                 document.getElementById(pId).classList.remove('hidden');
+                if (_a1f) { try { if (window._catDecorateVisible) window._catDecorateVisible(); } catch(e){} }
                 document.getElementById(pId).classList.add('animate-slide-up');
                 let sC = document.querySelector('.slider-container');
                 if(sC) sC.style.display = (pId === 'main-menu') ? 'block' : 'none';
