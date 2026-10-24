@@ -18503,87 +18503,8 @@ window._isTelegramId = function (uid) { return /^\d+$/.test(String(uid)); };
     }, {passive: true});
 })();
 
-/* ====================================================================
-   🃏 KARTA SWIPE — mahsulot kartasini surib amal bajarish:
-       chapga (←) = savatga qo'shish,  o'ngga (→) = sevimli (wishlist).
-   - passive touch -> skroll BUZILMAYDI; faqat aniq GORIZONTAL harakatda ishlaydi.
-   - tap (ochish) buzilmaydi: faqat threshold'dan oshsa amal + keyingi click bekor.
-   - addToCartQuick() ishlatiladi -> razmer/ombor/option'lar to'g'ri boshqariladi.
-   - parallax/reveal/micro-interaction bilan TO'QNASHMAYDI (alohida transform).
-   ==================================================================== */
-(function cardSwipeInit(){
-    var startX=0, startY=0, dx=0, card=null, horiz=null, acted=false;
-    var THRESH = 70, MAXPULL = 110;
-    function reset(){
-        if (card){
-            card.classList.remove('swiping');
-            card.classList.add('swipe-snap');
-            card.style.transform = '';
-            var c = card;
-            setTimeout(function(){ try { c.classList.remove('swipe-snap'); } catch(e){} }, 300);
-        }
-        card=null; dx=0; horiz=null;
-    }
-    document.addEventListener('touchstart', function(e){
-        var t = e.target.closest && e.target.closest('.luxury-card');
-        // tugmalar ustida bo'lsa — aralashmaymiz (ularning o'z bosishi bor)
-        if (!t || (e.target.closest && e.target.closest('.btn-add-cart, .btn-wishlist, .btn-compare-card'))) { card=null; return; }
-        card = t; startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-        dx=0; horiz=null;
-    }, {passive:true});
-    document.addEventListener('touchmove', function(e){
-        if (!card) return;
-        var mx = e.touches[0].clientX - startX;
-        var my = e.touches[0].clientY - startY;
-        if (horiz === null && (Math.abs(mx) > 10 || Math.abs(my) > 10)){
-            horiz = Math.abs(mx) > Math.abs(my) * 1.3;   // ANIQ gorizontal bo'lsagina
-            if (horiz) card.classList.add('swiping');
-        }
-        if (horiz){
-            dx = Math.max(-MAXPULL, Math.min(MAXPULL, mx));
-            card.style.transform = 'translateX(' + dx + 'px)';
-        }
-    }, {passive:true});
-    document.addEventListener('touchend', function(e){
-        if (!card) return;
-        var pid = parseInt(card.dataset && card.dataset.pid, 10);
-        if (horiz && Math.abs(dx) >= THRESH && !isNaN(pid)){
-            acted = true;
-            var tx = startX + dx, ty = startY;
-            try { if (e.changedTouches && e.changedTouches[0]){ tx = e.changedTouches[0].clientX; ty = e.changedTouches[0].clientY; } } catch(_){}
-            var synth = { stopPropagation:function(){}, preventDefault:function(){}, clientX: tx, clientY: ty, target: card };
-            if (dx < 0){
-                // ← chap: savatga (addToCartQuick razmer/ombor/option'ni o'zi hal qiladi)
-                try {
-                    if (typeof window.addToCartQuick === 'function') window.addToCartQuick(synth, pid);
-                    else if (typeof window.addToCart === 'function') window.addToCart(pid);
-                } catch(_){}
-            } else {
-                // → o'ng: sevimli (faqat qo'shish; allaqachon bo'lsa xabar)
-                try {
-                    var inW = (window.wishlist||[]).includes(pid);
-                    if (!inW && typeof window.toggleWishlist === 'function'){
-                        var heart = card.querySelector('.btn-wishlist');
-                        window.toggleWishlist({ target: heart || card }, pid);
-                    } else if (inW && typeof showToast === 'function'){
-                        showToast('Allaqachon saqlangan');
-                    }
-                } catch(_){}
-            }
-            try { if (typeof window._hap === 'function') window._hap(dx < 0 ? 'medium' : 'light'); } catch(_){}
-        }
-        reset();
-        if (acted) setTimeout(function(){ acted = false; }, 450);
-    }, {passive:true});
-    // Swipe bo'lganda kartaning ochilish (click) hodisasini bekor qilamiz
-    document.addEventListener('click', function(e){
-        if (acted && e.target.closest && e.target.closest('.luxury-card')){
-            e.stopPropagation();
-            try { e.preventDefault(); } catch(_){}
-            acted = false;
-        }
-    }, true);
-})();
+/* 🃏 Kartani surib savatga / sevimlilarga qo'shish OLIB TASHLANDI —
+   skroll paytida tasodifan tovar savatga tushib qolardi. */
 
 // 1.3 BOTTOM NAV PULSE — har bir nav-item bosilganda
 document.addEventListener('click', (e) => {
@@ -22636,8 +22557,6 @@ html.lite #content-area > div {
 @keyframes cssCheckDraw { to { stroke-dashoffset: 0; } }
 
 /* ——— 6) SWIPE: kartani surganda silliq qaytishi uchun ——— */
-.luxury-card.swiping { transition: none !important; z-index: 5; }
-.luxury-card.swipe-snap { transition: transform 0.28s cubic-bezier(0.2,0.8,0.2,1) !important; }
 
 /* ——— REDUCED-MOTION: pulslar/animatsiyalar o'chadi ——— */
 @media (prefers-reduced-motion: reduce) {
