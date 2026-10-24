@@ -42608,15 +42608,41 @@ html.a1-app body * { -webkit-tap-highlight-color: transparent; }
             var bl = node.querySelectorAll('[style*="backdrop"]'); for (var j = 0; j < bl.length; j++) noInlineGlass(bl[j]);
         }
     }
+    /* 3) Bezak uchun CHEKSIZ animatsiyalar (kartadagi yaltiroq, storis halqasi
+          porlashi, yurak/taqqoslash tebranishi, AI tugmasi orbitasi …) — ilovada
+          to'xtatiladi. O'lchovda ular skroll paytida har kadrda 8 000+ marta
+          uslub qayta hisoblatgan. Yuklanish belgilari (aylanuvchi spinner,
+          skelet, welcome shesternasi) TEGILMAYDI. */
+    var KEEP = /^(wlGearIdle|wlGearIn|gearSpin|wlIndet|wlLoad|skeleton-loading|skelShimmer|shimmerSlide|p2Shimmer|gold-loading|hourglass-anim|pulse-text|dotPulse|sgDot|a1Spin|aibSpin|aoSpin|mpSpin|ordlSpin|ordlSpinR|rvSpin|mapLocateSpin)$/;
+    var STOP = /^(a10Shine|ringGlow|a1FabSpin|cmpRock|a1Twinkle|storyRingSpin|a3Spin|lyRingSpin|gold-shimmer)$/;
+    function calmAnimations() {
+        if (!document.getAnimations) return;
+        try {
+            document.getAnimations().forEach(function (a) {
+                var n = a.animationName; if (!n || KEEP.test(n) || a.playState === 'paused') return;
+                var t = a.effect && a.effect.getTiming ? a.effect.getTiming() : null;
+                if (!t || t.iterations !== Infinity) return;
+                var dur = typeof t.duration === 'number' ? t.duration : 0;
+                if (STOP.test(n) || dur >= 2000) { try { a.currentTime = 0; } catch (e) {} a.pause(); }
+            });
+        } catch (e) {}
+    }
+    var calmT = 0;
+    function calmSoon() { if (calmT) return; calmT = setTimeout(function () { calmT = 0; calmAnimations(); }, 250); }
+
     noGlass();
     scan(document.body);
+    calmSoon();
     try {
         new MutationObserver(function (ms) {
             for (var i = 0; i < ms.length; i++) { var a = ms[i].addedNodes; for (var k = 0; k < a.length; k++) scan(a[k]); }
+            calmSoon();
         }).observe(document.documentElement, { childList: true, subtree: true });
     } catch (e) {}
-    window.addEventListener('load', noGlass);
-    setTimeout(noGlass, 2500);
+    window.addEventListener('load', function () { noGlass(); calmSoon(); });
+    window.addEventListener('a1-ready', calmSoon);
+    setTimeout(function () { noGlass(); calmAnimations(); }, 2500);
+    setTimeout(calmAnimations, 6000);
 })();
 </script>
 <style id="a1-install-hint">
