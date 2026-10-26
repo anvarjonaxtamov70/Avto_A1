@@ -43775,7 +43775,8 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
             var dec = function () { (img.decode ? img.decode() : Promise.resolve()).then(ok, ok); };
             if (img.complete && img.naturalWidth) { dec(); return; }
             img.onload = dec;
-            img.onerror = function () { if (!done) { done = true; res(false); } };
+            // Yuklanmagan rasm brauzerning "singan rasm" belgisi va ramkasini chizmasin
+            img.onerror = function () { img.style.visibility = 'hidden'; if (!done) { done = true; res(false); } };
         });
         ready.then(function (ok) {
             if (g !== S.gen) return;
@@ -43861,6 +43862,7 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
             b.className = 'a1sv-bd';
             b.alt = '';
             b.decoding = 'async';
+            b.onerror = function () { b.style.visibility = 'hidden'; };
             b.src = bd;
             slot.appendChild(b);
         }
@@ -44788,14 +44790,20 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
         var sb = box.querySelector('.a1sv-warn[data-k="slow"]');
         if (slow.length && !sb && !MGR.busy) {
             var canFix = !!isTgInit();
-            sb = mk('div', 'a1sv-warn is-info', IC.bolt + '<div><b>' + slow.length + ' ta video sekin ochiladi</b>' +
+            sb = mk('div', 'a1sv-warn is-info', IC.bolt + '<div><b></b>' +
                 'Bu videolarda indeks fayl oxirida \u2014 mijoz telefoni avval oxirini, keyin boshini yuklaydi (2\u20134 s qora ekran). Tezlashtirish sifatni o\u2018zgartirmaydi.' +
                 '<br><button type="button"' + (canFix ? '' : ' disabled') + '>' + (canFix ? 'Tezlashtirish' : 'Telegram ichida oching') + '</button></div>');
             sb.setAttribute('data-k', 'slow');
             var after = box.querySelector('.a1sv-warn[data-k="leak"]');
             box.insertBefore(sb, after ? after.nextSibling : box.firstChild);
-            if (canFix) sb.querySelector('button').addEventListener('click', function () { optimize(slow, sb); });
-        } else if (!slow.length && sb && sb.parentNode && !MGR.busy) sb.parentNode.removeChild(sb);
+            if (canFix) sb.querySelector('button').addEventListener('click', function () { optimize(sb.__list || [], sb); });
+        } else if (!slow.length && sb && sb.parentNode && !MGR.busy) { sb.parentNode.removeChild(sb); sb = null; }
+        // Tekshiruvlar asinxron tugaydi — banner soni va ro'yxati har chizishda yangilanadi
+        if (sb && !MGR.busy) {
+            sb.__list = slow;
+            var tb = sb.querySelector('b'), tx = slow.length + ' ta video sekin ochiladi';
+            if (tb && tb.textContent !== tx) tb.textContent = tx;
+        }
     }
     function probe(it) {
         MGR.probing[it.sid] = 1;
