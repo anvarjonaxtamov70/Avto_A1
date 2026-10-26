@@ -20153,9 +20153,21 @@ document.addEventListener('click', function (e) {
     /* ============================================================
        🛡 7. KAFOLAT KUZATUVI
        ============================================================ */
+    // ⚠ Buyurtma ID endi «1729…-ab12cd34ef56» ko'rinishida (server) — matn.
+    //    Ilgari `start = order.id` olinardi va «matn + son» qo'shilib, kafolat
+    //    oynasida «NaN kun», «NaN-undefined» chiqardi. Endi haqiqiy vaqt olinadi.
+    function tsOf(v) {
+        if (typeof v === 'number' && isFinite(v) && v > 0) return v;
+        var n = parseInt(String(v == null ? '' : v), 10);
+        return (isFinite(n) && n > 1e11) ? n : 0;
+    }
+    function orderStart(o) { return tsOf(o && o.createdAt) || tsOf(o && o.id) || Date.now(); }
+    function fixWarranties() {
+        (P.state.warranties || []).forEach(function (w) { if (w && typeof w.start !== 'number') w.start = tsOf(w.start) || Date.now(); });
+    }
     function createWarranties(order) {
         if (!order || !order.items) return;
-        var start = order.id || Date.now();
+        var start = orderStart(order);
         Object.keys(order.items).forEach(function (fullId) {
             var parts = String(fullId).split('||');
             var baseId = parts[0];
@@ -20163,7 +20175,7 @@ document.addEventListener('click', function (e) {
             var p = findProduct(baseId);
             var name = p ? p.name : 'Mahsulot';
             if (size && size !== 'Universal' && size !== 'undefined') name += ' (' + size + ')';
-            var wid = 'w' + start + '_' + baseId + (parts[1] ? '_' + parts[1] : '');
+            var wid = 'w' + String(order.id) + '_' + baseId + (parts[1] ? '_' + parts[1] : '');
             if (P.state.warranties.some(function (w) { return w.id === wid; })) return; // takror emas
             P.state.warranties.unshift({
                 id: wid,
@@ -20174,6 +20186,7 @@ document.addEventListener('click', function (e) {
         if (P.state.warranties.length > 80) P.state.warranties.length = 80;
     }
     function warrStatus(w) {
+        if (typeof w.start !== 'number') w.start = tsOf(w.start) || Date.now();
         var end = w.start + (w.days || WARRANTY_DAYS) * DAY;
         var now = Date.now();
         var remMs = end - now;
@@ -20228,7 +20241,7 @@ document.addEventListener('click', function (e) {
         h += '<div class="a1-hero" style="--d:0"><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="wrGoldG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F6DC7E"/><stop offset=".55" stop-color="#D4AF37"/><stop offset="1" stop-color="#A8851F"/></linearGradient></defs></svg>' +
             '<div class="wr-hero"><div class="wr-big"><svg viewBox="0 0 86 86" aria-hidden="true"><circle class="t" cx="43" cy="43" r="38"/><circle class="v" cx="43" cy="43" r="38" style="--off:' + off.toFixed(2) + '"/></svg>' +
             '<b>' + live + '<small>faol</small></b></div>' +
-            '<div class="wr-hero-tx"><b>Kafolatlaringiz</b><span>Har bir tovar ' + WARRANTY_DAYS + ' kun davomida himoyalangan</span><div class="wr-chips">' +
+            '<div class="wr-hero-tx"><b>Xarid qilgan tovarlaringiz</b><span>Har bir tovar ' + WARRANTY_DAYS + ' kun davomida himoyalangan</span><div class="wr-chips">' +
             '<span class="wr-chip" style="--c:#30d158"><i></i>' + (live - soon) + ' faol</span>' +
             (soon ? '<span class="wr-chip" style="--c:#ff9f0a"><i></i>' + soon + ' tugayapti</span>' : '') +
             (exp ? '<span class="wr-chip" style="--c:#8e8e93"><i></i>' + exp + ' tugagan</span>' : '') +
@@ -20278,6 +20291,7 @@ document.addEventListener('click', function (e) {
         if (window.ShopInfo) ShopInfo.openTg(msg);
     };
     P.openWarranty = function () {
+        fixWarranties();
         P._warrTab = null;
         renderWarr(true);
         if (typeof openModal === 'function') openModal('p2WarrantyModal');
@@ -20800,7 +20814,7 @@ document.addEventListener('click', function (e) {
             tile('🏆', 'Yutuqlar', 'Phase2.openAchievements()', achBadgeHTML()) +
             tile('📊', 'Analitika', 'Phase2.openAnalytics()', '') +
             tile('🔗', 'Referral', 'Phase2.openReferral()', '') +
-            tile('🛡', 'Kafolat', 'Phase2.openWarranty()', warrBadgeHTML()) +
+            tile('🛡', 'Tovarlar kafolati', 'Phase2.openWarranty()', warrBadgeHTML()) +
             tile('🔔', 'Xabarlar', 'Phase2.openNotifs()', '<span class="p2-tile-badge" id="p2-tile-notif-badge"></span>') +
             tile(P.state.theme === 'light' ? '🌙' : '☀️', 'Mavzu', 'Phase2.toggleTheme(event)', '') +
             (window.A1Perf ? tile('⚡', 'Ko\u2018rinish', 'A1Perf.openPicker()', '') : '') +
@@ -20891,7 +20905,7 @@ document.addEventListener('click', function (e) {
             modal('p2AchievementsModal', 'Yutuqlar', '<div class="p2-modal-scroll" id="p2-ach-body"></div>') +
             modal('p2AnalyticsModal', 'Analitika', '<div class="p2-modal-scroll" id="p2-an-body"></div>') +
             modal('p2ReferralModal', 'Do\'stlarni taklif qilish', '<div class="p2-modal-scroll" id="p2-ref-body"></div>') +
-            modal('p2WarrantyModal', 'Kafolat kuzatuvi', '<div class="p2-modal-scroll" id="p2-warr-body"></div>') +
+            modal('p2WarrantyModal', 'Tovarlar kafolati', '<div class="p2-modal-scroll" id="p2-warr-body"></div>') +
             modal('p2CashbackModal', 'Cashback', '<div class="p2-modal-scroll" id="p2-cashback-body"></div>') +
             '<div id="p2-unlock" onclick="Phase2.closeUnlock()">' +
             '<div class="p2-unlock-card" onclick="event.stopPropagation()">' +
@@ -34393,7 +34407,7 @@ html[data-theme="light"] #pfxTierModal { --px-bg2: #fff; --px-sep: rgba(60,60,67
         app.appendChild(grid);
         // "Yordam"dagi «Kafolat va yetkazib berish» bilan adashmasin
         var w = grid.querySelector('.p2-tile[onclick^="Phase2.openWarranty"] .p2-tile-lbl');
-        if (w) w.textContent = 'Mening kafolatlarim';
+        if (w) w.textContent = 'Tovarlar kafolati';
     }
     function watchHub() {
         var hub = $('p2-hub');
