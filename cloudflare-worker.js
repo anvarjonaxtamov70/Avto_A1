@@ -17,6 +17,9 @@
 //                   tahrirlanadi), mijozga o'z tilida xabar.
 //  6) "/order-notify" — bot watchdog: yetkazilmay qolgan bildirishnomani
 //                   qayta yuborish (faqat bot HMAC imzosi bilan).
+//  7) "/order-deliver" — yangi ilova buyurtma/holat javobini olgach xabarni
+//                   ALOHIDA so'rovda turtadi (notifyMode:"split"): bepul
+//                   rejadagi 50 subrequest limiti xabarlarga yetishi uchun.
 //  4) "/stock-commit" — Ombor zaxirasini SERVERDA kamaytiradi: mahsulot
 //                   `id` bo'yicha topiladi (indeks bo'yicha emas), `stock >= qty`
 //                   tekshiriladi va atomik `increment` bilan yoziladi.
@@ -82,6 +85,23 @@ const ORDER_RETRY_FIRST_MS = 90 * 1000;
 const ORDER_RETRY_MAX_ATTEMPTS = 8;
 const ATTEMPT_LEASE_MS = 45 * 1000;
 const STATUS_LEASE_MS = 45 * 1000;
+// ⏱ CLOUDFLARE SUBREQUEST BYUDJETI. Bepul rejada BITTA so'rov (fon vazifasi
+//    — waitUntil — bilan birga) atigi 50 ta tashqi fetch qila oladi. Har bir
+//    ETag yozuvi = 2 ta (GET + PUT). Ilgari lease HAR qadamda yangilanardi:
+//    1 tovarli buyurtma ~54, 4 tovarli ~62 subrequest ishlatardi. Natija:
+//      • xabarlar limitga urilib yuborilmasdi — admin va mijoz ularni faqat
+//        bot watchdog'idan (1.5-2.5 daqiqa) keyin olardi;
+//      • chegarada mijoz xabari ketib, yakuniy yozuv ketmasdi — watchdog
+//        uni QAYTA yuborardi ("qabul qilindi" ikki marta);
+//      • 4+ tovarli buyurtma "qisman bajarildi" (503) bilan yiqilardi.
+//    Endi lease faqat oxirgi yangilanishdan 15 s o'tgandagina yangilanadi.
+//    Lease 45 s — demak bu oraliqda boshqa egasi uni ola olmaydi va egalik
+//    (fencing) kafolati avvalgidek saqlanadi.
+const LEASE_RENEW_AFTER_MS = 15 * 1000;
+// Eski mijoz/bot (notifyMode yo'q) uchun xabar shu so'rovning o'zida
+// yuboriladi. Tovar soni ko'p bo'lsa byudjet yetmasligi mumkin — unda
+// xabar bot watchdog'iga qoldiriladi (kechikadi, lekin yo'qolmaydi).
+const INLINE_NOTIFY_MAX_ITEMS = 4;
 const JWKS_REFRESH_COOLDOWN_MS = 5 * 1000;
 const JWKS_NEGATIVE_TTL_MS = 60 * 1000;
 const firebaseCertCache = {
@@ -518,6 +538,7 @@ export default {
     if (path === "/order-commit") return handleOrderCommit(request, env, execCtx);
     if (path === "/order-status") return handleOrderStatus(request, env, execCtx);
     if (path === "/order-notify") return handleOrderNotify(request, env);
+    if (path === "/order-deliver") return handleOrderDeliver(request, env, execCtx);
     if (path === "/customer-register") return handleCustomerRegister(request, env);
     if (path === "/tg-login-poll") return handleTgLoginPoll(request, env);
     if (path === "/referral") return handleReferralSecure(request, env);
@@ -1232,22 +1253,31 @@ function loyaltyAvailable(account) {
   );
 }
 
+// Yangi cashback hisobi — eski `users/{uid}/phase2` qiymatlaridan (bootstrap).
+// phase2 FAQAT hisob hali yo'q bo'lganda o'qiladi: ilgari HAR chaqiruvda
+// o'qilardi (har amalga +1 ketma-ket so'rov va +1 subrequest).
+async function newLoyaltyAccount(ctx, token, uid) {
+  const phase2 = await rtdbGet(ctx.dbUrl, "users/" + uid + "/phase2", token);
+  const bootstrap = phase2 && typeof phase2 === "object" ? phase2 : {};
+  return {
+    version: 0,
+    earned: Math.max(0, Number(bootstrap.cashbackTotal) || 0),
+    spent: Math.max(0, Number(bootstrap.cashbackSpent) || 0),
+    refunded: Math.max(0, Number(bootstrap.cashbackRefunded) || 0),
+    reversed: 0,
+    ops: {},
+    bootstrappedAt: Date.now(),
+  };
+}
+
 async function ensureLoyaltyAccount(ctx, token, uid) {
   uid = requireSafeUid(uid, 400);
   const path = "loyalty_accounts/" + uid;
-  const phase2 = await rtdbGet(ctx.dbUrl, "users/" + uid + "/phase2", token);
-  const bootstrap = phase2 && typeof phase2 === "object" ? phase2 : {};
-  const result = await rtdbEtagMutate(ctx.dbUrl, path, token, (current) => {
+  let fresh = null;
+  const result = await rtdbEtagMutate(ctx.dbUrl, path, token, async (current) => {
     if (current && typeof current === "object") return { abort: true, result: current };
-    const value = {
-      version: 0,
-      earned: Math.max(0, Number(bootstrap.cashbackTotal) || 0),
-      spent: Math.max(0, Number(bootstrap.cashbackSpent) || 0),
-      refunded: Math.max(0, Number(bootstrap.cashbackRefunded) || 0),
-      reversed: 0,
-      ops: {},
-      bootstrappedAt: Date.now(),
-    };
+    if (!fresh) fresh = await newLoyaltyAccount(ctx, token, uid);
+    const value = cloneJson(fresh);
     return { value, result: value };
   });
   return result.result || result.value;
@@ -1292,10 +1322,17 @@ async function writeLoyaltyProjection(ctx, token, uid, account) {
 
 async function mutateLoyalty(ctx, token, uid, operationKey, apply) {
   uid = requireSafeUid(uid, 400);
-  await ensureLoyaltyAccount(ctx, token, uid);
-  const result = await rtdbEtagMutate(ctx.dbUrl, "loyalty_accounts/" + uid, token, (current) => {
-    const account = current && typeof current === "object" ? cloneJson(current) : null;
-    if (!account) throw httpError(500, "cashback hisobi topilmadi");
+  // Hisob yaratish (bootstrap) va amal — BITTA ETag yozuvida: ilgari avval
+  // ensureLoyaltyAccount (o'qish+yozish), keyin alohida amal edi (2-3 ta
+  // ortiqcha ketma-ket so'rov). Hisob yo'q bo'lsa xuddi o'sha bootstrap
+  // qiymatlari bilan yaratiladi; parallel yaratilsa ETag (412) qayta o'qitadi.
+  let fresh = null;
+  const result = await rtdbEtagMutate(ctx.dbUrl, "loyalty_accounts/" + uid, token, async (current) => {
+    let account = current && typeof current === "object" ? cloneJson(current) : null;
+    if (!account) {
+      if (!fresh) fresh = await newLoyaltyAccount(ctx, token, uid);
+      account = cloneJson(fresh);
+    }
     // These operation claims intentionally remain on the account: balance mutation and
     // idempotency must share one ETag write. Removing a claim before an equally atomic,
     // durable replacement exists could double-credit an old retry.
@@ -1313,12 +1350,15 @@ async function mutateLoyalty(ctx, token, uid, operationKey, apply) {
 }
 
 async function buildOrderQuote(ctx, token, uid, intent, payloadHash) {
-  const [productsRaw, ordersRaw, profileRaw, manualVip] = await Promise.all([
+  const [productsRaw, ordersRaw, profileRaw] = await Promise.all([
     rtdbGet(ctx.dbUrl, "products", token),
     rtdbGet(ctx.dbUrl, "users/" + uid + "/orders", token),
     rtdbGet(ctx.dbUrl, "users/" + uid + "/profile", token),
-    rtdbGet(ctx.dbUrl, "users/" + uid + "/profile/vip/manual", token),
   ]);
+  // `profile/vip/manual` — `profile` ning ichida: alohida so'rov (subrequest) shart emas.
+  const manualVip = profileRaw && typeof profileRaw === "object" && profileRaw.vip && typeof profileRaw.vip === "object"
+    ? profileRaw.vip.manual
+    : null;
   const products = toEntries(productsRaw);
   if (!products.length) throw httpError(503, "mahsulotlar mavjud emas");
   const quotedItems = [];
@@ -1429,15 +1469,32 @@ async function renewAttemptLease(ctx, token, attemptPath, owner, ownerGeneration
   return result.result || result.value;
 }
 
+// Lease qachon berilgani (yoki oxirgi marta yangilangani). `leaseUntil` dan
+// hisoblanadi — u PUT'dan OLDIN olingan vaqt, ya'ni ehtiyotkor baho.
+function leaseClock(leaseUntil, leaseMs) {
+  const at = Number(leaseUntil) - leaseMs;
+  return { at: Number.isFinite(at) && at > 0 ? Math.min(at, Date.now()) : 0 };
+}
+
+function leaseDue(clock) {
+  return !clock || Date.now() - clock.at >= LEASE_RENEW_AFTER_MS;
+}
+
+async function renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, ownerGeneration, clock) {
+  if (!leaseDue(clock)) return;
+  const next = await renewAttemptLease(ctx, token, attemptPath, owner, ownerGeneration);
+  if (clock) clock.at = leaseClock(next && next.leaseUntil, ATTEMPT_LEASE_MS).at || Date.now();
+}
+
 async function reservationMarkerKey(quote) {
   return "r_" + (await sha256Hex("reservation|" + quote.orderKey + "|" + quote.payloadHash)).slice(0, 40);
 }
 
-async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration) {
+async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration, clock) {
   const markerKey = await reservationMarkerKey(quote);
   const reserved = [];
   for (const item of quote.items) {
-    await renewAttemptLease(ctx, token, attemptPath, owner, ownerGeneration);
+    await renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, ownerGeneration, clock);
     const result = await rtdbEtagMutate(ctx.dbUrl, "products/" + item.productKey, token, (current) => {
       if (!current || String(current.id) !== item.id) {
         return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available: 0, requested: item.qty } } };
@@ -1475,7 +1532,7 @@ async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
       return { value: product, result: { reserved: true } };
     });
     if (result.result && result.result.shortage) {
-      await releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration);
+      await releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration, clock);
       return { ok: false, shortages: [result.result.shortage] };
     }
     reserved.push(item.lineKey);
@@ -1483,10 +1540,10 @@ async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
   return { ok: true, markerKey, reserved };
 }
 
-async function releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration) {
+async function releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration, clock) {
   const markerKey = await reservationMarkerKey(quote);
   for (const item of quote.items) {
-    if (attemptPath) await renewAttemptLease(ctx, token, attemptPath, owner, ownerGeneration);
+    if (attemptPath) await renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, ownerGeneration, clock);
     await rtdbEtagMutate(ctx.dbUrl, "products/" + item.productKey, token, (current) => {
       if (!current || !current._orderReservations || !current._orderReservations[markerKey]) {
         return { abort: true, result: { released: false } };
@@ -1511,6 +1568,7 @@ async function releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
 async function cleanReservationMarkers(ctx, token, quote) {
   const markerKey = await reservationMarkerKey(quote);
   for (const item of quote.items) {
+    if (!item || item.productKey == null || item.productKey === "") continue;
     await rtdbEtagMutate(ctx.dbUrl, "products/" + item.productKey, token, (current) => {
       if (!current || !current._orderReservations || !current._orderReservations[markerKey]) {
         return { abort: true, result: { cleaned: true } };
@@ -1645,36 +1703,49 @@ async function reconcileCommittedOrder(ctx, token, identity, intent, payloadHash
     throw httpError(409, "canonical buyurtma boshqa payloadga tegishli");
   }
   const orderKey = quote.orderKey;
-  await reconcileUserOrderProjection(ctx, token, identity, quote, payloadHash, canonicalOrder);
-  await rtdbCreateIfNull(
-    ctx.dbUrl,
-    "order_state/" + orderKey,
-    { current: String(canonicalOrder.status || "kutilmoqda"), pending: null, version: 0, updatedAt: Date.now() },
-    token,
-    (value) => {
-      if (!value || !ORDER_STATUSES.includes(String(value.current)) || !Number.isFinite(Number(value.version))) return false;
-      if (String(value.current) === String(canonicalOrder.status)) return true;
-      return !!value.pending && value.pending.target === canonicalOrder.status &&
-        value.pending.from === value.current && Number.isFinite(Number(value.pending.transitionVersion));
-    }
-  );
-  await rtdbCreateIfNull(
-    ctx.dbUrl,
-    "notification_outbox/" + orderKey,
-    {
-      type: "order_created", uid: identity.uid, orderKey, orderId: quote.orderId,
-      createdAt: Date.now(), delivered: false,
-      // Bot watchdog FAQAT `retryAt` bor hodisalarni ko'radi (indekslangan).
-      // Worker darhol yuboradi; ulgurmasa 90 s dan keyin bot qayta uradi.
-      retryAt: Date.now() + ORDER_RETRY_FIRST_MS,
-    },
-    token,
-    (value) => !!value && value.type === "order_created" && value.uid === identity.uid &&
-      value.orderKey === orderKey && String(value.orderId) === String(quote.orderId)
-  );
-  const account = await ensureLoyaltyAccount(ctx, token, identity.uid);
-  await writeLoyaltyProjection(ctx, token, identity.uid, account);
-  await cleanReservationMarkers(ctx, token, quote);
+  // ⚡ Quyidagi yozuvlar bir-biriga bog'liq emas (har biri O'Z yo'lida ETag
+  //    bilan) — PARALLEL. Ilgari ketma-ket edi: har biri javobni ~0.3 s
+  //    kechiktirardi. Hammasi tugagach `finalizeOrderAttempt` (oxirgi qadam):
+  //    biror yozuv yiqilsa attempt yakunlanmaydi va ayni so'rov qayta uradi.
+  await Promise.all([
+    reconcileUserOrderProjection(ctx, token, identity, quote, payloadHash, canonicalOrder),
+    rtdbCreateIfNull(
+      ctx.dbUrl,
+      "order_state/" + orderKey,
+      { current: String(canonicalOrder.status || "kutilmoqda"), pending: null, version: 0, updatedAt: Date.now() },
+      token,
+      (value) => {
+        if (!value || !ORDER_STATUSES.includes(String(value.current)) || !Number.isFinite(Number(value.version))) return false;
+        if (String(value.current) === String(canonicalOrder.status)) return true;
+        return !!value.pending && value.pending.target === canonicalOrder.status &&
+          value.pending.from === value.current && Number.isFinite(Number(value.pending.transitionVersion));
+      }
+    ),
+    rtdbCreateIfNull(
+      ctx.dbUrl,
+      "notification_outbox/" + orderKey,
+      {
+        type: "order_created", uid: identity.uid, orderKey, orderId: quote.orderId,
+        createdAt: Date.now(), delivered: false,
+        // Bot watchdog FAQAT `retryAt` bor hodisalarni ko'radi (indekslangan).
+        // Worker darhol yuboradi; ulgurmasa 90 s dan keyin bot qayta uradi.
+        retryAt: Date.now() + ORDER_RETRY_FIRST_MS,
+      },
+      token,
+      (value) => !!value && value.type === "order_created" && value.uid === identity.uid &&
+        value.orderKey === orderKey && String(value.orderId) === String(quote.orderId)
+    ),
+    // Cashback ishlatilmagan bo'lsa hisob o'zgarmagan — proyeksiyani qayta
+    // yozish shart emas (4 ta subrequest tejaladi).
+    Number(canonicalOrder.cashbackUsed) > 0
+      ? ensureLoyaltyAccount(ctx, token, identity.uid)
+        .then((account) => writeLoyaltyProjection(ctx, token, identity.uid, account))
+      : null,
+    // Band qilish belgilari (`_orderReservations`) endi xabar bilan birga FONDA
+    // tozalanadi (deliverOrderOutbox) — buyurtma javobini kechiktirmaydi va
+    // byudjetni yemaydi. Bot sozlanmagan bo'lsa fon yo'q — shu yerda.
+    ctx.env && ctx.env.BOT_TOKEN ? null : cleanReservationMarkers(ctx, token, quote),
+  ]);
   return await finalizeOrderAttempt(
     ctx, token, attemptPath, identity.uid, intent.attemptId, payloadHash, canonicalOrder
   );
@@ -1684,6 +1755,10 @@ async function handleOrderCommit(request, env, execCtx) {
   let claimed = false;
   try {
     const body = await readJsonBody(request);
+    // notifyMode:"split" — yangi ilova: xabarlarni shu javobdan keyin O'ZI
+    // /order-deliver orqali alohida so'rovda turtadi (to'liq subrequest
+    // byudjeti bilan). Maydon yo'q — eski ilova: xabar shu so'rovda ketadi.
+    const notifyMode = body.notifyMode === "split" ? "split" : "inline";
     const identity = await authenticateBody(body, env);
     const intent = normalizeOrderIntent(body);
     const payloadHash = await sha256Hex(stableStringify(intent));
@@ -1695,7 +1770,7 @@ async function handleOrderCommit(request, env, execCtx) {
     if (existing) {
       if (existing.payloadHash !== payloadHash) throw httpError(409, "attemptId boshqa payload bilan ishlatilgan");
       if (existing.state === "committed" && existing.result) {
-        return await committedOrderResponse(execCtx, env, existing.orderKey, existing.result, 200);
+        return await committedOrderResponse(execCtx, env, existing.orderKey, existing.result, 200, notifyMode);
       }
       if (existing.state === "rejected") throw httpError(409, existing.error || "buyurtma rad etilgan", { shortages: existing.shortages || [] });
       if (existing.quote) {
@@ -1704,7 +1779,7 @@ async function handleOrderCommit(request, env, execCtx) {
           const reconciled = await reconcileCommittedOrder(
             ctx, token, identity, intent, payloadHash, existing.quote, canonical, attemptPath
           );
-          return await committedOrderResponse(execCtx, env, existing.quote.orderKey, reconciled, 200);
+          return await committedOrderResponse(execCtx, env, existing.quote.orderKey, reconciled, 200, notifyMode);
         }
       }
     }
@@ -1716,7 +1791,7 @@ async function handleOrderCommit(request, env, execCtx) {
       ctx, token, attemptPath, identity.uid, intent.attemptId, payloadHash, quote, owner
     );
     if (existing.state === "committed" && existing.result) {
-      return await committedOrderResponse(execCtx, env, existing.orderKey, existing.result, 200);
+      return await committedOrderResponse(execCtx, env, existing.orderKey, existing.result, 200, notifyMode);
     }
     if (existing.state === "rejected") throw httpError(409, existing.error || "buyurtma rad etilgan", { shortages: existing.shortages || [] });
     if (existing.busy || existing.owner !== owner) {
@@ -1724,17 +1799,18 @@ async function handleOrderCommit(request, env, execCtx) {
     }
     claimed = true;
     quote = existing.quote;
+    const attemptClock = leaseClock(existing.leaseUntil, ATTEMPT_LEASE_MS);
 
     const canonicalBeforeReserve = await rtdbGet(ctx.dbUrl, "orders/" + quote.orderKey, token);
     if (canonicalBeforeReserve) {
       const reconciled = await reconcileCommittedOrder(
         ctx, token, identity, intent, payloadHash, quote, canonicalBeforeReserve, attemptPath
       );
-      return await committedOrderResponse(execCtx, env, quote.orderKey, reconciled, 200);
+      return await committedOrderResponse(execCtx, env, quote.orderKey, reconciled, 200, notifyMode);
     }
 
     const stock = await reserveQuoteItems(
-      ctx, token, identity.uid, intent.attemptId, quote, attemptPath, owner, existing.ownerGeneration
+      ctx, token, identity.uid, intent.attemptId, quote, attemptPath, owner, existing.ownerGeneration, attemptClock
     );
     if (!stock.ok) {
       await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
@@ -1751,15 +1827,22 @@ async function handleOrderCommit(request, env, execCtx) {
       throw httpError(409, "stock", { shortages: stock.shortages });
     }
 
-    await renewAttemptLease(ctx, token, attemptPath, owner, existing.ownerGeneration);
-    const spendKey = "spend_" + (await sha256Hex(quote.orderKey)).slice(0, 40);
-    const spend = await mutateLoyalty(ctx, token, identity.uid, spendKey, (account) => {
-      const amount = Math.min(quote.cashbackRequested, quote.total, loyaltyAvailable(account));
-      account.spent = Math.max(0, Number(account.spent) || 0) + amount;
-      return { type: "spend", amount, orderKey: quote.orderKey };
-    });
-    const cashbackUsed = Math.max(0, Number(spend.operation.amount) || 0);
-    await renewAttemptLease(ctx, token, attemptPath, owner, existing.ownerGeneration);
+    // Cashback so'ralmagan bo'lsa (ko'p buyurtmalar) hisobga tegmaymiz: nol
+    // summali "spend" amali hech narsani o'zgartirmas, lekin 4-5 subrequest
+    // yerdi. So'ralgan summa attempt payload'ining qismi (payloadHash) —
+    // ya'ni bu qaror ayni attempt uchun har doim bir xil.
+    let cashbackUsed = 0;
+    if (Number(quote.cashbackRequested) > 0) {
+      await renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, existing.ownerGeneration, attemptClock);
+      const spendKey = "spend_" + (await sha256Hex(quote.orderKey)).slice(0, 40);
+      const spend = await mutateLoyalty(ctx, token, identity.uid, spendKey, (account) => {
+        const amount = Math.min(quote.cashbackRequested, quote.total, loyaltyAvailable(account));
+        account.spent = Math.max(0, Number(account.spent) || 0) + amount;
+        return { type: "spend", amount, orderKey: quote.orderKey };
+      });
+      cashbackUsed = Math.max(0, Number(spend.operation.amount) || 0);
+    }
+    await renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, existing.ownerGeneration, attemptClock);
     const proposedOrder = await buildCanonicalOrder(identity, intent, quote, payloadHash, cashbackUsed);
     const canonicalCommit = await rtdbCreateIfNull(
       ctx.dbUrl,
@@ -1772,7 +1855,11 @@ async function handleOrderCommit(request, env, execCtx) {
     const resultBody = await reconcileCommittedOrder(
       ctx, token, identity, intent, payloadHash, quote, canonicalOrder, attemptPath
     );
-    return await committedOrderResponse(execCtx, env, quote.orderKey, resultBody, canonicalCommit.created ? 201 : 200);
+    const heavy = quote.items.length > INLINE_NOTIFY_MAX_ITEMS;
+    return await committedOrderResponse(
+      execCtx, env, quote.orderKey, resultBody, canonicalCommit.created ? 201 : 200,
+      notifyMode === "inline" && heavy ? "defer" : notifyMode
+    );
   } catch (err) {
     const definitiveStockRejection = claimed && err && err.status === 409 &&
       err.extra && Array.isArray(err.extra.shortages);
@@ -1941,14 +2028,14 @@ async function restockOperationKey(orderKey) {
   return "r_" + (await sha256Hex("restock|" + orderKey)).slice(0, 36);
 }
 
-async function restockOrderOnce(ctx, token, orderKey, items, owner, pending) {
+async function restockOrderOnce(ctx, token, orderKey, items, owner, pending, clock) {
   const opKey = await restockOperationKey(orderKey);
   const results = [];
   for (const item of items) {
     if (!Number.isSafeInteger(item.qty) || item.qty <= 0) {
       retryableInventoryConflict("tiklash miqdori noto'g'ri", { productId: item.id });
     }
-    await renewStatusLease(ctx, token, orderKey, owner, pending);
+    await renewStatusLeaseIfDue(ctx, token, orderKey, owner, pending, clock);
     const mutation = await rtdbEtagMutate(ctx.dbUrl, "products/" + item.productKey, token, (current) => {
       if (!current || String(current.id) !== String(item.id)) {
         retryableInventoryConflict("mahsulot joyi o'zgargan", { productId: item.id });
@@ -2031,8 +2118,10 @@ async function applyStatusLoyalty(ctx, token, uid, order, targetStatus) {
       return { type: "cancel", cashbackRefund, earnedReversal, orderId: String(order.id) };
     });
   }
-  const account = await ensureLoyaltyAccount(ctx, token, uid);
-  return { account, operation: { type: "status", amount: 0 }, duplicate: true };
+  // qabul / yo'lda — cashback o'zgarmaydi: bazaga umuman bormaymiz. Ilgari
+  // shu yerda hisob o'qilar va proyeksiya qayta yozilardi (har bosishda
+  // ~4-6 ta ortiqcha ketma-ket so'rov — admin tugmasi shuning uchun sekin edi).
+  return { account: null, operation: { type: "status", amount: 0 }, duplicate: true };
 }
 
 async function renewStatusLease(ctx, token, orderKey, owner, pending) {
@@ -2048,6 +2137,12 @@ async function renewStatusLease(ctx, token, orderKey, owner, pending) {
     return { value: next, result: next };
   });
   return result.result || result.value;
+}
+
+async function renewStatusLeaseIfDue(ctx, token, orderKey, owner, pending, clock) {
+  if (!leaseDue(clock)) return;
+  const next = await renewStatusLease(ctx, token, orderKey, owner, pending);
+  if (clock) clock.at = leaseClock(next && next.pending && next.pending.leaseUntil, STATUS_LEASE_MS).at || Date.now();
 }
 
 async function commitCanonicalStatus(ctx, token, orderPath, uid, orderId, fromStatus, targetStatus) {
@@ -2169,38 +2264,48 @@ async function adoptLegacyOrder(ctx, token, uid, orderId) {
   return created.value;
 }
 
-async function publishStatusProjections(ctx, token, uid, orderId, orderKey, order, fromStatus, targetStatus, transitionVersion, actor) {
-  const loyalty = await applyStatusLoyalty(ctx, token, uid, order, targetStatus);
+// `loyaltyResult` — asosiy oqim cashbackni ALLAQACHON qo'llagan bo'lsa, o'sha
+// natija (ilgari shu yerda applyStatusLoyalty IKKINCHI marta chaqirilardi —
+// amal idempotent, lekin 3-4 ta ortiqcha ketma-ket so'rov edi).
+async function publishStatusProjections(ctx, token, uid, orderId, orderKey, order, fromStatus, targetStatus, transitionVersion, actor, loyaltyResult) {
+  const loyalty = loyaltyResult || await applyStatusLoyalty(ctx, token, uid, order, targetStatus);
   const processed = {
     st: targetStatus,
     cb: targetStatus === "yetkazildi" ? Math.max(0, Number(loyalty.operation.amount) || 0) : 0,
     ur: targetStatus === "bekor_qilingan" ? Math.max(0, Number(loyalty.operation.cashbackRefund) || 0) : 0,
     rv: targetStatus === "bekor_qilingan" ? Math.max(0, Number(loyalty.operation.earnedReversal) || 0) : 0,
   };
-  await reconcileUserOrderStatus(ctx, token, uid, orderId, fromStatus, targetStatus, order.legacyUserKey);
-  await writeLoyaltyProjection(ctx, token, uid, loyalty.account);
-  await rtdbCreateIfNull(
-    ctx.dbUrl,
-    "users/" + uid + "/phase2/processedOrders/" + orderId + "_v" + transitionVersion,
-    processed,
-    token,
-    (value) => value && value.st === targetStatus
-  );
   const outboxKey = orderKey + "_status_" + transitionVersion;
-  await rtdbCreateIfNull(
-    ctx.dbUrl,
-    "notification_outbox/" + outboxKey,
-    {
-      type: "order_status", uid, orderKey, orderId, from: fromStatus, status: targetStatus,
-      createdAt: Date.now(), delivered: false, transitionVersion,
-      retryAt: Date.now() + ORDER_RETRY_FIRST_MS,
-      by: (actor && actor.role) || "admin",
-      byUid: (actor && actor.uid) || null,
-      byName: (actor && actor.name) || null,
-    },
-    token,
-    (value) => value && value.status === targetStatus && Number(value.transitionVersion) === Number(transitionVersion)
-  );
+  // ⚡ Uch mustaqil yo'l PARALLEL (ilgari 4 ta ketma-ket ETag yozuvi edi).
+  //    `users/{uid}/phase2` ichidagi ikki yozuv esa KETMA-KET: ular bitta ota
+  //    tugunda — parallel bo'lsa ETag to'qnashib, behuda qayta urinardi.
+  await Promise.all([
+    reconcileUserOrderStatus(ctx, token, uid, orderId, fromStatus, targetStatus, order.legacyUserKey),
+    (async () => {
+      if (loyalty.account) await writeLoyaltyProjection(ctx, token, uid, loyalty.account);
+      await rtdbCreateIfNull(
+        ctx.dbUrl,
+        "users/" + uid + "/phase2/processedOrders/" + orderId + "_v" + transitionVersion,
+        processed,
+        token,
+        (value) => value && value.st === targetStatus
+      );
+    })(),
+    rtdbCreateIfNull(
+      ctx.dbUrl,
+      "notification_outbox/" + outboxKey,
+      {
+        type: "order_status", uid, orderKey, orderId, from: fromStatus, status: targetStatus,
+        createdAt: Date.now(), delivered: false, transitionVersion,
+        retryAt: Date.now() + ORDER_RETRY_FIRST_MS,
+        by: (actor && actor.role) || "admin",
+        byUid: (actor && actor.uid) || null,
+        byName: (actor && actor.name) || null,
+      },
+      token,
+      (value) => value && value.status === targetStatus && Number(value.transitionVersion) === Number(transitionVersion)
+    ),
+  ]);
   return { ...processed, outboxKey };
 }
 
@@ -2220,6 +2325,9 @@ async function handleOrderStatus(request, env, execCtx) {
       : cleanText(body.expectedFrom, 32, true);
     if (expectedFrom && !ORDER_STATUSES.includes(expectedFrom)) throw httpError(400, "expectedFrom noto'g'ri");
 
+    // notifyMode:"split" — chaqiruvchi (yangi ilova / bot) xabarni javobdan
+    // keyin alohida so'rovda turtadi (/order-deliver yoki /order-notify).
+    const notifyMode = body.notifyMode === "split" ? "split" : "inline";
     const identity = body.botAuth != null
       ? await verifyBotAuth(body, env, "order-status", [uid, orderId, status, expectedFrom])
       : await authenticateBody(body, env);
@@ -2301,26 +2409,37 @@ async function handleOrderStatus(request, env, execCtx) {
       const processed = await publishStatusProjections(
         ctx, token, uid, orderId, orderKey, order, last.from, status, last.transitionVersion, actor
       );
-      const dupNotify = scheduleOrderOutbox(execCtx, env, processed.outboxKey);
-      if (dupNotify) await dupNotify;
-      return json({ ok: true, duplicate: true, orderKey, status, sideEffects: processed, notify: "server" });
+      if (notifyMode === "inline") {
+        const dupNotify = scheduleOrderOutbox(execCtx, env, processed.outboxKey);
+        if (dupNotify) await dupNotify;
+      }
+      return json({
+        ok: true, duplicate: true, orderKey, status, sideEffects: processed, notify: "server",
+        deliver: notifyMode === "split" ? processed.outboxKey : undefined,
+      });
     }
     claimed = true;
     const state = claim.state;
     const pending = state.pending;
     const originalStatus = pending.from;
+    // Lease faqat 15 s o'tgandagina yangilanadi (LEASE_RENEW_AFTER_MS). Odatiy
+    // qabul/yo'lda o'tishida bu 3 ta ketma-ket GET+PUT ni (≈1-1.5 s) tejaydi.
+    const statusClock = leaseClock(pending.leaseUntil, STATUS_LEASE_MS);
     let stockItems = [];
     if (status === "bekor_qilingan") {
       stockItems = await resolveOrderStockItems(ctx, token, order);
-      await restockOrderOnce(ctx, token, orderKey, stockItems, owner, pending);
+      await restockOrderOnce(ctx, token, orderKey, stockItems, owner, pending, statusClock);
     }
-    await renewStatusLease(ctx, token, orderKey, owner, pending);
+    await renewStatusLeaseIfDue(ctx, token, orderKey, owner, pending, statusClock);
     await commitCanonicalStatus(ctx, token, orderPath, uid, orderId, originalStatus, status);
-    await renewStatusLease(ctx, token, orderKey, owner, pending);
-    await applyStatusLoyalty(ctx, token, uid, order, status);
-    await renewStatusLease(ctx, token, orderKey, owner, pending);
+    await renewStatusLeaseIfDue(ctx, token, orderKey, owner, pending, statusClock);
+    const loyalty = await applyStatusLoyalty(ctx, token, uid, order, status);
+    await renewStatusLeaseIfDue(ctx, token, orderKey, owner, pending, statusClock);
     await completeStatusTransition(ctx, token, orderKey, owner, pending, status);
-    if (status === "bekor_qilingan") {
+    // Tiklash belgilari (`_orderOperations`) endi xabar bilan birga FONDA
+    // tozalanadi (deliverOrderOutbox): o'tish yakunlangan — ular faqat axlat.
+    // Bot sozlanmagan bo'lsa fon yo'q — shu yerda (avvalgidek).
+    if (status === "bekor_qilingan" && !env.BOT_TOKEN) {
       try {
         await cleanRestockMarkers(ctx, token, orderKey, stockItems);
       } catch (_) {
@@ -2328,14 +2447,20 @@ async function handleOrderStatus(request, env, execCtx) {
       }
     }
     const processed = await publishStatusProjections(
-      ctx, token, uid, orderId, orderKey, order, originalStatus, status, pending.transitionVersion, actor
+      ctx, token, uid, orderId, orderKey, order, originalStatus, status, pending.transitionVersion, actor, loyalty
     );
-    const notifyTask = scheduleOrderOutbox(execCtx, env, processed.outboxKey);
-    if (notifyTask) await notifyTask;
+    // Ko'p tovarli bekor qilish byudjetni ko'p yeydi — eski chaqiruvchi uchun
+    // xabar watchdog'ga qoldiriladi (yarim yo'lda uzilib, dublikat bermasin).
+    const heavy = status === "bekor_qilingan" && stockItems.length > INLINE_NOTIFY_MAX_ITEMS;
+    if (notifyMode === "inline" && !heavy) {
+      const notifyTask = scheduleOrderOutbox(execCtx, env, processed.outboxKey);
+      if (notifyTask) await notifyTask;
+    }
     const restockSkipped = (stockItems && stockItems.skipped) || [];
     return json({
       ok: true, orderKey, from: originalStatus, status, sideEffects: processed,
       notify: "server",
+      deliver: notifyMode === "split" ? processed.outboxKey : undefined,
       restockSkipped: restockSkipped.length ? restockSkipped : undefined,
     });
   } catch (err) {
@@ -2570,7 +2695,11 @@ async function adminCardSend(env, method, base, card, keyboard) {
 
 const CUSTOMER_ORDER_TEXTS = {
   uz: {
-    created: "✅ Buyurtmangiz qabul qilindi!{NL}🆔 Kod: #{code}{detail}{NL}{NL}🙏 Rahmat! Holat o'zgarganda shu yerda xabar beramiz.",
+    // ⚠️ "created" ATAYLAB "qabul qilindi" demaydi: do'kon hali qabul qilmagan.
+    //    Ilgari ikkala xabar ham "✅ ... qabul qilindi" bilan boshlanardi va
+    //    admin «Qabul» bosganda mijozga go'yo AYNAN SHU xabar ikkinchi marta
+    //    kelgandek tuyulardi.
+    created: "🧾 Buyurtmangiz do'konga yuborildi!{NL}🆔 Kod: #{code}{detail}{NL}{NL}⏳ Do'kon tez orada ko'rib chiqib tasdiqlaydi — holat o'zgarganda shu yerda xabar beramiz.",
     qabul: "✅ #{code} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!{detail}{NL}{NL}🙏 Tez orada keyingi bosqich haqida xabar beramiz.",
     yolda: "🚚 #{code} raqamli buyurtmangiz yo'lga chiqdi!{detail}{NL}{NL}📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.",
     yetkazildi: "🏁 #{code} raqamli buyurtmangiz yetkazib berildi.{detail}{NL}{NL}🙏 Xaridingiz uchun rahmat! Yana kutamiz.",
@@ -2582,7 +2711,7 @@ const CUSTOMER_ORDER_TEXTS = {
     cashback: "🎁 Cashback: −{sum} so'm",
   },
   ru: {
-    created: "✅ Ваш заказ принят!{NL}🆔 Код: #{code}{detail}{NL}{NL}🙏 Спасибо! Сообщим здесь, когда статус изменится.",
+    created: "🧾 Ваш заказ отправлен в магазин!{NL}🆔 Код: #{code}{detail}{NL}{NL}⏳ Магазин скоро проверит и подтвердит — сообщим здесь, когда статус изменится.",
     qabul: "✅ Ваш заказ #{code} принят и готовится!{detail}{NL}{NL}🙏 Скоро сообщим о следующем этапе.",
     yolda: "🚚 Ваш заказ #{code} в пути!{detail}{NL}{NL}📦 Скоро доставим по адресу, держите телефон под рукой.",
     yetkazildi: "🏁 Ваш заказ #{code} доставлен.{detail}{NL}{NL}🙏 Спасибо за покупку! Ждём вас снова.",
@@ -2635,7 +2764,10 @@ async function telegramCall(env, method, payload) {
     // o'chirilgan). 429/5xx — vaqtinchalik, keyinroq qayta uriladi.
     return { ok: false, permanent: response.status === 400 || response.status === 403, error };
   } catch (err) {
-    return { ok: false, permanent: false, error: String((err && err.message) || "tarmoq xatosi").slice(0, 200) };
+    const error = String((err && err.message) || "tarmoq xatosi").slice(0, 200);
+    // fetch o'zi xato tashladi: so'rov Telegram'ga yetib bordimi — NOMA'LUM
+    // (`uncertain`). Istisno — subrequest limiti: u so'rovni umuman jo'natmaydi.
+    return { ok: false, permanent: false, uncertain: !/too many subrequests/i.test(error), error };
   }
 }
 
@@ -2693,9 +2825,39 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
     else if (res.permanent) done[key] = "err: " + res.error;
     else { retry = true; errors.push(key + ": " + res.error); }
   };
+  // 🔒 MIJOZ XABARI — KO'PI BILAN BIR MARTA. Ilgari "yuborildi" belgisi faqat
+  //    oxirgi (yakuniy) yozuvda saqlanardi. Yakuniy yozuv yo'qolsa (subrequest
+  //    limiti, fon vazifasining vaqt chegarasi, tarmoq) watchdog 1.5-2.5
+  //    daqiqadan keyin xabarni QAYTA yuborardi — mijozga bir xil xabar ikki
+  //    marta kelardi. Endi yuborishdan OLDIN bazaga "sending" yoziladi va
+  //    keyingi urinishlar uni ko'rib qayta yubormaydi. Belgi yozilmasa — bu
+  //    safar yubormaymiz (keyingi urinish yuboradi).
+  const sendCustomerOnce = async (payload) => {
+    try {
+      await rtdbPatch(ctx.dbUrl, path + "/done", { customer: "sending" }, token);
+    } catch (_) {
+      retry = true;
+      errors.push("customer: belgi yozilmadi");
+      return;
+    }
+    done.customer = "sending";
+    const res = await telegramCall(env, "sendMessage", payload);
+    if (res.ok) done.customer = true;
+    else if (res.permanent) done.customer = "err: " + res.error;
+    else if (res.uncertain) done.customer = "uncertain: " + res.error; // dublikatdan ko'ra — yo'qotish
+    else {
+      // Telegram javob berdi (429/5xx) — xabar yetmagan: belgini olib tashlaymiz,
+      // yakuniy yozuv uni o'chiradi va keyingi urinish qayta yuboradi.
+      delete done.customer;
+      retry = true;
+      errors.push("customer: " + res.error);
+    }
+  };
+  let cleanupOrder = null;
 
   try {
     const order = await rtdbGet(ctx.dbUrl, "orders/" + event.orderKey, token);
+    if (order && typeof order === "object") cleanupOrder = order;
     if (!order || typeof order !== "object") {
       done.order = "err: buyurtma topilmadi";
     } else {
@@ -2730,9 +2892,7 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
           if (!isTelegramChatId(uid)) done.customer = "skip";
           else {
             const lang = await customerLang(ctx, token, uid);
-            record("customer", await telegramCall(env, "sendMessage", {
-              chat_id: uid, text: customerOrderText(lang, "created", order, env, true),
-            }));
+            await sendCustomerOnce({ chat_id: uid, text: customerOrderText(lang, "created", order, env, true) });
           }
         }
       } else {
@@ -2777,9 +2937,7 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
           if (!isTelegramChatId(uid) || !CUSTOMER_ORDER_TEXTS.uz[key] || target === "kutilmoqda") done.customer = "skip";
           else {
             const lang = await customerLang(ctx, token, uid);
-            record("customer", await telegramCall(env, "sendMessage", {
-              chat_id: uid, text: customerOrderText(lang, key, order, env, target === "qabul"),
-            }));
+            await sendCustomerOnce({ chat_id: uid, text: customerOrderText(lang, key, order, env, target === "qabul") });
           }
         }
       }
@@ -2811,7 +2969,31 @@ async function deliverOrderOutbox(ctx, token, env, outboxKey) {
     next.finishedAt = finishedAt;
     return { value: next, result: null };
   });
+  // 🧹 Xabarlardan KEYIN (eng past ustuvorlik): buyurtma/bekor qilish paytida
+  //    mahsulotlarga qo'yilgan vaqtinchalik belgilarni tozalaymiz. Ular endi
+  //    kerak emas (o'tish yakunlangan), lekin o'chirilmasa `products` tugunida
+  //    yig'ilib, har bir mijozga yuklanardi. Byudjet tugasa — keyingi urinish
+  //    yoki takroriy so'rov tozalaydi; xabarlarga ta'sir qilmaydi.
+  try {
+    await cleanupAfterDelivery(ctx, token, event, cleanupOrder);
+  } catch (err) {
+    console.error("outbox cleanup", outboxKey, String((err && err.message) || err).slice(0, 200));
+  }
   return { state: retry ? "retry" : "sent", errors };
+}
+
+async function cleanupAfterDelivery(ctx, token, event, order) {
+  if (!event || !order) return;
+  if (event.type === "order_created") {
+    if (!order.payloadHash || !Array.isArray(order.itemDetails) || !order.itemDetails.length) return;
+    await cleanReservationMarkers(ctx, token, {
+      orderKey: String(event.orderKey),
+      payloadHash: String(order.payloadHash),
+      items: order.itemDetails,
+    });
+  } else if (event.type === "order_status" && event.status === "bekor_qilingan") {
+    await cleanRestockMarkers(ctx, token, String(event.orderKey), []);
+  }
 }
 
 // Javobni kutdirmaslik uchun xabarlar `waitUntil` bilan fonda yuboriladi
@@ -2824,8 +3006,10 @@ function scheduleOrderOutbox(execCtx, env, outboxKey) {
       const ctx = getDbContext(env);
       const token = await getAccessToken(env);
       await deliverOrderOutbox(ctx, token, env, outboxKey);
-    } catch (_) {
-      // Bot watchdog yetkazilmagan hodisani keyinroq qayta uradi.
+    } catch (err) {
+      // Bot watchdog yetkazilmagan hodisani keyinroq qayta uradi. Jim yutmaymiz:
+      // Cloudflare loglarida sababi ko'rinsin.
+      console.error("order outbox", outboxKey, String((err && err.message) || err).slice(0, 200));
     }
   })();
   if (execCtx && typeof execCtx.waitUntil === "function") {
@@ -2835,14 +3019,45 @@ function scheduleOrderOutbox(execCtx, env, outboxKey) {
   return task;
 }
 
-async function committedOrderResponse(execCtx, env, orderKey, resultBody, status) {
+// notify: "inline" — xabar shu so'rovda (fonda) yuboriladi (eski ilova);
+//         "split"  — javobda `deliver` kaliti qaytadi, ilova /order-deliver
+//                    ni alohida chaqiradi (yangi ilova);
+//         "defer"  — byudjet yetmasligi mumkin: bot watchdog yuboradi.
+async function committedOrderResponse(execCtx, env, orderKey, resultBody, status, notify) {
   const order = resultBody && resultBody.order;
   const key = orderKey || (order && order.uid != null && order.id != null ? String(order.uid) + "_" + String(order.id) : "");
-  const task = scheduleOrderOutbox(execCtx, env, key);
-  if (task) await task;
+  const mode = notify === "split" || notify === "defer" ? notify : "inline";
+  if (mode === "inline") {
+    const task = scheduleOrderOutbox(execCtx, env, key);
+    if (task) await task;
+  }
   // notify:"server" — Mini App'ga "adminga xabarni MEN yubordim" signali
   // (eski Worker bilan moslik: bu maydon bo'lmasa ilova o'zi yuboradi).
-  return json({ ...resultBody, notify: "server" }, status);
+  return json({ ...resultBody, notify: "server", deliver: mode === "split" && key ? key : undefined }, status);
+}
+
+// 📨 /order-deliver — bildirishnomani ALOHIDA so'rovda yuborish.
+//    Nega: Cloudflare bepul rejasida bitta so'rovga 50 ta tashqi subrequest.
+//    Buyurtma yozish (stok, cashback, proyeksiyalar) shu limitning katta
+//    qismini oladi; xabarlar uchun joy qolmasa ular watchdog'gacha
+//    kechikardi yoki chegarada ikki marta ketardi. Yangi ilova javobni olgach
+//    shu yerni chaqiradi — yetkazish o'zining TO'LIQ byudjeti bilan ishlaydi.
+//    Xavfsiz: yetkazish idempotent (yetganini qayta yubormaydi). Mijoz faqat
+//    O'Z buyurtmasining hodisasini turta oladi, admin — istalganini.
+async function handleOrderDeliver(request, env, execCtx) {
+  try {
+    const body = await readJsonBody(request);
+    const outboxKey = cleanText(body.outboxKey, 260, true);
+    if (!/^[A-Za-z0-9_-]{1,260}$/.test(outboxKey)) throw httpError(400, "outboxKey noto'g'ri");
+    const identity = await authenticateBody(body, env);
+    const isAdmin = getAdminIds(env).includes(identity.uid);
+    if (!isAdmin && outboxKey.indexOf(identity.uid + "_") !== 0) throw httpError(403, "ruxsat yo'q");
+    const task = scheduleOrderOutbox(execCtx, env, outboxKey);
+    if (task) await task;
+    return json({ ok: true, queued: true });
+  } catch (err) {
+    return errorResponse(err);
+  }
 }
 
 // Bot watchdog: yetkazilmay qolgan buyurtma hodisasini qayta yuborish.

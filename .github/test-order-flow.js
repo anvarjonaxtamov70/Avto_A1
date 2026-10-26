@@ -17,6 +17,10 @@
      7) Eski (legacy) buyurtma holatini o'zgartirish mumkin (ilgari 404).
      8) O'chirilgan tovar bekor qilishni BLOKLAMAYDI.
      9) Telegram vaqtincha ishlamasa — /order-notify faqat yetmaganlarga.
+    9b) Mijoz xabari KO'PI BILAN BIR MARTA (yakuniy yozuv yo'qolsa ham —
+        ilgari "qabul qilindi" ikki marta kelardi); 429 — qayta yuboriladi.
+    9c) notifyMode:"split" + /order-deliver; Cloudflare bepul rejasi
+        byudjeti (bitta so'rovga 50 ta tashqi fetch) oshib ketmaydi.
    Ishga tushirish: node .github/test-order-flow.js
    ===================================================================== */
 'use strict';
@@ -107,11 +111,15 @@ class FakeDB {
 //  SOXTA fetch
 // ---------------------------------------------------------------------
 const DB_URL = 'https://test-rtdb.example';
-let db, tgCalls, tgFail, msgSeq;
+let db, tgCalls, tgFail, tgThrow, dbFail, msgSeq;
+// Har bir chaqiruvdagi tashqi fetch soni (Cloudflare bepul rejasi: 50 ta).
+let fetchCount = 0;
 function resetWorld(data) {
   db = new FakeDB(data);
   tgCalls = [];
   tgFail = null;   // (method, payload) => null | {status, description}
+  tgThrow = null;  // (method, payload) => true — fetch tarmoq xatosi tashlaydi
+  dbFail = null;   // (method, path, body) => null | HTTP status
   msgSeq = 1000;
 }
 function jsonResponse(obj, status, headers) {
@@ -121,6 +129,7 @@ globalThis.fetch = async (input, init) => {
   const url = typeof input === 'string' ? input : input.url;
   const opts = init || {};
   const method = String(opts.method || 'GET').toUpperCase();
+  fetchCount++;
   if (url.startsWith('https://oauth2.googleapis.com/token')) {
     return jsonResponse({ access_token: 'test-access-token', expires_in: 3600 });
   }
@@ -129,6 +138,7 @@ globalThis.fetch = async (input, init) => {
     const tgMethod = tail.slice(tail.indexOf('/') + 1);
     const payload = JSON.parse(opts.body || '{}');
     tgCalls.push({ method: tgMethod, payload });
+    if (tgThrow && tgThrow(tgMethod, payload)) throw new Error('network connection lost');
     const f = tgFail && tgFail(tgMethod, payload);
     if (f) return jsonResponse({ ok: false, description: f.description || 'fail' }, f.status || 500);
     return jsonResponse({ ok: true, result: { message_id: ++msgSeq } });
@@ -138,6 +148,8 @@ globalThis.fetch = async (input, init) => {
     const p = decodeURIComponent(u.pathname.replace(/\.json$/, ''));
     const h = new Headers(opts.headers || {});
     if (h.get('Authorization') !== 'Bearer test-access-token') return jsonResponse({ error: 'auth' }, 401);
+    const dbErr = dbFail && dbFail(method, p, opts.body);
+    if (dbErr) return jsonResponse({ error: 'injected' }, dbErr);
     if (method === 'GET') {
       const headers = {};
       if (h.get('X-Firebase-ETag') === 'true') headers.ETag = db.etag(p);
@@ -191,10 +203,11 @@ async function call(route, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  fetchCount = 0;
   const res = await worker.fetch(req, env, undefined);
   let data = null;
   try { data = await res.json(); } catch (_) {}
-  return { status: res.status, data };
+  return { status: res.status, data, fetches: fetchCount };
 }
 const tgBy = (m) => tgCalls.filter((c) => c.method === m);
 
@@ -512,6 +525,133 @@ async function main() {
   const r9c = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_block_123');
   const ob9c = db.read('notification_outbox/' + CUSTOMER + '_' + r9c.data.order.id);
   ok(ob9c.delivered === true && String(ob9c.done.customer).startsWith('err:'), 'botni bloklagan mijoz — doimiy xato, qayta urinilmaydi');
+
+  // ===== 9b) Mijoz xabari KO'PI BILAN BIR MARTA (dublikat "qabul qilindi") =====
+  console.log('▶ 9b) mijoz xabari ikki marta ketmaydi');
+  const custSends = () => tgBy('sendMessage').filter((c) => String(c.payload.chat_id) === CUSTOMER);
+  const notifyAgain = async (key) => {
+    db.set('notification_outbox/' + key + '/leaseUntil', 0);
+    return call('/order-notify', { outboxKey: key, botAuth: botAuth('order-notify', ADMINS[0], [key]) });
+  };
+  // a) Xabar ketdi, lekin YAKUNIY yozuv yo'qoldi (ilgari: watchdog qayta yuborardi)
+  resetWorld(baseData());
+  dbFail = (m, p, b) => (m === 'PUT' && p.startsWith('/notification_outbox/') && String(b || '').includes('"finishedAt"') ? 503 : null);
+  const r9d = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_dup_123');
+  eq(r9d.status, 201, 'buyurtma yaratildi');
+  const key9d = CUSTOMER + '_' + r9d.data.order.id;
+  eq(custSends().length, 1, 'mijozga birinchi xabar ketdi');
+  eq(db.read('notification_outbox/' + key9d + '/done/customer'), 'sending', 'yuborishdan OLDIN "sending" belgisi bazada');
+  dbFail = null;
+  await notifyAgain(key9d);
+  eq(custSends().length, 1, 'yakuniy yozuv yo\'qolsa ham watchdog mijozga QAYTA yubormadi');
+  ok(db.read('notification_outbox/' + key9d).delivered === true, 'keyingi urinish yozuvni yakunladi');
+  eq(tgBy('sendMessage').filter((c) => ADMINS.includes(String(c.payload.chat_id))).length, 3, 'adminlarga ham dublikat ketmadi');
+  // b) Belgini yozib bo'lmadi — bu safar YUBORILMAYDI, keyingi urinish yuboradi
+  resetWorld(baseData());
+  dbFail = (m, p) => (m === 'PATCH' && /\/notification_outbox\/[^/]+\/done$/.test(p) ? 503 : null);
+  const r9e = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_mark_123');
+  const key9e = CUSTOMER + '_' + r9e.data.order.id;
+  eq(custSends().length, 0, 'belgi yozilmasa mijozga yuborilmadi (dublikat xavfi yo\'q)');
+  ok(db.read('notification_outbox/' + key9e).state === 'retry', 'hodisa qayta urinishga qoldi');
+  dbFail = null;
+  await notifyAgain(key9e);
+  eq(custSends().length, 1, 'keyingi urinish mijozga BIR marta yubordi');
+  // c) Telegram 429 (javob keldi — xabar yetmagan) — qayta yuboriladi
+  resetWorld(baseData());
+  tgFail = (m, p) => (String(p.chat_id) === CUSTOMER ? { status: 429, description: 'Too Many Requests' } : null);
+  const r9f = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_429_123');
+  const key9f = CUSTOMER + '_' + r9f.data.order.id;
+  ok(!db.read('notification_outbox/' + key9f + '/done/customer'), '429 dan keyin belgi olib tashlandi');
+  tgFail = null;
+  await notifyAgain(key9f);
+  eq(custSends().length, 2, '429 — keyingi urinish mijozga qayta yubordi (1 rad etilgan + 1 yetgan)');
+  ok(db.read('notification_outbox/' + key9f + '/done/customer') === true, 'endi yetkazildi');
+  // d) Tarmoq uzildi (yetganmi — noma'lum) — dublikatdan ko'ra yo'qotish
+  resetWorld(baseData());
+  tgThrow = (m, p) => String(p.chat_id) === CUSTOMER;
+  const r9g2 = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_net_123');
+  const key9g2 = CUSTOMER + '_' + r9g2.data.order.id;
+  tgThrow = null;
+  ok(String(db.read('notification_outbox/' + key9g2 + '/done/customer')).startsWith('uncertain'), 'noaniq natija belgilandi');
+  ok(db.read('notification_outbox/' + key9g2).delivered === true, 'noaniq mijoz xabari qayta urinishga sabab bo\'lmadi');
+  // e) Matnlar: "yuborildi" va "qabul qilindi" endi bir-biriga o'xshamaydi
+  resetWorld(baseData());
+  const r9h = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_txt_123');
+  const created = custSends()[0].payload.text;
+  ok(!/qabul qilindi/i.test(created) && /yuborildi/.test(created), 'yangi buyurtma xabari "qabul qilindi" demaydi');
+  tgCalls = [];
+  await setStatus(ADMINS[0], CUSTOMER, r9h.data.order.id, 'qabul');
+  const accepted = custSends()[0].payload.text;
+  ok(/qabul qilindi/.test(accepted) && accepted.split('\n')[0] !== created.split('\n')[0], 'admin qabul qilgandagi xabar boshqacha boshlanadi');
+  const ruText = await (async () => {
+    resetWorld(baseData());
+    const r = await placeOrder(OTHER, [{ id: '1', size: '', qty: 1 }], 'attempt_ru_123');
+    return tgBy('sendMessage').filter((c) => String(c.payload.chat_id) === OTHER)[0].payload.text;
+  })();
+  ok(!/принят/i.test(ruText) && /отправлен/.test(ruText), 'ruscha matn ham "принят" demaydi');
+
+  // ===== 9c) notifyMode:"split" + /order-deliver + subrequest byudjeti =====
+  console.log('▶ 9c) alohida yetkazish (split) va byudjet');
+  const LIMIT = 50;   // Cloudflare bepul rejasi: bitta so'rovga 50 ta tashqi fetch
+  const many = baseData();
+  for (let i = 0; i < 12; i++) many.products.push({ id: 100 + i, name: 'Tovar ' + i, price: 1000, stock: 9 });
+  resetWorld(many);
+  const items12 = Array.from({ length: 12 }, (_, i) => ({ id: String(100 + i), size: '', qty: 1 }));
+  const sp = await call('/order-commit', {
+    initData: initDataFor(CUSTOMER), attemptId: 'attempt_split_123', items: items12, notifyMode: 'split',
+    customer: { name: 'Ali', phone: '+998901112233', address: 'Toshkent' },
+    delivery: { method: 'courier', address: 'Chilonzor 5' }, payment: { method: 'Naqd' },
+  });
+  eq(sp.status, 201, '12 tovarli buyurtma yaratildi (ilgari limitga urilib 503 berardi)');
+  ok(sp.fetches <= 45, '12 tovarli buyurtma byudjetga sig\'di (' + sp.fetches + ' <= 45)');
+  const spKey = CUSTOMER + '_' + sp.data.order.id;
+  eq(sp.data.deliver, spKey, 'javobda deliver kaliti bor');
+  eq(tgCalls.length, 0, 'split rejimida buyurtma so\'rovi xabar YUBORMADI');
+  const prodsAfter = db.read('products');
+  ok(prodsAfter.some((p) => p && p._orderReservations), 'band belgilari hali turibdi (fonda tozalanadi)');
+  const foreignDeliver = await call('/order-deliver', { initData: initDataFor(OTHER), outboxKey: spKey });
+  eq(foreignDeliver.status, 403, 'begona mijoz boshqaning xabarini turta olmaydi');
+  eq(tgCalls.length, 0, 'rad etilgan turtish hech narsa yubormadi');
+  const dl = await call('/order-deliver', { initData: initDataFor(CUSTOMER), outboxKey: spKey });
+  ok(dl.status === 200 && dl.data.queued === true, '/order-deliver ishladi');
+  ok(dl.fetches <= 45, 'yetkazish alohida byudjetga sig\'di (' + dl.fetches + ' <= 45)');
+  eq(tgBy('sendMessage').filter((c) => ADMINS.includes(String(c.payload.chat_id))).length, 3, 'uchala adminga kartochka');
+  eq(custSends().length, 1, 'mijozga bitta xabar');
+  ok(db.read('notification_outbox/' + spKey).delivered === true, 'yetkazildi');
+  ok(!db.read('products').some((p) => p && p._orderReservations), 'band belgilari fonda tozalandi');
+  const dl2 = await call('/order-deliver', { initData: initDataFor(CUSTOMER), outboxKey: spKey });
+  ok(dl2.status === 200 && tgBy('sendMessage').length === 4, 'qayta turtish dublikat yubormadi');
+  tgCalls = [];
+  const ss = await call('/order-status', { initData: initDataFor(ADMINS[0], 0, 'Anvar'), uid: CUSTOMER, orderId: sp.data.order.id, status: 'qabul', notifyMode: 'split' });
+  ok(ss.status === 200 && ss.data.deliver === spKey + '_status_1', 'holat javobida deliver kaliti');
+  ok(ss.fetches <= 16, 'qabul — kam so\'rov (' + ss.fetches + ' <= 16; ilgari ~25 + xabarlar)');
+  eq(tgCalls.length, 0, 'split: holat so\'rovi xabar yubormadi');
+  const sd = await call('/order-deliver', { initData: initDataFor(ADMINS[0], 0, 'Anvar'), outboxKey: ss.data.deliver });
+  eq(sd.status, 200, 'admin istalgan hodisani turta oladi');
+  eq(tgBy('editMessageText').length, 3, 'kartochkalar yangilandi');
+  eq(custSends().length, 1, 'mijozga holat xabari');
+  tgCalls = [];
+  const sc = await call('/order-status', { initData: initDataFor(ADMINS[0], 0, 'Anvar'), uid: CUSTOMER, orderId: sp.data.order.id, status: 'bekor_qilingan', notifyMode: 'split' });
+  ok(sc.status === 200 && sc.fetches <= LIMIT - 5, '12 tovarli bekor qilish byudjetga sig\'di (' + sc.fetches + ')');
+  ok(db.read('products').filter((p) => p && p._orderOperations).length > 0, 'tiklash belgilari hali turibdi (fonda tozalanadi)');
+  eq(Number(db.read('products/5/stock')), 9, 'bekor qilinganda stok qaytdi');
+  const scd = await call('/order-deliver', { initData: initDataFor(ADMINS[0], 0, 'Anvar'), outboxKey: sc.data.deliver });
+  ok(scd.fetches <= LIMIT - 5, 'bekor xabari + tozalash byudjetga sig\'di (' + scd.fetches + ')');
+  ok(!db.read('products').some((p) => p && p._orderOperations), 'tiklash belgilari fonda tozalandi');
+  // Eski ilova (notifyMode yo'q) — 1 tovar: hammasi BITTA so'rovda, limitdan past
+  resetWorld(baseData());
+  const legacy1 = await placeOrder(CUSTOMER, [{ id: '1', size: '', qty: 1 }], 'attempt_leg1_123');
+  ok(legacy1.fetches <= LIMIT - 8, 'eski oqim: buyurtma + xabarlar bitta so\'rovda byudjetga sig\'di (' + legacy1.fetches + ')');
+  ok(db.read('notification_outbox/' + CUSTOMER + '_' + legacy1.data.order.id).delivered === true, 'eski oqim: darhol yetkazildi');
+  // Eski ilova — ko'p tovar: xabar watchdog'ga qoldiriladi (limit o'rtasida uzilmasin)
+  resetWorld(many);
+  const legacy12 = await placeOrder(CUSTOMER, items12, 'attempt_leg12_123');
+  ok(legacy12.status === 201 && legacy12.fetches <= LIMIT, 'eski oqim: 12 tovar ham limitdan oshmadi (' + legacy12.fetches + ')');
+  eq(tgCalls.length, 0, 'eski oqim + ko\'p tovar: xabar watchdog\'ga qoldi');
+  const lk = CUSTOMER + '_' + legacy12.data.order.id;
+  ok(db.read('notification_outbox/' + lk).retryAt > Date.now(), 'watchdog uchun retryAt bor');
+  const lw = await notifyAgain(lk);
+  ok(lw.fetches <= LIMIT && db.read('notification_outbox/' + lk).delivered === true, 'watchdog yetkazdi (' + lw.fetches + ')');
 
   // ===== 10) Eskirgan initData =====
   console.log('▶ 10) eskirgan initData');

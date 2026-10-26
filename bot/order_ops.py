@@ -178,8 +178,15 @@ async def worker_post(worker_url, route, body, timeout=30):
 
 
 async def worker_order_status(worker_url, bot_token, actor, uid, order_id, status,
-                              expected_from="", post=None):
-    """Holatni Worker orqali o'zgartiradi. `(ok, http_status, data)`."""
+                              expected_from="", post=None, notify_mode=None):
+    """Holatni Worker orqali o'zgartiradi. `(ok, http_status, data)`.
+
+    notify_mode="split" — Worker xabarni shu so'rovda yubormaydi, javobda
+    `deliver` kalitini qaytaradi; chaqiruvchi uni /order-notify bilan
+    ALOHIDA so'rovda turtadi (Cloudflare bepul rejasida bitta so'rovga
+    atigi 50 ta tashqi subrequest — ko'p tovarli bekor qilishda xabarlarga
+    joy qolmasdi). Eski Worker maydonni e'tiborsiz qoldiradi.
+    """
     uid, order_id, status = str(uid), str(order_id), str(status)
     expected_from = str(expected_from or "")
     body = {
@@ -189,6 +196,8 @@ async def worker_order_status(worker_url, bot_token, actor, uid, order_id, statu
     }
     if expected_from:
         body["expectedFrom"] = expected_from
+    if notify_mode:
+        body["notifyMode"] = str(notify_mode)
     code, data = await (post or worker_post)(worker_url, "/order-status", body)
     return bool(code == 200 and data.get("ok")), code, data
 
