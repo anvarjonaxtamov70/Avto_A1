@@ -51,7 +51,7 @@ function makeCtx(opts) {
   const elements = {};
   const el = (id) => elements[id] || (elements[id] = { innerHTML: '', innerText: '', style: {}, classList: { add() {}, remove() {} } });
   const ctx = {
-    console, URLSearchParams, JSON, Promise, Object, Array, String, Number, Math, Date, setTimeout,
+    console, URLSearchParams, JSON, Promise, Object, Array, String, Number, Math, Date, setTimeout, clearTimeout,
     TG_PROXY: 'https://w.test',
     ADMIN_IDS: [5105291033, 483425630, 5302078],
     ADMIN_ID: 5105291033,
@@ -207,6 +207,24 @@ function makeCtx(opts) {
   await t.ctx.changeOrderStatus('777', 'o1', 'yolda');
   ok(loader.some((l) => l[0] === 'finish2' && l[1] === false) && afo3[0].status === 'qabul', 'xatoda: krestcha, holat o\'zgarmadi');
   ok(t.ctx._aoStatusBusy === false, 'xatodan keyin qulf ochildi (keyingi bosish ishlaydi)');
+  // Javob kelmasa (osilib qolgan tarmoq) — soatcha ekranni abadiy to'smaydi
+  const afo4 = [{ uI: '777', id: 'o1', code: 'A1-XYZ', status: 'kutilmoqda', total: 1, itemDetails: order.itemDetails }];
+  t = makeCtx({ allFetchedOrders: afo4, currentUser: '5105291033' });
+  let releaseLate;
+  t.ctx.fetch = async (url, init) => {
+    t.calls.fetch.push({ url, body: JSON.parse(init.body) });
+    if (url.endsWith('/order-status')) await new Promise((res) => { releaseLate = res; });
+    return { ok: true, status: 200, json: async () => ({ ok: true, notify: 'server', status: 'qabul', deliver: '777_o1_status_1' }) };
+  };
+  t.ctx._aoStatusTimeoutMs = 60;
+  const lg = [];
+  t.ctx._ordLoader = { show() {}, finish: (okk, txt) => { lg.push([okk, txt]); return Promise.resolve(); }, hide() {} };
+  await t.ctx.changeOrderStatus('777', 'o1', 'qabul');
+  ok(lg.length === 1 && lg[0][0] === false && /Javob kelmadi/.test(lg[0][1]) && t.ctx._aoStatusBusy === false, 'javob kelmasa — 20 s dan keyin soatcha yopiladi, qulf ochiladi');
+  ok(afo4[0].status === 'kutilmoqda', 'javobsiz — holat taxmin qilinmadi');
+  releaseLate();
+  await new Promise((r) => setTimeout(r, 10));
+  ok(afo4[0].status === 'qabul' && t.calls.fetch.some((f) => f.url.endsWith('/order-deliver')), 'kech kelgan muvaffaqiyatli javob baribir qo\'llandi (+ xabar turtildi)');
   t = makeCtx({ allFetchedOrders: afo2, currentUser: '5105291033', responses: [{ status: 200, data: { ok: true, notify: 'server', restockSkipped: [{ id: '9', name: 'Eski filtr' }] } }] });
   await t.ctx.changeOrderStatus('777', 'o1', 'bekor_qilingan');
   ok(t.calls.toasts.some((m) => /QAYTARILMADI[\s\S]*Eski filtr/.test(m)), 'qaytarilmagan tovar adminga ko\'rsatildi');
