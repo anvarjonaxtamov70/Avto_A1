@@ -43754,8 +43754,11 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
         S.errT = setTimeout(function () { if (g === S.gen && S.open) next(); }, 3200);
     }
     function mountImage(slot, card, it, g) {
-        var img = PRE.img[it.src] || new Image();
+        var img = PRE.img[it.src] || null;
         delete PRE.img[it.src];
+        // Oldindan yuklash yiqilgan bo'lsa (complete, lekin o'lchami 0) — uning `error`
+        // hodisasi allaqachon o'tib ketgan: qayta ishlatsak storis watchdog'gacha qotardi.
+        if (!img || (img.complete && !img.naturalWidth)) img = new Image();
         img.className = 'a1sv-el';
         img.alt = '';
         img.decoding = 'async';
@@ -43789,8 +43792,12 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
         return { el: img, ready: ready };
     }
     function mountVideo(slot, card, it, g) {
-        var v = (PRE.v && PRE.v.__src === it.src) ? PRE.v : null;
-        if (v) PRE.v = null; else v = newVideo();
+        var v = null;
+        if (PRE.v && PRE.v.__src === it.src) {
+            // Oldindan yuklash xato bilan tugagan bo'lsa — qayta ishlatmaymiz (yangisi yuklanadi)
+            if (PRE.v.error) dropPreVideo(); else { v = PRE.v; PRE.v = null; }
+        }
+        if (!v) v = newVideo();
         v.className = 'a1sv-el';
         v.muted = S.muted;
         if (it.poster) v.setAttribute('poster', it.poster); else v.removeAttribute('poster');
