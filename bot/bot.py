@@ -680,6 +680,10 @@ class BoundedTTLCache:
         except KeyError:
             return default
 
+    def pop(self, key, default=None):
+        item = self._store.pop(key, None)
+        return default if item is None else item[0]
+
 
 # AI suhbat tarixi: 2 soat faolsiz bo'lsa yoki 2000 tadan oshsa tozalanadi
 ai_sessions = BoundedTTLCache(max_size=2000, ttl_seconds=2 * 3600)
@@ -2886,6 +2890,58 @@ async def app_login_callback(callback: types.CallbackQuery):
     await callback.answer()
 
 
+# =====================================================================
+# 🗑 HISOBNI O'CHIRISH (Google Play talabi) — /delete yoki /hisobni_ochirish
+#   Ikki bosqichli: tasdiq tugmasi. Worker mijozning O'Z ID'si bilan
+#   imzolangan so'rovni qabul qiladi (boshqa odamnikini o'chirib bo'lmaydi).
+#   ⚠️ `unknown_command` (F.text.startswith("/")) dan OLDIN turishi shart.
+# =====================================================================
+DELETE_ACCOUNT_TEXT = (
+    "🗑 <b>Hisobni o'chirish</b>\n\n"
+    "O'chadi: profil, raqam, manzillar, savat, sevimlilar, <b>keshbek</b>, "
+    "storis javoblari, sharhlar va AI suhbatlari.\n"
+    "Saqlanadi: buyurtmalar tarixi (hisob-kitob va kafolat uchun) — ismingiz, "
+    "raqamingiz va manzilingizsiz.\n\n"
+    "<b>Bu amalni qaytarib bo'lmaydi.</b> O'chiraymi?"
+)
+
+
+@dp.message(Command("delete", "hisobni_ochirish", "deleteaccount"))
+async def delete_account_command(message: types.Message, state: FSMContext):
+    await state.clear()
+    if message.from_user.id in ADMIN_IDS:
+        await message.answer("Admin hisobini bu yerdan o'chirib bo'lmaydi.")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🗑 Ha, butunlay o'chirish", callback_data="acdel:yes"),
+        InlineKeyboardButton(text="Bekor qilish", callback_data="acdel:no"),
+    ]])
+    await message.answer(DELETE_ACCOUNT_TEXT, parse_mode="HTML", reply_markup=kb)
+
+
+@dp.callback_query(F.data.in_({"acdel:yes", "acdel:no"}))
+async def delete_account_callback(call: types.CallbackQuery):
+    if call.data == "acdel:no":
+        try:
+            await call.message.edit_text("Bekor qilindi — hisobingiz joyida.")
+        except Exception:
+            pass
+        await call.answer()
+        return
+    await call.answer("O'chirilmoqda…")
+    ok, code, data = await account_ops.worker_account_delete(WORKER_URL, API_TOKEN, call.from_user.id)
+    if not ok:
+        logging.warning("Hisob o'chirilmadi (%s): %s %s", call.from_user.id, code, data)
+    else:
+        # Xotiradagi profil va AI suhbat tarixi ham o'chadi
+        users_db.pop(call.from_user.id, None)
+        ai_sessions.pop(call.from_user.id, None)
+    try:
+        await call.message.edit_text(account_ops.account_delete_result_text(ok, code, data), parse_mode="HTML")
+    except Exception:
+        pass
+
+
 async def maybe_phone_link_start(message):
     """`/start phone` — ilovadagi «Raqamni Telegram'da ulashing» tugmasi."""
     parts = (message.text or "").split(maxsplit=1)
@@ -2961,6 +3017,11 @@ async def start_command(message: types.Message, state: FSMContext):
         return
     # 📱 Ilovadagi «Raqamni Telegram'da ulashing» (raqam bilan kirish uchun)
     if await maybe_phone_link_start(message):
+        return
+    # 🗑 Saytdagi «Hisobni o'chirish» sahifasidan (t.me/<bot>?start=delete)
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) > 1 and parts[1].strip() == "delete":
+        await delete_account_command(message, state)
         return
 
     # 👔 XO'JAYIN: mijoz oqimi (til tanlash / ro'yxatdan o'tish / menyu)
