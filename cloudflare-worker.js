@@ -199,10 +199,13 @@ async function handleMedia(request, env) {
     return new Response("BOT_TOKEN sozlanmagan", { status: 500, headers: mediaCors });
   }
 
-  const fileId = new URL(request.url).searchParams.get("id");
+  const reqUrl = new URL(request.url);
+  const fileId = reqUrl.searchParams.get("id");
   if (!fileId) {
     return new Response("file_id yo'q (?id=...)", { status: 400, headers: mediaCors });
   }
+  // Ilova ishorasi: t=v — video, t=i — rasm (kengaytmasiz file_path uchun).
+  const kindHint = reqUrl.searchParams.get("t");
 
   try {
     // 1) file_id -> file_path (keshdan; yo'q bo'lsa Telegram'dan)
@@ -237,20 +240,74 @@ async function handleMedia(request, env) {
     const headers = new Headers();
     headers.set("Access-Control-Allow-Origin", "*");
     headers.set("Accept-Ranges", "bytes");
-    headers.set("Cache-Control", "public, max-age=86400");
+    // file_id ning mazmuni HECH QACHON o'zgarmaydi — brauzer uni bir yil
+    // saqlaydi va qayta ko'rishda (storisni yana ochganda) tarmoqqa bormaydi.
+    // Xato javoblar keshlanmaydi (aks holda vaqtinchalik xato "yopishib" qolardi).
+    headers.set("Cache-Control", upstream.ok ? "public, max-age=31536000, immutable" : "no-store");
+    // ⚠️ Telegram fayl serveri doim `application/octet-stream` qaytaradi va
+    //    file_path ko'pincha kengaytmasiz bo'ladi. iOS Safari bunday videoni
+    //    ba'zan umuman o'ynatmaydi (yoki butun faylni kutadi). Endi: kengaytma
+    //    -> ilova ishorasi (t=v/i) -> fayl boshidagi "sehrli" baytlar.
     const ct = upstream.headers.get("Content-Type");
-    headers.set(
-      "Content-Type",
-      ct && ct !== "application/octet-stream" ? ct : guessMime(filePath)
-    );
+    let mime = ct && ct !== "application/octet-stream" ? ct : guessMime(filePath);
+    let body = upstream.body;
+    if (mime === "application/octet-stream" && upstream.ok) {
+      if (kindHint === "v") mime = "video/mp4";
+      else if (kindHint === "i") mime = "image/jpeg";
+      else if (mediaMimeCache.has(fileId)) mime = mediaMimeCache.get(fileId);
+      else if (body && (!range || /^bytes=0-/.test(range))) {
+        const [peek, pass] = body.tee();
+        body = pass;
+        const sniffed = await sniffMime(peek);
+        if (sniffed) mime = sniffed;
+      }
+      if (mime !== "application/octet-stream") {
+        if (mediaMimeCache.size > 500) mediaMimeCache.clear();
+        mediaMimeCache.set(fileId, mime);
+      }
+    }
+    headers.set("Content-Type", mime);
     const cl = upstream.headers.get("Content-Length");
     if (cl) headers.set("Content-Length", cl);
     const cr = upstream.headers.get("Content-Range");
     if (cr) headers.set("Content-Range", cr);
 
-    return new Response(upstream.body, { status: upstream.status, headers });
+    return new Response(body, { status: upstream.status, headers });
   } catch (e) {
     return new Response("Media xatosi: " + String(e), { status: 500, headers: mediaCors });
+  }
+}
+
+// file_id -> aniqlangan MIME (keyingi Range so'rovlari fayl o'rtasidan boshlanadi —
+// u yerda "sehrli" baytlar yo'q, shuning uchun birinchi javobdagi natija eslab qolinadi).
+const mediaMimeCache = new Map();
+
+// Fayl boshidagi baytlardan turini aniqlaydi (faqat birinchi bo'lak o'qiladi).
+async function sniffMime(stream) {
+  const reader = stream.getReader();
+  try {
+    let got = new Uint8Array(0);
+    while (got.length < 16) {
+      const part = await reader.read();
+      if (part.done || !part.value) break;
+      const next = new Uint8Array(got.length + part.value.length);
+      next.set(got, 0);
+      next.set(part.value, got.length);
+      got = next;
+    }
+    const b = got;
+    const s = (i, n) => String.fromCharCode.apply(null, Array.from(b.subarray(i, i + n)));
+    if (b.length >= 12 && s(4, 4) === "ftyp") return "video/mp4";          // MP4 / MOV (H.264)
+    if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+    if (b.length >= 8 && b[0] === 0x89 && s(1, 3) === "PNG") return "image/png";
+    if (b.length >= 12 && s(0, 4) === "RIFF" && s(8, 4) === "WEBP") return "image/webp";
+    if (b.length >= 4 && s(0, 4) === "GIF8") return "image/gif";
+    if (b.length >= 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return "video/webm";
+    return null;
+  } catch (_) {
+    return null;
+  } finally {
+    try { reader.cancel(); } catch (_) {}
   }
 }
 

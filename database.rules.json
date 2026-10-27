@@ -88,6 +88,17 @@
           ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
         },
 
+        "story_seen": {
+          // 👁 Ko'rilgan storislar (sid -> vaqt). Telefon xotirasi tozalansa yoki
+          //    boshqa qurilmadan kirsa ham ko'rilgan halqa QAYTA YONMASLIGI uchun.
+          //    Faqat egasi yozadi; har qiymat — son (vaqt).
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren()",
+          "$sid": {
+            ".validate": "newData.isNumber() && $sid.length <= 140"
+          }
+        },
+
         "orders": {
           // 🔒 SERVER-OWNED. Mijoz buyurtma yozuvini yarata/o'zgartira OLMAYDI
           //    (ilgari mijoz o'z buyurtmasining status/summasini yozardi).
@@ -323,6 +334,49 @@
     "stories": {
       ".read": true,
       ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
+    },
+
+    "story_views": {
+      // 👁 "Kim ko'rdi" — admin statistikasi (sid = kategoriya__kalit). Har mijoz
+      //    FAQAT o'z yozuvini (uid = auth.uid) yozadi; o'qish va o'chirish — admin.
+      ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
+      "$sid": {
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['t']) && $sid.length <= 140",
+          "t": { ".validate": "newData.isNumber()" },
+          "n": { ".validate": "newData.isString() && newData.val().length <= 80" },
+          "a": { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+          "u": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_]{3,64}$/)" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "story_replies": {
+      // 💬 Mijozning storisga javobi / reaksiyasi. Mijoz FAQAT o'z nomidan
+      //    (uid = auth.uid) YANGI yozuv qo'sha oladi (tahrirlash/o'chirish yo'q)
+      //    va faqat O'Z javoblarini o'qiydi (ilovada "Siz: ..." pufakchasi).
+      //    Admin hammasini o'qiydi va o'chiradi.
+      ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
+      "$sid": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$rid": {
+            ".write": "auth != null && auth.uid === $uid && !data.exists()",
+            ".validate": "newData.hasChildren(['t']) && (newData.hasChild('x') || newData.hasChild('e')) && $sid.length <= 140",
+            "t": { ".validate": "newData.isNumber()" },
+            "x": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500" },
+            "e": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 16" },
+            "n": { ".validate": "newData.isString() && newData.val().length <= 80" },
+            "a": { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+            "u": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_]{3,64}$/)" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
     },
 
     "banners": {
