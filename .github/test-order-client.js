@@ -11,6 +11,10 @@
  *    4. Eski Worker fallback xabarida tovarlar ro'yxati bor (itemDetails).
  *    5. Mijoz faqat "kutilmoqda" buyurtmani bekor qila oladi; tugma faqat
  *       shunda ko'rinadi.
+ *    6. Admin holat tugmasi: soatcha darhol, notifyMode:"split" + xabar
+ *       /order-deliver bilan alohida turtiladi, yozuv optimistik yangilanadi
+ *       (butun ro'yxat qayta yuklanmaydi), ikki marta bosish — bitta so'rov,
+ *       409 da faqat shu buyurtma serverdan qayta o'qiladi.
  *
  *  ISHGA TUSHIRISH:  node .github/test-order-client.js
  * ===================================================================== */
@@ -47,7 +51,7 @@ function makeCtx(opts) {
   const elements = {};
   const el = (id) => elements[id] || (elements[id] = { innerHTML: '', innerText: '', style: {}, classList: { add() {}, remove() {} } });
   const ctx = {
-    console, URLSearchParams, JSON, Promise, Object, Array, String, Number, Math, Date, setTimeout,
+    console, URLSearchParams, JSON, Promise, Object, Array, String, Number, Math, Date, setTimeout, clearTimeout,
     TG_PROXY: 'https://w.test',
     ADMIN_IDS: [5105291033, 483425630, 5302078],
     ADMIN_ID: 5105291033,
@@ -79,6 +83,9 @@ function makeCtx(opts) {
     myOrders: opts.myOrders || [],
   };
   ctx.window = ctx;
+  if (opts.db) {
+    ctx.db = { ref: (p) => ({ once: async () => { calls.dbReads = (calls.dbReads || []).concat(p); return { val: () => opts.db[p] || null }; } }) };
+  }
   ctx._invalidateUsersCache = () => {};
   ctx._orderItemsSummary = () => ({ lines: '', total: 0 });
   ctx._orderAttemptId = () => 'attempt_test_123';
@@ -125,7 +132,17 @@ function makeCtx(opts) {
   r = await t.ctx.confirmOrder('Naqd pul');
   ok(r && r.ok === true, 'buyurtma o\'tdi');
   ok(t.calls.fetch[0].url === 'https://w.test/order-commit', '/order-commit ga yuborildi');
+  ok(t.calls.fetch[0].body.notifyMode === 'split', 'buyurtma notifyMode:"split" bilan (xabar alohida so\'rovda)');
   ok(t.calls.tg.length === 0, 'yangi Worker: brauzer Telegram xabar YUBORMADI (dublikat yo\'q)');
+  t = makeCtx({ responses: [{ status: 201, data: { ok: true, committed: true, order, notify: 'server', deliver: '777_o1' } }, { status: 200, data: { ok: true } }] });
+  r = await t.ctx.confirmOrder('Naqd pul');
+  await new Promise((res) => setTimeout(res, 0));
+  ok(r.ok && t.calls.fetch[1] && t.calls.fetch[1].url === 'https://w.test/order-deliver' && t.calls.fetch[1].body.outboxKey === '777_o1' && t.calls.fetch[1].body.initData,
+    'javobdan keyin DARHOL /order-deliver turtildi (kredential bilan)');
+  t = makeCtx({ responses: [{ status: 201, data: { ok: true, committed: true, order, notify: 'server', deliver: '777_o1' } }, { status: 502, data: null }, { status: 200, data: { ok: true } }] });
+  await t.ctx.confirmOrder('Naqd pul');
+  await new Promise((res) => setTimeout(res, 2700));
+  ok(t.calls.fetch.filter((f) => f.url.endsWith('/order-deliver')).length === 2, 'turtish yiqilsa — bir marta qayta uriladi');
   t = makeCtx({ responses: [{ status: 201, data: { ok: true, committed: true, order } }] });
   r = await t.ctx.confirmOrder('Naqd pul');
   const toAdmins = t.calls.tg.filter((p) => [5105291033, 483425630, 5302078].includes(p.chat_id)).map((p) => p.chat_id);
@@ -153,10 +170,61 @@ function makeCtx(opts) {
   ok(adm.length === 2 && !adm.includes(5105291033), 'eski Worker: boshqa 2 adminga (o\'ziga emas)');
   const cust = t.calls.tg.find((p) => String(p.chat_id) === '777');
   ok(cust && /Porshen/.test(cust.text), 'mijoz xabarida tovar nomi bor (ilgari "l_<hash>" sabab bo\'sh edi)');
-  t = makeCtx({ allFetchedOrders: afo2, currentUser: '5105291033', responses: [{ status: 409, data: { ok: false, error: "status o'tishi mumkin emas" } }] });
+  const afo409 = [{ ...afo2[0] }];
+  t = makeCtx({ allFetchedOrders: afo409, currentUser: '5105291033', responses: [{ status: 409, data: { ok: false, error: "status o'tishi mumkin emas" } }],
+    db: { 'orders/777_o1': { status: 'yolda' } } });
   await t.ctx.changeOrderStatus('777', 'o1', 'qabul');
-  ok(t.calls.admin === 1, '409: ro\'yxat qayta yuklandi (eskirgan ko\'rinish)');
+  await new Promise((r) => setTimeout(r, 0));
+  ok(t.calls.admin === 0, '409: butun ro\'yxat QAYTA YUKLANMADI (eng sekin qism edi)');
+  ok((t.calls.dbReads || []).join() === 'orders/777_o1' && afo409[0].status === 'yolda', '409: faqat shu buyurtmaning haqiqiy holati o\'qildi (' + afo409[0].status + ')');
   ok(t.calls.toasts.some((m) => /o'tishi mumkin emas/.test(m)), '409: serverning aniq sababi ko\'rsatildi');
+  const afo409b = [{ ...afo2[0] }];
+  t = makeCtx({ allFetchedOrders: afo409b, currentUser: '5105291033', responses: [{ status: 409, data: { ok: false, error: 'x', currentStatus: 'qabul' } }] });
+  await t.ctx.changeOrderStatus('777', 'o1', 'yolda');
+  ok(afo409b[0].status === 'qabul' && t.calls.toasts.some((m) => /allaqachon «Qabul qilingan»/.test(m)), '409 + currentStatus: holat joyida tuzatildi');
+
+  // ⚡ Yangi oqim: split xabar, optimistik yangilanish, ikki marta bosish
+  const afo3 = [{ uI: '777', id: 'o1', code: 'A1-XYZ', status: 'kutilmoqda', total: 200000, itemDetails: order.itemDetails }];
+  t = makeCtx({ allFetchedOrders: afo3, currentUser: '5105291033',
+    responses: [{ status: 200, data: { ok: true, notify: 'server', status: 'qabul', deliver: '777_o1_status_1' } }, { status: 200, data: { ok: true, queued: true } }] });
+  const loader = [];
+  t.ctx._ordLoader = { show: (txt, o) => loader.push(['show', txt, o]), finish: (okk, txt) => { loader.push(['finish', okk, txt]); return Promise.resolve(); }, hide() {} };
+  const p1 = t.ctx.changeOrderStatus('777', 'o1', 'qabul');
+  const p2 = t.ctx.changeOrderStatus('777', 'o1', 'qabul');   // ikkinchi (tasodifiy) bosish
+  await Promise.all([p1, p2]);
+  await new Promise((r) => setTimeout(r, 0));
+  ok(t.calls.fetch.filter((f) => f.url.endsWith('/order-status')).length === 1, 'ikki marta bosish — BITTA so\'rov');
+  ok(t.calls.fetch[0].body.notifyMode === 'split', 'holat so\'rovi notifyMode:"split" bilan');
+  ok(t.calls.fetch.some((f) => f.url === 'https://w.test/order-deliver' && f.body.outboxKey === '777_o1_status_1'), 'xabar alohida /order-deliver bilan turtildi');
+  ok(afo3[0].status === 'qabul', 'optimistik: ro\'yxatdagi yozuv darhol "qabul"');
+  ok(t.calls.admin === 0, 'muvaffaqiyatdan keyin butun ro\'yxat qayta yuklanmadi');
+  ok(loader[0] && loader[0][0] === 'show' && /Qabul qilinmoqda/.test(loader[0][1]) && loader[0][2].minSpin < 1000, 'soatcha darhol, qisqa rejimda (' + JSON.stringify(loader[0]) + ')');
+  ok(loader.some((l) => l[0] === 'finish' && l[1] === true && /Qabul qilindi/.test(l[2])), 'pticha: "Qabul qilindi"');
+  ok(t.calls.tg.length === 0, 'yangi Worker: brauzer Telegram xabar yubormadi');
+  t.ctx._aoStatusBusy = false;
+  t = makeCtx({ allFetchedOrders: afo3, currentUser: '5105291033', responses: [{ status: 503, data: { ok: false, error: 'x', retryable: true } }] });
+  t.ctx._ordLoader = { show() {}, finish: (okk) => { loader.push(['finish2', okk]); return Promise.resolve(); }, hide() {} };
+  await t.ctx.changeOrderStatus('777', 'o1', 'yolda');
+  ok(loader.some((l) => l[0] === 'finish2' && l[1] === false) && afo3[0].status === 'qabul', 'xatoda: krestcha, holat o\'zgarmadi');
+  ok(t.ctx._aoStatusBusy === false, 'xatodan keyin qulf ochildi (keyingi bosish ishlaydi)');
+  // Javob kelmasa (osilib qolgan tarmoq) — soatcha ekranni abadiy to'smaydi
+  const afo4 = [{ uI: '777', id: 'o1', code: 'A1-XYZ', status: 'kutilmoqda', total: 1, itemDetails: order.itemDetails }];
+  t = makeCtx({ allFetchedOrders: afo4, currentUser: '5105291033' });
+  let releaseLate;
+  t.ctx.fetch = async (url, init) => {
+    t.calls.fetch.push({ url, body: JSON.parse(init.body) });
+    if (url.endsWith('/order-status')) await new Promise((res) => { releaseLate = res; });
+    return { ok: true, status: 200, json: async () => ({ ok: true, notify: 'server', status: 'qabul', deliver: '777_o1_status_1' }) };
+  };
+  t.ctx._aoStatusTimeoutMs = 60;
+  const lg = [];
+  t.ctx._ordLoader = { show() {}, finish: (okk, txt) => { lg.push([okk, txt]); return Promise.resolve(); }, hide() {} };
+  await t.ctx.changeOrderStatus('777', 'o1', 'qabul');
+  ok(lg.length === 1 && lg[0][0] === false && /Javob kelmadi/.test(lg[0][1]) && t.ctx._aoStatusBusy === false, 'javob kelmasa — 20 s dan keyin soatcha yopiladi, qulf ochiladi');
+  ok(afo4[0].status === 'kutilmoqda', 'javobsiz — holat taxmin qilinmadi');
+  releaseLate();
+  await new Promise((r) => setTimeout(r, 10));
+  ok(afo4[0].status === 'qabul' && t.calls.fetch.some((f) => f.url.endsWith('/order-deliver')), 'kech kelgan muvaffaqiyatli javob baribir qo\'llandi (+ xabar turtildi)');
   t = makeCtx({ allFetchedOrders: afo2, currentUser: '5105291033', responses: [{ status: 200, data: { ok: true, notify: 'server', restockSkipped: [{ id: '9', name: 'Eski filtr' }] } }] });
   await t.ctx.changeOrderStatus('777', 'o1', 'bekor_qilingan');
   ok(t.calls.toasts.some((m) => /QAYTARILMADI[\s\S]*Eski filtr/.test(m)), 'qaytarilmagan tovar adminga ko\'rsatildi');
@@ -169,9 +237,11 @@ function makeCtx(opts) {
   ok(/Buyurtmani bekor qilish/.test(t.elements['od-cancel-box'].innerHTML), 'kutilmoqda — tugma ko\'rinadi');
   t.ctx._renderOrderCancel({ id: 'o6', status: 'qabul' });
   ok(t.elements['od-cancel-box'].innerHTML === '', 'qabul qilingan — tugma YO\'Q');
-  t = makeCtx({ myOrders: [{ ...mine }], responses: [{ status: 200, data: { ok: true } }] });
+  t = makeCtx({ myOrders: [{ ...mine }], responses: [{ status: 200, data: { ok: true, deliver: '777_o5_status_1' } }, { status: 200, data: { ok: true } }] });
   await t.ctx.cancelMyOrder('o5');
+  await new Promise((res) => setTimeout(res, 0));
   ok(t.calls.fetch[0].body.uid === '777' && t.calls.fetch[0].body.status === 'bekor_qilingan' && t.calls.fetch[0].body.orderId === 'o5', 'o\'z uid si bilan bekor so\'rovi');
+  ok(t.calls.fetch[0].body.notifyMode === 'split' && t.calls.fetch[1] && t.calls.fetch[1].url.endsWith('/order-deliver'), 'bekor xabari alohida turtildi');
   ok(t.ctx.myOrders[0].status === 'bekor_qilingan', 'mahalliy holat yangilandi');
   t = makeCtx({ myOrders: [{ ...mine }], confirm: false });
   await t.ctx.cancelMyOrder('o5');

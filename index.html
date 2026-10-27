@@ -9053,6 +9053,40 @@ document.addEventListener('touchmove', function(e) {
         }
         return r;
     };
+    // 📨 Xabarlarni ALOHIDA so'rovda turtish (Worker notifyMode:"split").
+    //    Cloudflare bepul rejasida bitta so'rovga atigi 50 ta tashqi so'rov:
+    //    buyurtma yozish shu limitning katta qismini olgani uchun xabarlar
+    //    1.5-2.5 daqiqa kechikar yoki mijozga IKKI marta ketardi. Endi javob
+    //    kelishi bilan shu chaqiriladi va Worker xabarlarni yangi so'rovda
+    //    (to'liq limit bilan) yuboradi. `keepalive` — Telegram oynasi darhol
+    //    yopilsa ham so'rov yetib boradi. Yiqilsa bir marta qayta uradi;
+    //    baribir yetmasa bot watchdog ~1.5 daqiqada yuboradi (yo'qolmaydi).
+    window._a1OrderDeliver = function (outboxKey) {
+        if (!outboxKey || typeof outboxKey !== 'string') return Promise.resolve(false);
+        var post = function (cred) {
+            var b = { outboxKey: outboxKey };
+            if (cred && cred.initData) b.initData = cred.initData;
+            else if (cred && cred.idToken) b.idToken = cred.idToken;
+            else return Promise.resolve({ status: 401 });
+            return fetch(TG_PROXY + '/order-deliver', {
+                method: 'POST', keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(b)
+            }).then(function (r) { return { status: r.status }; }, function () { return { status: 0 }; });
+        };
+        var attempt = function (n, preferToken) {
+            return Promise.resolve(window._authCred ? window._authCred(preferToken ? { preferToken: true } : null) : null)
+                .catch(function () { return null; })
+                .then(post)
+                .then(function (r) {
+                    if (r.status >= 200 && r.status < 300) return true;
+                    if (n >= 1 || (r.status >= 400 && r.status < 500 && r.status !== 401 && r.status !== 429)) return false;
+                    return new Promise(function (res) { setTimeout(res, 2500); })
+                        .then(function () { return attempt(n + 1, r.status === 401); });
+                });
+        };
+        return attempt(0, false);
+    };
     // 🔐 Auth kafolati: Worker chaqiruvi / DB yozuvidan OLDIN chaqiriladi.
     //    Telegram — custom token (window._authReady kutiladi).
     //    Brauzer/APK — anonim kirish (barqaror uid, LOCAL persistence).
@@ -11882,6 +11916,71 @@ window._orderDetailLines = function (o) {
     return window._orderItemsSummary((o && o.items) || {});
 };
 
+// ⌛ Holat soatchasi matnlari: [jarayon, natija].
+window._aoStatusLbl = function (st, from) {
+    if (st === 'qabul') return ['Qabul qilinmoqda\u2026', 'Qabul qilindi'];
+    if (st === 'yolda') return ["Yo'lga chiqarilmoqda\u2026", "Yo'lga chiqdi"];
+    if (st === 'yetkazildi') return ['Yetkazildi deb belgilanmoqda\u2026', 'Yetkazib berildi'];
+    if (st === 'bekor_qilingan') return from === 'yetkazildi' ? ['Qaytarilmoqda\u2026', 'Qaytarildi'] : ['Bekor qilinmoqda\u2026', 'Bekor qilindi'];
+    return ["Holat o'zgartirilmoqda\u2026", "Holat o'zgartirildi"];
+};
+
+// 🔄 Holat o'zgargach OCHIQ ko'rinishlarni joyida yangilaydi (serverga bormasdan):
+//    buyurtma sahifasi (yangi holat + keyingi tugma), yig'ish oynasi va orqadagi ro'yxat.
+window._aoAfterStatus = function (uid, id) {
+    var same = function (o) { return !!o && String(o.uI) === String(uid) && String(o.id) === String(id); };
+    var shown = function (elId) {
+        var m = document.getElementById(elId);
+        var d = m && m.style ? m.style.display : '';
+        return !!d && d !== 'none';
+    };
+    try {
+        var k = window._aoDetailKey;
+        if (k && String(k.uid) === String(uid) && String(k.id) === String(id) && shown('adminOrderSheetModal') && window._aoRenderDetail) {
+            window._aoRenderDetail(false);
+        }
+    } catch (e) {}
+    try { if (same(window._pickOrder) && shown('adminOrderPickModal') && window._renderPick) window._renderPick(); } catch (e) {}
+    // Orqadagi ro'yxat — animatsiyasiz qayta chiziladi (paginatsiya saqlanadi).
+    try {
+        if (window.lastOrdersRef && document.getElementById('admin-orders-render-box') && typeof renderAdminOrdersUI === 'function') {
+            renderAdminOrdersUI(window.lastOrdersRef);
+        }
+    } catch (e) {}
+};
+
+// ✨ Yangi holat kartasi mayin "joyiga tushadi" (WAAPI — lite rejimdagi CSS
+//    animatsiya o'chirgichi unga ta'sir qilmaydi; zaif qurilmada umuman yo'q).
+window._aoPulseHero = function () {
+    var hero = document.querySelector('#ao-detail .ao-hero');
+    if (!hero || !hero.animate || document.documentElement.classList.contains('lite')) return;
+    try {
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    } catch (e) {}
+    hero.animate([{ transform: 'scale(.97)', opacity: .6 }, { transform: 'none', opacity: 1 }],
+        { duration: 360, easing: 'cubic-bezier(.2,.8,.2,1)' });
+};
+
+// 🔎 Bitta buyurtmaning HAQIQIY (server) holatini qayta o'qiydi — butun `users`
+//    daraxtini yuklamasdan (409: boshqa admin/bot allaqachon o'zgartirgan).
+window._aoRefreshOne = function (uid, id) {
+    try {
+        if (typeof db === 'undefined' || !db || !db.ref) return Promise.resolve(null);
+        return db.ref('orders/' + String(uid) + '_' + String(id)).once('value').then(function (s) {
+            var c = s && s.val ? s.val() : null;
+            if (!c || typeof c !== 'object') return null;
+            (window.allFetchedOrders || []).forEach(function (o) {
+                if (o && String(o.uI) === String(uid) && String(o.id) === String(id)) {
+                    o.status = c.status || 'kutilmoqda';
+                    if (c.statusUpdatedAt) o.statusUpdatedAt = c.statusUpdatedAt;
+                }
+            });
+            try { window._aoAfterStatus(uid, id); } catch (e) {}
+            return c;
+        }).catch(function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+};
+
 async function changeOrderStatus(uid, orderId, newStatus) {
         // 🔒 SERVER-AUTHORITATIVE: holat Worker /order-status orqali o'zgaradi.
         //    Server ikkala yozuvni (+ stok qaytarish, cashback) yangilaydi va
@@ -11896,19 +11995,71 @@ async function changeOrderStatus(uid, orderId, newStatus) {
         } catch (e) {}
         if (_ord) { oldStatus = _ord.status || 'kutilmoqda'; displayCode = _ord.code || orderId; }
 
+        // ⏳ Ikki marta bosishdan himoya: bitta o'zgarish tugamaguncha yangisi boshlanmaydi.
+        if (window._aoStatusBusy) return;
+        window._aoStatusBusy = true;
+
         // ⚠️ Qaytarib bo'lmaydigan amallar — tasdiq so'raymiz (tasodifiy bosish).
         if (newStatus === 'bekor_qilingan') {
             var _q = (oldStatus === 'yetkazildi')
                 ? ("#" + displayCode + " QAYTARILDI deb belgilansinmi?\n\nTovarlar omborga qaytadi, berilgan cashback qaytarib olinadi. Bu amalni qaytarib bo'lmaydi.")
                 : ("#" + displayCode + " bekor qilinsinmi?\n\nTovarlar omborga qaytadi, mijozga xabar boradi. Bu amalni qaytarib bo'lmaydi.");
-            if (!(await window._a1Confirm(_q))) return;
+            var _yes = false;
+            try { _yes = await window._a1Confirm(_q); } catch (e) {}
+            if (!_yes) { window._aoStatusBusy = false; return; }
         }
 
-        var _resp, _data;
+        // ⌛ Soatcha DARHOL — xuddi buyurtma berilgandagidek (lekin qisqaroq:
+        //    admin kuniga o'nlab marta bosadi). Ilgari tugma bosilgach bir necha
+        //    soniya hech narsa ko'rinmasdi, keyin butun ro'yxat qayta yuklanardi.
+        var _L = window._ordLoader;
+        var _txt = window._aoStatusLbl(newStatus, oldStatus);
+        try { if (_L) _L.show(_txt[0], { minSpin: 650, hold: 760, sub: '#' + displayCode }); } catch (e) {}
+        try { if (window._hap) window._hap('light'); } catch (e) {}
+        var _finish = function (ok, text) {
+            window._aoStatusBusy = false;
+            try { if (_L && _L.finish) return _L.finish(ok, text); } catch (e) {}
+            return Promise.resolve();
+        };
+
+        // ✅ Server tasdiqlagan holatni qo'llash (oddiy yo'l ham, kechikkan javob ham).
+        var _apply = function (data) {
+            // Xabarlar alohida so'rovda (adminlar kartochkasi + mijoz xabari).
+            if (data.deliver) { try { window._a1OrderDeliver(data.deliver); } catch (e) {} }
+            // ⚡ OPTIMISTIK: ro'yxatdagi yozuv shu yerning o'zida yangilanadi. Ochiq
+            //    sahifa (buyurtma / yig'ish) joyida qayta chiziladi: yangi holat +
+            //    keyingi tugma. Butun `users` daraxtini qayta yuklash (eng sekin
+            //    qism edi) endi shart emas — keyingi ochilishda yangisi olinadi.
+            if (_ord) {
+                _ord.status = data.status || newStatus;
+                _ord.statusUpdatedAt = Date.now();
+                delete _ord._projStatus;
+            }
+            try { window._invalidateUsersCache(); } catch (e) {}
+            try { window._aoAfterStatus(uid, orderId); } catch (e) {}
+        };
+
+        var _resp, _data, _req, _timer;
         try {
-            var _wp = await window._workerPost('/order-status', { uid: String(uid), orderId: String(orderId), status: newStatus });
+            _req = window._workerPost('/order-status', { uid: String(uid), orderId: String(orderId), status: newStatus, notifyMode: 'split' });
+            // ⏱ Javob 20 s kelmasa soatcha ekranni abadiy to'sib qolmasin. So'rov
+            //    fonda davom etadi: kech bo'lsa ham muvaffaqiyatli kelsa qo'llanadi
+            //    (takroriy bosish ham xavfsiz — server "duplicate" qaytaradi).
+            var _wp = await Promise.race([_req, new Promise(function (res) { _timer = setTimeout(function () { res(null); }, window._aoStatusTimeoutMs || 20000); })]);
+            clearTimeout(_timer);
+            if (!_wp) {
+                _finish(false, "Javob kelmadi");
+                showToast("Server javob bermadi — holat birozdan keyin o'zi yangilanadi", "warning");
+                _req.then(function (late) {
+                    if (late && late.resp && late.resp.ok && late.data && late.data.ok) _apply(late.data);
+                    else { try { window._aoRefreshOne(uid, orderId); } catch (e) {} }
+                }, function () { try { window._aoRefreshOne(uid, orderId); } catch (e) {} });
+                return;
+            }
             _resp = _wp.resp; _data = _wp.data;
         } catch (e) {
+            clearTimeout(_timer);
+            _finish(false, "Internet yo'q");
             showToast("Holat saqlanmadi — internetni tekshiring", "warning");
             return;
         }
@@ -11918,31 +12069,35 @@ async function changeOrderStatus(uid, orderId, newStatus) {
                         : ("server javobi " + (_resp ? _resp.status : '?'));
             if (_data && _data.retryable) _emsg = "boshqa o'zgarish bajarilmoqda — birozdan keyin qayta bosing";
             var _cur = _data && (_data.currentStatus || _data.from || _data.canonicalStatus);
+            var _known = { kutilmoqda: "Kutilmoqda", qabul: "Qabul qilingan", yolda: "Yo'lda", yetkazildi: "Yetkazilgan", bekor_qilingan: "Bekor qilingan" };
             if (_resp && _resp.status === 409 && _cur && _cur !== newStatus) {
-                var _lbl = { kutilmoqda: "Kutilmoqda", qabul: "Qabul qilingan", yolda: "Yo'lda", yetkazildi: "Yetkazilgan", bekor_qilingan: "Bekor qilingan" }[_cur] || _cur;
-                _emsg = "bu buyurtma allaqachon \u00AB" + _lbl + "\u00BB — ro'yxat yangilandi";
+                _emsg = "bu buyurtma allaqachon \u00AB" + (_known[_cur] || _cur) + "\u00BB — sahifa yangilandi";
             }
+            _finish(false, "Holat saqlanmadi");
             showToast("Holat saqlanmadi: " + _emsg, "warning");
             try { if (window._dwarn) window._dwarn('[order-status] xato:', _resp && _resp.status, _data); } catch (e) {}
-            // Ro'yxat eskirgan bo'lishi mumkin (boshqa admin/bot o'zgartirgan) — yangilaymiz.
-            if (_resp && _resp.status === 409) { try { window._invalidateUsersCache(); openAdminOrders(); } catch (e) {} }
+            // Boshqa admin/bot allaqachon o'zgartirgan — server aytgan HAQIQIY holatni
+            // shu yerning o'zida ko'rsatamiz (butun ro'yxatni qayta yuklamasdan).
+            if (_resp && _resp.status === 409) {
+                try { window._invalidateUsersCache(); } catch (e) {}
+                if (_ord && _cur && _known[_cur]) { _ord.status = _cur; try { window._aoAfterStatus(uid, orderId); } catch (e) {} }
+                else { try { window._aoRefreshOne(uid, orderId); } catch (e) {} }
+            }
             return;
         }
 
-        showToast(_data.duplicate ? "Holat allaqachon shunday edi" : "Holat o'zgartirildi!");
+        var _anim = _finish(true, _data.duplicate ? "Holat allaqachon shunday edi" : _txt[1]);
+        _apply(_data);
+        // Soatcha yopilgach — yangi holat kartasi mayin "joyiga tushadi".
+        Promise.resolve(_anim).then(function () { try { if (window._aoPulseHero) window._aoPulseHero(); } catch (e) {} });
         if (Array.isArray(_data.restockSkipped) && _data.restockSkipped.length) {
             var _sk = _data.restockSkipped.map(function (x) { return '• ' + (x.name || x.id) + (x.size && x.size !== 'Universal' ? ' (' + x.size + ')' : ''); }).join('\n');
-            try {
-                var _skTxt = "Bu tovarlar omborga QAYTARILMADI (katalogdan o'chirilgan yoki razmeri o'zgargan):\n\n" + _sk + "\n\nKerak bo'lsa qoldiqni qo'lda to'g'rilang.";
-                if (typeof tg !== 'undefined' && tg.showAlert) tg.showAlert(_skTxt); else alert(_skTxt);
-            } catch (e) {}
-        }
-        window._invalidateUsersCache();
-        let hTitle = document.querySelector('#adminOrdersModal .modal-header h2').innerText;
-        if (hTitle === '📦 Buyurtmalar') {
-            openAdminOrders();
-        } else {
-            openCustomerSpecificOrders(uid, hTitle.replace('📦 ', '').replace(' buyurtmalari', ''));
+            Promise.resolve(_anim).then(function () {
+                try {
+                    var _skTxt = "Bu tovarlar omborga QAYTARILMADI (katalogdan o'chirilgan yoki razmeri o'zgargan):\n\n" + _sk + "\n\nKerak bo'lsa qoldiqni qo'lda to'g'rilang.";
+                    if (typeof tg !== 'undefined' && tg.showAlert) tg.showAlert(_skTxt); else alert(_skTxt);
+                } catch (e) {}
+            });
         }
 
         // 📨 Yangi Worker xabarlarni O'ZI yuboradi (notify:"server").
@@ -13017,7 +13172,9 @@ window.confirmOrder = async (paymentMethod) => {
             customer: { name: profName, phone: profPhone, address: custAddress, username: userTgLink },
             delivery: { method: deliveryMethod, address: deliveryAddress, mapLink: deliveryMapLink, note: deliveryNote },
             payment: { method: paymentMethod },
-            cashbackRequested: cashbackRequested
+            cashbackRequested: cashbackRequested,
+            // Xabarlar javobdan keyin ALOHIDA so'rovda (window._a1OrderDeliver).
+            notifyMode: 'split'
         };
 
         // 🛡 SERVERDA ATOMIK: stok band qilinadi, buyurtma yoziladi, cashback hisoblanadi.
@@ -13072,6 +13229,8 @@ window.confirmOrder = async (paymentMethod) => {
         //    mijoz brauzeri buyurtma YOZMAYDI, stok KAMAYTIRMAYDI, Phase2.spendCashback
         //    CHAQIRMAYDI. on('value') listener buyurtmani serverdan o'zi tortadi.
         var order = data.order;
+        // 📨 Adminlarga kartochka + mijozga tasdiq — DARHOL, alohida so'rovda.
+        if (data.deliver) { try { window._a1OrderDeliver(data.deliver); } catch (e) {} }
         try { window._orderAttemptClear(); } catch (e) {}
 
         // Savat va qo'llangan cashback tozalanadi
@@ -13142,7 +13301,9 @@ window.confirmOrder = async (paymentMethod) => {
                 try { tgProxySend({ chat_id: aid, text: _adminText, parse_mode: "HTML" }); } catch (e) {}
             });
             if (currentUser) {
-                tgProxySend({ chat_id: currentUser, text: "\u2705 Buyurtmangiz qabul qilindi!\n\uD83C\uDD94 Kod: #" + (order.code || '') +
+                // Matn Worker'dagi `created` bilan bir xil ma'noda: do'kon hali QABUL
+                // QILMAGAN (aks holda keyingi "qabul qilindi" xabari dublikatdek tuyuladi).
+                tgProxySend({ chat_id: currentUser, text: "\uD83E\uDDFE Buyurtmangiz do'konga yuborildi!\n\uD83C\uDD94 Kod: #" + (order.code || '') +
                     (_cb > 0 ? "\n\uD83C\uDF81 Cashback: \u2212" + _cb.toLocaleString() + " so'm\n\uD83D\uDCB5 To'lanadi: " + _pay.toLocaleString() + " so'm" : '') +
                     "\n\uD83D\uDCDE Bog'lanish: " + profPhone });
             }
@@ -13311,13 +13472,14 @@ window.cancelMyOrder = async function (orderId) {
     if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerText = '⏳ Bekor qilinmoqda...'; }
     var r;
     try {
-        r = await window._workerPost('/order-status', { uid: String(currentUser), orderId: String(o.id), status: 'bekor_qilingan' });
+        r = await window._workerPost('/order-status', { uid: String(currentUser), orderId: String(o.id), status: 'bekor_qilingan', notifyMode: 'split' });
     } catch (e) {
         showToast("Internetni tekshiring", "warning");
         try { window._renderOrderCancel(o); } catch (e2) {}
         return;
     }
     if (r && r.resp && r.resp.ok && r.data && r.data.ok) {
+        if (r.data.deliver) { try { window._a1OrderDeliver(r.data.deliver); } catch (e) {} }
         o.status = 'bekor_qilingan';
         showToast("Buyurtma bekor qilindi");
         try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
@@ -13533,9 +13695,13 @@ window._aoHideDetail = function () {
     m.style.display = 'none';
 };
 
+// ⚡ Holat tugmasi: endi sahifadan CHIQMAYMIZ. Soatcha darhol chiqadi, holat
+//    o'zgargach sahifa joyida yangilanadi (yangi holat + keyingi tugma).
+//    Ilgari avval ro'yxatga qaytilar, 280 ms kutilar, keyin butun ro'yxat
+//    serverdan qayta yuklanardi — bosilgandan keyin bir necha soniya "hech
+//    narsa bo'lmayotgandek" tuyulardi.
 window._aoDetailStatus = function (uid, id, status) {
-    try { window.history.back(); } catch (e) {}
-    setTimeout(function () { try { changeOrderStatus(uid, id, status); } catch (e) {} }, 280);
+    try { changeOrderStatus(uid, id, status); } catch (e) {}
 };
 
 window._aoLines = function (o) {
@@ -13821,9 +13987,9 @@ function _pickActionBtns(o) {
 }
 
 window._pickStatus = function (uid, id, status) {
-    // Pick oynasini yopamiz (orders ro'yxatiga qaytadi), keyin holatni o'zgartiramiz.
-    try { window.history.back(); } catch (e) {}
-    setTimeout(function () { try { changeOrderStatus(uid, id, status); } catch (e) {} }, 280);
+    // Yig'ish oynasida QOLAMIZ: soatcha chiqadi, holat va tugmalar joyida
+    // yangilanadi (_aoAfterStatus). Ilgari oyna yopilib, ro'yxat qayta yuklanardi.
+    try { changeOrderStatus(uid, id, status); } catch (e) {}
 };
 
 // ===================================================
@@ -27596,6 +27762,9 @@ html.lite body #ordl.show .ordl-box {
     var HOLD_OK  = 1150;   // pticha ekranda turadigan vaqt
     var el = null;
     var t0 = 0;
+    // show(text, {minSpin, hold, sub}) — joriy seans sozlamasi. Admin holat
+    // o'zgartirishida qisqaroq (u kuniga o'nlab marta bosadi), buyurtmada — to'liq.
+    var curMin = MIN_SPIN, curHold = HOLD_OK;
 
     function reduced() {
         try {
@@ -27622,6 +27791,7 @@ html.lite body #ordl.show .ordl-box {
                     '</span>' +
                 '</div>' +
                 '<div class="ordl-tx">Buyurtma yuborilmoqda...</div>' +
+                '<div class="ordl-sub" hidden></div>' +
             '</div>';
         document.body.appendChild(el);
         return el;
@@ -27633,6 +27803,14 @@ html.lite body #ordl.show .ordl-box {
         if (t) t.textContent = s;
     }
 
+    function setSub(s) {
+        if (!el) return;
+        var t = el.querySelector('.ordl-sub');
+        if (!t) return;
+        t.textContent = s || '';
+        t.hidden = !s;
+    }
+
     /** Belgi shaklini almashtiramiz: pticha (ok) yoki krestcha (xato). */
     function setMark(ok) {
         if (!el) return;
@@ -27641,11 +27819,15 @@ html.lite body #ordl.show .ordl-box {
         p.setAttribute('d', ok ? 'M34 47l9 9 17-18' : 'M37 37l18 18M55 37l-18 18');
     }
 
-    function show(text) {
+    function show(text, opts) {
         build();
+        opts = opts || {};
+        curMin = opts.minSpin != null ? Math.max(0, +opts.minSpin || 0) : MIN_SPIN;
+        curHold = opts.hold != null ? Math.max(250, +opts.hold || 0) : HOLD_OK;
         el.classList.remove('is-ok', 'is-err');
         el.classList.add('show', 'is-load');
         setText(text || "Buyurtma yuborilmoqda...");
+        setSub(opts.sub || '');
         t0 = Date.now();
         // Eski (qotib qoladigan) overlay bilan ustma-ust chiqmasin
         try {
@@ -27672,8 +27854,8 @@ html.lite body #ordl.show .ordl-box {
     function finish(ok, text) {
         if (!el || !el.classList.contains('show')) return Promise.resolve();
         var rm = reduced();
-        var minSpin = rm ? 250 : MIN_SPIN;
-        var hold = rm ? 450 : HOLD_OK;
+        var minSpin = rm ? Math.min(250, curMin) : curMin;
+        var hold = rm ? Math.min(450, curHold) : curHold;
         var wait = Math.max(0, minSpin - (Date.now() - t0));
 
         return new Promise(function (resolve) {

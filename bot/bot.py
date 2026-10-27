@@ -4072,8 +4072,10 @@ async def order_button_callback(call: types.CallbackQuery):
 
     status = order_ops.STATUS_FROM_CODE[code]
     ok, http_status, data = await order_ops.worker_order_status(
-        WORKER_URL, API_TOKEN, call.from_user.id, idx["uid"], idx["orderId"], status)
+        WORKER_URL, API_TOKEN, call.from_user.id, idx["uid"], idx["orderId"], status,
+        notify_mode="split")
     if ok:
+        _kick_order_delivery(call.from_user.id, data)
         label = order_ops.STATUS_LABELS.get(status, status)
         note = " (allaqachon shunday edi)" if data.get("duplicate") else ""
         try:
@@ -4106,10 +4108,45 @@ async def order_button_callback(call: types.CallbackQuery):
 async def agent_order_status(uid, order_id, status, expected_from, actor):
     """AI agenti uchun: holatni Worker orqali o'zgartirish. `(ok, xato_matni)`."""
     ok, http_status, data = await order_ops.worker_order_status(
-        WORKER_URL, API_TOKEN, actor or ADMIN_ID, uid, order_id, status, expected_from)
+        WORKER_URL, API_TOKEN, actor or ADMIN_ID, uid, order_id, status, expected_from,
+        notify_mode="split")
     if ok:
+        _kick_order_delivery(actor or ADMIN_ID, data)
         return True, ""
     return False, order_ops.status_error_text(http_status, data)
+
+
+_order_bg_tasks = set()
+
+
+def _kick_order_delivery(actor, data):
+    """Worker `deliver` kalitini qaytarsa — xabarni ALOHIDA so'rovda turtadi.
+
+    Nega alohida: Cloudflare bepul rejasida bitta so'rovga 50 ta tashqi
+    subrequest; holat o'zgarishi (ayniqsa ko'p tovarli bekor qilish) shu
+    limitning katta qismini oladi va xabarlarga joy qolmasdi. Turtish FONDA —
+    tugma javobini kechiktirmaydi. Bu yerda yiqilsa ham bot watchdog
+    (order_outbox_watchdog) xabarni baribir yuboradi — yo'qolmaydi.
+    """
+    key = (data or {}).get("deliver") if isinstance(data, dict) else None
+    if not key:
+        return
+
+    async def _run():
+        try:
+            ok, code, resp = await order_ops.worker_order_notify(WORKER_URL, API_TOKEN, actor, key)
+            if not ok:
+                logging.warning("Bildirishnoma turtilmadi (%s): %s %s", key, code, resp)
+        except Exception as e:
+            logging.warning("Bildirishnoma turtishda xato (%s): %s", key, e)
+
+    try:
+        task = asyncio.get_running_loop().create_task(_run())
+    except RuntimeError:
+        return
+    # Kuchli havola: aks holda fon vazifasi GC tomonidan yig'ib olinishi mumkin.
+    _order_bg_tasks.add(task)
+    task.add_done_callback(_order_bg_tasks.discard)
 
 
 ORDER_WATCHDOG_INTERVAL = int(os.getenv("ORDER_WATCHDOG_INTERVAL", "60"))
