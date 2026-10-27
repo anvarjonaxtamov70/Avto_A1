@@ -34578,7 +34578,7 @@ html[data-theme="light"] .pfx-grp { box-shadow: 0 1px 2px rgba(0,0,0,.04); }
 .pfx-pill[hidden] { display: none; }
 .pfx-pill.is-plain { color: var(--px-tx2); background: var(--px-fill); box-shadow: none; }
 .pfx-pill svg { width: 12px; height: 12px; }
-#profile-section .pfx-uid { margin: 0; font-size: 13px; color: var(--px-tx2) !important; }
+#profile-section .pfx-uid { margin: 0; font-size: 13px; color: var(--px-tx2) !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pfx-chev { flex: 0 0 auto; margin-left: 4px; color: var(--px-tx3); font-size: 22px; font-weight: 300; line-height: 1; }
 
 /* — Qator — */
@@ -42241,6 +42241,13 @@ html.a1-app body #login-screen .login-trust { justify-content: center; }
 .a1-app-brand b svg { width: 20px; height: 20px; color: #1D9BF0; }
 .a1-app-brand span { font: 400 14px/1.3 var(--a3-font, sans-serif); color: var(--a3-tx2, #999); }
 html[data-theme="light"].a1-app body #login-screen { background: radial-gradient(120% 60% at 50% 0%, rgba(201,168,76,.18), transparent 60%), var(--a3-page, #f4eee2) !important; }
+/* Kichik ekran (360×640) yoki klaviatura ochiq: oyna aylantiriladi, tepasi/pastki
+   tugma kesilib qolmaydi. «center» o'rniga auto chekka — sig'sa o'rtada, sig'masa tepadan. */
+html body #login-screen.login-overlay { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; align-items: flex-start; }
+html body #login-screen.login-overlay > .login-card { margin-top: auto; margin-bottom: auto; flex-shrink: 0; }
+html.a1-app body #login-screen.login-overlay { justify-content: flex-start; align-items: center; }
+html.a1-app body #login-screen.login-overlay > .a1-app-brand { margin-top: auto; flex-shrink: 0; }
+html.a1-app body #login-screen.login-overlay > .login-card { margin: 0 auto auto !important; }
 
 </style>
 <script id="a1-ios26-product-js">
@@ -43398,7 +43405,7 @@ html.lite #a1acct .aa-dim, html.lite #a1acct .aa-sheet { transition-duration: .0
         hap('light');
         if (act === 'link') { if (typeof W.a1LinkTelegram === 'function') W.a1LinkTelegram(); return; }
         if (act === 'verify') { startVerify(); return; }
-        if (act === 'privacy') { openDoc(SITE + 'privacy.html', 'Maxfiylik siyosati'); return; }
+        if (act === 'privacy') { W.a1OpenPrivacy(); return; }
         if (act === 'delete') { deleteFlow(); return; }
     });
 
@@ -43431,7 +43438,11 @@ html.lite #a1acct .aa-dim, html.lite #a1acct .aa-sheet { transition-duration: .0
         return true;
     }
     W.a1CloseDoc = closeDoc;
-    W.a1OpenPrivacy = function () { openDoc(SITE + 'privacy.html', 'Maxfiylik siyosati'); };
+    // Sahifa ilova mavzusida (qorong'i/yorug') ochiladi
+    W.a1OpenPrivacy = function () {
+        var th = D.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        openDoc(SITE + 'privacy.html?theme=' + th, 'Maxfiylik siyosati');
+    };
 
     /* ── 🗑 Hisobni o'chirish (Google Play talabi) — ikki bosqichli tasdiq ── */
     function afterDeleted() {
