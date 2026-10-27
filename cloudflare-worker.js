@@ -20,6 +20,15 @@
 //  7) "/order-deliver" — yangi ilova buyurtma/holat javobini olgach xabarni
 //                   ALOHIDA so'rovda turtadi (notifyMode:"split"): bepul
 //                   rejadagi 50 subrequest limiti xabarlarga yetishi uchun.
+//  8) 🪪 YAGONA HISOB (fayl oxirida batafsil):
+//       "/login-phone"  — ilova/sayt: raqam -> Telegram'ga 3 ta raqamli tugma;
+//       "/tg-login-poll" — tasdiqlansa Telegram ID uchun custom token;
+//       "/phone-verify" — Mini App requestContact (Telegram imzosi) -> raqam indeksi;
+//       "/merge-legacy" — eski (anonim/parolli) hisobni Telegram hisobiga ko'chirish;
+//       "/session"      — birlashtirilgan eski sessiya -> Telegram hisobi tokeni.
+//  9) "/story-reply" — mijozning storis javobi (server yozadi, adminlarga
+//                   «✍️ Javob yozish» tugmali kartochka); "/story-answer" —
+//                   admin javobi mijozga (ilovada + Telegram'da).
 //  4) "/stock-commit" — Ombor zaxirasini SERVERDA kamaytiradi: mahsulot
 //                   `id` bo'yicha topiladi (indeks bo'yicha emas), `stock >= qty`
 //                   tekshiriladi va atomik `increment` bilan yoziladi.
@@ -46,7 +55,8 @@ const cors = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   // X-Init-Data — /upload stream rejimida auth shu header orqali keladi
   // (body'ga tegmasdan tekshirish uchun). Preflight ruxsati SHART.
-  "Access-Control-Allow-Headers": "Content-Type, Range, X-Init-Data",
+  // Authorization — ilova/sayt (Telegram'siz) admini: Firebase idToken.
+  "Access-Control-Allow-Headers": "Content-Type, Range, X-Init-Data, Authorization",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -405,14 +415,26 @@ function buildUploadResult(tg, isVideo, origin, size) {
  *    CPU deyarli nolga tushadi, yuklash esa tezlashadi: baytlar mijozdan
  *    kelishi bilan darhol Telegram'ga ketadi (avval to'liq kutilardi).
  * =========================================================================== */
-async function handleUploadStream(request, env, initData) {
+async function handleUploadStream(request, env, initData, idToken) {
   try {
     if (!env.BOT_TOKEN) return json({ ok: false, error: "BOT_TOKEN sozlanmagan" }, 500);
 
-    const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
-    if (!verified.ok) return json({ ok: false, error: verified.error }, 401);
-
-    const uid = requireSafeUid(verified.user.id, 401);
+    // Telegram ichida — initData; ilova/saytdagi admin — Firebase idToken
+    // (Telegram orqali kirgan admin hisobining uid'i = Telegram ID).
+    let uid;
+    if (initData) {
+      const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
+      if (!verified.ok) return json({ ok: false, error: verified.error }, 401);
+      uid = requireSafeUid(verified.user.id, 401);
+    } else {
+      let claims;
+      try {
+        claims = await verifyFirebaseIdToken(idToken, env);
+      } catch (err) {
+        return json({ ok: false, error: String((err && err.message) || "token noto'g'ri") }, Number(err && err.status) || 401);
+      }
+      uid = requireSafeUid(claims.sub, 401);
+    }
     if (getAdminIds(env).indexOf(uid) === -1) {
       return json({ ok: false, error: "ruxsat yoq" }, 403);
     }
@@ -524,7 +546,11 @@ export default {
       // 🚀 ASOSIY YO'L: auth header'da bo'lsa — body'ni Telegram'ga stream qilamiz
       //    (CPU cheklovi muammosi shu bilan hal bo'ladi, yuqoridagi izohga qara).
       const hdrInit = request.headers.get("X-Init-Data");
-      if (hdrInit) return handleUploadStream(request, env, hdrInit);
+      if (hdrInit) return handleUploadStream(request, env, hdrInit, null);
+      // 📱 Ilova/sayt admini (Telegram'siz): "Authorization: Bearer <idToken>"
+      const authz = String(request.headers.get("Authorization") || "");
+      const bearer = authz.match(/^Bearer\s+(\S{20,4096})$/);
+      if (bearer) return handleUploadStream(request, env, "", bearer[1]);
 
       // 🛟 ZAXIRA YO'L (legacy): eski mijoz initData'ni body ichida yuboradi.
       //    Bu yo'l 20 MB ni xotirada parse qiladi va CPU cheklovига urilishi
@@ -598,6 +624,13 @@ export default {
     if (path === "/order-deliver") return handleOrderDeliver(request, env, execCtx);
     if (path === "/customer-register") return handleCustomerRegister(request, env);
     if (path === "/tg-login-poll") return handleTgLoginPoll(request, env);
+    // 🪪 Yagona hisob (Telegram ID = asosiy hisob) va storis javoblari
+    if (path === "/session") return handleSession(request, env);
+    if (path === "/login-phone") return handleLoginPhone(request, env);
+    if (path === "/phone-verify") return handlePhoneVerify(request, env);
+    if (path === "/merge-legacy") return handleMergeLegacy(request, env);
+    if (path === "/story-reply") return handleStoryReply(request, env, execCtx);
+    if (path === "/story-answer") return handleStoryAnswer(request, env);
     if (path === "/referral") return handleReferralSecure(request, env);
     if (path === "/referral-qualify") return handleReferralQualifySecure(request, env);
     if (path === "/stock-commit") return handleDeprecatedStockCommit(request, env);
@@ -749,6 +782,10 @@ async function authenticateBody(body, env) {
     throw httpError(401, "initData yoki idToken kerak");
   }
   await assertNotBlocked(identity.uid, env);
+  // Eski (Telegram'siz) hisob Telegram hisobiga birlashtirilgan bo'lsa — uning
+  // nomidan yangi buyurtma/yozuv bo'lmasin (yetim qoladi). Ilova 409 + redirect
+  // ni ko'rib /session orqali Telegram hisobiga o'tadi.
+  if (identity.source === "firebase" && !isTgUid(identity.uid)) await assertNotRedirected(identity.uid, env);
   return identity;
 }
 
@@ -3785,7 +3822,22 @@ async function handleTgLoginPoll(request, env) {
     const path = "tg_login/" + nonce;
     const got = await rtdbGetEtag(ctx.dbUrl, path, token);
     const rec = got && got.value;
-    if (!rec || typeof rec !== "object") return json({ ok: true, pending: true });
+    if (!rec || typeof rec !== "object") {
+      // 🔢 Raqam bo'yicha kirish (/login-phone): mijoz Telegram'da «Men emasman»
+      //    ni bosgan yoki noto'g'ri raqamni tanlagan bo'lsa — ilova kutib
+      //    qolmasin, darhol sababini ko'rsatsin.
+      if (body.match === true) {
+        const req = await rtdbGet(ctx.dbUrl, "tg_login_req/" + nonce, token);
+        if (req && typeof req === "object") {
+          const st = String(req.state || "");
+          if (st === "no" || st === "bad" || st === "unreachable") {
+            return json({ ok: false, denied: true, reason: st }, 403);
+          }
+          if (!(Number(req.at) > Date.now() - LOGIN_REQ_TTL_MS)) return json({ ok: false, error: "eskirgan" }, 410);
+        }
+      }
+      return json({ ok: true, pending: true });
+    }
     // Bir martalik: avval o'chiramiz (ETag bilan — ikki so'rov bir yozuvni ishlata olmaydi)
     const del = await rtdbPut(ctx.dbUrl, path, null, token, got.etag);
     if (!del.ok) return json({ ok: true, pending: true });   // boshqa so'rov allaqachon ishlatdi
@@ -3794,8 +3846,839 @@ async function handleTgLoginPoll(request, env) {
     if (!/^\d{3,20}$/.test(uid)) return json({ ok: false, error: "uid noto'g'ri" }, 400);
     await assertNotBlocked(uid, env);
     const customToken = await createFirebaseCustomToken(uid, env);
-    return json({ ok: true, token: customToken, uid, name: String(rec.name || "").slice(0, 80) });
+    if (body.match === true) {
+      try { await rtdbPut(ctx.dbUrl, "tg_login_req/" + nonce, null, token); } catch (_) {}
+    }
+    return json({
+      ok: true, token: customToken, uid, name: String(rec.name || "").slice(0, 80),
+      // Bot raqami tasdiqlanganini biladi — ilova keyingi qadamni shunga qarab ko'rsatadi.
+      phoneVerified: rec.phoneVerified === true,
+    });
   } catch (e) {
     return errorResponse(e);
+  }
+}
+
+// =====================================================================
+//  🪪 YAGONA HISOB — Telegram ID = mijozning ASOSIY hisobi
+// ---------------------------------------------------------------------
+//  Muammo: mijoz Telegram'da (uid = Telegram ID), ilova/saytda esa anonim
+//  yoki telefon+parol (uid = Firebase tasodifiy ID) bilan kirardi —
+//  buyurtma, keshbek, savat va storis javoblari 2-3 hisobga bo'linardi,
+//  admin ilovadan yozgan mijozga javob bera olmasdi.
+//
+//  Yechim (barcha bot/Worker/qoidalar allaqachon Telegram ID'ga tayanadi):
+//    • /phone-verify — Mini App `requestContact` javobi Telegram imzosi
+//      bilan tekshiriladi: `phone_index/<raqam>` = Telegram ID. (Bot ham
+//      kontakt xabarini `user_id == from.id` bo'lsa xuddi shunday yozadi.)
+//    • /login-phone — ilova/sayt: raqam kiritiladi. Raqam Telegram'ga
+//      bog'langan bo'lsa bot o'sha Telegram hisobiga 3 ta 2 xonali tugma
+//      yuboradi; ekrandagi raqam tanlansa bot `tg_login/<nonce>` yozadi va
+//      /tg-login-poll AYNAN Telegram hisobi uchun custom token beradi.
+//      Noto'g'ri raqam yoki «Men emasman» — so'rov darhol yopiladi.
+//    • /merge-legacy — eski hisobni Telegram hisobiga KO'CHIRADI. Ikkala
+//      hisob ham isbotlanishi SHART: Telegram (initData yoki Telegram
+//      uid'li idToken) + eski hisobning o'z idToken'i. Yoki admin.
+//    • /session — eski sessiya birlashtirilgan bo'lsa Telegram hisobi
+//      tokenini beradi: mijozning boshqa qurilmalari o'zi ko'chadi.
+//  Xavfsizlik: indeks, so'rov, redirect va limit tugunlari faqat serverga
+//  ochiq (database.rules.json). Raqamning o'zi hisobga kirish huquqini
+//  BERMAYDI — har doim Telegram'dagi tasdiq kerak.
+// =====================================================================
+const LOGIN_REQ_TTL_MS = 10 * 60 * 1000;
+const PUSH_CHARS = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+const redirectCache = new Map();
+
+function isTgUid(value) {
+  return /^[1-9]\d{2,19}$/.test(String(value == null ? "" : value));
+}
+
+// "+998 90 123-45-67", "901234567", "998901234567" -> "998901234567".
+// Bot (account_ops.phone_digits) va ilova (digitsOf) bilan bir xil.
+function phoneDigits(value) {
+  const d = String(value == null ? "" : value).replace(/[^0-9]/g, "");
+  if (d.length === 9) return "998" + d;
+  if (d.length >= 10 && d.length <= 15) return d;
+  return "";
+}
+
+function maskPhone(digits) {
+  const d = String(digits || "");
+  if (d.length === 12 && d.indexOf("998") === 0) return "+998 " + d.slice(3, 5) + " *** ** " + d.slice(10);
+  if (d.length < 7) return "+" + d;
+  return "+" + d.slice(0, d.length - 6) + " *** " + d.slice(-2);
+}
+
+function plainObj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+// RTDB raqamli kalitli tugunni (masalan savat: mahsulot id -> soni) MASSIV
+// qilib qaytarishi mumkin. Ikkala shaklni ham {kalit: qiymat} ga keltiramiz.
+function asMap(value) {
+  if (Array.isArray(value)) {
+    const out = {};
+    value.forEach((v, i) => { if (v != null) out[String(i)] = v; });
+    return out;
+  }
+  return plainObj(value);
+}
+
+function numOf(value) {
+  return Math.max(0, Number(value) || 0);
+}
+
+// Firebase push() kalitiga o'xshash: vaqt bo'yicha tartiblanadi (8 belgi vaqt
+// + 12 belgi tasodif). Kalitni oldindan bilish bir nechta yo'lni BITTA atomik
+// PATCH bilan yozishga imkon beradi (subrequest tejaladi).
+function pushId() {
+  let now = Date.now();
+  let time = "";
+  for (let i = 0; i < 8; i++) {
+    time = PUSH_CHARS.charAt(now % 64) + time;
+    now = Math.floor(now / 64);
+  }
+  const rnd = new Uint8Array(12);
+  crypto.getRandomValues(rnd);
+  let tail = "";
+  for (let i = 0; i < 12; i++) tail += PUSH_CHARS.charAt(rnd[i] % 64);
+  return time + tail;
+}
+
+async function rtdbQuery(dbUrl, path, params, token) {
+  const qs = Object.keys(params).map((k) => encodeURIComponent(k) + "=" + encodeURIComponent(params[k])).join("&");
+  let response;
+  try {
+    response = await fetch(rtdbUrl(dbUrl, path) + "?" + qs, { headers: { Authorization: "Bearer " + token } });
+  } catch (_) {
+    throw httpError(503, "RTDB tarmoq xatosi", { retryable: true });
+  }
+  if (!response.ok) throw httpError(502, "RTDB so'rov xatosi", { dbStatus: response.status });
+  return await response.json();
+}
+
+function keyRange(prefix) {
+  return { orderBy: '"$key"', startAt: JSON.stringify(prefix), endAt: JSON.stringify(prefix + "\uf8ff") };
+}
+
+async function clientIpHash(request) {
+  const ip = String(request.headers.get("CF-Connecting-IP") || "").trim();
+  return (await sha256Hex("login-ip|" + (ip || "unknown"))).slice(0, 32);
+}
+
+// Kirish urinishlari chegarasi (barcha isolate'lar uchun umumiy, ETag-CAS).
+async function consumeLoginRate(ctx, token, key, limit, windowMs) {
+  const now = Date.now();
+  await rtdbEtagMutate(ctx.dbUrl, "login_rate/" + key, token, (current) => {
+    const same = current && Number(current.windowStart) > 0 && now - Number(current.windowStart) < windowMs;
+    const windowStart = same ? Number(current.windowStart) : now;
+    const count = same ? Math.max(0, Number(current.count) || 0) : 0;
+    if (count >= limit) {
+      throw httpError(429, "juda ko'p urinish — birozdan keyin qayta urinib ko'ring", {
+        retryAfter: Math.max(1, Math.ceil((windowStart + windowMs - now) / 1000)),
+      });
+    }
+    return { value: { windowStart, count: count + 1, updatedAt: now }, result: null };
+  });
+}
+
+// Mini App `requestContact` javobi — initData bilan bir xil HMAC
+// (secret = HMAC("WebAppData", BOT_TOKEN)). Ichida `contact` JSON bo'ladi.
+async function verifyTelegramContact(raw, botToken) {
+  if (!botToken) return { ok: false, error: "BOT_TOKEN sozlanmagan" };
+  if (typeof raw !== "string" || !raw || raw.length > 4096) return { ok: false, error: "contact yoq" };
+  const params = new URLSearchParams(raw);
+  const hash = String(params.get("hash") || "");
+  if (!/^[0-9a-f]{64}$/.test(hash)) return { ok: false, error: "hash yoq" };
+  params.delete("hash");
+  const NL = String.fromCharCode(10);
+  const pairs = [];
+  for (const [k, v] of params) pairs.push(k + "=" + v);
+  pairs.sort();
+  const enc = new TextEncoder();
+  const secretKey = await hmacSha256(enc.encode("WebAppData"), enc.encode(botToken));
+  const computed = toHex(await hmacSha256(secretKey, enc.encode(pairs.join(NL))));
+  if (!constantTimeEqual(computed, hash)) return { ok: false, error: "imzo mos kelmadi" };
+  const authDate = parseInt(params.get("auth_date") || "0", 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (!authDate || authDate > now + CLOCK_SKEW_SECONDS || now - authDate > TELEGRAM_INIT_MAX_AGE) {
+    return { ok: false, error: "contact eskirgan" };
+  }
+  let contact = null;
+  try { contact = JSON.parse(params.get("contact") || "null"); } catch (_) { contact = null; }
+  if (!contact || typeof contact !== "object" || !contact.phone_number || contact.user_id == null) {
+    return { ok: false, error: "contact noto'g'ri" };
+  }
+  return { ok: true, contact };
+}
+
+async function readRedirect(uid, env) {
+  const key = String(uid || "");
+  const now = Date.now();
+  const hit = redirectCache.get(key);
+  if (hit && hit.exp > now) return hit.v;
+  let to = "";
+  try {
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const rec = await rtdbGet(ctx.dbUrl, "uid_redirect/" + key, token);
+    to = rec && typeof rec === "object" && isTgUid(rec.to) ? String(rec.to) : "";
+  } catch (_) {
+    return "";   // fail-open: baza vaqtincha javob bermasa hammani to'xtatmaymiz
+  }
+  if (redirectCache.size > 5000) redirectCache.clear();
+  redirectCache.set(key, { v: to, exp: now + 30 * 1000 });
+  return to;
+}
+
+async function assertNotRedirected(uid, env) {
+  if (isTgUid(uid)) return;
+  const to = await readRedirect(uid, env);
+  if (to) throw httpError(409, "hisob Telegram hisobiga birlashtirilgan — ilovani qayta oching", { redirect: true });
+}
+
+// Tasdiqlangan raqamni Telegram hisobiga bog'laydi (bitta atomik PATCH).
+async function linkVerifiedPhone(ctx, token, uid, digits, src) {
+  const [profile, pw] = await Promise.all([
+    rtdbGet(ctx.dbUrl, "users/" + uid + "/profile", token),
+    rtdbGet(ctx.dbUrl, "phone_pw/" + digits, token),
+  ]);
+  const now = Date.now();
+  const updates = {};
+  updates["phone_index/" + digits] = { uid, at: now, src };
+  updates["users/" + uid + "/verify"] = { phone: "+" + digits, at: now, src };
+  // Profil raqami bo'sh bo'lsa to'ldiramiz. Profil umuman bo'lmasa tegmaymiz
+  // (aks holda yangi mijoz «eski» deb hisoblanib, admin xabari jim qolardi).
+  if (profile && typeof profile === "object" && !profile.phone) {
+    updates["users/" + uid + "/profile/phone"] = "+" + digits;
+  }
+  await rtdbPatch(ctx.dbUrl, "", updates, token);
+  let legacy = null;
+  const pwUid = pw && typeof pw === "object" && typeof pw.uid === "string" ? pw.uid : "";
+  if (pwUid && !isTgUid(pwUid) && pwUid !== uid) {
+    const redirect = await rtdbGet(ctx.dbUrl, "uid_redirect/" + pwUid, token);
+    if (!redirect) legacy = { method: "password", phone: "+" + digits };
+  }
+  return { legacy };
+}
+
+// ---------- /session : eski sessiya -> (birlashtirilgan bo'lsa) Telegram hisobi ----------
+async function handleSession(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    if (typeof body.idToken !== "string" || !body.idToken) throw httpError(401, "idToken kerak");
+    const claims = await verifyFirebaseIdToken(body.idToken, env);
+    const uid = requireSafeUid(claims.sub, 401);
+    if (isTgUid(uid)) {
+      await assertNotBlocked(uid, env);
+      return json({ ok: true, uid, kind: "telegram" });
+    }
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const email = String(claims.email || "").toLowerCase();
+    const m = email.match(/^(\d{9,15})@tel\.avtoa1\.app$/);
+    const digits = m ? phoneDigits(m[1]) : "";
+    const [redirect, pw] = await Promise.all([
+      rtdbGet(ctx.dbUrl, "uid_redirect/" + uid, token),
+      digits ? rtdbGet(ctx.dbUrl, "phone_pw/" + digits, token) : Promise.resolve(null),
+    ]);
+    const to = redirect && typeof redirect === "object" && isTgUid(redirect.to) ? String(redirect.to) : "";
+    // Parolli hisob indeksi: Telegram'dagi mijoz raqamini tasdiqlaganda
+    // «ilovada ham hisobingiz bor — birlashtiraymi?» deyish uchun.
+    if (digits && !to && !(pw && pw.uid === uid)) {
+      try { await rtdbPut(ctx.dbUrl, "phone_pw/" + digits, { uid, at: Date.now() }, token); } catch (_) {}
+    }
+    if (to) {
+      await assertNotBlocked(to, env);
+      const customToken = await createFirebaseCustomToken(to, env);
+      return json({ ok: true, uid, kind: "legacy", redirect: { uid: to, token: customToken } });
+    }
+    return json({ ok: true, uid, kind: "legacy", phone: digits ? "+" + digits : "" });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
+// ---------- /login-phone : raqam -> Telegram'da raqamni tanlash ----------
+async function handleLoginPhone(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const nonce = String(body.nonce || "");
+    if (!/^[0-9a-f]{32}$/.test(nonce)) throw httpError(400, "nonce noto'g'ri");
+    const digits = phoneDigits(body.phone);
+    if (!digits) throw httpError(400, "telefon formati noto'g'ri");
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    await consumeLoginRate(ctx, token, "ip_" + (await clientIpHash(request)), 20, 60 * 60 * 1000);
+    const [index, pw] = await Promise.all([
+      rtdbGet(ctx.dbUrl, "phone_index/" + digits, token),
+      rtdbGet(ctx.dbUrl, "phone_pw/" + digits, token),
+    ]);
+    const target = index && typeof index === "object" && isTgUid(index.uid) ? String(index.uid) : "";
+    const hasPw = !!(pw && typeof pw === "object" && pw.uid);
+    if (!target) {
+      // Raqam Telegram'ga bog'lanmagan: parolli hisob bo'lsa — parol bilan,
+      // aks holda «Telegram orqali kirish» (bot keyin raqamni so'raydi).
+      return json({ ok: true, method: hasPw ? "password" : "telegram", phone: "+" + digits });
+    }
+    // Bitta raqamga 15 daqiqada 5 ta so'rov — begona odam mijozni
+    // Telegram xabarlari bilan ko'mib tashlay olmaydi.
+    await consumeLoginRate(ctx, token, "ph_" + digits, 5, 15 * 60 * 1000);
+    await assertNotBlocked(target, env);
+
+    const codes = [];
+    const rnd = new Uint8Array(24);
+    crypto.getRandomValues(rnd);
+    for (let i = 0; i < rnd.length && codes.length < 3; i++) {
+      const c = String(10 + (rnd[i] % 90));
+      if (codes.indexOf(c) === -1) codes.push(c);
+    }
+    for (let n = 10; codes.length < 3; n++) if (codes.indexOf(String(n)) === -1) codes.push(String(n));
+    const code = codes[rnd[23] % 3];
+    const now = Date.now();
+    await rtdbCreateIfNull(ctx.dbUrl, "tg_login_req/" + nonce,
+      { uid: target, code, codes, state: "sent", at: now, phone: digits },
+      token, () => false);
+
+    const NL = String.fromCharCode(10);
+    const text = "🔐 <b>Avto A1 ga kirish</b>" + NL + NL +
+      "<b>" + escapeTelegramHtml(maskPhone(digits)) + "</b> raqami bilan ilova yoki saytga kirilmoqda." + NL + NL +
+      "Bu siz bo'lsangiz — <b>ekrandagi raqamni</b> tanlang 👇" + NL +
+      "Siz bo'lmasangiz — «❌ Men emasman» ni bosing va hech kimga raqam aytmang.";
+    const keyboard = {
+      inline_keyboard: [
+        codes.map((c) => ({ text: c, callback_data: "tgl:p:" + nonce + ":" + c })),
+        [{ text: "❌ Men emasman", callback_data: "tgl:no:" + nonce }],
+      ],
+    };
+    const sent = await telegramCall(env, "sendMessage", {
+      chat_id: target, text, parse_mode: "HTML", reply_markup: keyboard, disable_web_page_preview: true,
+    });
+    if (!sent.ok) {
+      try { await rtdbPatch(ctx.dbUrl, "tg_login_req/" + nonce, { state: "unreachable" }, token); } catch (_) {}
+      // 403 — mijoz botni bloklagan/o'chirgan: Telegram havolasi orqali kirsin.
+      if (sent.permanent) return json({ ok: true, method: "telegram", reason: "unreachable", phone: "+" + digits });
+      throw httpError(503, "Telegram'ga yuborilmadi — qayta urinib ko'ring", { retryable: true });
+    }
+    return json({ ok: true, method: "match", code, ttl: LOGIN_REQ_TTL_MS, phone: maskPhone(digits) });
+  } catch (e) {
+    const response = errorResponse(e);
+    if (response.status === 429) response.headers.set("Retry-After", String(e.extra && e.extra.retryAfter || 900));
+    return response;
+  }
+}
+
+// ---------- /phone-verify : Mini App requestContact -> raqam indeksi ----------
+async function handlePhoneVerify(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const identity = await authenticateBody(body, env);
+    if (!isTgUid(identity.uid)) throw httpError(403, "faqat Telegram hisobi");
+    const verified = await verifyTelegramContact(body.contact, env.BOT_TOKEN);
+    if (!verified.ok) throw httpError(401, verified.error);
+    if (String(verified.contact.user_id) !== identity.uid) throw httpError(403, "bu sizning raqamingiz emas");
+    const digits = phoneDigits(verified.contact.phone_number);
+    if (!digits) throw httpError(400, "telefon formati noto'g'ri");
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const result = await linkVerifiedPhone(ctx, token, identity.uid, digits, "webapp");
+    return json({ ok: true, phone: "+" + digits, legacy: result.legacy });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
+// ---------- /merge-legacy : eski hisob -> Telegram hisobi ----------
+async function handleMergeLegacy(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    let fromUid;
+    let toUid;
+    let by;
+    if (body.from != null || body.to != null) {
+      // 👔 Admin rejimi: admin mijoz bilan gaplashib, ikkala hisobni ko'rsatadi.
+      const from = requireSafeUid(cleanText(body.from, 128, true), 400);
+      const to = requireSafeUid(cleanText(body.to, 128, true), 400);
+      const identity = body.botAuth != null
+        ? await verifyBotAuth(body, env, "merge-legacy", [from, to])
+        : await authenticateBody(body, env);
+      if (!getAdminIds(env).includes(identity.uid)) throw httpError(403, "faqat admin");
+      fromUid = from;
+      toUid = to;
+      by = { role: "admin", uid: identity.uid };
+    } else {
+      // 👤 Mijozning o'zi: Telegram hisobi + eski hisobning o'z tokeni.
+      const identity = await authenticateBody(body, env);
+      if (!isTgUid(identity.uid)) throw httpError(403, "avval Telegram hisobi bilan kiring");
+      if (typeof body.legacyIdToken !== "string" || !body.legacyIdToken) throw httpError(400, "legacyIdToken kerak");
+      const legacy = await verifyFirebaseIdToken(body.legacyIdToken, env);
+      fromUid = requireSafeUid(legacy.sub, 401);
+      toUid = identity.uid;
+      by = { role: "owner", uid: identity.uid };
+    }
+    if (isTgUid(fromUid)) throw httpError(400, "faqat eski (Telegram'siz) hisob birlashtiriladi");
+    if (!isTgUid(toUid)) throw httpError(400, "maqsad Telegram hisobi bo'lishi kerak");
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const result = await mergeAccounts(ctx, token, env, fromUid, toUid, by);
+    return json({ ok: true, ...result });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
+// Ikki qiymatni (massiv/obyekt) takrorsiz BITTA massivga birlashtiradi.
+function unionList(first, second, limit) {
+  const out = [];
+  const seen = new Set();
+  const add = (list) => {
+    const values = Array.isArray(list) ? list : Object.keys(plainObj(list)).map((k) => list[k]);
+    for (const v of values) {
+      if (v == null) continue;
+      const sig = JSON.stringify(v);
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      out.push(v);
+    }
+  };
+  add(first);
+  add(second);
+  return limit && out.length > limit ? out.slice(0, limit) : out;
+}
+
+function safeChildKey(value) {
+  const s = String(value == null ? "" : value);
+  return /^[A-Za-z0-9_-]{1,80}$/.test(s) ? s : "";
+}
+
+/* ---------------------------------------------------------------------
+   mergeAccounts(from -> to)
+   Bepul rejadagi 50 subrequest chegarasiga sig'ishi uchun:
+     ~11 ta parallel o'qish (indeksli so'rovlar bilan) + loyalty ETag (2)
+     + BITTA atomik ko'p yo'lli PATCH + proyeksiya (2) + Telegram (1).
+   Tartib (qayta urinishga chidamli):
+     1) keshbek: `to` hisobiga `merge_<from>` amali bilan qo'shiladi
+        (idempotent — qayta urinishda ikki marta qo'shilmaydi);
+     2) buyurtmalar (markaziy yozuv, holat mashinasi, admin kartochkalari,
+        tugma indeksi, yetkazilmagan xabarlar, chat), profil, savat ... va
+        `uid_redirect` BITTA PATCH bilan yoziladi; eski tugunlar o'chadi.
+   Holat o'zgarishi yoki buyurtma yozish ayni paytda bajarilayotgan bo'lsa
+   — 409 (qisman ko'chirish xavfi bo'lmasin).
+   --------------------------------------------------------------------- */
+async function mergeAccounts(ctx, token, env, from, to, by) {
+  const now = Date.now();
+  const [fromUser, toUser, ordersRaw, statesRaw, tgRaw, outboxRaw, chatsRaw, attemptsRaw, fromLoyalty, blocked, prior] =
+    await Promise.all([
+      rtdbGet(ctx.dbUrl, "users/" + from, token),
+      rtdbGet(ctx.dbUrl, "users/" + to, token),
+      rtdbQuery(ctx.dbUrl, "orders", { orderBy: '"uid"', equalTo: JSON.stringify(from) }, token),
+      rtdbQuery(ctx.dbUrl, "order_state", keyRange(from + "_"), token),
+      rtdbQuery(ctx.dbUrl, "order_tg", keyRange(from + "_"), token),
+      rtdbQuery(ctx.dbUrl, "notification_outbox", keyRange(from + "_"), token),
+      rtdbGet(ctx.dbUrl, "order_chats/" + from, token),
+      rtdbGet(ctx.dbUrl, "order_attempts/" + from, token),
+      rtdbGet(ctx.dbUrl, "loyalty_accounts/" + from, token),
+      rtdbGet(ctx.dbUrl, "blocked_users/" + from, token),
+      rtdbGet(ctx.dbUrl, "account_merges/" + from, token),
+    ]);
+  if (prior && typeof prior === "object") {
+    if (String(prior.to) === to) {
+      return { duplicate: true, uid: to, orders: numOf(prior.orders), cashback: numOf(prior.cashback) };
+    }
+    throw httpError(409, "bu hisob allaqachon boshqa hisobga birlashtirilgan");
+  }
+
+  // 1) Markaziy buyurtmalar (indeks so'rovi; natija kodda ham filtrlanadi)
+  const moved = [];
+  for (const entry of toEntries(ordersRaw)) {
+    const order = entry.val;
+    if (String(order.uid) !== from || entry.key !== from + "_" + String(order.id)) continue;
+    moved.push({ oldKey: entry.key, orderId: String(order.id), order, newKey: to + "_" + String(order.id) });
+  }
+  const byOldKey = new Map(moved.map((m) => [m.oldKey, m]));
+  const byOrderId = new Map(moved.map((m) => [m.orderId, m]));
+
+  // 2) Ayni paytda bajarilayotgan ish bo'lsa — keyinroq
+  const states = new Map();
+  for (const entry of toEntries(statesRaw)) {
+    if (!byOldKey.has(entry.key)) continue;
+    if (entry.val.pending) {
+      throw httpError(409, "buyurtma holati o'zgarmoqda — bir daqiqadan keyin qayta urinib ko'ring", { retryable: true });
+    }
+    states.set(entry.key, entry.val);
+  }
+  const outbox = [];
+  for (const entry of toEntries(outboxRaw)) {
+    const ev = entry.val;
+    if (entry.key.indexOf(from + "_") !== 0 || !byOldKey.has(String(ev.orderKey))) continue;
+    if (Number(ev.leaseUntil) > now) {
+      throw httpError(409, "buyurtma xabari yuborilmoqda — bir daqiqadan keyin qayta urinib ko'ring", { retryable: true });
+    }
+    if (ev.delivered !== true) outbox.push({ key: entry.key, ev });
+  }
+  for (const entry of toEntries(attemptsRaw)) {
+    const a = entry.val;
+    if (a.state === "processing" && Number(a.leaseUntil) > now - 10 * 60 * 1000) {
+      throw httpError(409, "buyurtma hali yozilmoqda — bir daqiqadan keyin qayta urinib ko'ring", { retryable: true });
+    }
+  }
+
+  // 3) Keshbek amallari kaliti buyurtma kalitidan hosil bo'ladi — yangi
+  //    kalitga o'tkazamiz, aks holda yetkazilgan buyurtmaga keyingi takroriy
+  //    «yetkazildi» keshbekni IKKINCHI marta berardi, bekor qilish esa
+  //    berilganini qaytarib ololmasdi.
+  const rekey = {};
+  const rekeyOrderKey = {};
+  for (const m of moved) {
+    const [hOld, hNew] = await Promise.all([sha256Hex(m.oldKey), sha256Hex(m.newKey)]);
+    rekey["earn_" + hOld.slice(0, 36)] = "earn_" + hNew.slice(0, 36);
+    rekey["cancel_" + hOld.slice(0, 36)] = "cancel_" + hNew.slice(0, 36);
+    rekey["spend_" + hOld.slice(0, 40)] = "spend_" + hNew.slice(0, 40);
+    rekeyOrderKey[m.oldKey] = m.newKey;
+  }
+  const fromPhase2 = plainObj(fromUser && fromUser.phase2);
+  const toPhase2 = plainObj(toUser && toUser.phase2);
+  const fromAcc = fromLoyalty && typeof fromLoyalty === "object" ? fromLoyalty : {
+    earned: numOf(fromPhase2.cashbackTotal),
+    spent: numOf(fromPhase2.cashbackSpent),
+    refunded: numOf(fromPhase2.cashbackRefunded),
+    reversed: 0,
+    ops: {},
+  };
+  const add = {
+    earned: numOf(fromAcc.earned), spent: numOf(fromAcc.spent),
+    refunded: numOf(fromAcc.refunded), reversed: numOf(fromAcc.reversed),
+  };
+  const mergeOp = "merge_" + from;
+  const loyalty = await rtdbEtagMutate(ctx.dbUrl, "loyalty_accounts/" + to, token, (current) => {
+    const account = current && typeof current === "object" ? cloneJson(current) : {
+      version: 0,
+      earned: numOf(toPhase2.cashbackTotal),
+      spent: numOf(toPhase2.cashbackSpent),
+      refunded: numOf(toPhase2.cashbackRefunded),
+      reversed: 0,
+      ops: {},
+      bootstrappedAt: now,
+    };
+    account.ops = account.ops && typeof account.ops === "object" ? account.ops : {};
+    if (account.ops[mergeOp]) return { abort: true, result: { account, duplicate: true } };
+    account.earned = numOf(account.earned) + add.earned;
+    account.spent = numOf(account.spent) + add.spent;
+    account.refunded = numOf(account.refunded) + add.refunded;
+    account.reversed = numOf(account.reversed) + add.reversed;
+    const fromOps = plainObj(fromAcc.ops);
+    for (const k of Object.keys(fromOps)) {
+      const nk = rekey[k] || k;
+      if (account.ops[nk]) continue;
+      const op = cloneJson(fromOps[k]);
+      if (op && typeof op === "object" && op.orderKey && rekeyOrderKey[op.orderKey]) op.orderKey = rekeyOrderKey[op.orderKey];
+      account.ops[nk] = op;
+    }
+    account.version = numOf(account.version) + 1;
+    account.ops[mergeOp] = { type: "merge", from, ...add, version: account.version, at: now };
+    account.updatedAt = now;
+    return { value: account, result: { account, duplicate: false } };
+  });
+  const account = (loyalty.result && loyalty.result.account) || loyalty.value;
+
+  // 4) Hammasi BITTA atomik PATCH
+  const u = {};
+  const toOrders = plainObj(toUser && toUser.orders);
+  const toOrdersArr = Array.isArray(toUser && toUser.orders) ? toUser.orders : null;
+  const usedKeys = new Set(toOrdersArr ? toOrdersArr.map((_, i) => String(i)) : Object.keys(toOrders));
+  const fromOrdersRaw = fromUser && fromUser.orders;
+  const fromProjections = Array.isArray(fromOrdersRaw)
+    ? fromOrdersRaw.map((v, i) => ({ key: String(i), val: v })).filter((e) => e.val && typeof e.val === "object")
+    : toEntries(fromOrdersRaw);
+  const projectionKeyOf = new Map();
+  let legacyOnly = 0;
+  for (const entry of fromProjections) {
+    const o = entry.val;
+    const id = String(o.id == null ? "" : o.id);
+    let key = entry.key === id && safeChildKey(id) && !usedKeys.has(id) ? id : "";
+    if (!key) {
+      const safe = safeChildKey(id);
+      key = safe && !usedKeys.has(safe) ? safe : "m" + entry.key + "_" + from.slice(0, 6);
+    }
+    usedKeys.add(key);
+    const next = cloneJson(o);
+    if (next.uid != null) next.uid = to;
+    next.mergedFrom = from;
+    u["users/" + to + "/orders/" + key] = next;
+    if (byOrderId.has(id)) projectionKeyOf.set(id, key);
+    else legacyOnly++;
+  }
+  for (const m of moved) {
+    const order = cloneJson(m.order);
+    order.uid = to;
+    order.mergedFrom = from;
+    order.mergedAt = now;
+    if (order.legacyUserKey != null && projectionKeyOf.has(m.orderId)) order.legacyUserKey = projectionKeyOf.get(m.orderId);
+    u["orders/" + m.newKey] = order;
+    u["orders/" + m.oldKey] = null;
+    if (states.has(m.oldKey)) {
+      u["order_state/" + m.newKey] = states.get(m.oldKey);
+      u["order_state/" + m.oldKey] = null;
+    }
+    const idx = { orderKey: m.newKey, uid: to, orderId: m.orderId };
+    const [oldShort, newShort] = await Promise.all([orderShortKey(m.oldKey), orderShortKey(m.newKey)]);
+    u["order_tg_index/" + oldShort] = idx;   // eski kartochka tugmalari ham ishlayversin
+    u["order_tg_index/" + newShort] = idx;
+  }
+  for (const entry of toEntries(tgRaw)) {
+    if (!byOldKey.has(entry.key)) continue;
+    u["order_tg/" + byOldKey.get(entry.key).newKey] = entry.val;
+    u["order_tg/" + entry.key] = null;
+  }
+  for (const item of outbox) {
+    const ev = cloneJson(item.ev);
+    ev.uid = to;
+    ev.orderKey = rekeyOrderKey[String(ev.orderKey)];
+    u["notification_outbox/" + to + item.key.slice(from.length)] = ev;
+    u["notification_outbox/" + item.key] = null;
+  }
+  const chats = asMap(chatsRaw);
+  for (const oid of Object.keys(chats)) u["order_chats/" + to + "/" + oid] = chats[oid];
+  if (Object.keys(chats).length) u["order_chats/" + from] = null;
+
+  // Profil: Telegram hisobidagi qiymat ustun; bo'sh joylar eski hisobdan.
+  const fp = plainObj(fromUser && fromUser.profile);
+  const tp = plainObj(toUser && toUser.profile);
+  for (const f of ["name", "firstName", "lastName", "phone", "address", "lang", "avatar", "region"]) {
+    const cur = tp[f];
+    const empty = cur == null || cur === "" || (f === "name" && cur === "Mijoz");
+    if (empty && fp[f] != null && fp[f] !== "") u["users/" + to + "/profile/" + f] = fp[f];
+  }
+  const fromVip = plainObj(fp.vip);
+  if (fromVip.manual && !plainObj(tp.vip).manual) u["users/" + to + "/profile/vip/manual"] = fromVip.manual;
+
+  const fu = plainObj(fromUser);
+  const tu = plainObj(toUser);
+  const fromCart = asMap(fu.cart);
+  const toCart = asMap(tu.cart);
+  for (const k of Object.keys(fromCart)) if (toCart[k] == null) u["users/" + to + "/cart/" + k] = fromCart[k];
+  if (fu.wishlist != null) u["users/" + to + "/wishlist"] = unionList(tu.wishlist, fu.wishlist, 500);
+  if (fu.addresses != null) u["users/" + to + "/addresses"] = unionList(tu.addresses, fu.addresses, 30);
+  if (typeof fu.my_car === "string" && fu.my_car && !tu.my_car) u["users/" + to + "/my_car"] = fu.my_car;
+  const fromSeen = asMap(fu.story_seen);
+  const toSeen = asMap(tu.story_seen);
+  for (const k of Object.keys(fromSeen)) {
+    if (typeof fromSeen[k] === "number" && !(Number(toSeen[k]) >= fromSeen[k])) u["users/" + to + "/story_seen/" + k] = fromSeen[k];
+  }
+  const fromProcessed = asMap(fromPhase2.processedOrders);
+  const toProcessed = asMap(toPhase2.processedOrders);
+  for (const k of Object.keys(fromProcessed)) {
+    if (toProcessed[k] == null) u["users/" + to + "/phase2/processedOrders/" + k] = fromProcessed[k];
+  }
+  if (fromPhase2.cashbackHistory != null) {
+    const hist = unionList(toPhase2.cashbackHistory, fromPhase2.cashbackHistory, 0)
+      .sort((a, b) => (Number(b && b.date) || 0) - (Number(a && a.date) || 0));
+    u["users/" + to + "/phase2/cashbackHistory"] = hist.slice(0, 80);
+  }
+  const ordersCount = moved.length + legacyOnly;
+  const cashback = loyaltyAvailable(add);
+  u["users/" + to + "/phase2/notifications/merge_" + from] = {
+    id: "merge_" + from,
+    icon: "🔗",
+    title: "Hisoblar birlashtirildi",
+    text: (ordersCount ? ordersCount + " ta buyurtma" : "Ma'lumotlar") +
+      (cashback ? " va " + fmtSomW(cashback) + " so'm keshbek" : "") + " Telegram hisobingizga o'tkazildi.",
+    date: now,
+    read: false,
+  };
+  if (blocked && !getAdminIds(env).includes(to)) u["blocked_users/" + to] = blocked;
+  u["account_merges/" + from] = {
+    to, at: now, by: by.role, byUid: by.uid, orders: ordersCount, cashback,
+  };
+  u["uid_redirect/" + from] = { to, at: now };
+  u["users/" + from] = null;
+  u["loyalty_accounts/" + from] = null;
+  await rtdbPatch(ctx.dbUrl, "", u, token);
+  redirectCache.set(from, { v: to, exp: now + 30 * 1000 });
+
+  try {
+    await writeLoyaltyProjection(ctx, token, to, account);
+  } catch (_) {
+    // Hisob (loyalty_accounts) haqiqiy manba; proyeksiya keyingi amalda tiklanadi.
+  }
+  if (env.BOT_TOKEN) {
+    const NL = String.fromCharCode(10);
+    await telegramCall(env, "sendMessage", {
+      chat_id: to,
+      parse_mode: "HTML",
+      text: "🔗 <b>Hisoblaringiz birlashtirildi</b>" + NL + NL +
+        "Ilova/saytdagi " + (ordersCount ? "<b>" + ordersCount + " ta buyurtma</b>" : "ma'lumotlar") +
+        (cashback ? " va <b>" + fmtSomW(cashback) + " so'm keshbek</b>" : "") +
+        " shu Telegram hisobingizga o'tkazildi. Endi Telegram, ilova va saytda bitta hisob.",
+    });
+  }
+  return { merged: true, uid: to, orders: ordersCount, cashback };
+}
+
+// =====================================================================
+//  💬 STORIS JAVOBLARI — admin HAR BIR mijoz bilan bog'lana oladi
+// ---------------------------------------------------------------------
+//  Ilgari mijoz (ayniqsa ilova/saytdan) storisga yozsa adminga faqat ism
+//  borardi: Telegram'i yo'q mijozga javob berishning iloji yo'q edi.
+//  Endi javob SERVERDA yoziladi (ism, tasdiqlangan raqam, username bilan) va
+//  adminlarga «✍️ Javob yozish» tugmali kartochka boradi. Admin javobi
+//  (bot yoki ilova orqali) mijozga ilovada (storis + 🔔) va Telegram'da
+//  yetadi — qayerdan yozganidan qat'i nazar.
+// =====================================================================
+const STORY_SID_RE = /^[^.#$\[\]\/\u0000-\u001F\u007F]{1,140}$/;
+
+function miniAppUrl(env) {
+  const url = String((env && env.MINI_APP_URL) || "https://anvarjonaxtamov70.github.io/Avto_A1/");
+  return /^https:\/\//.test(url) ? url : "https://anvarjonaxtamov70.github.io/Avto_A1/";
+}
+
+function storyReplyCardText(r) {
+  const NL = String.fromCharCode(10);
+  const name = escapeTelegramHtml(r.name || "Mijoz");
+  const who = isTgUid(r.uid) ? '<a href="tg://user?id=' + r.uid + '">' + name + "</a>" : "<b>" + name + "</b>";
+  const lines = [
+    (r.x ? "💬 <b>Storisga javob</b>" : "✨ <b>Storisga reaksiya</b>"),
+    "",
+    "👤 " + who + (r.username ? " · @" + escapeTelegramHtml(r.username) : ""),
+  ];
+  if (r.phone) lines.push("📞 <code>" + escapeTelegramHtml(r.phone) + "</code>" + (r.phoneVerified ? " ✅" : ""));
+  lines.push("📱 " + escapeTelegramHtml(r.via));
+  if (r.cap) lines.push("🎬 " + escapeTelegramHtml(r.cap));
+  lines.push("");
+  if (r.x) lines.push("✍️ <i>«" + escapeTelegramHtml(r.x) + "»</i>");
+  else lines.push("✨ Reaksiya: " + escapeTelegramHtml(r.e) + (r.e === "❓" ? " <i>(narx / ma'lumot so'rayapti)</i>" : ""));
+  lines.push("");
+  lines.push("<i>«✍️ Javob yozish» — javobingiz mijozga ilovada va Telegram'da boradi.</i>");
+  return lines.join(NL);
+}
+
+async function handleStoryReply(request, env, execCtx) {
+  try {
+    const body = await readJsonBody(request);
+    const identity = await authenticateBody(body, env);
+    const sid = cleanText(body.sid, 140, true);
+    if (!STORY_SID_RE.test(sid)) throw httpError(400, "sid noto'g'ri");
+    const x = cleanText(body.x, 500, false);
+    const e = x ? "" : cleanText(body.e, 16, false);
+    if (!x && !e) throw httpError(400, "javob bo'sh");
+    const isAdmin = getAdminIds(env).includes(identity.uid);
+    consumeMessageRate("story|" + identity.uid, isAdmin);
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const [profileRaw, verifyRaw] = await Promise.all([
+      rtdbGet(ctx.dbUrl, "users/" + identity.uid + "/profile", token),
+      rtdbGet(ctx.dbUrl, "users/" + identity.uid + "/verify", token),
+    ]);
+    const profile = plainObj(profileRaw);
+    const verify = plainObj(verifyRaw);
+    const claims = identity.source === "telegram" ? plainObj(identity.claims) : {};
+    const tgName = [claims.first_name, claims.last_name].filter(Boolean).join(" ");
+    const profName = profile.name && profile.name !== "Mijoz" ? profile.name : "";
+    const name = cleanText(String(profName || tgName || body.n || "Mijoz").slice(0, 80), 80, false) || "Mijoz";
+    let username = String(claims.username || profile.username || "").replace(/^@+/, "");
+    if (!/^[A-Za-z0-9_]{3,64}$/.test(username)) username = "";
+    const vPhone = typeof verify.phone === "string" ? verify.phone : "";
+    const phone = cleanText(String(vPhone || profile.phone || "").slice(0, 40), 40, false);
+    const avatarRaw = String(profile.avatar || body.a || "");
+    const avatar = /^https:\/\//.test(avatarRaw) && avatarRaw.length <= 500 ? avatarRaw : "";
+    const viaHint = String(body.via || "");
+    const via = identity.source === "telegram" ? "Telegram mini app"
+      : (viaHint === "app" ? "Ilova" : "Sayt") + (isTgUid(identity.uid) ? " (Telegram hisobi)" : "");
+    const cap = cleanText(String(body.cap || "").slice(0, 120), 120, false);
+
+    const rid = pushId();
+    const rec = { t: Date.now(), n: name };
+    if (x) rec.x = x; else rec.e = e;
+    if (username) rec.u = username;
+    if (avatar) rec.a = avatar;
+    if (phone) rec.ph = phone;
+    if (vPhone) rec.pv = 1;
+    const short = (await sha256Hex("sr|" + sid + "|" + identity.uid + "|" + rid)).slice(0, 20);
+    const updates = {};
+    updates["story_replies/" + sid + "/" + identity.uid + "/" + rid] = rec;
+    updates["story_reply_index/" + short] = { sid, uid: identity.uid, rid, at: rec.t, n: name };
+    await rtdbPatch(ctx.dbUrl, "", updates, token);
+
+    const admins = getAdminIds(env).filter(isTelegramChatId).filter((id) => id !== identity.uid);
+    const text = storyReplyCardText({ uid: identity.uid, name, username, phone, phoneVerified: !!vPhone, via, cap, x, e });
+    const row = [{ text: "✍️ Javob yozish", callback_data: "sra:" + short }];
+    if (username) row.push({ text: "💬 Telegram", url: "https://t.me/" + username });
+    const keyboard = { inline_keyboard: [row] };
+    const results = env.BOT_TOKEN
+      ? await Promise.all(admins.map((chatId) => telegramCall(env, "sendMessage", {
+        chat_id: chatId, text, parse_mode: "HTML", reply_markup: keyboard, disable_web_page_preview: true,
+      })))
+      : [];
+    return json({ ok: true, rid, notified: results.filter((r) => r.ok).length });
+  } catch (err) {
+    const response = errorResponse(err);
+    if (response.status === 429) response.headers.set("Retry-After", String(err.extra && err.extra.retryAfter || 60));
+    return response;
+  }
+}
+
+async function handleStoryAnswer(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const short = body.short == null ? "" : cleanText(body.short, 40, false);
+    const rawText = typeof body.text === "string" ? body.text : "";
+    // Imzo bot yuborgan AYNAN matn bo'yicha tekshiriladi, keyin tozalanadi.
+    const identity = body.botAuth != null
+      ? await verifyBotAuth(body, env, "story-answer",
+        [short || String(body.sid || "") + "|" + String(body.uid || ""), rawText])
+      : await authenticateBody(body, env);
+    const text = cleanText(rawText, 1000, true);
+    if (!getAdminIds(env).includes(identity.uid)) throw httpError(403, "faqat admin");
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    let sid;
+    let uid;
+    if (short) {
+      if (!/^[0-9a-f]{20}$/.test(short)) throw httpError(400, "short noto'g'ri");
+      const idx = await rtdbGet(ctx.dbUrl, "story_reply_index/" + short, token);
+      if (!idx || typeof idx !== "object") throw httpError(404, "javob topilmadi");
+      sid = String(idx.sid || "");
+      uid = String(idx.uid || "");
+    } else {
+      sid = cleanText(body.sid, 140, true);
+      uid = cleanText(body.uid, 128, true);
+    }
+    if (!STORY_SID_RE.test(sid)) throw httpError(400, "sid noto'g'ri");
+    uid = requireSafeUid(uid, 400);
+    // Mijoz eski hisobini Telegram hisobiga birlashtirgan bo'lsa — javob yangisiga
+    let target = uid;
+    if (!isTgUid(uid)) {
+      const r = await rtdbGet(ctx.dbUrl, "uid_redirect/" + uid, token);
+      if (r && typeof r === "object" && isTgUid(r.to)) target = String(r.to);
+    }
+    const aid = pushId();
+    const now = Date.now();
+    const updates = {};
+    updates["story_replies/" + sid + "/" + target + "/" + aid] = { t: now, x: text, s: 1, n: "Avto A1", by: identity.uid };
+    updates["users/" + target + "/phase2/notifications/sa_" + aid] = {
+      id: "sa_" + aid, icon: "💬", title: "Avto A1 javob berdi", text: text.slice(0, 300),
+      date: now, read: false, kind: "story_answer", sid,
+    };
+    if (short) updates["story_reply_index/" + short + "/answeredAt"] = now;
+    await rtdbPatch(ctx.dbUrl, "", updates, token);
+    let telegram = "skip";
+    if (isTgUid(target) && env.BOT_TOKEN) {
+      const NL = String.fromCharCode(10);
+      const payload = {
+        chat_id: target,
+        parse_mode: "HTML",
+        text: "💬 <b>Avto A1</b> storisdagi xabaringizga javob berdi:" + NL + NL + "<i>" + escapeTelegramHtml(text) + "</i>",
+        reply_markup: { inline_keyboard: [[{ text: "🛍 Do'konni ochish", web_app: { url: miniAppUrl(env) } }]] },
+      };
+      let res = await telegramCall(env, "sendMessage", payload);
+      if (!res.ok && res.permanent && /button|web_app|BUTTON/i.test(res.error)) {
+        delete payload.reply_markup;
+        res = await telegramCall(env, "sendMessage", payload);
+      }
+      telegram = res.ok ? "sent" : "err";
+    }
+    return json({ ok: true, uid: target, sid, id: aid, telegram });
+  } catch (err) {
+    return errorResponse(err);
   }
 }

@@ -90,6 +90,13 @@ jobs:
       - name: Stories sinovi
         run: node .github/test-stories.js
 
+      # 🪪 Yagona hisob: raqam bo'yicha kirish (Telegram'da raqamni tanlash),
+      # Telegram kontakt imzosi, eski hisobni Telegram hisobiga ko'chirish
+      # (buyurtma + holat mashinasi + keshbek amallari), /session, storis
+      # javobiga admin javobi, ilovadagi admin /upload, server-only qoidalar.
+      - name: Yagona hisob sinovi (Worker)
+        run: node .github/test-identity.js
+
       # ⚡ Deploy'dagi ixchamlashtirish ishlashini oldindan tekshiramiz:
       # build xatosiz o'tadi va chiqqan har bir JS fayl sintaktik toza.
       - name: Ixchamlashtirish sinovi (build-site)
@@ -103,7 +110,7 @@ jobs:
       - name: Python sintaksisi (bot)
         run: |
           python3 -m py_compile bot/bot.py bot/ai_agent.py bot/fb_utils.py \
-                                bot/bulk_import_fixed.py bot/order_ops.py
+                                bot/bulk_import_fixed.py bot/order_ops.py bot/account_ops.py
           echo "✅ Python fayllari sintaktik toza"
 
       # AI agenti sinovlari — Groq va Firebase SOXTA, ya'ni tashqi
@@ -115,3 +122,4 @@ jobs:
           python3 tests/test_ai_write.py
           python3 tests/test_owner_mode.py
           python3 tests/test_order_buttons.py
+          python3 tests/test_account_ops.py

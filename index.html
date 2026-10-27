@@ -6567,6 +6567,11 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
                     <button type="button" class="pfx-row" onclick="openMyCarModal()"><span class="pfx-ic" style="--ic:#0a84ff"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM5 11l1.5-4.5h11L19 11H5z"/></svg></span><span class="pfx-lbl">Mening mashinam</span><span id="pf-my-car-info" class="pfx-val pfx-car">Belgilanmagan</span><span class="pfx-chev" aria-hidden="true">›</span></button>
                 </div>
 
+                <!-- 🪪 Hisob: Telegram hisobi va tasdiqlangan raqam (a1-account qatlami chizadi) -->
+                <div class="pfx-sec" id="pfx-acct-sec" hidden>Hisob</div>
+                <div class="pfx-grp" id="pfx-acct" hidden></div>
+                <p class="pfx-foot" id="pfx-acct-foot" hidden></p>
+
                 <div class="pfx-sec">Ilova</div>
                 <div class="pfx-grp" id="pfx-app"></div>
 
@@ -10792,7 +10797,7 @@ function openProduct(id) {
 
     buyB.setAttribute('data-id', id);
     loadProductReviews(id);
-    let edB = document.getElementById('pm-edit-btn'); if (ADMIN_IDS.includes(currentUser)) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
+    let edB = document.getElementById('pm-edit-btn'); if (typeof window.isAdmin === 'function' ? window.isAdmin() : ADMIN_IDS.includes(currentUser)) { edB.style.display = 'flex'; edB.onclick = (e) => openEditModal(e); } else { edB.style.display = 'none'; }
     let sC = document.getElementById('pm-similar-items'); let pC = p.categories ? p.categories[0] : p.category; let sP = productsDB.filter(x => x.id !== p.id && (x.category === pC || (x.categories && x.categories.includes(pC))) ).slice(0, 6);
     if(sP.length > 0) { document.getElementById('similar-title').style.display = 'block'; sC.innerHTML = sP.map(x => `<div class="similar-card" onclick="openProduct(${x.id})"><div class="img-wrap"><img src="${_thumb(x.img, 200)}" loading="lazy" decoding="async" data-full="${(x.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)"></div><h4>${escHtml(x.name)}</h4><div class="price">${x.price.toLocaleString()} so'm</div></div>`).join(''); } else { document.getElementById('similar-title').style.display = 'none'; sC.innerHTML = ''; }
     // 🆕 Compare tugmasi + Notify me (tugaganda)
@@ -11595,8 +11600,19 @@ window.openAdminChat = (uid, orderId) => {
                   .push({ sender: 'admin', text: text, time: timeString })
                   .then(function () {
                         input.value = '';   // jonli listener o'zi qayta chizadi
-                        // MIJOZGA TELEGRAM ORQALI SMS JO'NATISH
-                        tgProxySend({
+                        var _uidStr = String(currentAdminChatUid);
+                        // 🔔 Ilova ichidagi bildirishnoma — HAR mijozga (ilova/saytdan Telegram'siz
+                        //    buyurtma bergan mijoz ham javobni ko'radi). Bitta kalit — ro'yxat
+                        //    ustidan yozilmaydi (admin yozish huquqi bor: phase2/notifications).
+                        try {
+                            var _nid = 'oc_' + String(currentAdminChatOrderId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60) + '_' + Date.now();
+                            db.ref('users/' + _uidStr + '/phase2/notifications/' + _nid).set({
+                                id: _nid, icon: '\uD83D\uDCE9', title: '#' + String(_sentCode).slice(0, 40) + ' buyurtma bo\u2018yicha javob',
+                                text: text.slice(0, 300), date: Date.now(), read: false, kind: 'order_chat', orderId: String(currentAdminChatOrderId)
+                            }).catch(function () {});
+                        } catch (e) {}
+                        // MIJOZGA TELEGRAM ORQALI XABAR — faqat Telegram hisobi bo'lsa (uid = Telegram ID)
+                        if (/^[1-9]\d{2,19}$/.test(_uidStr)) tgProxySend({
                             chat_id: currentAdminChatUid,
                             text: `📩 <b>#${escTg(_sentCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`,
                             parse_mode: "HTML"
@@ -12769,7 +12785,8 @@ window.selectSizeModel = (btn, stock) => {
     let buyB = document.getElementById('pm-buy-btn');
     if(!box || !buyB) return;
     
-    let isAdmin = (typeof currentUser !== 'undefined' && typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(currentUser));
+    // isAdmin(): tasdiqlangan auth.uid bo'yicha — ilovadagi admin (uid satr) ham tanilsin
+    let isAdmin = (typeof window.isAdmin === 'function') ? window.isAdmin() : (typeof currentUser !== 'undefined' && typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(currentUser));
     let stockText = isAdmin ? `✅ Sotuvda bor: ${stock} ta` : `✅ Sotuvda bor`;
     
     if(stock <= 0) {
@@ -16534,7 +16551,7 @@ function initReveal() {
 
             // Admin uchun o'chirish tugmasi
             let delBtn = document.getElementById('admin-story-delete-btn');
-            if (typeof currentUser !== 'undefined' && typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(currentUser)) {
+            if (typeof window.isAdmin === 'function' ? window.isAdmin() : (typeof currentUser !== 'undefined' && typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(currentUser))) {
                 delBtn.style.display = 'flex';
             } else {
                 delBtn.style.display = 'none';
@@ -17759,7 +17776,7 @@ window.scanBarcode = (prefix) => {
 // 2) ADMIN: skanerlangan kod bo'yicha tovarni topib ochadi (faqat admin)
 window.scanToFindProduct = () => {
     // Qo'shimcha xavfsizlik: faqat admin
-    let isAdmin = ADMIN_IDS.includes(window.currentUser) || ADMIN_IDS.includes(parseInt(window.currentUser));
+    let isAdmin = (typeof window.isAdmin === 'function') ? window.isAdmin() : (ADMIN_IDS.includes(window.currentUser) || ADMIN_IDS.includes(parseInt(window.currentUser)));
     if (!isAdmin) { showToast("Bu funksiya faqat administrator uchun", "warning"); return; }
 
     runScanner((raw) => {
@@ -24927,10 +24944,23 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
             initData = (_tg && _tg.initData) ? _tg.initData : '';
         } catch (e) {}
         if (!initData) {
-            toast('Video yuklash faqat Telegram ilovasi ichida ishlaydi', 'warning');
+            // 📱 Ilova/saytdagi admin: Telegram orqali kirgan bo'lsa (uid = Telegram ID) —
+            //    Worker /upload ga Firebase idToken bilan (Authorization: Bearer).
+            var fu = null;
+            try { fu = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null; } catch (e) {}
+            if (!fu || !/^[1-9]\d{2,19}$/.test(String(fu.uid))) {
+                toast('Video yuklash uchun Telegram hisobi bilan kiring (Profil \u2192 Hisob)', 'warning');
+                return;
+            }
+            setVidPickUI('\u23F3', 'Tayyorlanmoqda...', fmtMB(file.size));
+            fu.getIdToken().then(function (tok) { _startVideoSend(file, '', tok); },
+                function () { _resetVidUI('Sessiya eskirgan \u2014 ilovani qayta oching'); });
             return;
         }
+        _startVideoSend(file, initData, '');
+    }
 
+    function _startVideoSend(file, initData, idToken) {
         setVidPickUI('\u23F3', 'Yuklanmoqda...', fmtMB(file.size));
         // ⚡ "FASTSTART": telefon videolarida `moov` (indeks) ko'pincha fayl OXIRIDA
         //    bo'ladi — mijozning brauzeri o'ynatishdan oldin avval oxirini, keyin
@@ -24939,12 +24969,12 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         //    o'zgarmaydi). Qatlam yo'q yoki fayl tanilmasa — asl fayl ketadi.
         if (typeof window._a1FastStart === 'function') {
             showProgress(2, 'Video tayyorlanmoqda...');
-            window._a1FastStart(file).then(function (f) { _sendVideo(f || file, initData, false); },
-                function () { _sendVideo(file, initData, false); });
+            window._a1FastStart(file).then(function (f) { _sendVideo(f || file, initData, false, idToken); },
+                function () { _sendVideo(file, initData, false, idToken); });
             return;
         }
         showProgress(2, 'Video yuklanmoqda... 0%');
-        _sendVideo(file, initData, false);
+        _sendVideo(file, initData, false, idToken);
     }
 
     /* ==================================================================
@@ -24962,7 +24992,7 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
      *    o'tamiz. Shunda admin "Worker deploy qil" degan xabarni kutmasdan
      *    ishlashda davom etadi.
      * ================================================================== */
-    function _sendVideo(file, initData, legacy) {
+    function _sendVideo(file, initData, legacy, idToken) {
         var fd = new FormData();
         var url;
         if (legacy) {
@@ -24979,15 +25009,18 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         _vidXhr = xhr;
         try {
             xhr.open('POST', url);
-            if (!legacy) xhr.setRequestHeader('X-Init-Data', initData);
+            if (!legacy) {
+                if (idToken) xhr.setRequestHeader('Authorization', 'Bearer ' + idToken);
+                else xhr.setRequestHeader('X-Init-Data', initData);
+            }
         } catch (e) {
             _resetVidUI('So\'rov ochilmadi: ' + ((e && e.message) || String(e)));
             return;
         }
         xhr.timeout = 240000;   // 4 daqiqa — juda sekin internet uchun
 
-        // Zaxira yo'lga o'tish kerakmi?
-        var _canFallback = !legacy;
+        // Zaxira yo'lga o'tish kerakmi? (idToken bilan zaxira yo'q — u faqat initData'li eski Worker uchun)
+        var _canFallback = !legacy && !idToken;
         var _fallback = function () {
             _clearVidStall();
             _vidXhr = null;
@@ -25962,11 +25995,22 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
     /* ---------------- 5.4 Amallar ---------------- */
 
     function openTelegram(c) {
-        var url = c.username ? ('https://t.me/' + c.username) : ('tg://user?id=' + c.uid);
+        // Bot username'ni "@ali" yoki (yo'q bo'lsa) "Yo'q" deb yozadi — faqat haqiqiy username
+        var un = String(c.username || '').replace(/^@+/, '');
+        if (!/^[A-Za-z0-9_]{4,32}$/.test(un)) un = '';
+        var numeric = /^[1-9]\d{2,19}$/.test(String(c.uid || ''));
+        if (!un && !numeric) {
+            // Ilova/saytdagi (Telegram'siz) mijoz — Telegram yo'q: qo'ng'iroq qilamiz
+            if (c.phone) { toast('Bu mijoz Telegram\u2019ga ulanmagan \u2014 qo\u2018ng\u2018iroq qilinmoqda', 'info'); callCustomer(c); }
+            else toast('Bu mijoz Telegram\u2019ga ulanmagan va raqami yo\u2018q', 'warning');
+            return;
+        }
+        var url = un ? ('https://t.me/' + un) : ('tg://user?id=' + c.uid);
         try {
-            if (c.username && window.tg && tg.openTelegramLink) { tg.openTelegramLink(url); return; }
-            if (window.tg && tg.openLink && c.username) { tg.openLink(url); return; }
+            if (un && window.tg && tg.openTelegramLink && tg.initData) { tg.openTelegramLink(url); return; }
+            if (un && window.tg && tg.openLink && tg.initData) { tg.openLink(url); return; }
         } catch (e) {}
+        try { if (typeof window.a1OpenExternal === 'function' && window.A1_APP) { window.a1OpenExternal(url); return; } } catch (e) {}
         try { window.open(url, '_blank'); } catch (e) { toast('Ochib bo\'lmadi', 'warning'); }
     }
 
@@ -36281,7 +36325,7 @@ html body :is(#contactModal, #trustModal, #p2NotifModal, #p2WarrantyModal, #shop
 .a1-hd-acts { display: flex; align-items: center; gap: 8px; flex: none; }
 .a1-edit-btn {
     display: none; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border: 0; border-radius: 16px;
-    background: var(--a-goldbg); color: var(--a-gold); font: 600 14px/1 inherit; font-family: inherit; cursor: pointer;
+    background: var(--a-goldbg); color: var(--a-gold); font-weight: 600; font-size: 14px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer;
     -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a-spring);
 }
 .a1-edit-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -36372,7 +36416,7 @@ html[data-theme="light"] .a1-gear b { background: linear-gradient(135deg, #c9a84
 /* Tugmalar */
 .a1-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 18px; box-sizing: border-box;
-    border: 0; border-radius: 25px; font: 600 16px/1 inherit; font-family: inherit; letter-spacing: -.2px; text-decoration: none; cursor: pointer;
+    border: 0; border-radius: 25px; font-weight: 600; font-size: 16px; line-height: 1; font-family: inherit; font-family: inherit; letter-spacing: -.2px; text-decoration: none; cursor: pointer;
     background: var(--a-glass); color: var(--a-tx); box-shadow: var(--a-edge);
     -webkit-tap-highlight-color: transparent; transition: transform .35s var(--a-spring);
 }
@@ -36435,7 +36479,7 @@ html[data-theme="light"] .ci-map {
 .ci-map-tag { position: absolute; left: 12px; bottom: 10px; padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--a-tx); background: rgba(0,0,0,.45); }
 html[data-theme="light"] .ci-map-tag { background: rgba(255,255,255,.85); }
 .ci-map-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: .5px solid var(--a-sep); }
-.ci-map-acts button { height: 46px; border: 0; background: none; color: var(--a-gold); font: 600 15px/1 inherit; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.ci-map-acts button { height: 46px; border: 0; background: none; color: var(--a-gold); font-weight: 600; font-size: 15px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
 .ci-map-acts button + button { border-left: .5px solid var(--a-sep); }
 .ci-map-acts button:active { background: var(--a-fill2); }
 .ci-map-acts svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -36486,7 +36530,7 @@ html[data-theme="light"] .tr-stat b { background: linear-gradient(135deg, #b8901
 #p2NotifModal .nf-sum { font-size: 15px; font-weight: 500; color: var(--a-tx2); letter-spacing: -.2px; }
 html body #p2NotifModal .p2-markall-btn {
     margin: 0 !important; align-self: auto !important; height: 32px; padding: 0 13px !important; border: 0 !important; border-radius: 16px !important;
-    background: var(--a-goldbg) !important; color: var(--a-gold) !important; font: 600 13.5px/1 inherit !important; font-family: inherit !important;
+    background: var(--a-goldbg) !important; color: var(--a-gold) !important; font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit !important; font-family: inherit !important;
     box-shadow: none !important; transition: transform .3s var(--a-spring) !important;
 }
 html body #p2NotifModal .p2-markall-btn:active { transform: scale(.9) !important; }
@@ -36525,7 +36569,7 @@ html[data-theme="light"] #p2NotifModal .nf.is-new { background: linear-gradient(
 #p2NotifModal .nf-time { flex: none; font-size: 12.5px; color: var(--a-tx3); font-variant-numeric: tabular-nums; }
 #p2NotifModal .nf-text { margin-top: 2px; font-size: 14px; line-height: 1.36; letter-spacing: -.1px; color: var(--a-tx2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 #p2NotifModal .nf-count { display: inline-block; margin-left: 5px; padding: 1px 7px; border-radius: 99px; font-style: normal; font-size: 11.5px; font-weight: 700; vertical-align: 1px; color: var(--a-tx2); background: var(--a-fill); }
-#p2NotifModal .nf-clear { display: block; margin: 18px auto 6px; padding: 9px 16px; border: 0; border-radius: 99px; background: var(--a-fill2); color: var(--a-tx2); font: 600 13.5px/1 inherit; font-family: inherit; cursor: pointer; }
+#p2NotifModal .nf-clear { display: block; margin: 18px auto 6px; padding: 9px 16px; border: 0; border-radius: 99px; background: var(--a-fill2); color: var(--a-tx2); font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer; }
 #p2NotifModal .nf-clear:active { transform: scale(.94); }
 #p2NotifModal .nf-hint { margin: 2px 0 0; text-align: center; font-size: 12px; color: var(--a-tx3); }
 
@@ -36556,7 +36600,7 @@ html[data-theme="light"] .wr-chip { background: rgba(255,255,255,.8); }
 .a1-seg { position: relative; display: flex; padding: 3px; margin: 16px 0 12px; border-radius: 99px; background: var(--a-fill2); box-shadow: inset 0 0 0 .5px var(--a-sep); }
 .a1-seg button {
     flex: 1; height: 32px; border: 0; border-radius: 99px; background: none; color: var(--a-tx2); cursor: pointer;
-    font: 600 13.5px/1 inherit; font-family: inherit; letter-spacing: -.15px; transition: background .3s var(--a-ease), color .2s, box-shadow .3s;
+    font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit; font-family: inherit; letter-spacing: -.15px; transition: background .3s var(--a-ease), color .2s, box-shadow .3s;
 }
 .a1-seg button.on { color: var(--a-tx); background: rgba(255,255,255,.14); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 3px 8px rgba(0,0,0,.25); }
 html[data-theme="light"] .a1-seg button.on { background: #fff; box-shadow: 0 3px 8px rgba(0,0,0,.1), 0 0 0 .5px rgba(0,0,0,.04); }
@@ -36612,11 +36656,11 @@ html[data-theme="light"] .a1-seg button.on { background: #fff; box-shadow: 0 3px
 #shopInfoModal .se-li input { padding: 8px 10px; border-radius: 10px; background: var(--a-fill2) !important; font-size: 15.5px; }
 #shopInfoModal .se-x { flex: 0 0 26px; width: 26px; height: 26px; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--a-red); color: #fff; cursor: pointer; }
 #shopInfoModal .se-x svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
-#shopInfoModal .se-add { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; height: 48px; padding: 0 14px; border: 0; background: none; color: var(--a-gold); font: 600 15.5px/1 inherit; font-family: inherit; cursor: pointer; }
+#shopInfoModal .se-add { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; height: 48px; padding: 0 14px; border: 0; background: none; color: var(--a-gold); font-weight: 600; font-size: 15.5px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer; }
 #shopInfoModal .se-add i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 18px; font-weight: 600; color: #fff; background: var(--a-green); }
 #shopInfoModal .se-add:active { background: var(--a-fill2); }
 #shopInfoModal .se-days { display: flex; gap: 6px; flex-wrap: wrap; }
-#shopInfoModal .se-day { width: 40px; height: 34px; border: 0; border-radius: 12px; background: var(--a-fill2); color: var(--a-tx2); font: 650 13.5px/1 inherit; font-family: inherit; cursor: pointer; transition: transform .3s var(--a-spring), background .2s; }
+#shopInfoModal .se-day { width: 40px; height: 34px; border: 0; border-radius: 12px; background: var(--a-fill2); color: var(--a-tx2); font-weight: 650; font-size: 13.5px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer; transition: transform .3s var(--a-spring), background .2s; }
 #shopInfoModal .se-day.on { background: var(--a-grad); color: var(--a-ink); }
 #shopInfoModal .se-day:active { transform: scale(.88); }
 #shopInfoModal .se-two { display: grid; grid-template-columns: 1fr 1fr; }
@@ -36625,7 +36669,7 @@ html[data-theme="light"] .a1-seg button.on { background: #fff; box-shadow: 0 3px
 #shopInfoModal .se-bar { position: sticky; bottom: calc(-80px + var(--safe-bottom, 0px)); z-index: 3; margin: 26px -16px 0; padding: 12px 16px calc(14px + var(--safe-bottom, 0px)); background: linear-gradient(transparent, rgba(8,8,10,.92) 30%); }
 html[data-theme="light"] #shopInfoModal .se-bar { background: linear-gradient(rgba(246,241,230,0), rgba(246,241,230,.95) 30%); }
 #shopInfoModal .se-bar .a1-btn { width: 100%; }
-#shopInfoModal .se-reset { display: block; margin: 12px auto 0; border: 0; background: none; color: var(--a-red); font: 500 14.5px/1 inherit; font-family: inherit; cursor: pointer; }
+#shopInfoModal .se-reset { display: block; margin: 12px auto 0; border: 0; background: none; color: var(--a-red); font-weight: 500; font-size: 14.5px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer; }
 #shopInfoModal .se-busy { opacity: .6; pointer-events: none; }
 
 /* ══════════════ 🚗 MARKALAR (ixcham iOS ro'yxati) ══════════════ */
@@ -37246,7 +37290,7 @@ html body .a1-search input::placeholder { color: var(--a-tx3); }
 .mc-cur-tx { flex: 1; min-width: 0; }
 .mc-cur-tx small { display: block; font-size: 12.5px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; color: var(--a-tx2); }
 .mc-cur-tx b { display: block; margin-top: 2px; font-size: 19px; font-weight: 700; letter-spacing: -.4px; color: var(--a-tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mc-cur-x { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 16px; background: color-mix(in srgb, var(--a-red) 14%, transparent); color: var(--a-red); font: 600 13.5px/1 inherit; font-family: inherit; cursor: pointer; }
+.mc-cur-x { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 16px; background: color-mix(in srgb, var(--a-red) 14%, transparent); color: var(--a-red); font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer; }
 .mc-cur-x:active { transform: scale(.92); }
 .mc-brand { display: flex; align-items: center; gap: 9px; margin: 22px 6px 8px; }
 .mc-brand img { width: 26px; height: 26px; border-radius: 7px; object-fit: contain; background: #fff; padding: 2px; box-sizing: border-box; box-shadow: 0 0 0 .5px rgba(0,0,0,.1); }
@@ -37428,7 +37472,7 @@ html[data-theme="light"] body #addr-name-sheet { background: #f8f4ec; }
 .an-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
 .an-chip {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; height: 66px; border: 0; border-radius: 18px;
-    background: var(--a-fill2); color: var(--a-tx2); font: 600 12.5px/1 inherit; font-family: inherit; cursor: pointer;
+    background: var(--a-fill2); color: var(--a-tx2); font-weight: 600; font-size: 12.5px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer;
     -webkit-tap-highlight-color: transparent; transition: transform .3s var(--a-spring), background .2s, color .2s, box-shadow .2s;
 }
 .an-chip svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -37511,7 +37555,7 @@ html body .rf-in input {
 html body #adminDraftsModal > .dr-clear {
     width: auto !important; align-self: flex-start; display: inline-flex !important; align-items: center; gap: 6px; height: 34px; margin: -2px 2px 12px !important; padding: 0 13px !important;
     border: 0 !important; border-radius: 17px !important; background: color-mix(in srgb, var(--a-red) 14%, transparent) !important; color: var(--a-red) !important;
-    font: 600 13.5px/1 inherit !important; font-family: inherit !important; cursor: pointer;
+    font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit !important; font-family: inherit !important; cursor: pointer;
 }
 html body #adminDraftsModal > .dr-clear svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 html body #adminDraftsModal > .dr-clear.is-off { display: none !important; }
@@ -37547,7 +37591,7 @@ html body #broadcastModal #bc-text { min-height: 150px; padding: 14px 16px 30px 
 .bcx-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 8px 6px 0; font-size: 12.5px; color: var(--x-tx2); }
 .bcx-meta b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .bcx-tools { display: flex; gap: 6px; }
-.bcx-tools button { height: 28px; min-width: 32px; padding: 0 9px; border: 0; border-radius: 14px; background: var(--x-fill2); color: var(--x-tx); font: 600 13px/1 inherit; font-family: inherit; cursor: pointer; }
+.bcx-tools button { height: 28px; min-width: 32px; padding: 0 9px; border: 0; border-radius: 14px; background: var(--x-fill2); color: var(--x-tx); font-weight: 600; font-size: 13px; line-height: 1; font-family: inherit; font-family: inherit; cursor: pointer; }
 .bcx-tools button:active { transform: scale(.9); }
 .bcx-prev { margin-top: 18px; }
 .bcx-prev-t { margin: 0 6px 8px; font-size: 13px; font-weight: 600; letter-spacing: .2px; text-transform: uppercase; color: var(--x-tx2); }
@@ -42422,37 +42466,103 @@ html[data-theme="light"] #login-screen .login-seg button { color: #1c1c1e; }
 #login-tg-wait .tgw-st.bad { color: #ff9f0a; }
 html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-wait .tgw-code b { color: #1c1c1e; }
 
+/* ═══ 🪪 Yagona hisob: raqam bilan kirish, tanlov va birlashtirish panellari ═══ */
+#login-screen .login-card { position: relative; }
+#login-screen .login-hint[hidden], #login-screen .login-alt[hidden], #login-screen .login-close[hidden], #login-screen .login-panel[hidden] { display: none !important; }
+#login-screen .login-hint {
+    margin: -4px 0 14px; padding: 10px 12px; border-radius: 12px; background: rgba(201,168,76,.13);
+    color: var(--text-main, #f5f5f7); font: 500 13.5px/1.4 var(--a3-font, -apple-system, sans-serif); letter-spacing: -.1px;
+}
+html[data-theme="light"] #login-screen .login-hint { color: #1c1c1e; background: rgba(201,168,76,.17); }
+#login-screen .login-alt {
+    display: block; margin: 12px auto 0; padding: 6px 10px; border: 0; background: none; cursor: pointer;
+    color: var(--luxury-gold, #C9A84C); font: 600 14px/1.25 var(--a3-font, -apple-system, sans-serif); -webkit-tap-highlight-color: transparent;
+}
+#login-screen .login-alt:active { opacity: .55; }
+#login-screen .lp-back { display: inline-block; width: 15px; height: 15px; margin: 0 3px 0 -2px; vertical-align: -2px; }
+#login-screen .login-close {
+    position: absolute; top: 10px; right: 10px; z-index: 2; width: 32px; height: 32px; padding: 8px; border: 0; border-radius: 50%; cursor: pointer;
+    background: rgba(118,118,128,.24); color: var(--text-muted, #8a8a8a); -webkit-tap-highlight-color: transparent;
+}
+#login-screen .login-close svg { display: block; width: 100%; height: 100%; }
+#login-screen .login-card.is-closable .login-title { padding-right: 34px; }
+#login-screen .login-card.lp-panel > :not(.lp-on):not(#login-close) { display: none !important; }
+#login-screen .login-panel { text-align: center; padding: 6px 2px 0; }
+#login-screen .login-panel .tgw-ic { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; background: #2AABEE; color: #fff; box-shadow: 0 10px 26px rgba(42,171,238,.35); }
+#login-screen .login-panel .tgw-ic svg { width: 32px; height: 32px; }
+#login-screen .tgw-ic.is-gold { background: linear-gradient(135deg, #f0d060, #a8851f); color: #1a1405; box-shadow: 0 10px 26px rgba(201,168,76,.35); }
+#login-screen .login-panel h3 { margin: 0 0 6px; font: 700 21px/1.2 var(--a3-display, -apple-system, sans-serif); letter-spacing: -.4px; color: var(--text-main, #fff); }
+#login-screen .login-panel p { margin: 0 0 18px; font: 400 14px/1.45 var(--a3-font, -apple-system, sans-serif); color: var(--text-muted, #8a8a8a); }
+#login-screen .login-panel p b { color: var(--text-main, #fff); font-weight: 600; }
+html[data-theme="light"] #login-screen .login-panel h3, html[data-theme="light"] #login-screen .login-panel p b { color: #1c1c1e; }
+#login-screen .login-tg.is-gold { background: linear-gradient(135deg, #f0d060, #c9a84c 55%, #a8851f); color: #1a1405; box-shadow: 0 8px 20px rgba(201,168,76,.3); }
+#login-screen .login-sec {
+    width: 100%; height: 50px; margin-top: 10px; border: 0; border-radius: 14px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    background: rgba(118,118,128,.2); color: var(--text-main, #f5f5f7); font: 600 15.5px/1 var(--a3-font, -apple-system, sans-serif); letter-spacing: -.2px;
+    transition: transform .25s cubic-bezier(.34,1.45,.64,1);
+}
+#login-screen .login-sec:active { transform: scale(.97); }
+html[data-theme="light"] #login-screen .login-sec { color: #1c1c1e; background: rgba(118,118,128,.14); }
+#login-tg-wait p b { color: var(--text-main, #fff); font-weight: 600; }
+html[data-theme="light"] #login-tg-wait p b { color: #1c1c1e; }
+#login-tg-wait .tgw-code.is-match { margin: 16px auto 12px; padding: 16px 0 14px; animation: a1lpPulse 2.4s ease-in-out infinite; }
+#login-tg-wait .tgw-code.is-match b { margin-top: 8px; padding-left: 12px; font-size: 60px; letter-spacing: 12px; }
+@keyframes a1lpPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(42,171,238,0); } 50% { box-shadow: 0 0 0 6px rgba(42,171,238,.2); } }
+html.lite #login-tg-wait .tgw-code.is-match { animation: none; }
+@media (prefers-reduced-motion: reduce) { #login-tg-wait .tgw-code.is-match { animation: none; } }
+
 </style>
 <script id="a1-auth-pw-js">
 /* ═══════════════════════════════════════════════════════════════════
-   🔐 Avto A1 — Telefon + parol bilan kirish (ilova va brauzer)
-   Telegram ichida hech narsa o'zgarmaydi (u yerda Telegram o'zi tasdiqlaydi).
+   🔐 Avto A1 — KIRISH (ilova va brauzer). Telegram ichida bu qatlam
+   ishlamaydi (u yerda Telegram o'zi tasdiqlaydi; raqam tasdig'i va
+   «Hisob» kartasi — a1-account qatlamida).
 
-   • Ro'yxatdan o'tish: ism + telefon + o'zi o'ylab topgan parol.
-   • Kirish: telefon + parol. Bir raqamga faqat BITTA hisob — Firebase
-     Authentication raqamni (ichki email sifatida) yagona saqlaydi.
-   • Parol Firebase'da xavfsiz (hash) saqlanadi — bizning bazaga yozilmaydi.
-   • Avval anonim kirgan mijoz parol o'rnatganda hisobi (uid, buyurtmalar,
-     keshbek) O'ZGARMAYDI — anonim hisob parolli hisobga bog'lanadi.
-   • Firebase Console'da «Email/Password» yoqilmagan bo'lsa — eski (anonim)
-     kirish yo'li avtomatik ishlaydi, ilova to'xtab qolmaydi.
+   🪪 YAGONA HISOB: asosiy hisob — Telegram ID. Mini app, ilova va sayt
+   BITTA hisobda: profil rasmi, buyurtmalar, keshbek, savat, javoblar.
+   1) Raqam bilan kirish (asosiy): raqam -> Worker /login-phone -> botga
+      3 ta 2 xonali tugma boradi -> ekrandagi raqam tanlanadi ->
+      /tg-login-poll AYNAN Telegram hisobi tokenini beradi.
+   2) «Telegram orqali kirish» havolasi — raqam hali bog'lanmagan bo'lsa
+      (bot keyin raqamni so'raydi -> keyingi safar 1-yo'l ishlaydi).
+   3) Telegram'i yo'q mijoz — telefon + parol (Firebase Email/Password).
+   Bu qurilmadagi eski (anonim/parolli) hisobda buyurtma yoki keshbek
+   bo'lsa — Telegram hisobiga BIRLASHTIRISH taklif qilinadi (/merge-legacy:
+   ikkala hisob ham isbotlangan). Boshqa qurilmalar /session orqali ko'chadi.
    ═══════════════════════════════════════════════════════════════════ */
 (function () {
     'use strict';
     var $ = function (id) { return document.getElementById(id); };
     var DOMAIN = 'tel.avtoa1.app';
     var OFF_KEY = 'a1_pw_off_until';
+    var TG_BOT = 'avtoa1bot';
     var inTelegram = function () { try { return !!(window.tg && tg.initData); } catch (e) { return false; } };
     var auth = function () { try { return (window.firebase && firebase.auth) ? firebase.auth() : null; } catch (e) { return null; } };
     var digitsOf = function (v) { return String(v || '').replace(/[^0-9]/g, ''); };
     var emailOf = function (digits) { return digits + '@' + DOMAIN; };
+    var isTgUid = function (u) { return /^[1-9]\d{2,19}$/.test(String(u == null ? '' : u)); };
     var hap = function (k) { try { if (k === 'ok') Haptics.success(); else Haptics.warning(); } catch (e) {} };
     var pwOff = function () { try { return Date.now() < (parseInt(localStorage.getItem(OFF_KEY), 10) || 0); } catch (e) { return false; } };
     var setPwOff = function () { try { localStorage.setItem(OFF_KEY, String(Date.now() + 6 * 3600 * 1000)); } catch (e) {} };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var fmt = function (n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+    var proxy = function () { try { return typeof TG_PROXY !== 'undefined' ? TG_PROXY : ''; } catch (e) { return ''; } };
+    // Worker'ga POST (vaqt chegarasi bilan). { status, data } — tarmoq xatosida throw.
+    var post = async function (path, body, ms) {
+        var ctl = null; try { ctl = new AbortController(); } catch (e) {}
+        var timer = ctl ? setTimeout(function () { try { ctl.abort(); } catch (e) {} }, ms || 15000) : null;
+        try {
+            var resp = await fetch(proxy() + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), signal: ctl ? ctl.signal : undefined });
+            var data = await resp.json().catch(function () { return null; });
+            return { status: resp.status, data: data || {} };
+        } finally { if (timer) clearTimeout(timer); }
+    };
+    window._a1Post = post;
+    window._a1IsTgUid = isTgUid;
 
     if (inTelegram()) return;
 
-    /* ── Xato ko'rsatish: parol maydoni ichki o'ramda, shuning uchun .login-field ni topamiz ── */
+    /* ── Xato / maslahat ko'rsatish ── */
     var fieldOf = function (el) { return el && (el.closest ? el.closest('.login-field') : null) || (el && el.parentNode); };
     window._loginSetErr = function (id, msg) {
         var el = $(id), err = $('err-' + id), f = fieldOf(el);
@@ -42460,39 +42570,48 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
         if (err) err.textContent = msg || '';
     };
     window._loginClearErr = function (id) { var f = fieldOf($(id)); if (f) f.classList.remove('has-err'); };
+    function setHint(t) { var h = $('login-hint'); if (!h) return; h.textContent = t || ''; h.hidden = !t; }
 
-    /* ── Rejim: kirish / ro'yxatdan o'tish ── */
-    var mode = 'register', upgrade = false;
+    /* ── Rejimlar: phone (asosiy) / login / register; linkMode — eski hisobni saqlash ── */
+    var mode = 'phone', upgrade = false, linkMode = false, closable = false;
     var TXT = {
-        register: { t: 'Ro\u2018yxatdan o\u2018tish', s: 'Ism, telefon raqam va o\u2018zingiz o\u2018ylab topgan parolni kiriting. Keyingi safar raqam va parol bilan kirasiz.', b: 'Ro\u2018yxatdan o\u2018tish' },
-        login: { t: 'Kirish', s: 'Telefon raqamingiz va parolingizni kiriting.', b: 'Kirish' },
+        phone: { t: 'Kirish', s: 'Telefon raqamingizni kiriting \u2014 Telegram orqali tasdiqlaymiz. Telegram\u2019dagi mini app bilan bitta hisob: buyurtmalar, keshbek va savat.', b: 'Davom etish' },
+        link: { t: 'Hisobingizni saqlang', s: 'Raqamingizni kiriting \u2014 Telegram orqali tasdiqlaymiz. Bu qurilmadagi buyurtmalar va keshbek Telegram hisobingizga o\u2018tadi.', b: 'Davom etish' },
+        register: { t: 'Ro\u2018yxatdan o\u2018tish', s: 'Telegram\u2019siz: ism, telefon raqam va o\u2018zingiz o\u2018ylab topgan parol. Keyingi safar raqam va parol bilan kirasiz.', b: 'Ro\u2018yxatdan o\u2018tish' },
+        login: { t: 'Parol bilan kirish', s: 'Telefon raqamingiz va parolingizni kiriting.', b: 'Kirish' },
         upgrade: { t: 'Parol o\u2018rnating', s: 'Hisobingiz xavfsizligi uchun parol o\u2018ylab toping. Buyurtmalar va keshbek saqlanib qoladi.', b: 'Parolni saqlash' }
     };
     function paint() {
-        var key = (mode === 'register' && upgrade) ? 'upgrade' : mode;
+        var key = mode === 'phone' ? (linkMode ? 'link' : 'phone') : ((mode === 'register' && upgrade) ? 'upgrade' : mode);
         var t = document.querySelector('#login-screen .login-title'); if (t) t.textContent = TXT[key].t;
         var s = document.querySelector('#login-screen .login-sub'); if (s) s.textContent = TXT[key].s;
         var b = $('login-submit-btn'); if (b && b.dataset.busy !== '1') b.textContent = TXT[key].b;
         var seg = $('login-mode');
-        if (seg) { seg.hidden = false; seg.querySelectorAll('button').forEach(function (x) { var on = x.getAttribute('data-m') === mode; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); }); }
+        if (seg) { seg.hidden = mode === 'phone'; seg.querySelectorAll('button').forEach(function (x) { var on = x.getAttribute('data-m') === mode; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); }); }
         var show = function (id, on) { var e = $(id); if (e) e.hidden = !on; };
         show('login-name-field', mode === 'register');
-        show('login-pass-field', true);
+        show('login-pass-field', mode !== 'phone');
         show('login-pass2-field', mode === 'register');
         show('login-forgot', mode === 'login');
+        show('login-pw-alt', mode === 'phone');
+        show('login-phone-alt', mode !== 'phone');
+        show('login-close', closable);
+        var cardEl = document.querySelector('#login-screen .login-card'); if (cardEl) cardEl.classList.toggle('is-closable', closable);
         var p = $('login-pass'); if (p) p.setAttribute('autocomplete', mode === 'login' ? 'current-password' : 'new-password');
+        var ph = $('login-phone'); if (ph) ph.setAttribute('enterkeyhint', mode === 'phone' ? 'go' : 'next');
         ['login-name', 'login-phone', 'login-pass', 'login-pass2'].forEach(window._loginClearErr);
     }
-    window._loginSetMode = function (m) { mode = m === 'login' ? 'login' : 'register'; paint(); try { Haptics.tap && Haptics.tap(); } catch (e) {} };
+    function setMode(m) { mode = m; setHint(''); paint(); }
+    window._loginSetMode = function (m) { setMode(m === 'login' ? 'login' : 'register'); try { Haptics.tap && Haptics.tap(); } catch (e) {} };
     window._loginToggleEye = function () {
         var on = $('login-pass') && $('login-pass').type === 'password';
         ['login-pass', 'login-pass2'].forEach(function (id) { var e = $(id); if (e) e.type = on ? 'text' : 'password'; });
         var b = document.querySelector('#login-screen .login-eye'); if (b) { b.classList.toggle('on', on); b.setAttribute('aria-label', on ? 'Parolni yashirish' : 'Parolni ko\u2018rsatish'); }
     };
     window._loginForgot = function () {
-        var msg = 'Parolni tiklash uchun do\u2018kon bilan bog\u2018laning \u2014 raqamingizni tekshirib, yangi parol o\u2018rnatishga yordam beramiz.';
+        var msg = 'Raqamingiz Telegram\u2019ga ulangan bo\u2018lsa, parol kerak emas: \u00ab\u2190 Raqam bilan kirish\u00bb ni bosing va Telegram\u2019da tasdiqlang.\n\nTelegram bo\u2018lmasa \u2014 do\u2018kon bilan bog\u2018laning, raqamingizni tekshirib yangi parol o\u2018rnatishga yordam beramiz.';
         try {
-            if (window.ShopInfo && ShopInfo.tgUrl && window.confirm(msg + '\n\nTelegram orqali yozasizmi?')) { window.a1OpenExternal ? a1OpenExternal(ShopInfo.tgUrl()) : (location.href = ShopInfo.tgUrl()); return; }
+            if (window.ShopInfo && ShopInfo.tgUrl && window.confirm(msg + '\n\nDo\u2018konga Telegram orqali yozasizmi?')) { window.a1OpenExternal ? a1OpenExternal(ShopInfo.tgUrl()) : (location.href = ShopInfo.tgUrl()); return; }
             if (!(window.ShopInfo && ShopInfo.tgUrl)) window.alert(msg);
         } catch (e) { try { window.alert(msg); } catch (e2) {} }
     };
@@ -42509,11 +42628,11 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
         return ['login-phone', 'Xatolik yuz berdi. Qayta urinib ko\u2018ring'];
     }
 
-    function busy(on) {
+    function busy(on, label) {
         var b = $('login-submit-btn'); if (!b) return;
         b.dataset.busy = on ? '1' : '0';
         b.classList.toggle('is-loading', on);
-        if (on) b.textContent = mode === 'login' ? 'Kirilmoqda\u2026' : 'Saqlanmoqda\u2026'; else paint();
+        if (on) b.textContent = label || (mode === 'login' ? 'Kirilmoqda\u2026' : 'Saqlanmoqda\u2026'); else paint();
     }
 
     function hideScreen() {
@@ -42555,17 +42674,22 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
                  .catch(function (e) { if (window._dwarn) window._dwarn('[profil] ro\u2018yxatdan o\u2018tish yozilmadi:', e); });
             } else { w.catch(function () {}); }
         }
+        // Parolli hisob raqamini indekslaymiz (Telegram'da «birlashtiraymi?» taklifi uchun)
+        if (!isTgUid(u.uid)) { try { sessionCheck(u, true); } catch (e) {} }
         hap('ok');
         hideScreen();
         busy(false);
+        panel(null);
         try { updateProfileUI(); } catch (e) {}
         try { showToast((isNew ? 'Xush kelibsiz, ' : 'Qaytganingiz bilan, ') + name + '!', 'success'); } catch (e) {}
         if (!window._a1UserInited) { try { initUserData(); } catch (e) {} }
+        try { if (window.a1AccountRefresh) window.a1AccountRefresh(); } catch (e) {}
     }
 
-    /* ── Asosiy: «Kirish» / «Ro'yxatdan o'tish» tugmasi ── */
+    /* ── Asosiy tugma: «Davom etish» (raqam) / «Kirish» / «Ro'yxatdan o'tish» ── */
     window.manualLogin = async function () {
         var b = $('login-submit-btn'); if (b && b.dataset.busy === '1') return;
+        if (mode === 'phone') { await phoneContinue(); return; }
         var name = ($('login-name') || {}).value ? $('login-name').value.trim() : '';
         var phone = ($('login-phone') || {}).value ? $('login-phone').value.trim() : '';
         var pass = ($('login-pass') || {}).value || '';
@@ -42618,77 +42742,189 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
         try { await finish(u, name, phone, mode === 'register'); } catch (e) { busy(false); }
     };
 
+    /* ── Karta ichidagi panellar (kutish / tanlov / birlashtirish) ── */
+    function panel(id) {
+        var card = document.querySelector('#login-screen .login-card'); if (!card) return;
+        ['login-tg-wait', 'login-choice', 'login-merge'].forEach(function (k) { var e = $(k); if (e) { e.hidden = k !== id; e.classList.toggle('lp-on', k === id); } });
+        card.classList.toggle('lp-panel', !!id);
+    }
 
-    /* ── 📱 TELEGRAM ORQALI KIRISH (ilova ↔ mini app — BITTA hisob) ──
-       Ilova tasodifiy kod yaratadi va botni ochadi: t.me/avtoa1bot?start=login_<kod>.
-       Mijoz botda «✅ Ha, kirish» ni bosadi -> bot tasdiqni yozadi -> Worker
-       (/tg-login-poll) bir martalik Firebase token beradi -> ilova AYNAN
-       Telegram hisobiga kiradi: profil rasmi, buyurtmalar, keshbek umumiy. */
-    var TG_BOT = 'avtoa1bot';
-    var tgf = null;
+    /* ── 1) RAQAM BILAN KIRISH ── */
     var hex = function (n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); };
+    async function phoneContinue() {
+        var d = digitsOf(($('login-phone') || {}).value);
+        if (d.length === 9) d = '998' + d;
+        if (d.length !== 12) { window._loginSetErr('login-phone', 'To\u2018liq raqam kiriting: +998 90 123 45 67'); hap('err'); try { $('login-phone').focus(); } catch (e) {} return; }
+        setHint('');
+        busy(true, 'Tekshirilmoqda\u2026');
+        var nonce = hex(16), r;
+        try { r = await post('/login-phone', { phone: '+' + d, nonce: nonce }, 15000); }
+        catch (e) { busy(false); window._loginSetErr('login-phone', 'Internet aloqasini tekshiring'); hap('err'); return; }
+        busy(false);
+        var data = r.data || {};
+        if (r.status === 404) {
+            // Worker hali yangilanmagan — raqam bo'yicha kirish yo'q: Telegram havolasi yoki parol
+            choiceShow('old');
+            return;
+        }
+        if (r.status === 429) { window._loginSetErr('login-phone', 'Juda ko\u2018p urinish. ' + Math.max(1, Math.ceil((Number(data.retryAfter) || 900) / 60)) + ' daqiqadan keyin qayta urinib ko\u2018ring'); hap('err'); return; }
+        if (r.status === 403 && data.blocked) { window._loginSetErr('login-phone', 'Bu hisob bloklangan. Do\u2018kon bilan bog\u2018laning'); hap('err'); return; }
+        if (!(r.status >= 200 && r.status < 300) || !data.ok) { window._loginSetErr('login-phone', 'Xatolik yuz berdi. Qayta urinib ko\u2018ring'); hap('err'); return; }
+        if (data.method === 'match') { matchStart(nonce, String(data.code || ''), String(data.phone || '')); return; }
+        if (data.method === 'password') {
+            setMode('login');
+            setHint('Bu raqam parol bilan ro\u2018yxatdan o\u2018tgan \u2014 parolingizni kiriting.');
+            try { $('login-pass').focus(); } catch (e) {}
+            return;
+        }
+        choiceShow(data.reason === 'unreachable' ? 'unreachable' : 'new');
+    }
+    function choiceShow(kind) {
+        var w = $('login-choice'); if (!w) return;
+        var h = w.querySelector('h3'), p = w.querySelector('p');
+        if (kind === 'unreachable') {
+            h.textContent = 'Bot sizga yoza olmadi';
+            p.textContent = 'Telegram\u2019da @' + TG_BOT + ' to\u2018xtatilgan bo\u2018lishi mumkin. \u00abTelegram orqali kirish\u00bb ni bosing \u2014 bot qayta ochiladi va kirishni tasdiqlaysiz.';
+        } else if (kind === 'old') {
+            h.textContent = 'Telegram orqali kiring';
+            p.textContent = 'Telegram\u2019dagi botimiz kirishni bir bosishda tasdiqlaydi. Telegram\u2019ingiz bo\u2018lmasa \u2014 parol bilan ro\u2018yxatdan o\u2018ting.';
+        } else {
+            h.textContent = 'Raqam hali Telegram\u2019ga ulanmagan';
+            p.textContent = 'Bir marta Telegram orqali kiring \u2014 bot raqamingizni so\u2018raydi va keyingi safar shu raqam bilan bir bosishda kirasiz.';
+        }
+        panel('login-choice');
+        hap('light');
+    }
+
+    /* ── Telegram'da tasdiqlashni kutish (raqam / havola) ── */
+    var tgf = null;
     var codeOf = function (nonce) { return String(parseInt(nonce.slice(0, 6), 16) % 9000 + 1000); };
-    var tgLink = function () { return 'https://t.me/' + TG_BOT + '?start=login_' + tgf.nonce; };
-    var openTg = function () { try { if (window.a1OpenExternal) a1OpenExternal(tgLink()); else location.href = tgLink(); } catch (e) {} };
+    var tgLink = function (f) { return 'https://t.me/' + TG_BOT + (f && f.kind === 'link' ? '?start=login_' + f.nonce : ''); };
+    // APK (Capacitor) — tizim Telegram ilovasini ochadi. Brauzer/PWA — YANGI oynada:
+    // joriy sahifa (va tasdiqni kutish) yopilib ketmasin.
+    var openExt = function (u) {
+        try {
+            if (window.A1_APP && !window.A1_PWA && window.a1OpenExternal) { a1OpenExternal(u); return; }
+            // ('noopener' bermaymiz: u bilan window.open doim null qaytaradi)
+            var w = window.open(u, '_blank');
+            if (w) { try { w.opener = null; } catch (e) {} }
+            else if (window.a1OpenExternal) a1OpenExternal(u);
+        } catch (e) { try { location.href = u; } catch (e2) {} }
+    };
+    window._a1OpenTelegram = openExt;
+    var openTg = function () { openExt(tgLink(tgf)); };
+    var TG_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.3-.2 1.6l4.7 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.5-1.5zM9.8 14.6l-.4 3.8-1.4-4.6 10.3-6.5-8.5 7.3z"/></svg>';
+    var BACK_SVG = '<svg class="lp-back" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     function tgUI() {
         var card = document.querySelector('#login-screen .login-card'); if (!card || $('login-tg-btn')) return;
         var btn = $('login-submit-btn');
+        // Kichik maslahat (neytral) — sarlavha ostida
+        var sub = card.querySelector('.login-sub');
+        if (sub && !$('login-hint')) { var hn = document.createElement('p'); hn.id = 'login-hint'; hn.className = 'login-hint'; hn.hidden = true; sub.parentNode.insertBefore(hn, sub.nextSibling); }
         var wrap = document.createElement('div'); wrap.className = 'login-tg-box';
         wrap.innerHTML = '<div class="login-or"><span>yoki</span></div>' +
-            '<button type="button" class="login-tg" id="login-tg-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.3-.2 1.6l4.7 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.5-1.5zM9.8 14.6l-.4 3.8-1.4-4.6 10.3-6.5-8.5 7.3z"/></svg>Telegram orqali kirish</button>' +
+            '<button type="button" class="login-tg" id="login-tg-btn">' + TG_SVG + 'Telegram orqali kirish</button>' +
             '<p class="login-tg-hint">Telegram\u2019dagi mini app bilan bir xil hisob: rasm, buyurtmalar va keshbek.</p>';
         if (btn && btn.parentNode) btn.parentNode.insertBefore(wrap, btn.nextSibling);
+        // Matnli o'tish tugmalari (raqam <-> parol)
+        var alt1 = document.createElement('button'); alt1.type = 'button'; alt1.id = 'login-pw-alt'; alt1.className = 'login-alt';
+        alt1.textContent = 'Telegram\u2019im yo\u2018q \u2014 parol bilan';
+        alt1.onclick = function () { setMode('login'); try { Haptics.tap && Haptics.tap(); } catch (e) {} };
+        var alt2 = document.createElement('button'); alt2.type = 'button'; alt2.id = 'login-phone-alt'; alt2.className = 'login-alt'; alt2.hidden = true;
+        // «←» belgisi ba'zi shriftlarda «▯» bo'lib chiqadi — SVG chevron
+        alt2.innerHTML = BACK_SVG + 'Raqam bilan kirish (Telegram orqali)';
+        alt2.onclick = function () { setMode('phone'); try { Haptics.tap && Haptics.tap(); } catch (e) {} };
+        if (btn && btn.parentNode) { btn.parentNode.insertBefore(alt2, btn.nextSibling); btn.parentNode.insertBefore(alt1, btn.nextSibling); }
+        // Profil -> «Telegram bilan bog'lash» dan ochilganda: yopish
+        var cl = document.createElement('button'); cl.type = 'button'; cl.id = 'login-close'; cl.className = 'login-close'; cl.hidden = true; cl.setAttribute('aria-label', 'Yopish');
+        cl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+        cl.onclick = function () { tgStop(); closable = false; linkMode = false; mode = 'phone'; paint(); hideScreen(); };
+        card.insertBefore(cl, card.firstChild);
+        // Kutish paneli
         var w = document.createElement('div'); w.id = 'login-tg-wait'; w.hidden = true;
-        w.innerHTML = '<div class="tgw-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.3-.2 1.6l4.7 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.5-1.5z"/></svg></div>' +
-            '<h3>Telegram\u2019da tasdiqlang</h3><p>Botda <b>\u00ab\u2705 Ha, kirish\u00bb</b> tugmasini bosing va shu yerga qayting.</p>' +
-            '<div class="tgw-code"><small>Tekshiruv kodi</small><b id="tgw-code">0000</b></div>' +
+        w.innerHTML = '<div class="tgw-ic">' + TG_SVG + '</div>' +
+            '<h3 id="tgw-h">Telegram\u2019da tasdiqlang</h3><p id="tgw-p"></p>' +
+            '<div class="tgw-code" id="tgw-box"><small id="tgw-lbl">Tekshiruv kodi</small><b id="tgw-code">0000</b></div>' +
             '<p class="tgw-st" id="tgw-st">Tasdiq kutilmoqda\u2026</p>' +
             '<button type="button" class="login-tg" id="tgw-open">Telegram\u2019ni ochish</button>' +
             '<button type="button" class="login-forgot" id="tgw-cancel">Bekor qilish</button>';
         card.appendChild(w);
-        $('login-tg-btn').onclick = tgStart;
+        // Tanlov paneli (raqam hali ulanmagan)
+        var c = document.createElement('div'); c.id = 'login-choice'; c.className = 'login-panel'; c.hidden = true;
+        c.innerHTML = '<div class="tgw-ic">' + TG_SVG + '</div><h3></h3><p></p>' +
+            '<button type="button" class="login-tg" id="lc-tg">' + TG_SVG + 'Telegram orqali kirish</button>' +
+            '<button type="button" class="login-sec" id="lc-pw">Telegram\u2019siz ro\u2018yxatdan o\u2018tish</button>' +
+            '<button type="button" class="login-forgot" id="lc-back">' + BACK_SVG + 'Raqamni o\u2018zgartirish</button>';
+        card.appendChild(c);
+        // Birlashtirish paneli
+        var m = document.createElement('div'); m.id = 'login-merge'; m.className = 'login-panel'; m.hidden = true;
+        m.innerHTML = '<div class="tgw-ic is-gold"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></div>' +
+            '<h3>Hisoblarni birlashtiraymi?</h3><p id="lm-p"></p>' +
+            '<button type="button" class="login-tg is-gold" id="lm-yes">Ha, birlashtirish</button>' +
+            '<button type="button" class="login-forgot" id="lm-no">Yo\u2018q, faqat kirish</button>';
+        card.appendChild(m);
+        $('login-tg-btn').onclick = function () { tgStart(); };
         $('tgw-open').onclick = openTg;
         $('tgw-cancel').onclick = function () { tgStop(); };
-    }
-    function tgShow(on) {
-        var card = document.querySelector('#login-screen .login-card'); if (card) card.classList.toggle('tg-waiting', !!on);
-        var w = $('login-tg-wait'); if (w) w.hidden = !on;
+        $('lc-tg').onclick = function () { tgStart(); };
+        $('lc-pw').onclick = function () { panel(null); setMode('register'); try { $('login-name').focus(); } catch (e) {} };
+        $('lc-back').onclick = function () { panel(null); try { $('login-phone').focus(); } catch (e) {} };
     }
     function tgStatus(t, bad) { var e = $('tgw-st'); if (e) { e.textContent = t; e.classList.toggle('bad', !!bad); } }
     function tgStop(msg) {
         if (tgf) { clearTimeout(tgf.t); tgf = null; }
-        tgShow(false);
+        panel(null);
         if (msg) window._loginSetErr('login-phone', msg);
+    }
+    function waitPaint(f, masked) {
+        var match = f.kind === 'match';
+        $('tgw-h').textContent = match ? 'Telegram\u2019da raqamni tanlang' : 'Telegram\u2019da tasdiqlang';
+        $('tgw-p').innerHTML = match
+            ? '@' + TG_BOT + ' sizga xabar yubordi' + (masked ? ' (' + esc(masked) + ')' : '') + '. Shu <b>raqamni</b> bosing:'
+            : 'Botda <b>\u00ab\u2705 Ha, kirish\u00bb</b> tugmasini bosing va shu yerga qayting.';
+        $('tgw-lbl').textContent = match ? 'Ekrandagi raqam' : 'Tekshiruv kodi';
+        $('tgw-code').textContent = match ? f.code : codeOf(f.nonce);
+        $('tgw-box').classList.toggle('is-match', match);
+        tgStatus('Tasdiq kutilmoqda\u2026');
+    }
+    function matchStart(nonce, code, masked) {
+        tgStop();
+        tgf = { nonce: nonce, kind: 'match', code: code, started: Date.now(), t: 0, busy: false, link: linkMode };
+        waitPaint(tgf, masked);
+        panel('login-tg-wait');
+        hap('ok');
+        tgf.t = setTimeout(tgPoll, 2000);
     }
     function tgStart() {
         tgStop();
-        tgf = { nonce: hex(16), started: Date.now(), t: 0, busy: false };
-        var c = $('tgw-code'); if (c) c.textContent = codeOf(tgf.nonce);
-        tgStatus('Tasdiq kutilmoqda\u2026');
-        tgShow(true);
+        tgf = { nonce: hex(16), kind: 'link', started: Date.now(), t: 0, busy: false, link: linkMode };
+        waitPaint(tgf, '');
+        panel('login-tg-wait');
         try { Haptics.tap && Haptics.tap(); } catch (e) {}
         openTg();
         tgf.t = setTimeout(tgPoll, 2500);
     }
     async function tgPoll() {
         var f = tgf; if (!f || f.busy) return;
-        if (Date.now() - f.started > 5 * 60 * 1000) { tgStop('Vaqt tugadi. \u00abTelegram orqali kirish\u00bb ni qayta bosing'); return; }
+        if (Date.now() - f.started > 5 * 60 * 1000) { tgStop('Vaqt tugadi. Qayta urinib ko\u2018ring'); return; }
         f.busy = true;
         try {
-            var resp = await fetch(TG_PROXY + '/tg-login-poll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nonce: f.nonce }) });
-            var data = await resp.json().catch(function () { return null; });
+            var r = await post('/tg-login-poll', { nonce: f.nonce, match: f.kind === 'match' }, 12000);
+            var data = r.data;
             if (f !== tgf) return;
-            if (resp.status === 404) { tgStop('Telegram orqali kirish hali yoqilmagan. Telefon va parol bilan kiring'); return; }
-            if (resp.status === 410) { tgStop('Tasdiq eskirgan. Qayta urinib ko\u2018ring'); return; }
+            if (r.status === 404 && !data.ok) { tgStop('Telegram orqali kirish hali yoqilmagan. Telefon va parol bilan kiring'); return; }
+            if (r.status === 410) { tgStop('Tasdiq eskirgan. Qayta urinib ko\u2018ring'); return; }
+            if (r.status === 403 && data.denied) {
+                hap('err');
+                tgStop(data.reason === 'bad' ? 'Telegram\u2019da boshqa raqam tanlandi \u2014 xavfsizlik uchun so\u2018rov bekor qilindi. Qayta urinib ko\u2018ring'
+                    : data.reason === 'unreachable' ? 'Telegram\u2019ga yuborib bo\u2018lmadi \u2014 \u00abTelegram orqali kirish\u00bb ni bosing'
+                    : 'Kirish Telegram\u2019da rad etildi');
+                return;
+            }
+            if (r.status === 403 && data.blocked) { tgStop('Bu hisob bloklangan. Do\u2018kon bilan bog\u2018laning'); return; }
             if (data && data.ok && data.token) {
-                tgStatus('Kirilmoqda\u2026');
-                var A = auth();
-                var cred = await A.signInWithCustomToken(data.token);
-                var u = (cred && cred.user) || A.currentUser;
                 tgf = null;
-                try { localStorage.setItem('a1_had_account', '1'); } catch (e) {}
-                await finish(u, data.name || '', '', false);
-                tgShow(false);
+                await onTgToken(data, f);
                 return;
             }
         } catch (e) {
@@ -42700,7 +42936,155 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
     document.addEventListener('visibilitychange', function () {
         if (!document.hidden && tgf && !tgf.busy) { clearTimeout(tgf.t); tgPoll(); }
     });
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tgUI); else tgUI();
+
+    /* ── Telegram tasdiqladi: (kerak bo'lsa) birlashtirish -> kirish ── */
+    async function readCounts(uid) {
+        // Shu qurilmada yuklangan ma'lumot shu uid'niki bo'lsa — o'shani olamiz
+        var c = { orders: 0, cashback: 0, cart: 0 };
+        if (window._a1UserInited && String(window.currentUser) === String(uid)) {
+            try { c.orders = (window.myOrders || []).length; } catch (e) {}
+            try { c.cashback = window.Phase2 && Phase2.balance ? Math.max(0, Number(Phase2.balance()) || 0) : 0; } catch (e) {}
+            try { c.cart = (typeof cart !== 'undefined' && cart) ? Object.keys(cart).length : 0; } catch (e) {}
+            return c;
+        }
+        try {
+            var DB = firebase.database();
+            var snap = await Promise.race([DB.ref('users/' + uid).once('value'), new Promise(function (res) { setTimeout(function () { res(null); }, 5000); })]);
+            var v = snap && snap.val ? (snap.val() || {}) : {};
+            var o = v.orders; c.orders = Array.isArray(o) ? o.filter(Boolean).length : (o ? Object.keys(o).length : 0);
+            var p2 = v.phase2 || {}; c.cashback = Math.max(0, (Number(p2.cashbackTotal) || 0) + (Number(p2.cashbackRefunded) || 0) - (Number(p2.cashbackSpent) || 0));
+            c.cart = v.cart ? Object.keys(v.cart).length : 0;
+        } catch (e) {}
+        return c;
+    }
+    async function legacySnapshot() {
+        var A = auth(), cur = A && A.currentUser;
+        if (!cur || isTgUid(cur.uid)) return null;
+        var tok = null;
+        try { tok = await cur.getIdToken(); } catch (e) {}
+        if (!tok) return null;
+        var c = await readCounts(cur.uid);
+        return { uid: cur.uid, token: tok, orders: c.orders, cashback: c.cashback, cart: c.cart, valuable: c.orders > 0 || c.cashback > 0 || c.cart > 0 };
+    }
+    function askMerge(legacy, tgName) {
+        return new Promise(function (resolve) {
+            var parts = [];
+            if (legacy.orders) parts.push('<b>' + legacy.orders + ' ta buyurtma</b>');
+            if (legacy.cashback) parts.push('<b>' + fmt(legacy.cashback) + ' so\u2018m keshbek</b>');
+            if (legacy.cart && !legacy.orders) parts.push('savatda ' + legacy.cart + ' ta tovar');
+            $('lm-p').innerHTML = 'Bu qurilmadagi hisobda ' + (parts.join(' va ') || 'ma\u2019lumotlar') + ' bor. Ularni ' +
+                (tgName ? '<b>' + esc(tgName) + '</b> \u2014 ' : '') + 'Telegram hisobingizga o\u2018tkazaymi? Keyin Telegram, ilova va saytda bitta hisob bo\u2018ladi.';
+            panel('login-merge');
+            hap('light');
+            var done = function (v) { $('lm-yes').onclick = $('lm-no').onclick = null; resolve(v); };
+            $('lm-yes').onclick = function () { done(true); };
+            $('lm-no').onclick = function () { done(false); };
+        });
+    }
+    async function mergeLegacy(u, legacyToken) {
+        for (var attempt = 0; attempt < 2; attempt++) {
+            try {
+                var tok = await u.getIdToken();
+                var r = await post('/merge-legacy', { idToken: tok, legacyIdToken: legacyToken }, 30000);
+                if (r.status === 200 && r.data.ok) return { ok: true, data: r.data };
+                if (r.data && r.data.retryable && attempt === 0) { await new Promise(function (res) { setTimeout(res, 4000); }); continue; }
+                return { ok: false, error: (r.data && r.data.error) || ('HTTP ' + r.status) };
+            } catch (e) {
+                if (attempt === 0) continue;
+                return { ok: false, error: 'internet' };
+            }
+        }
+        return { ok: false, error: 'qayta urinib ko\u2018ring' };
+    }
+    async function onTgToken(data, f) {
+        var A = auth();
+        var legacy = null;
+        try { legacy = await legacySnapshot(); } catch (e) {}
+        var doMerge = false;
+        if (legacy) {
+            if (f.link) doMerge = true;                       // mijozning o'zi «hisobni saqlash/bog'lash» ni tanlagan
+            else if (legacy.valuable) doMerge = await askMerge(legacy, data.name);
+        }
+        panel('login-tg-wait');
+        tgStatus('Kirilmoqda\u2026');
+        var u = null;
+        try {
+            var cred = await A.signInWithCustomToken(data.token);
+            u = (cred && cred.user) || A.currentUser;
+        } catch (e) {
+            tgStop('Kirib bo\u2018lmadi \u2014 internetni tekshirib qayta urinib ko\u2018ring');
+            return;
+        }
+        try { localStorage.setItem('a1_had_account', '1'); } catch (e) {}
+        if (doMerge && legacy) {
+            tgStatus('Hisoblar birlashtirilmoqda\u2026');
+            var res = await mergeLegacy(u, legacy.token);
+            var note;
+            if (res.ok) {
+                var d = res.data || {}, bits = [];
+                if (d.orders) bits.push(d.orders + ' ta buyurtma');
+                if (d.cashback) bits.push(fmt(d.cashback) + ' so\u2018m keshbek');
+                note = 'ok|\uD83D\uDD17 Hisoblar birlashtirildi' + (bits.length ? ': ' + bits.join(', ') : '');
+            } else {
+                note = 'warn|Hisoblar birlashtirilmadi (' + res.error + '). Do\u2018kon bilan bog\u2018laning \u2014 qo\u2018lda birlashtirib beramiz.';
+            }
+            try { sessionStorage.setItem('a1_notice', note); } catch (e) {}
+        }
+        await finish(u, data.name || '', '', false);
+    }
+
+    /* ── 🔁 /session: bu qurilmadagi eski hisob boshqa joyda birlashtirilgan bo'lsa — Telegram hisobiga o'tamiz ── */
+    var sessP = null;
+    function sessionCheck(u, force) {
+        if (sessP && !force) return sessP;
+        sessP = (async function () {
+            if (!u || isTgUid(u.uid)) return false;
+            var tok; try { tok = await u.getIdToken(); } catch (e) { return false; }
+            var r; try { r = await post('/session', { idToken: tok }, 10000); } catch (e) { return false; }
+            var red = r && r.data && r.data.redirect;
+            if (!(r.status === 200 && red && red.token && isTgUid(red.uid))) return false;
+            try { await auth().signInWithCustomToken(red.token); } catch (e) { return false; }
+            var saved = {}; try { saved = JSON.parse(localStorage.getItem('avto_a1_user') || '{}') || {}; } catch (e) {}
+            saved.id = red.uid;
+            try {
+                localStorage.setItem('avto_a1_user', JSON.stringify(saved));
+                sessionStorage.setItem('a1_notice', 'ok|\uD83D\uDD17 Hisobingiz Telegram hisobiga birlashtirilgan \u2014 endi hamma joyda bitta hisob');
+            } catch (e) {}
+            location.reload();
+            return true;
+        })();
+        return sessP;
+    }
+    window.a1SessionCheck = function () { var A = auth(); return sessionCheck(A && A.currentUser, true); };
+    // Worker «bu uid birlashtirilgan» (409 redirect) desa — darhol ko'chamiz
+    (function hookWorkerPost() {
+        var orig = window._workerPost;
+        if (typeof orig !== 'function' || orig.__a1acct) return;
+        var w = async function () {
+            var r = await orig.apply(this, arguments);
+            try { if (r && r.resp && r.resp.status === 409 && r.data && r.data.redirect) window.a1SessionCheck(); } catch (e) {}
+            return r;
+        };
+        w.__a1acct = 1;
+        window._workerPost = w;
+    })();
+
+    /* ── Profil -> «Telegram bilan bog'lash» ── */
+    window.a1LinkTelegram = function () {
+        var ls = $('login-screen'); if (!ls) return;
+        var A = auth(), cur = A && A.currentUser;
+        linkMode = true; closable = true; upgrade = !!(cur && cur.isAnonymous); mode = 'phone';
+        try {
+            var ph = (typeof myProfile !== 'undefined' && myProfile && myProfile.phone) ? myProfile.phone : '';
+            if (!ph) { var sv = JSON.parse(localStorage.getItem('avto_a1_user') || '{}') || {}; ph = sv.phone || ''; }
+            if (ph && digitsOf(ph).length >= 9 && $('login-phone')) { $('login-phone').value = ph; try { window._loginFormatPhone($('login-phone')); } catch (e) {} }
+        } catch (e) {}
+        setHint('');
+        panel(null);
+        paint();
+        ls.classList.remove('hidden');
+        try { Haptics.tap && Haptics.tap(); } catch (e) {}
+    };
 
     /* ── Hisobdan chiqish ── */
     window.a1Logout = function () {
@@ -42709,7 +43093,7 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
             var A = auth();
             Promise.resolve(A ? A.signOut() : null).catch(function () {}).then(function () { location.reload(); });
         };
-        try { if (window.confirm('Hisobdan chiqasizmi? Qayta kirish uchun telefon raqam va parol kerak bo\u2018ladi.')) go(); } catch (e) { go(); }
+        try { if (window.confirm('Hisobdan chiqasizmi? Qayta kirish uchun telefon raqamingiz kerak bo\u2018ladi (Telegram orqali tasdiqlanadi).')) go(); } catch (e) { go(); }
     };
     function logoutRow() {
         var app = $('pfx-app'); if (!app || $('a1-logout-grp')) return;
@@ -42719,29 +43103,39 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
     }
 
     /* ── Ekranni boshlash ── */
-    function start() {
-        var ls = $('login-screen'); if (!ls) return;
-        logoutRow();
+    function notices() {
         try {
             var wn = sessionStorage.getItem('a1_welcome');
             if (wn) { sessionStorage.removeItem('a1_welcome'); setTimeout(function () { try { showToast('Qaytganingiz bilan, ' + wn + '!', 'success'); } catch (e) {} }, 900); }
+            var nt = sessionStorage.getItem('a1_notice');
+            if (nt) {
+                sessionStorage.removeItem('a1_notice');
+                var i = nt.indexOf('|'), kind = nt.slice(0, i), text = nt.slice(i + 1);
+                setTimeout(function () { try { showToast(text, kind === 'ok' ? 'success' : 'warning'); } catch (e) {} }, 1600);
+            }
         } catch (e) {}
-        if (pwOff()) return;   // provayder yoqilmagan — eski ekran o'zgarishsiz
+    }
+    function start() {
+        var ls = $('login-screen'); if (!ls) return;
+        tgUI();
+        logoutRow();
+        notices();
+        mode = 'phone';
         paint();
-        // Avval anonim (parolsiz) kirgan mijoz — bir marta parol o'rnatish taklif qilinadi
         if (window.currentUser && window._authSettled) {
             window._authSettled().then(function (u) {
-                if (!u || !u.isAnonymous || pwOff()) return;
-                var saved = {}; try { saved = JSON.parse(localStorage.getItem('avto_a1_user') || '{}'); } catch (e) {}
-                upgrade = true; mode = 'register';
-                if ($('login-name') && saved.name) $('login-name').value = saved.name;
-                if ($('login-phone') && saved.phone) { $('login-phone').value = saved.phone; try { window._loginFormatPhone($('login-phone')); } catch (e) {} }
-                paint();
-                ls.classList.remove('hidden');
+                if (!u || isTgUid(u.uid)) return;           // Telegram hisobi — hammasi joyida
+                sessionCheck(u).then(function (moved) {
+                    if (moved || !u.isAnonymous || pwOff()) return;
+                    // Avval anonim (parolsiz) kirgan mijoz — hisobni saqlash: Telegram (birlashtirib) yoki parol
+                    var saved = {}; try { saved = JSON.parse(localStorage.getItem('avto_a1_user') || '{}'); } catch (e) {}
+                    upgrade = true; linkMode = true; mode = 'phone';
+                    if ($('login-name') && saved.name) $('login-name').value = saved.name;
+                    if ($('login-phone') && saved.phone) { $('login-phone').value = saved.phone; try { window._loginFormatPhone($('login-phone')); } catch (e) {} }
+                    paint();
+                    ls.classList.remove('hidden');
+                });
             });
-        } else if (!window.currentUser) {
-            // Yangi qurilma: oldin shu qurilmada kirgan bo'lsa — darhol «Kirish» rejimi
-            try { if (localStorage.getItem('a1_had_account') === '1') { mode = 'login'; paint(); } } catch (e) {}
         }
     }
     // Ma'lumotlar yuklanganini belgilaymiz (hisob almashtirishda qayta yuklash uchun)
@@ -42754,6 +43148,293 @@ html[data-theme="light"] #login-tg-wait h3, html[data-theme="light"] #login-tg-w
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 
+</script>
+<style id="a1-account">
+/* ═══ 🪪 Profil → «Hisob» va raqamni tasdiqlash oynasi (iOS 26) ═══ */
+#pfx-acct[hidden], #pfx-acct-sec[hidden], #pfx-acct-foot[hidden] { display: none !important; }
+.pfx-foot { margin: 7px 14px 0; font-size: 12.5px; line-height: 1.4; color: var(--px-tx2); }
+.pfa-ok { color: #30d158; font-weight: 600; }
+.pfa-ck { display: inline-block; width: 15px; height: 15px; margin-left: 4px; vertical-align: -2px; }
+.pfa-warn { color: #ff9f0a; font-weight: 600; }
+html[data-theme="light"] .pfa-ok { color: #1f9d48; }
+html[data-theme="light"] .pfa-warn { color: #c46a00; }
+#a1acct { position: fixed; inset: 0; z-index: 100050; display: none; }
+#a1acct.on { display: block; }
+#a1acct .aa-dim { position: absolute; inset: 0; background: rgba(0,0,0,.48); opacity: 0; transition: opacity .25s ease; }
+#a1acct.on.in .aa-dim { opacity: 1; }
+#a1acct .aa-sheet {
+    position: absolute; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto;
+    padding: 22px 20px 18px; border-radius: 30px; text-align: center; color: #f5f5f7;
+    background: rgba(30,30,32,.97); box-shadow: 0 24px 60px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.08);
+    transform: translate3d(0,110%,0); transition: transform .42s cubic-bezier(.2,.9,.25,1);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+}
+#a1acct.on.in .aa-sheet { transform: none; }
+html[data-theme="light"] #a1acct .aa-sheet { background: rgba(255,255,255,.98); color: #1c1c1e; box-shadow: 0 24px 60px rgba(0,0,0,.18); }
+#a1acct .aa-ic { width: 60px; height: 60px; margin: 2px auto 14px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--aa-ic, #34c759); box-shadow: 0 10px 24px -6px var(--aa-ic, #34c759); }
+#a1acct .aa-ic svg { width: 30px; height: 30px; }
+#a1acct h3 { margin: 0 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -.4px; }
+#a1acct p { margin: 0 0 16px; font-size: 14.5px; line-height: 1.45; color: rgba(235,235,245,.68); }
+html[data-theme="light"] #a1acct p { color: rgba(60,60,67,.7); }
+#a1acct p b { color: inherit; font-weight: 600; }
+#a1acct input {
+    display: block; width: 100%; height: 48px; margin: 0 0 12px; padding: 0 14px; border: 0; border-radius: 14px; outline: none;
+    background: rgba(118,118,128,.24); color: inherit; font-weight: 400; font-size: 16px; line-height: 1; font-family: inherit; box-sizing: border-box;
+}
+#a1acct input:focus { box-shadow: 0 0 0 2px rgba(201,168,76,.7); }
+#a1acct .aa-err { min-height: 18px; margin: -6px 0 8px; font-size: 13px; color: #ff6961; text-align: left; }
+#a1acct button { display: block; width: 100%; height: 50px; margin-top: 8px; border: 0; border-radius: 15px; cursor: pointer; font-weight: 600; font-size: 16px; line-height: 1; font-family: inherit; letter-spacing: -.2px; -webkit-tap-highlight-color: transparent; transition: transform .25s cubic-bezier(.34,1.45,.64,1), opacity .2s; }
+#a1acct button:active { transform: scale(.97); }
+#a1acct button[disabled] { opacity: .55; }
+#a1acct .aa-pri { background: linear-gradient(135deg, #f0d060, #c9a84c 55%, #a8851f); color: #1a1405; box-shadow: 0 8px 20px -8px rgba(201,168,76,.8); }
+#a1acct .aa-sec { background: transparent; color: #c9a84c; }
+html.lite #a1acct .aa-dim, html.lite #a1acct .aa-sheet { transition-duration: .01s; }
+@media (prefers-reduced-motion: reduce) { #a1acct .aa-dim, #a1acct .aa-sheet { transition-duration: .01s; } }
+</style>
+<script id="a1-account-js">
+/* ═══════════════════════════════════════════════════════════════════
+   🪪 YAGONA HISOB — profil «Hisob» kartasi va raqam tasdig'i
+   • Telegram (mini app): «Raqamni tasdiqlash» -> Telegram'ning o'z
+     oynasi (requestContact). Javob Telegram imzosi bilan Worker'da
+     tekshiriladi (/phone-verify); bo'lmasa bot kontakt xabarini o'zi
+     tasdiqlaydi. Shundan keyin ilova/saytda SHU raqam bilan Telegram
+     hisobiga kiriladi. Ilovada parolli hisobi bo'lsa — paroli bilan
+     shu yerda birlashtiriladi (/merge-legacy).
+   • Ilova/sayt: Telegram hisobi bo'lmasa — «Telegram bilan bog'lash»;
+     raqam tasdiqlanmagan bo'lsa — botda raqamni ulashish.
+   ═══════════════════════════════════════════════════════════════════ */
+(function () {
+    'use strict';
+    var W = window, D = document;
+    var $ = function (id) { return D.getElementById(id); };
+    var TG_BOT = 'avtoa1bot';
+    var PROMPT_KEY = 'a1_phone_prompt_until';
+    var isTgUid = W._a1IsTgUid || function (u) { return /^[1-9]\d{2,19}$/.test(String(u == null ? '' : u)); };
+    var inTG = function () { try { return !!(typeof tg !== 'undefined' && tg && tg.initData); } catch (e) { return false; } };
+    var auth = function () { try { return (W.firebase && firebase.auth) ? firebase.auth() : null; } catch (e) { return null; } };
+    var authUid = function () { var A = auth(); var u = A && A.currentUser; return u ? String(u.uid) : ''; };
+    var DBX = function () { try { return (typeof db !== 'undefined' && db && db.ref) ? db : (W.firebase && firebase.database ? firebase.database() : null); } catch (e) { return null; } };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var toast = function (m, k) { try { if (typeof W.showToast === 'function') W.showToast(m, k || 'success'); } catch (e) {} };
+    var hap = function (k) { try { if (typeof W._hap === 'function') W._hap(k || 'light'); } catch (e) {} };
+    var fmt = function (n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+    var post = function (path, body, ms) { return W._a1Post ? W._a1Post(path, body, ms) : Promise.reject(new Error('post')); };
+    var fmtPhone = function (p) {
+        var d = String(p || '').replace(/[^0-9]/g, '');
+        return d.length === 12 && d.indexOf('998') === 0 ? '+998 ' + d.slice(3, 5) + ' ' + d.slice(5, 8) + ' ' + d.slice(8, 10) + ' ' + d.slice(10) : (d ? '+' + d : '');
+    };
+    var IC = {
+        tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.3-.2 1.6l4.7 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.5-1.5z"/></svg>',
+        phone: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 1H7C5.9 1 5 1.9 5 3v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm-5 21c-.8 0-1.5-.7-1.5-1.5S11.2 19 12 19s1.5.7 1.5 1.5S12.8 22 12 22zm5-4H7V4h10v14z"/></svg>',
+        link: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>',
+        ck: '<svg class="pfa-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.3 4.3L19 7.2" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    };
+
+    /* ── Tasdiqlangan raqam (users/{uid}/verify) — jonli ── */
+    var VER = null, verLoaded = false, verRef = null, verUid = '';
+    function watchVerify() {
+        var uid = authUid(), d = DBX();
+        if (!uid || !d || uid === verUid) return;
+        if (verRef) { try { verRef.off(); } catch (e) {} }
+        verUid = uid; verLoaded = false; VER = null;
+        verRef = d.ref('users/' + uid + '/verify');
+        verRef.on('value', function (s) {
+            var was = !!(VER && VER.phone), first = !verLoaded;
+            VER = s.val() || null; verLoaded = true;
+            render();
+            if (first && inTG() && !(VER && VER.phone)) setTimeout(maybePrompt, 7000);
+            if (!was && VER && VER.phone && W._a1VerifyWaiting) { W._a1VerifyWaiting = false; toast('\u2705 Raqam tasdiqlandi \u2014 endi ilova va saytda shu raqam bilan kirasiz', 'success'); }
+        }, function () { verLoaded = true; render(); });
+    }
+
+    /* ── Profil → «Hisob» ── */
+    function row(act, icon, color, label, valHtml) {
+        return '<button type="button" class="pfx-row" data-acct="' + act + '"><span class="pfx-ic" style="--ic:' + color + '">' + icon + '</span>' +
+            '<span class="pfx-lbl">' + label + '</span><span class="pfx-val">' + valHtml + '</span>' + (act !== 'none' ? '<span class="pfx-chev" aria-hidden="true">\u203A</span>' : '') + '</button>';
+    }
+    function render() {
+        var grp = $('pfx-acct'), sec = $('pfx-acct-sec'), foot = $('pfx-acct-foot');
+        if (!grp) return;
+        var uid = authUid();
+        if (!uid) { grp.hidden = sec.hidden = foot.hidden = true; return; }
+        var tgAcc = isTgUid(uid), phone = VER && VER.phone ? String(VER.phone) : '';
+        var html = '';
+        if (tgAcc) html += row('none', IC.tg, '#2AABEE', 'Telegram hisobi', '<span class="pfa-ok">Ulangan' + IC.ck + '</span>');
+        else html += row('link', IC.link, '#2AABEE', 'Telegram hisobi', '<span class="pfa-warn">Ulash</span>');
+        if (tgAcc) html += row(phone ? 'none' : 'verify', IC.phone, '#34c759', 'Telefon raqam', phone ? esc(fmtPhone(phone)) + '<span class="pfa-ok">' + IC.ck + '</span>' : (verLoaded ? '<span class="pfa-warn">Tasdiqlash</span>' : ''));
+        grp.innerHTML = html;
+        foot.textContent = tgAcc
+            ? (phone ? 'Telegram, ilova va saytda bitta hisob \u2014 istalgan joyda shu raqam bilan kirasiz.' : 'Raqamni tasdiqlang: ilova va saytda shu raqam bilan Telegram hisobingizga kirasiz.')
+            : 'Telegram bilan bog\u2018lang \u2014 buyurtmalar, keshbek va savat Telegram\u2019dagi mini app bilan birlashadi.';
+        grp.hidden = sec.hidden = foot.hidden = false;
+    }
+    D.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('#pfx-acct [data-acct]') : null;
+        if (!b) return;
+        var act = b.getAttribute('data-acct');
+        hap('light');
+        if (act === 'link') { if (typeof W.a1LinkTelegram === 'function') W.a1LinkTelegram(); return; }
+        if (act === 'verify') { startVerify(); return; }
+    });
+
+    /* ── Oyna (bottom sheet) ── */
+    var SH = null;
+    function sheet(o) {
+        return new Promise(function (resolve) {
+            if (!SH) {
+                SH = D.createElement('div'); SH.id = 'a1acct'; SH.setAttribute('role', 'dialog'); SH.setAttribute('aria-modal', 'true');
+                SH.innerHTML = '<div class="aa-dim"></div><div class="aa-sheet"><div class="aa-ic"></div><h3></h3><p></p><div class="aa-in"></div><button type="button" class="aa-pri"></button><button type="button" class="aa-sec"></button></div>';
+                D.body.appendChild(SH);
+            }
+            var ic = SH.querySelector('.aa-ic'), inBox = SH.querySelector('.aa-in'), pri = SH.querySelector('.aa-pri'), sec = SH.querySelector('.aa-sec');
+            ic.innerHTML = o.icon || IC.phone; ic.style.setProperty('--aa-ic', o.color || '#34c759');
+            SH.querySelector('h3').textContent = o.title || '';
+            SH.querySelector('p').innerHTML = o.html || '';
+            inBox.innerHTML = o.input ? '<input type="' + (o.input.type || 'text') + '" autocomplete="' + (o.input.autocomplete || 'off') + '" placeholder="' + esc(o.input.placeholder || '') + '"><div class="aa-err"></div>' : '';
+            pri.textContent = o.primary || 'OK'; pri.disabled = false;
+            sec.textContent = o.secondary || 'Yopish';
+            var close = function (v) {
+                SH.classList.remove('in');
+                setTimeout(function () { SH.classList.remove('on'); }, 260);
+                pri.onclick = sec.onclick = null; SH.querySelector('.aa-dim').onclick = null;
+                resolve(v);
+            };
+            var api = {
+                value: function () { var i = inBox.querySelector('input'); return i ? i.value : ''; },
+                error: function (t) { var e = inBox.querySelector('.aa-err'); if (e) e.textContent = t || ''; },
+                busy: function (on, t) { pri.disabled = !!on; pri.textContent = on ? (t || 'Kuting\u2026') : (o.primary || 'OK'); },
+                close: close
+            };
+            pri.onclick = function () { if (o.onPrimary) o.onPrimary(api); else close(true); };
+            sec.onclick = function () { close(false); };
+            SH.querySelector('.aa-dim').onclick = function () { close(false); };
+            SH.classList.add('on');
+            requestAnimationFrame(function () { requestAnimationFrame(function () { SH.classList.add('in'); }); });
+            hap('light');
+            if (o.input) setTimeout(function () { try { inBox.querySelector('input').focus(); } catch (e) {} }, 380);
+        });
+    }
+
+    /* ── Raqamni tasdiqlash ── */
+    function openBotPhone() {
+        var u = 'https://t.me/' + TG_BOT + '?start=phone';
+        W._a1VerifyWaiting = true;
+        try { if (inTG() && tg.openTelegramLink) { tg.openTelegramLink(u); return; } } catch (e) {}
+        try { if (typeof W._a1OpenTelegram === 'function') { W._a1OpenTelegram(u); return; } } catch (e) {}
+        try { W.open(u, '_blank'); } catch (e) {}
+    }
+    function canRequestContact() {
+        try { return inTG() && typeof tg.requestContact === 'function' && (!tg.isVersionAtLeast || tg.isVersionAtLeast('6.9')); } catch (e) { return false; }
+    }
+    function startVerify() {
+        if (!isTgUid(authUid())) { if (typeof W.a1LinkTelegram === 'function') W.a1LinkTelegram(); return; }
+        if (!canRequestContact()) { openBotPhone(); toast('Botda \u00ab\uD83D\uDCF1 Raqamni yuborish\u00bb tugmasini bosing', 'info'); return; }
+        try {
+            tg.requestContact(function (shared, res) {
+                if (!shared) { toast('Raqam ulashilmadi', 'info'); return; }
+                W._a1VerifyWaiting = true;
+                var raw = res && typeof res.response === 'string' ? res.response : '';
+                if (!raw) return;   // bot kontakt xabarini o'zi tasdiqlaydi (verify tinglovchisi xabar beradi)
+                post('/phone-verify', { initData: tg.initData, contact: raw }, 15000).then(function (r) {
+                    if (r.status === 200 && r.data && r.data.ok) {
+                        W._a1VerifyWaiting = false;
+                        VER = { phone: r.data.phone }; render();
+                        toast('\u2705 Raqam tasdiqlandi \u2014 endi ilova va saytda shu raqam bilan kirasiz', 'success');
+                        if (r.data.legacy && r.data.legacy.method === 'password') setTimeout(function () { offerPasswordMerge(r.data.phone); }, 700);
+                    }
+                }, function () {});
+            });
+        } catch (e) { openBotPhone(); }
+    }
+
+    /* ── Ilovadagi parolli hisobni Telegram hisobiga qo'shish (paroli bilan isbotlanadi) ── */
+    async function legacyTokenByPassword(phone, pass) {
+        var digits = String(phone || '').replace(/[^0-9]/g, '');
+        var name = 'a1legacy';
+        var app2 = null;
+        try { app2 = (firebase.apps || []).filter(function (a) { return a.name === name; })[0] || firebase.initializeApp(firebase.app().options, name); } catch (e) { app2 = null; }
+        if (!app2) throw new Error('app');
+        var A2 = app2.auth();
+        try { await A2.setPersistence(firebase.auth.Auth.Persistence.NONE); } catch (e) {}
+        var cred = await A2.signInWithEmailAndPassword(digits + '@tel.avtoa1.app', pass);
+        var tok = await cred.user.getIdToken();
+        try { await A2.signOut(); } catch (e) {}
+        return tok;
+    }
+    function offerPasswordMerge(phone) {
+        sheet({
+            icon: IC.link, color: '#c9a84c',
+            title: 'Ilovadagi hisobni qo\u2018shamizmi?',
+            html: 'Ilova yoki saytda <b>' + esc(fmtPhone(phone)) + '</b> raqami bilan parolli hisobingiz bor. Parolini kiriting \u2014 buyurtmalar va keshbek shu Telegram hisobiga o\u2018tadi.',
+            input: { type: 'password', placeholder: 'Ilovadagi parol', autocomplete: 'current-password' },
+            primary: 'Birlashtirish', secondary: 'Keyinroq',
+            onPrimary: async function (api) {
+                var pass = api.value();
+                if (pass.length < 6) { api.error('Parol kamida 6 ta belgi'); return; }
+                api.error(''); api.busy(true, 'Birlashtirilmoqda\u2026');
+                var tok;
+                try { tok = await legacyTokenByPassword(phone, pass); }
+                catch (e) {
+                    api.busy(false);
+                    api.error(/too-many/.test((e && e.code) || '') ? 'Juda ko\u2018p urinish \u2014 keyinroq' : /network/.test((e && e.code) || '') ? 'Internetni tekshiring' : 'Parol noto\u2018g\u2018ri');
+                    return;
+                }
+                var r;
+                try { r = await post('/merge-legacy', { initData: tg.initData, legacyIdToken: tok }, 30000); }
+                catch (e) { api.busy(false); api.error('Internetni tekshiring'); return; }
+                if (r.status === 200 && r.data && r.data.ok) {
+                    api.close(true);
+                    var d = r.data, bits = [];
+                    if (d.orders) bits.push(d.orders + ' ta buyurtma');
+                    if (d.cashback) bits.push(fmt(d.cashback) + ' so\u2018m keshbek');
+                    hap('success');
+                    toast('\uD83D\uDD17 Hisoblar birlashtirildi' + (bits.length ? ': ' + bits.join(', ') : ''), 'success');
+                    return;
+                }
+                api.busy(false);
+                api.error((r.data && r.data.error) ? String(r.data.error) : 'Birlashtirilmadi \u2014 qayta urinib ko\u2018ring');
+            }
+        });
+    }
+
+    /* ── Mini app: bir martalik taklif (7 kunda bir) ── */
+    var prompted = false;
+    function maybePrompt() {
+        if (prompted || !inTG() || !verLoaded || (VER && VER.phone) || !isTgUid(authUid())) return;
+        var until = 0; try { until = parseInt(localStorage.getItem(PROMPT_KEY), 10) || 0; } catch (e) {}
+        if (Date.now() < until) return;
+        prompted = true;
+        var tries = 0;
+        (function wait() {
+            // Boshqa oyna ochiq bo'lsa (savat, tovar, storis) — xalaqit bermaymiz
+            var busyUi = false;
+            try {
+                busyUi = !!(typeof activeModal !== 'undefined' && activeModal) || D.documentElement.classList.contains('a1sv-lock') ||
+                    !!(D.getElementById('welcome-screen') && D.getElementById('welcome-screen').offsetParent);
+            } catch (e) {}
+            if (busyUi && tries++ < 20) { setTimeout(wait, 6000); return; }
+            if (VER && VER.phone) return;
+            try { localStorage.setItem(PROMPT_KEY, String(Date.now() + 7 * 24 * 3600 * 1000)); } catch (e) {}
+            sheet({
+                icon: IC.phone, color: '#34c759',
+                title: 'Raqamingizni tasdiqlang',
+                html: 'Bir marta tasdiqlasangiz, <b>Avto A1 ilovasi va saytida</b> shu raqam bilan Telegram hisobingizga kirasiz \u2014 buyurtmalar va keshbek hamma joyda bitta.',
+                primary: 'Raqamni ulashish', secondary: 'Keyinroq'
+            }).then(function (yes) { if (yes) startVerify(); });
+        })();
+    }
+
+    /* ── Ulash ── */
+    function onAuth() { watchVerify(); render(); }
+    (function hook() {
+        var A = auth();
+        if (!A) { setTimeout(hook, 900); return; }
+        A.onAuthStateChanged(function () { onAuth(); });
+    })();
+    // Kirish/hisob almashganda (finish) — tinglovchini ham, kartani ham yangilaydi
+    W.a1AccountRefresh = function () { watchVerify(); render(); };
+    W.a1VerifyPhone = startVerify;
+})();
 </script>
 <style id="a1-app-perf">
 /* 📱 Ilova (Android/iPhone) ko'rinishi Telegram mini app bilan AYNAN bir xil:
@@ -42864,7 +43545,7 @@ html[data-theme="light"] #a1-inst { background: #fff; color: #1c1c1e; box-shadow
 #a1-inst span { color: rgba(235,235,245,.62); }
 html[data-theme="light"] #a1-inst span { color: rgba(60,60,67,.64); }
 #a1-inst svg { width: 16px; height: 16px; vertical-align: -3px; color: #0a84ff; }
-#a1-inst .go { flex: 0 0 auto; height: 34px; padding: 0 14px; border: 0; border-radius: 17px; cursor: pointer; font: 600 14px/1 inherit;
+#a1-inst .go { flex: 0 0 auto; height: 34px; padding: 0 14px; border: 0; border-radius: 17px; cursor: pointer; font-weight: 600; font-size: 14px; line-height: 1; font-family: inherit;
     background: linear-gradient(135deg, #f6dc7e, #d4af37 48%, #a07c1c); color: #1a1405; }
 #a1-inst .x { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; background: rgba(118,118,128,.24); color: inherit; font-size: 16px; line-height: 28px; }
 </style>
@@ -43120,7 +43801,7 @@ html[data-perf="low"] #a1sv .a1sv-bd, html.lite #a1sv .a1sv-bd { display: none; 
 #a1sv .a1sv-err.on { display: flex; }
 #a1sv .a1sv-err b { font-size: 16px; font-weight: 600; }
 #a1sv .a1sv-err span { font-size: 13.5px; color: rgba(255,255,255,.7); }
-#a1sv .a1sv-err button { margin-top: 4px; height: 38px; padding: 0 18px; border-radius: 19px; border: 0; font: 600 15px/1 inherit; color: #000; background: #fff; }
+#a1sv .a1sv-err button { margin-top: 4px; height: 38px; padding: 0 18px; border-radius: 19px; border: 0; font-weight: 600; font-size: 15px; line-height: 1; font-family: inherit; color: #000; background: #fff; }
 #a1sv .a1sv-hint { position: absolute; left: 50%; top: 50%; z-index: 5; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 22px; font-size: 14.5px; font-weight: 600; white-space: nowrap;
     background: rgba(20,20,22,.62); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 8px; }
 #a1sv .a1sv-hint svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
@@ -43130,7 +43811,7 @@ html[data-perf="low"] #a1sv .a1sv-bd, html.lite #a1sv .a1sv-bd { display: none; 
 #a1sv:not(.tall) .a1sv-cap { padding-bottom: calc(76px + var(--sv-bot)); }
 #a1sv .a1sv-cap p { margin: 0; font-size: 17px; font-weight: 500; line-height: 1.32; letter-spacing: -.3px; text-shadow: 0 1px 10px rgba(0,0,0,.6); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 #a1sv .a1sv-cap p:empty { display: none; }
-#a1sv .a1sv-link { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px 0 18px; border-radius: 20px; border: 0; font: 600 15.5px/1 inherit; letter-spacing: -.2px;
+#a1sv .a1sv-link { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px 0 18px; border-radius: 20px; border: 0; font-weight: 600; font-size: 15.5px; line-height: 1; font-family: inherit; letter-spacing: -.2px;
     color: #000; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.28); }
 #a1sv .a1sv-link[hidden] { display: none; }
 #a1sv .a1sv-link svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -43140,7 +43821,7 @@ html[data-perf="low"] #a1sv .a1sv-bd, html.lite #a1sv .a1sv-bd { display: none; 
 #a1sv .a1sv-row { display: flex; align-items: center; gap: 8px; min-height: 46px; }
 #a1sv .a1sv-row[hidden] { display: none; }
 #a1sv .a1sv-reply { flex: 1; min-width: 0; height: 46px; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 18px; border-radius: 23px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.42); background: rgba(0,0,0,.08); margin: 0; }
-#a1sv .a1sv-reply input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: #fff; font: 400 16px/1.2 inherit; letter-spacing: -.25px; -webkit-user-select: text; user-select: text; }
+#a1sv .a1sv-reply input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: #fff; font-weight: 400; font-size: 16px; line-height: 1.2; font-family: inherit; letter-spacing: -.25px; -webkit-user-select: text; user-select: text; }
 #a1sv .a1sv-reply input::placeholder { color: rgba(255,255,255,.74); }
 #a1sv .a1sv-send { width: 36px; height: 36px; flex: none; border-radius: 50%; border: 0; display: none; place-items: center; color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #d4af37 52%, #a8851f); }
 #a1sv .a1sv-reply.has-text .a1sv-send { display: grid; }
@@ -43163,14 +43844,14 @@ html[data-perf="low"] #a1sv .a1sv-bd, html.lite #a1sv .a1sv-bd { display: none; 
 #a1sv .a1sv-bub.is-emo { font-size: 26px; line-height: 1; padding: 6px 10px; background: rgba(255,255,255,.14); }
 #a1sv .a1sv-bub small { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; opacity: .62; text-align: right; }
 /* Admin paneli */
-#a1sv .a1sv-pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 8px; border: 0; border-radius: 20px; color: #fff; font: 600 14.5px/1 inherit; letter-spacing: -.2px;
+#a1sv .a1sv-pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 8px; border: 0; border-radius: 20px; color: #fff; font-weight: 600; font-size: 14.5px; line-height: 1; font-family: inherit; letter-spacing: -.2px;
     background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16); }
 #a1sv .a1sv-pill:active { background: rgba(255,255,255,.2); }
 #a1sv .a1sv-pill svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
 #a1sv .a1sv-pill em { font-style: normal; font-weight: 400; color: rgba(255,255,255,.7); }
 #a1sv .a1sv-faces { display: inline-flex; }
 #a1sv .a1sv-faces:empty { display: none; }
-#a1sv .a1sv-faces i { width: 26px; height: 26px; border-radius: 50%; margin-left: -8px; display: grid; place-items: center; font: 700 11px/1 inherit; font-style: normal; color: #1a1405; overflow: hidden;
+#a1sv .a1sv-faces i { width: 26px; height: 26px; border-radius: 50%; margin-left: -8px; display: grid; place-items: center; font-weight: 700; font-size: 11px; line-height: 1; font-family: inherit; font-style: normal; color: #1a1405; overflow: hidden;
     background: linear-gradient(135deg, #f6dc7e, #c9a84c); box-shadow: 0 0 0 2px #000; }
 #a1sv .a1sv-faces i:first-child { margin-left: 0; }
 #a1sv .a1sv-faces img { width: 100%; height: 100%; object-fit: cover; }
@@ -43199,7 +43880,7 @@ html[data-theme="light"] #a1sv-ins:not(.is-dark) { --in-bg: #f2f2f7; --in-card: 
 #a1sv-ins .in-x { width: 32px; height: 32px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; color: var(--in-tx2); background: var(--in-fill); flex: none; }
 #a1sv-ins .in-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; }
 #a1sv-ins .in-seg { display: flex; margin: 10px 16px 6px; padding: 2px; border-radius: 10px; background: var(--in-fill); position: relative; flex: none; }
-#a1sv-ins .in-seg button { flex: 1; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--in-tx); font: 600 13.5px/1 inherit; letter-spacing: -.1px; position: relative; z-index: 1; }
+#a1sv-ins .in-seg button { flex: 1; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--in-tx); font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit; letter-spacing: -.1px; position: relative; z-index: 1; }
 #a1sv-ins .in-seg button em { font-style: normal; font-weight: 500; color: var(--in-tx2); margin-left: 4px; }
 #a1sv-ins .in-seg i { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); border-radius: 8px; background: rgba(99,99,102,.82); box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04); transition: transform .3s cubic-bezier(.2,.9,.25,1); }
 html[data-theme="light"] #a1sv-ins:not(.is-dark) .in-seg i { background: #fff; }
@@ -43212,20 +43893,39 @@ html[data-theme="light"] #a1sv-ins:not(.is-dark) .in-seg i { background: #fff; }
 #a1sv-ins .in-list { margin: 0 16px; border-radius: 14px; background: var(--in-card); overflow: hidden; }
 #a1sv-ins .in-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; position: relative; }
 #a1sv-ins .in-row + .in-row::before { content: ''; position: absolute; top: 0; right: 0; left: 66px; height: .5px; background: var(--in-sep); }
-#a1sv-ins .in-av { width: 40px; height: 40px; border-radius: 50%; flex: none; overflow: hidden; display: grid; place-items: center; font: 700 15px/1 inherit; color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #c9a84c); }
+#a1sv-ins .in-av { width: 40px; height: 40px; border-radius: 50%; flex: none; overflow: hidden; display: grid; place-items: center; font-weight: 700; font-size: 15px; line-height: 1; font-family: inherit; color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #c9a84c); }
 #a1sv-ins .in-av img { width: 100%; height: 100%; object-fit: cover; }
 #a1sv-ins .in-mid { flex: 1; min-width: 0; }
 #a1sv-ins .in-mid b { display: block; font-size: 16px; font-weight: 500; letter-spacing: -.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #a1sv-ins .in-mid span { display: block; font-size: 13px; color: var(--in-tx2); margin-top: 2px; }
 #a1sv-ins .in-q { margin-top: 6px; display: inline-block; max-width: 100%; padding: 7px 11px; border-radius: 16px 16px 16px 5px; font-size: 15px; line-height: 1.3; background: var(--in-fill); word-break: break-word; white-space: pre-wrap; }
 #a1sv-ins .in-q.is-emo { font-size: 26px; line-height: 1; padding: 4px 8px; background: transparent; }
-#a1sv-ins .in-act { height: 30px; padding: 0 12px; border-radius: 15px; border: 0; font: 600 13.5px/1 inherit; color: #fff; background: #0a84ff; flex: none; text-decoration: none; display: inline-flex; align-items: center; }
+#a1sv-ins .in-act { height: 30px; padding: 0 12px; border-radius: 15px; border: 0; font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit; color: #fff; background: #0a84ff; flex: none; text-decoration: none; display: inline-flex; align-items: center; }
 #a1sv-ins .in-act.is-gray { color: var(--in-tx); background: var(--in-fill); }
 #a1sv-ins .in-empty { padding: 34px 26px 30px; text-align: center; color: var(--in-tx2); font-size: 14.5px; line-height: 1.4; }
 #a1sv-ins .in-empty b { display: block; color: var(--in-tx); font-size: 17px; font-weight: 600; margin: 10px 0 4px; }
 #a1sv-ins .in-empty svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .55; }
 #a1sv-ins .in-note { margin: 12px 16px 0; font-size: 12.5px; line-height: 1.4; color: var(--in-tx2); }
 #a1sv-ins .in-sk { height: 60px; margin: 0 16px 8px; border-radius: 14px; background: var(--in-card); opacity: .6; }
+/* 💬 Do'kon javobi (mijozga ko'rinadi) va admin javob oynasi */
+#a1sv .a1sv-mine .a1sv-bub.is-shop { align-self: flex-start; border-radius: 18px 18px 18px 6px; color: #fff; background: rgba(28,28,30,.86); box-shadow: inset 0 0 0 1px rgba(226,196,110,.55), 0 6px 16px -8px rgba(0,0,0,.6); }
+#a1sv .a1sv-bub.is-shop b { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 700; color: #e2c46e; letter-spacing: 0; }
+#a1sv .a1sv-bub.is-shop small { text-align: left; }
+#a1sv-ins .in-acts { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+#a1sv-ins .in-act.is-gold { color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #c9a84c); }
+#a1sv-ins .in-ct { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+#a1sv-ins .in-ct a, #a1sv-ins .in-ct button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border: 0; border-radius: 13px; font-weight: 600; font-size: 12.5px; line-height: 1; font-family: inherit;
+    color: var(--in-tx); background: var(--in-fill); text-decoration: none; -webkit-tap-highlight-color: transparent; }
+#a1sv-ins .in-ct a:active, #a1sv-ins .in-ct button:active { opacity: .6; }
+#a1sv-ins .in-ct .is-ok { color: #30d158; }
+#a1sv-ins .in-ans { margin-top: 6px; padding: 6px 10px; border-radius: 14px 14px 14px 5px; font-size: 14px; line-height: 1.3; color: var(--in-tx); background: rgba(226,196,110,.16); box-shadow: inset 0 0 0 .5px rgba(226,196,110,.45); word-break: break-word; white-space: pre-wrap; }
+#a1sv-ins .in-ans small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--in-tx2); }
+#a1sv-ins .in-cmp { display: flex; gap: 8px; align-items: flex-end; padding: 2px 14px 12px 66px; }
+#a1sv-ins .in-cmp textarea { flex: 1; min-height: 38px; max-height: 120px; padding: 9px 12px; border: 0; border-radius: 19px; outline: none; resize: none; font-weight: 400; font-size: 15px; line-height: 1.3; font-family: inherit; color: var(--in-tx); background: var(--in-fill); box-sizing: border-box; }
+#a1sv-ins .in-cmp textarea:focus { box-shadow: 0 0 0 1.5px rgba(226,196,110,.8); }
+#a1sv-ins .in-cmp button { width: 38px; height: 38px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center; color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #c9a84c); }
+#a1sv-ins .in-cmp button[disabled] { opacity: .5; }
+#a1sv-ins .in-cmp button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ═══ Admin boshqaruvi: kartadagi statistika tugmasi + ogohlantirish bannerlari ═══ */
 .a1sv-stat { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; height: 26px; padding: 0 10px; border: 0; border-radius: 13px; font: 600 12.5px/1 -apple-system, "SF Pro Text", system-ui, sans-serif;
@@ -43239,7 +43939,7 @@ html[data-theme="light"] .a1sv-stat { color: #000; background: rgba(118,118,128,
 .a1sv-warn.is-info { background: rgba(10,132,255,.14); box-shadow: inset 0 0 0 .5px rgba(64,156,255,.35); }
 .a1sv-warn b { display: block; font-size: 15px; font-weight: 600; margin-bottom: 2px; }
 .a1sv-warn svg { width: 22px; height: 22px; flex: none; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.a1sv-warn button { margin-top: 9px; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; font: 600 14px/1 inherit; color: #fff; background: #ff453a; }
+.a1sv-warn button { margin-top: 9px; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; font-weight: 600; font-size: 14px; line-height: 1; font-family: inherit; color: #fff; background: #ff453a; }
 .a1sv-warn.is-info button { background: #0a84ff; }
 .a1sv-warn button[disabled] { opacity: .6; }
 html[data-theme="light"] .a1sv-warn { color: #000; }
@@ -44434,9 +45134,12 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
     }
     function renderMine(it) {
         var a = (it && Array.isArray(MINE[it.sid])) ? MINE[it.sid] : [];
-        var txt = a.filter(function (r) { return r.x; }).slice(-2);
+        var txt = a.filter(function (r) { return r.x; }).slice(-3);
         if (!txt.length) { S.mine.hidden = true; S.mine.innerHTML = ''; return; }
+        // 💬 Do'kon javobi (s:1) — chap tomonda, tilla ramkada: mijoz qayerdan
+        //    yozganidan qat'i nazar (ilova, sayt, Telegram) javobni shu yerda ko'radi.
         S.mine.innerHTML = txt.map(function (r) {
+            if (r.s) return '<div class="a1sv-bub is-shop"><b>Avto A1</b>' + esc(r.x) + '<small>' + esc(agoLong(r.t) || 'hozir') + ' \u00B7 do\u2018kon javobi</small></div>';
             return '<div class="a1sv-bub">' + esc(r.x) + '<small>Siz \u00B7 ' + esc(agoLong(r.t) || 'hozir') + ' \u00B7 yuborildi \u2713</small></div>';
         }).join('');
         S.mine.hidden = false;
@@ -44450,8 +45153,8 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
                 var v = s.val() || {};
                 Object.keys(v).forEach(function (k) {
                     var r = v[k] || {};
-                    if (r.x) addMine(it.sid, { x: String(r.x), t: Number(r.t) || 0 });
-                    if (r.e && !REACT[it.sid]) { REACT[it.sid] = String(r.e); lsSet('a1sv_react_v1', trimMap(REACT, 400)); }
+                    if (r.x) addMine(it.sid, { x: String(r.x), t: Number(r.t) || 0, s: r.s === 1 ? 1 : 0 });
+                    if (r.e && !r.s && !REACT[it.sid]) { REACT[it.sid] = String(r.e); lsSet('a1sv_react_v1', trimMap(REACT, 400)); }
                 });
                 if (S.item === it) { renderMine(it); paintLike(it); }
             }).catch(function () {});
@@ -44515,6 +45218,28 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
                 .catch(function () {}).then(function () { setTimeout(step, 150); });
         })();
     }
+    // 🛰 Javob SERVER orqali (/story-reply): Worker uni ism + TASDIQLANGAN raqam
+    //    bilan yozadi va adminlarga «✍️ Javob yozish» tugmali kartochka yuboradi —
+    //    ilova/saytdan (Telegram'siz) yozgan mijozga ham javob berish mumkin.
+    //    Worker eski bo'lsa (404) yoki tarmoq uzilsa — eski yo'l (to'g'ridan yozish).
+    function capOf(it) {
+        var list = DATA[it.cat] || [], no = list.indexOf(it) + 1;
+        return (catName(it.cat) + (no > 0 ? ' \u00B7 ' + no + '-storis' : '') + (it.caption ? ' \u00AB' + String(it.caption).slice(0, 50) + '\u00BB' : '')).slice(0, 120);
+    }
+    function sendStoryReply(it, body, isReaction, contentHtml) {
+        var legacy = function () { persistReply(it, body); notifyAdmins(it, isReaction, contentHtml); };
+        if (typeof W._workerPost !== 'function') { legacy(); return; }
+        var me = whoAmI(), p = { sid: it.sid, cap: capOf(it), via: W.A1_APP ? 'app' : 'web' };
+        if (body.x) p.x = body.x; else p.e = body.e;
+        if (me.n) p.n = me.n;
+        if (me.a) p.a = me.a;
+        W._workerPost('/story-reply', p).then(function (r) {
+            var st = r && r.resp ? r.resp.status : 0;
+            if (st >= 200 && st < 300 && r.data && r.data.ok) return;
+            if (st === 429) { toast('Juda tez \u2014 biroz kuting', 'warning'); return; }
+            if (st === 404 || st === 405 || st === 0 || st >= 500) legacy();
+        }, legacy);
+    }
     function sendReply(text) {
         text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 500);
         var it = S.item;
@@ -44528,9 +45253,8 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
         renderMine(it);
         if (S.mine.lastChild) anim(S.mine.lastChild, [{ opacity: 0, transform: 'translateY(10px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
         hap('success');
-        persistReply(it, { x: text });
-        notifyAdmins(it, false, esc(text));
-        toast('Javobingiz do\u2018konga yuborildi \u2705', 'success');
+        sendStoryReply(it, { x: text }, false, esc(text));
+        toast('Javobingiz do\u2018konga yuborildi \u2705 Javob shu yerda va \uD83D\uDD14 da chiqadi', 'success');
         try { S.input.blur(); } catch (e) {}
     }
     function sendReaction(emoji, fromEl) {
@@ -44544,8 +45268,7 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
         hap('light');
         paintLike(it);
         if (prev) return;   // bitta storisga — adminga BIR marta (spam bo'lmasin)
-        persistReply(it, { e: emoji });
-        notifyAdmins(it, true, esc(emoji) + (emoji === '\u2753' ? ' <i>(narx / ma\u2018lumot so\u2018rayapti)</i>' : ''));
+        sendStoryReply(it, { e: emoji }, true, esc(emoji) + (emoji === '\u2753' ? ' <i>(narx / ma\u2018lumot so\u2018rayapti)</i>' : ''));
     }
 
     /* ═══════════════ 6) ADMIN: kim ko'rdi + javoblar ═══════════════ */
@@ -44554,23 +45277,29 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
         var c = STATS[it.sid];
         if (c && !force && Date.now() - c.at < 20000) { cb(c); return; }
         var d = DBX();
-        if (!d) { cb({ v: [], r: [], at: 0, err: 'db' }); return; }
+        if (!d) { cb({ v: [], r: [], ans: [], at: 0, err: 'db' }); return; }
         Promise.all([
             d.ref('story_views/' + it.sid).once('value').then(function (s) { return s.val() || {}; }),
             d.ref('story_replies/' + it.sid).once('value').then(function (s) { return s.val() || {}; })
         ]).then(function (res) {
-            var V = res[0], R = res[1], v = [], r = [];
+            var V = res[0], R = res[1], v = [], r = [], ans = [];
             Object.keys(V).forEach(function (uid) { var x = V[uid] || {}; v.push({ uid: uid, t: Number(x.t) || 0, n: String(x.n || ''), a: String(x.a || ''), u: String(x.u || '') }); });
             Object.keys(R).forEach(function (uid) {
                 var m = R[uid] || {};
-                Object.keys(m).forEach(function (k) { var x = m[k] || {}; r.push({ uid: uid, k: k, t: Number(x.t) || 0, x: String(x.x || ''), e: String(x.e || ''), n: String(x.n || ''), a: String(x.a || ''), u: String(x.u || '') }); });
+                Object.keys(m).forEach(function (k) {
+                    var x = m[k] || {};
+                    // s:1 — do'kon javobi (admin yozgan): hisobga kirmaydi, mijoz qatori ostida chiqadi
+                    (x.s === 1 ? ans : r).push({ uid: uid, k: k, t: Number(x.t) || 0, x: String(x.x || ''), e: String(x.e || ''), n: String(x.n || ''), a: String(x.a || ''), u: String(x.u || ''),
+                        ph: String(x.ph || ''), pv: x.pv === 1 });
+                });
             });
             v.sort(function (a, b) { return b.t - a.t; });
             r.sort(function (a, b) { return b.t - a.t; });
-            var st = { v: v, r: r, at: Date.now() };
+            ans.sort(function (a, b) { return a.t - b.t; });
+            var st = { v: v, r: r, ans: ans, at: Date.now() };
             STATS[it.sid] = st;
             cb(st);
-        }).catch(function (err) { cb({ v: [], r: [], at: 0, err: String((err && (err.code || err.message)) || 'err') }); });
+        }).catch(function (err) { cb({ v: [], r: [], ans: [], at: 0, err: String((err && (err.code || err.message)) || 'err') }); });
     }
     function face(p) {
         return '<i>' + (p.a ? '<img src="' + esc(p.a) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : esc(initials(p.n || 'M'))) + '</i>';
@@ -44702,16 +45431,39 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
                 }).join('') + '</div>';
             }
         } else {
+            // Har mijozning ENG OXIRGI javobi ostida — do'kon javoblari, aloqa tugmalari va «Javob».
+            var ans = st.ans || [], shownAns = {};
             if (!st.r.length) html += '<div class="in-empty">' + IC.chat + '<b>Hali javob yo\u2018q</b>Mijoz storisga yozsa yoki reaksiya bildirsa \u2014 shu yerda va Telegram\u2019da ko\u2018rasiz.</div>';
-            else html += '<div class="in-list">' + st.r.map(function (p) {
-                var act = p.u ? '<a class="in-act" href="https://t.me/' + esc(p.u) + '" data-tg="' + esc(p.u) + '">Javob</a>' : '';
-                return '<div class="in-row" style="align-items:flex-start"><span class="in-av">' + (p.a ? '<img src="' + esc(p.a) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : esc(initials(p.n || 'Mijoz'))) + '</span>' +
-                    '<span class="in-mid"><b>' + esc(p.n || 'Mijoz') + '</b><span>' + esc(agoLong(p.t)) + (p.u ? ' \u00B7 @' + esc(p.u) : '') + '</span>' +
-                    '<span class="in-q' + (p.e && !p.x ? ' is-emo' : '') + '">' + esc(p.x || p.e) + '</span></span>' + act + '</div>';
+            else html += '<div class="in-list">' + st.r.map(function (p, idx) {
+                var first = !shownAns[p.uid];
+                shownAns[p.uid] = 1;
+                var mine = first ? ans.filter(function (a) { return a.uid === p.uid; }) : [];
+                var ct = '';
+                if (first) {
+                    var ph = String(p.ph || '');
+                    if (!ph) st.r.some(function (q) { if (q.uid === p.uid && q.ph) { ph = q.ph; return true; } return false; });
+                    if (ph) ct += '<a href="tel:' + esc(ph.replace(/[^0-9+]/g, '')) + '" data-ph="' + esc(ph) + '">\uD83D\uDCDE ' + esc(ph) + (p.pv ? ' <span class="is-ok">\u2713</span>' : '') + '</a>';
+                    if (p.u) ct += '<a href="https://t.me/' + esc(p.u) + '" data-tg="' + esc(p.u) + '">\u2708\uFE0F @' + esc(p.u) + '</a>';
+                }
+                return '<div class="in-row" style="align-items:flex-start" data-i="' + idx + '"><span class="in-av">' + (p.a ? '<img src="' + esc(p.a) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : esc(initials(p.n || 'Mijoz'))) + '</span>' +
+                    '<span class="in-mid"><b>' + esc(p.n || 'Mijoz') + '</b><span>' + esc(agoLong(p.t)) + '</span>' +
+                    '<span class="in-q' + (p.e && !p.x ? ' is-emo' : '') + '">' + esc(p.x || p.e) + '</span>' +
+                    mine.map(function (a) { return '<span class="in-ans">' + esc(a.x) + '<small>Siz \u00B7 ' + esc(agoLong(a.t)) + '</small></span>'; }).join('') +
+                    (ct ? '<span class="in-ct">' + ct + '</span>' : '') + '</span>' +
+                    (first ? '<span class="in-acts"><button type="button" class="in-act is-gold" data-ans="' + idx + '">Javob</button></span>' : '') + '</div>';
             }).join('') + '</div>';
         }
-        html += '<p class="in-note">Admin ko\u2018rishlari hisobga olinmaydi. Mijozga javob \u2014 Telegram orqali.</p>';
+        html += '<p class="in-note">Admin ko\u2018rishlari hisobga olinmaydi. \u00abJavob\u00bb \u2014 mijozga ilovada (\uD83D\uDD14) va Telegram\u2019da boradi, qayerdan yozganidan qat\u2019i nazar.</p>';
         INS.body.innerHTML = html;
+        INS.body.querySelectorAll('button[data-ans]').forEach(function (b) {
+            b.addEventListener('click', function () { openComposer(st.r[Number(b.getAttribute('data-ans'))], b.closest('.in-row')); });
+        });
+        INS.body.querySelectorAll('a[data-ph]').forEach(function (a) {
+            a.addEventListener('click', function () {
+                // Telegram ichida tel: ochilmasligi mumkin — raqam baribir nusxalanadi
+                try { if (navigator.clipboard) navigator.clipboard.writeText(a.getAttribute('data-ph')); toast('Raqam nusxalandi', 'success'); } catch (er) {}
+            });
+        });
         INS.body.querySelectorAll('a[data-tg]').forEach(function (a) {
             a.addEventListener('click', function (e) {
                 e.preventDefault();
@@ -44720,6 +45472,42 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
                 try { if (typeof W.a1OpenExternal === 'function') { W.a1OpenExternal(u); return; } } catch (er) {}
                 try { W.open(u, '_blank'); } catch (er) {}
             });
+        });
+    }
+    // ✍️ Admin javobi — mijozga ilovada (storis suhbati + 🔔) va Telegram'da (/story-answer)
+    function openComposer(p, rowEl) {
+        if (!p || !rowEl || !INS.it) return;
+        var old = INS.body.querySelector('.in-cmp');
+        if (old) { var same = old.__uid === p.uid; if (old.parentNode) old.parentNode.removeChild(old); if (same) return; }
+        var it = INS.it;
+        var f = mk('form', 'in-cmp');
+        f.__uid = p.uid;
+        f.innerHTML = '<textarea rows="1" maxlength="1000" enterkeyhint="send" placeholder="' + esc((p.n || 'Mijoz') + 'ga javob\u2026') + '"></textarea>' +
+            '<button type="submit" aria-label="Yuborish"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>';
+        rowEl.parentNode.insertBefore(f, rowEl.nextSibling);
+        var ta = f.querySelector('textarea'), btn = f.querySelector('button');
+        ta.addEventListener('input', function () { ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; });
+        setTimeout(function () { try { ta.focus(); } catch (e) {} }, 60);
+        hap('light');
+        f.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var text = String(ta.value || '').trim();
+            if (!text || btn.disabled) return;
+            if (typeof W._workerPost !== 'function') { toast('Ilovani yangilang', 'warning'); return; }
+            btn.disabled = true;
+            W._workerPost('/story-answer', { sid: it.sid, uid: p.uid, text: text.slice(0, 1000) }).then(function (r) {
+                var code = r && r.resp ? r.resp.status : 0;
+                if (code === 200 && r.data && r.data.ok) {
+                    hap('success');
+                    toast(r.data.telegram === 'sent' ? 'Javob yuborildi \u2014 ilovada va Telegram\u2019da' : 'Javob yuborildi \u2014 mijoz ilovada ko\u2018radi (\uD83D\uDD14)', 'success');
+                    var cur = STATS[it.sid];
+                    if (cur) (cur.ans = cur.ans || []).push({ uid: p.uid, t: Date.now(), x: text });
+                    if (INS.it === it) { INS.st = STATS[it.sid] || INS.st; insRender(); }
+                    return;
+                }
+                btn.disabled = false;
+                toast(code === 404 ? 'Server hali yangilanmagan (Worker deploy kerak)' : ('Yuborilmadi: ' + ((r && r.data && r.data.error) || ('HTTP ' + code))), 'warning');
+            }, function () { btn.disabled = false; toast('Internet aloqasini tekshiring', 'warning'); });
         });
     }
     function insHideNow() {
@@ -44870,7 +45658,8 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
         var slow = vids.filter(function (it) { return MGR.fs[it.sid] === 'slow'; });
         var sb = box.querySelector('.a1sv-warn[data-k="slow"]');
         if (slow.length && !sb && !MGR.busy) {
-            var canFix = !!isTgInit();
+            // Ilova/saytdagi admin (Telegram orqali kirgan) — Firebase idToken bilan
+            var canFix = !!isTgInit() || (amAdmin() && !!authUid());
             sb = mk('div', 'a1sv-warn is-info', IC.bolt + '<div><b></b>' +
                 'Bu videolarda indeks fayl oxirida \u2014 mijoz telefoni avval oxirini, keyin boshini yuklaydi (2\u20134 s qora ekran). Tezlashtirish sifatni o\u2018zgartirmaydi.' +
                 '<br><button type="button"' + (canFix ? '' : ' disabled') + '>' + (canFix ? 'Tezlashtirish' : 'Telegram ichida oching') + '</button></div>');
@@ -44905,9 +45694,19 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
             if (res === 'slow') schedule(paintManager);
         }).catch(function () {}).then(function () { delete MGR.probing[it.sid]; });
     }
-    function optimize(list, banner) {
+    // /upload auth: Telegram ichida initData, ilova/saytda — Firebase idToken (Bearer)
+    function uploadHeaders() {
         var init = isTgInit();
-        if (!init || MGR.busy) return;
+        if (init) return Promise.resolve({ 'X-Init-Data': init });
+        try {
+            var u = (W.firebase && firebase.auth) ? firebase.auth().currentUser : null;
+            if (u) return u.getIdToken().then(function (t) { return { Authorization: 'Bearer ' + t }; }, function () { return null; });
+        } catch (e) {}
+        return Promise.resolve(null);
+    }
+    W._a1UploadHeaders = uploadHeaders;
+    function optimize(list, banner) {
+        if (MGR.busy) return;
         MGR.busy = true;
         var btn = banner.querySelector('button'), title = banner.querySelector('b');
         btn.disabled = true;
@@ -44929,7 +45728,10 @@ html[data-theme="light"] .a1sv-warn { color: #000; }
                 title.textContent = i + '/' + list.length + ' \u00B7 qayta joylanmoqda\u2026';
                 var fd = new FormData();
                 fd.append('video', new Blob([out], { type: 'video/mp4' }), 'story.mp4');
-                return fetch(proxyBase() + '/upload?kind=video', { method: 'POST', headers: { 'X-Init-Data': init }, body: fd })
+                return uploadHeaders().then(function (hd) {
+                    if (!hd) throw new Error('admin sifatida kiring');
+                    return fetch(proxyBase() + '/upload?kind=video', { method: 'POST', headers: hd, body: fd });
+                })
                     .then(function (r) { return r.json().catch(function () { return null; }); })
                     .then(function (j) {
                         if (!j || !j.ok || !j.url) throw new Error((j && j.error) || 'yuklanmadi');
