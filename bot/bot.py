@@ -65,6 +65,8 @@ from fb_utils import (GENERIC_VALUES as _GENERIC_VALUES,
 import ai_agent
 # 🧾 Buyurtma tugmalari va Worker bilan imzolangan aloqa (sof modul).
 import order_ops
+# 🪪 Yagona hisob (raqam bo'yicha kirish, kontakt tasdig'i) va storis javoblari.
+import account_ops
 
 # =====================================================================
 # SOZLAMALAR (.env dan)
@@ -1429,6 +1431,12 @@ class Register(StatesGroup):
     region = State()
 
 
+class StoryAnswer(StatesGroup):
+    # Admin storis javobi kartochkasida «✍️ Javob yozish» ni bosdi — keyingi
+    # matni mijozga (ilova + Telegram) yuboriladi.
+    text = State()
+
+
 # =====================================================================
 # EXCEL / CSV IMPORT (+ boshqa fayllar)
 # ---------------------------------------------------------------------
@@ -2754,31 +2762,193 @@ async def maybe_app_login_start(message):
     return True
 
 
+PHONE_LINK_TEXT = (
+    "📱 <b>Keyingi safar faqat raqam bilan kiring</b>\n\n"
+    "Pastdagi tugma orqali raqamingizni ulashing — ilova va saytda raqamni "
+    "yozsangiz kifoya, tasdiq shu yerga keladi. Buyurtma, keshbek va savat "
+    "hamma joyda bitta bo'ladi."
+)
+
+
+async def link_verified_phone(user_id, phone):
+    """Foydalanuvchining O'Z raqamini (Telegram tasdiqlagan) hisobiga bog'laydi:
+    `phone_index/<raqam>` -> Telegram ID va `users/<id>/verify`. Bitta root PATCH."""
+    digits = account_ops.phone_digits(phone)
+    if not digits:
+        return False
+    updates = account_ops.verified_phone_updates(user_id, digits, int(time.time() * 1000), "bot")
+    ok = await firebase_patch("", updates)
+    if not ok:
+        logging.warning("Tasdiqlangan raqam yozilmadi (%s)", user_id)
+    return ok
+
+
+def _deny_step(req, user_id):
+    """«Men emasman» uchun `(natija, yangi_holat)`."""
+    d = account_ops.deny_decision(req, user_id)
+    return d, ("no" if d == "no" else None)
+
+
+async def _resolve_login_request(u, nonce, decide):
+    """`tg_login_req/<nonce>` ni ETag bilan BIR MARTA hal qiladi.
+    `decide(req) -> (natija, yangi_holat)`; `(natija, req)` qaytaradi."""
+    path = f"tg_login_req/{nonce}"
+    for _ in range(4):
+        etag, req = await firebase_get_etag(path)
+        if etag is None:
+            return "error", None
+        result, new_state = decide(req)
+        if new_state is None:
+            return result, req
+        nxt = dict(req)
+        nxt["state"] = new_state
+        nxt["decidedAt"] = int(time.time() * 1000)
+        ok, status = await firebase_put(path, nxt, etag=etag)
+        if ok:
+            return result, nxt
+        if status != 412:
+            return "error", None
+    return "error", None
+
+
 @dp.callback_query(F.data.startswith("tgl:"))
 async def app_login_callback(callback: types.CallbackQuery):
-    parts = (callback.data or "").split(":")
-    if len(parts) != 3 or not re.fullmatch(r"[0-9a-f]{32}", parts[2]):
-        await callback.answer()
-        return
-    action, nonce = parts[1], parts[2]
-    if action != "ok":
-        await callback.message.edit_text("❌ Kirish rad etildi.")
+    action, nonce, code = account_ops.parse_login_callback(callback.data)
+    if not action:
         await callback.answer()
         return
     u = callback.from_user
+    now_ms = int(time.time() * 1000)
+
+    if action == "pick":
+        # 🔢 Ilova/saytdan raqam bo'yicha kirish: ekrandagi raqam tanlandi
+        result, _req = await _resolve_login_request(
+            u, nonce, lambda req: account_ops.login_pick_decision(req, u.id, code, now_ms))
+        if result == "ok":
+            ok, _status = await firebase_put(f"tg_login/{nonce}", {
+                "uid": str(u.id),
+                "name": (u.first_name or "")[:80],
+                "username": (u.username or "")[:64],
+                "at": now_ms,
+                # Raqam indeksi orqali kelgan — demak raqam allaqachon tasdiqlangan.
+                "phoneVerified": True,
+            })
+            if not ok:
+                result = "error"
+        if result in ("foreign", "error"):
+            await callback.answer(
+                "Bu tugma siz uchun emas." if result == "foreign"
+                else "Hozir tasdiqlab bo'lmadi — bir ozdan keyin qayta bosing.", show_alert=True)
+            return
+        try:
+            await callback.message.edit_text(account_ops.LOGIN_RESULT_TEXTS[result], parse_mode="HTML")
+        except Exception:
+            pass
+        await callback.answer("✅ Tasdiqlandi" if result == "ok" else None)
+        return
+
+    if action == "no":
+        # Raqam bo'yicha so'rov bo'lsa — yopamiz (ilova darhol «rad etildi» ko'rsatadi).
+        # Havola orqali kirishda (tg_login_req yo'q) — shunchaki xabar.
+        result, _req = await _resolve_login_request(u, nonce, lambda req: _deny_step(req, u.id))
+        if result == "foreign":
+            await callback.answer("Bu tugma siz uchun emas.", show_alert=True)
+            return
+        try:
+            await callback.message.edit_text(account_ops.LOGIN_RESULT_TEXTS["no"], parse_mode="HTML")
+        except Exception:
+            pass
+        await callback.answer()
+        return
+
+    # action == "ok" — ilovadagi «Telegram orqali kirish» havolasi (4 xonali kod)
+    verify = await firebase_get(f"users/{u.id}/verify")
     ok, _status = await firebase_put(f"tg_login/{nonce}", {
         "uid": str(u.id),
         "name": (u.first_name or "")[:80],
         "username": (u.username or "")[:64],
-        "at": int(time.time() * 1000),
+        "at": now_ms,
+        "phoneVerified": bool(verify),
     })
     if ok:
         await callback.message.edit_text(
             "✅ Tasdiqlandi! Endi Avto A1 ilovasiga qayting — u o'zi ochiladi.")
+        if not verify and not _is_owner(u.id):
+            # Keyingi safar faqat raqam bilan kirishi uchun — raqamni ulashishni taklif qilamiz.
+            try:
+                lang = await get_user_lang(u.id)
+                await bot.send_message(u.id, PHONE_LINK_TEXT, parse_mode="HTML", reply_markup=phone_kb(lang))
+            except Exception as e:
+                logging.warning("Raqam taklifi yuborilmadi (%s): %s", u.id, e)
     else:
         await callback.message.edit_text(
             "⚠️ Hozir tasdiqlab bo'lmadi. Ilovada «Telegram orqali kirish» ni qayta bosing.")
     await callback.answer()
+
+
+async def maybe_phone_link_start(message):
+    """`/start phone` — ilovadagi «Raqamni Telegram'da ulashing» tugmasi."""
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or parts[1].strip() != "phone":
+        return False
+    lang = await get_user_lang(message.from_user.id)
+    await message.answer(PHONE_LINK_TEXT, parse_mode="HTML", reply_markup=phone_kb(lang))
+    return True
+
+
+# =====================================================================
+# 💬 STORIS JAVOBIGA ADMIN JAVOBI
+#   Worker (/story-reply) adminlarga «✍️ Javob yozish» (`sra:<qisqa>`) tugmali
+#   kartochka yuboradi. Admin bosadi -> keyingi matni Worker (/story-answer)
+#   orqali mijozga boradi: ilovada (storis suhbati + 🔔) va Telegram'da.
+#   Mijoz ilova yoki saytdan yozgan bo'lsa ham (Telegram'i yo'q) — yetadi.
+#   ⚠️ Bu handler `handle_ai_chat` (F.text) dan OLDIN ro'yxatdan o'tishi
+#      shart, aks holda u «state_busy» deb javob berardi.
+# =====================================================================
+@dp.callback_query(F.data.startswith("sra:"))
+async def story_answer_start(call: types.CallbackQuery, state: FSMContext):
+    if call.from_user.id not in ADMIN_IDS:
+        await call.answer("Bu tugma faqat adminlar uchun.", show_alert=True)
+        return
+    short = account_ops.parse_story_callback(call.data)
+    if not short:
+        await call.answer("Tugma eskirgan.", show_alert=True)
+        return
+    idx = await firebase_get(f"story_reply_index/{short}")
+    if not isinstance(idx, dict) or not idx.get("uid"):
+        await call.answer("Mijoz javobi topilmadi (o'chirilgan bo'lishi mumkin).", show_alert=True)
+        return
+    name = str(idx.get("n") or "Mijoz")[:60]
+    await state.set_state(StoryAnswer.text)
+    await state.update_data(sra_short=short, sra_name=name)
+    await call.answer()
+    await call.message.answer(
+        f"✍️ <b>{esc(name)}</b> ga javobingizni yozing — u mijozga ilovada va "
+        "Telegram'da boradi.\n\n<i>Bekor qilish: /bekor</i>",
+        parse_mode="HTML")
+
+
+@dp.message(StoryAnswer.text, not_a_command)
+async def story_answer_text(message: types.Message, state: FSMContext):
+    text = (message.text or message.caption or "").strip()
+    if not text:
+        await message.answer("Javobni matn bilan yozing. Bekor qilish: /bekor")
+        return
+    data = await state.get_data()
+    short = data.get("sra_short")
+    name = data.get("sra_name") or "Mijoz"
+    await state.clear()
+    if not short:
+        await message.answer("Javob kimga ekanligi yo'qoldi — kartochkadagi «✍️ Javob yozish» ni qayta bosing.")
+        return
+    ok, code, resp = await account_ops.worker_story_answer(
+        WORKER_URL, API_TOKEN, message.from_user.id, short, text[:1000])
+    if ok:
+        where = "ilovada va Telegram'da" if resp.get("telegram") == "sent" else "ilovada (🔔 bildirishnoma)"
+        await message.answer(f"✅ Javob yuborildi — {esc(name)} {where} ko'radi.", parse_mode="HTML")
+    else:
+        logging.warning("Storis javobi yuborilmadi: %s %s", code, resp)
+        await message.answer("❌ " + account_ops.story_answer_error_text(code, resp))
 
 
 @dp.message(Command("start"))
@@ -2788,6 +2958,9 @@ async def start_command(message: types.Message, state: FSMContext):
 
     # 📱 Ilovadan kelgan «Telegram orqali kirish» havolasi
     if await maybe_app_login_start(message):
+        return
+    # 📱 Ilovadagi «Raqamni Telegram'da ulashing» (raqam bilan kirish uchun)
+    if await maybe_phone_link_start(message):
         return
 
     # 👔 XO'JAYIN: mijoz oqimi (til tanlash / ro'yxatdan o'tish / menyu)
@@ -2989,6 +3162,9 @@ async def get_phone(message: types.Message, state: FSMContext):
         phone = message.contact.phone_number
         if not phone.startswith("+"):
             phone = "+" + phone
+        # Telegram tasdiqlagan O'Z raqami — ilova/saytda shu raqam bilan kirish uchun.
+        if account_ops.contact_is_own(message.contact.user_id, message.from_user.id):
+            await link_verified_phone(message.from_user.id, phone)
     else:
         phone = normalize_phone(message.text)
         if not phone:
@@ -4317,6 +4493,7 @@ async def handle_contact_share(message: types.Message):
     phone = (message.contact.phone_number or "").strip()
     if phone and not phone.startswith("+"):
         phone = "+" + phone
+    own = account_ops.contact_is_own(message.contact.user_id, message.from_user.id)
     try:
         if phone:
             user_id = message.from_user.id
@@ -4324,11 +4501,18 @@ async def handle_contact_share(message: types.Message):
             prof = users_db.get(user_id) or {}
             prof["phone"] = phone
             users_db[user_id] = prof
+            # 🪪 O'Z raqami (Mini App «Raqamni tasdiqlash» yoki tugma) — ilova va
+            #    saytda shu raqam bilan Telegram hisobiga kirish ochiladi.
+            if own:
+                await link_verified_phone(user_id, phone)
     except Exception as e:
         logging.error(f"Kontakt raqamini saqlash xatosi: {e}")
     kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
-    await message.reply(t(lang, "contact_reply", phone=esc(phone or "—")),
-                        parse_mode="HTML", reply_markup=kb)
+    reply = t(lang, "contact_reply", phone=esc(phone or "—"))
+    if own:
+        reply += ("\n\n🔐 Raqam tasdiqlandi — endi ilova va saytda shu raqam bilan "
+                  "Telegram hisobingizga kirasiz.")
+    await message.reply(reply, parse_mode="HTML", reply_markup=kb)
 
 
 @dp.message(StateFilter(None), F.video)

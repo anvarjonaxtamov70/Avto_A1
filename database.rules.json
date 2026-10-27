@@ -63,13 +63,21 @@
           },
           "vip": {
             // Manual VIP darajasi — faqat admin bera oladi (server ham o'qiydi).
-            // Mijoz o'zini VIP qila olmasligi uchun bu yerda mijoz-grant YO'Q.
             ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
             "manual": {
-              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 16)"
+              // ⚠️ TESHIK YOPILDI: yuqoridagi `profile` ".write" (egasi) butun
+              //    ostki daraxtga tarqaladi — mijoz `profile/vip/manual = 'vip'`
+              //    yozib o'zini VIP qila olardi (Worker cashback 1% berardi).
+              //    Endi qiymatni faqat admin O'ZGARTIRA oladi; mijozning
+              //    profilni butunlay qayta yozishi (o'sha qiymat bilan) o'tadi.
+              ".validate": "newData.isString() && newData.val().length <= 16 && (newData.val() === data.val() || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')))"
             }
           }
         },
+
+        // 🪪 users/{uid}/verify — tasdiqlangan raqam ({phone, at, src}). Bu yerda
+        //    mijoz-grant YO'Q: faqat Worker/bot yozadi (profile egasiga ochiq,
+        //    shuning uchun «tasdiqlangan» belgisi profilda saqlanmaydi).
 
         "cart": {
           ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
@@ -439,6 +447,47 @@
     },
 
     "tg_login": {
+      ".read": false,
+      ".write": false
+    },
+
+    // ================= 🪪 YAGONA HISOB — FAQAT SERVER =================
+    // Worker/bot service-account bilan yozadi (qoidalarni chetlab o'tadi).
+    // Mijoz brauzeri bularni KO'RMAYDI va YOZOLMAYDI: aks holda begona
+    // raqamni o'ziga bog'lash, kirish so'rovini soxtalashtirish yoki boshqa
+    // hisobga "redirect" yozib uni egallash mumkin bo'lardi.
+    "phone_index": {
+      // Tasdiqlangan raqam -> Telegram ID (Telegram kontakt imzosi yoki bot).
+      ".read": false,
+      ".write": false
+    },
+    "phone_pw": {
+      // Telefon+parol (eski) hisob raqami -> uid (birlashtirish taklifi uchun).
+      ".read": false,
+      ".write": false
+    },
+    "tg_login_req": {
+      // Raqam bo'yicha kirish so'rovlari (to'g'ri 2 xonali raqam, holat).
+      ".read": false,
+      ".write": false
+    },
+    "login_rate": {
+      // Kirish urinishlari chegarasi (IP / raqam bo'yicha).
+      ".read": false,
+      ".write": false
+    },
+    "uid_redirect": {
+      // Birlashtirilgan eski uid -> Telegram ID. Eski qurilmalar /session orqali ko'chadi.
+      ".read": false,
+      ".write": false
+    },
+    "account_merges": {
+      // Birlashtirish jurnali (kim, qachon, nechta buyurtma, qancha keshbek).
+      ".read": false,
+      ".write": false
+    },
+    "story_reply_index": {
+      // Admin kartochkasidagi «✍️ Javob yozish» tugmasi -> {sid, uid, rid}.
       ".read": false,
       ".write": false
     },
