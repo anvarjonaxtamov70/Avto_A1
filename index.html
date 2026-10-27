@@ -43404,23 +43404,30 @@ html.lite #a1acct .aa-dim, html.lite #a1acct .aa-sheet { transition-duration: .0
 
     /* ── 📄 Hujjat (maxfiylik siyosati) — ilova ichida ochiladi ── */
     var DOC = null;
+    // ⚠️ iframe.src ni almashtirish brauzer tarixiga yozuv qo'shadi — keyin «Orqaga»
+    //    ilova o'rniga yashirin iframe ichida yurardi. Shuning uchun har ochilishda
+    //    YANGI iframe (birinchi yuklanish tarixga yozilmaydi), yopilganda — olib tashlanadi.
     function openDoc(url, title) {
         if (!DOC) {
             DOC = D.createElement('div'); DOC.id = 'a1doc'; DOC.setAttribute('role', 'dialog'); DOC.setAttribute('aria-modal', 'true');
-            DOC.innerHTML = '<div class="ad-bar"><b></b><button type="button" aria-label="Yopish">' + IC.x + '</button></div><iframe title="" referrerpolicy="no-referrer"></iframe>';
+            DOC.innerHTML = '<div class="ad-bar"><b></b><button type="button" aria-label="Yopish">' + IC.x + '</button></div>';
             D.body.appendChild(DOC);
             DOC.querySelector('button').onclick = closeDoc;
         }
+        var old = DOC.querySelector('iframe'); if (old) old.parentNode.removeChild(old);
+        var fr = D.createElement('iframe');
+        fr.setAttribute('title', title || '');
+        fr.setAttribute('referrerpolicy', 'no-referrer');
+        fr.src = url;
+        DOC.appendChild(fr);
         DOC.querySelector('b').textContent = title || '';
-        DOC.querySelector('iframe').setAttribute('title', title || '');
-        DOC.querySelector('iframe').src = url;
         DOC.classList.add('on');
         hap('light');
     }
     function closeDoc() {
         if (!DOC || !DOC.classList.contains('on')) return false;
         DOC.classList.remove('on');
-        try { DOC.querySelector('iframe').src = 'about:blank'; } catch (e) {}
+        var fr = DOC.querySelector('iframe'); if (fr) fr.parentNode.removeChild(fr);
         return true;
     }
     W.a1CloseDoc = closeDoc;
