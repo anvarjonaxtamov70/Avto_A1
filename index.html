@@ -42586,6 +42586,7 @@ html[data-theme="light"] #login-screen .login-hint { color: #1c1c1e; background:
     background: rgba(118,118,128,.24); color: var(--text-muted, #8a8a8a); -webkit-tap-highlight-color: transparent;
 }
 #login-screen .login-close svg { display: block; width: 100%; height: 100%; }
+#login-screen .login-card.is-closable .login-title { padding-right: 34px; }
 #login-screen .login-card.lp-panel > :not(.lp-on):not(#login-close) { display: none !important; }
 #login-screen .login-panel { text-align: center; padding: 6px 2px 0; }
 #login-screen .login-panel .tgw-ic { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; background: #2AABEE; color: #fff; box-shadow: 0 10px 26px rgba(42,171,238,.35); }
@@ -42696,6 +42697,7 @@ html.lite #login-tg-wait .tgw-code.is-match { animation: none; }
         show('login-pw-alt', mode === 'phone');
         show('login-phone-alt', mode !== 'phone');
         show('login-close', closable);
+        var cardEl = document.querySelector('#login-screen .login-card'); if (cardEl) cardEl.classList.toggle('is-closable', closable);
         var p = $('login-pass'); if (p) p.setAttribute('autocomplete', mode === 'login' ? 'current-password' : 'new-password');
         var ph = $('login-phone'); if (ph) ph.setAttribute('enterkeyhint', mode === 'phone' ? 'go' : 'next');
         ['login-name', 'login-phone', 'login-pass', 'login-pass2'].forEach(window._loginClearErr);
@@ -43173,7 +43175,11 @@ html.lite #login-tg-wait .tgw-code.is-match { animation: none; }
         var ls = $('login-screen'); if (!ls) return;
         var A = auth(), cur = A && A.currentUser;
         linkMode = true; closable = true; upgrade = !!(cur && cur.isAnonymous); mode = 'phone';
-        try { var ph = (typeof myProfile !== 'undefined' && myProfile && myProfile.phone) ? myProfile.phone : ''; if (ph && $('login-phone')) { $('login-phone').value = ph; try { window._loginFormatPhone($('login-phone')); } catch (e) {} } } catch (e) {}
+        try {
+            var ph = (typeof myProfile !== 'undefined' && myProfile && myProfile.phone) ? myProfile.phone : '';
+            if (!ph) { var sv = JSON.parse(localStorage.getItem('avto_a1_user') || '{}') || {}; ph = sv.phone || ''; }
+            if (ph && digitsOf(ph).length >= 9 && $('login-phone')) { $('login-phone').value = ph; try { window._loginFormatPhone($('login-phone')); } catch (e) {} }
+        } catch (e) {}
         setHint('');
         panel(null);
         paint();
@@ -43353,7 +43359,7 @@ html.lite #a1acct .aa-dim, html.lite #a1acct .aa-sheet { transition-duration: .0
         var tgAcc = isTgUid(uid), phone = VER && VER.phone ? String(VER.phone) : '';
         var html = '';
         if (tgAcc) html += row('none', IC.tg, '#2AABEE', 'Telegram hisobi', '<span class="pfa-ok">Ulangan \u2713</span>');
-        else html += row('link', IC.link, '#2AABEE', 'Telegram bilan bog\u2018lash', '<span class="pfa-warn">Ulanmagan</span>');
+        else html += row('link', IC.link, '#2AABEE', 'Telegram hisobi', '<span class="pfa-warn">Ulash</span>');
         if (tgAcc) html += row(phone ? 'none' : 'verify', IC.phone, '#34c759', 'Telefon raqam', phone ? esc(fmtPhone(phone)) + ' <span class="pfa-ok">\u2713</span>' : (verLoaded ? '<span class="pfa-warn">Tasdiqlash</span>' : ''));
         grp.innerHTML = html;
         foot.textContent = tgAcc
