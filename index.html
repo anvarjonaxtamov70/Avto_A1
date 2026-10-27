@@ -10180,6 +10180,9 @@ function showToast(m, t = 'success') {
                             : ('<span class="card-rating">' + icon('star') + ' ' + info.avg + '</span>');
                         var span = wrap.firstElementChild || wrap;
                         meta.insertBefore(span, meta.firstChild);
+                        // Shablondagidek: reyting bor kartada «Kafolatlangan» yorlig'i chiqmaydi
+                        // (tor kartada u «Kaf» bo'lib kesilib qolardi)
+                        meta.querySelectorAll('.ac-trust, .bm-trust').forEach(function (t) { t.remove(); });
                     });
                 } catch (e) { _dwarn('[ratings] DOM xato:', e); }
             });
@@ -35595,6 +35598,13 @@ html body .luxury-card.ac-card .card-stock-low { color: #ff9f0a !important; back
 .ac-card.is-long .ac-pr b { font-size: 15px; }
 .ac-pr s { display: block; height: 15px; font-size: 12px; line-height: 15px; color: var(--hx-tx2); opacity: .75; white-space: nowrap; }
 .ac-pr b { display: block; font-size: 16.5px; font-weight: 700; letter-spacing: -.35px; color: var(--hx-tx); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 360px telefonda narx kesilmasin («162 000 so» emas): shrift karta eniga moslashadi
+   (keng ekranda o'zgarmaydi), baribir sig'masa «so'm» keyingi qatorga o'tadi.
+   Raqam ichida bo'sh joy — NBSP (toLocaleString), raqamning o'zi bo'linmaydi. */
+.ac-pr { container-type: inline-size; }
+.ac-pr b { white-space: normal; font-size: clamp(14px, 17cqi, 16.5px); }
+.ac-card.is-long .ac-pr b { font-size: clamp(12.5px, 14.6cqi, 15px); }
+.ac-pr b small { font-size: .74em; white-space: nowrap; }
 html body .luxury-card.ac-card .btn-add-cart.ac-add {
     flex: 0 0 36px !important; width: 36px !important; height: 36px !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
     border-radius: 50% !important; display: grid !important; place-items: center !important; border: 0 !important;
