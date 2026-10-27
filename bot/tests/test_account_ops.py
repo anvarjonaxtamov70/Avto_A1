@@ -116,6 +116,28 @@ def test_storis_javobi_imzolanadi():
     assert body["botAuth"] == expected
 
 
+def test_hisobni_ochirish_oz_nomidan_imzolanadi():
+    calls = []
+
+    async def fake_post(url, route, body):
+        calls.append((route, body))
+        return 200, {"ok": True, "deleted": True}
+
+    ok, code, _ = run(account_ops.worker_account_delete(
+        "https://w.test", "123:TEST_TOKEN_FOR_ORDER_FLOW", 777000111, post=fake_post))
+    assert ok and code == 200
+    route, body = calls[0]
+    assert route == "/account-delete" and body["uid"] == "777000111" and body["confirm"] == "DELETE"
+    # actor == o'chiriladigan uid (Worker shuni talab qiladi)
+    assert body["botAuth"]["actor"] == "777000111"
+    assert body["botAuth"] == order_ops.bot_auth("123:TEST_TOKEN_FOR_ORDER_FLOW", "account-delete",
+                                                 "777000111", ["777000111"], ts=body["botAuth"]["ts"])
+    t = account_ops.account_delete_result_text
+    assert "o'chirildi" in t(True, 200, {})
+    assert "faol buyurtma" in t(False, 409, {"activeOrders": 1})
+    assert "qayta urinib" in t(False, 500, {})
+
+
 def test_storis_xatosi_tushunarli():
     t = account_ops.story_answer_error_text
     assert "eski versiyada" in t(404, {"error": "topilmadi"})

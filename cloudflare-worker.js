@@ -26,6 +26,8 @@
 //       "/phone-verify" — Mini App requestContact (Telegram imzosi) -> raqam indeksi;
 //       "/merge-legacy" — eski (anonim/parolli) hisobni Telegram hisobiga ko'chirish;
 //       "/session"      — birlashtirilgan eski sessiya -> Telegram hisobi tokeni.
+// 10) "/account-delete" — mijoz o'z hisobini o'chiradi (shaxsiy ma'lumotlar
+//                   o'chadi, buyurtmalar anonim holda saqlanadi).
 //  9) "/story-reply" — mijozning storis javobi (server yozadi, adminlarga
 //                   «✍️ Javob yozish» tugmali kartochka); "/story-answer" —
 //                   admin javobi mijozga (ilovada + Telegram'da).
@@ -631,6 +633,8 @@ export default {
     if (path === "/merge-legacy") return handleMergeLegacy(request, env);
     if (path === "/story-reply") return handleStoryReply(request, env, execCtx);
     if (path === "/story-answer") return handleStoryAnswer(request, env);
+    // 🗑 Hisobni o'chirish (Google Play talabi): ilova, sayt yoki Telegram /delete
+    if (path === "/account-delete") return handleAccountDelete(request, env);
     if (path === "/referral") return handleReferralSecure(request, env);
     if (path === "/referral-qualify") return handleReferralQualifySecure(request, env);
     if (path === "/stock-commit") return handleDeprecatedStockCommit(request, env);
@@ -2590,7 +2594,9 @@ async function signBotAuth(env, route, ts, actor, fields) {
   return toHex(await hmacSha256(key, new TextEncoder().encode(botAuthMessage(route, ts, actor, fields))));
 }
 
-async function verifyBotAuth(body, env, route, fields) {
+// Imzoni tekshiradi va `actor` (Telegram ID) ni qaytaradi. Faqat bot imzolay oladi
+// (kalit BOT_TOKEN dan). Admin tekshiruvi — verifyBotAuth da.
+async function checkBotSignature(body, env, route, fields) {
   const auth = body.botAuth;
   if (!auth || typeof auth !== "object" || Array.isArray(auth)) throw httpError(401, "botAuth noto'g'ri");
   const ts = Number(auth.ts);
@@ -2603,6 +2609,11 @@ async function verifyBotAuth(body, env, route, fields) {
   if (Math.abs(now - ts) > BOT_AUTH_MAX_SKEW_SECONDS) throw httpError(401, "botAuth eskirgan");
   const expected = await signBotAuth(env, route, ts, actor, fields);
   if (!constantTimeEqual(expected, sig)) throw httpError(401, "botAuth imzosi mos kelmadi");
+  return actor;
+}
+
+async function verifyBotAuth(body, env, route, fields) {
+  const actor = await checkBotSignature(body, env, route, fields);
   if (!getAdminIds(env).includes(actor)) throw httpError(403, "faqat admin");
   return { uid: actor, source: "bot", claims: null };
 }
@@ -4680,5 +4691,190 @@ async function handleStoryAnswer(request, env) {
     return json({ ok: true, uid: target, sid, id: aid, telegram });
   } catch (err) {
     return errorResponse(err);
+  }
+}
+
+// =====================================================================
+//  🗑 HISOBNI O'CHIRISH — Google Play talabi (ilova ichida + veb sahifa)
+// ---------------------------------------------------------------------
+//  Mijoz o'z hisobini o'zi o'chiradi: ilova/sayt/mini app (Profil → Hisob)
+//  yoki Telegram'da /delete (bot mijozning O'Z nomidan imzolaydi).
+//  O'CHADI: profil, tasdiqlangan raqam va uning indekslari, manzillar, savat,
+//    sevimlilar, mashina, bildirishnomalar, keshbek hisobi, buyurtma chati,
+//    storis ko'rish/javoblari, sharhlar, «kelganda xabar ber» so'rovlari,
+//    AI suhbatlari, ro'yxatdan o'tish yozuvlari, birlashtirish yo'naltirishlari
+//    va Firebase Authentication foydalanuvchisi.
+//  SAQLANADI (anonim): buyurtmalar — hisob-kitob va kafolat uchun; ism,
+//    raqam, manzil, xarita havolasi va izoh olib tashlanadi.
+//  Faol (yetkazilmagan) buyurtma bo'lsa — 409: avval yakunlansin.
+// =====================================================================
+const ACTIVE_ORDER_STATUSES = ["kutilmoqda", "qabul", "yolda"];
+const DELETED_NAME = "O'chirilgan mijoz";
+const authAdminTokenCache = { token: "", expiresAt: 0 };
+
+// Firebase Authentication foydalanuvchisini o'chirish uchun alohida OAuth token
+// (Identity Toolkit admin API — RTDB tokenidan boshqa scope).
+async function getAuthAdminToken(env) {
+  if (authAdminTokenCache.token && Date.now() < authAdminTokenCache.expiresAt) return authAdminTokenCache.token;
+  const clientEmail = env.FIREBASE_CLIENT_EMAIL;
+  const privateKeyPem = env.FIREBASE_PRIVATE_KEY;
+  if (!clientEmail || !privateKeyPem) throw new Error("service account sozlanmagan");
+  const now = Math.floor(Date.now() / 1000);
+  const enc = new TextEncoder();
+  const headerB64 = base64url(enc.encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
+  const claimsB64 = base64url(enc.encode(JSON.stringify({
+    iss: clientEmail,
+    scope: "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/identitytoolkit",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  })));
+  const signingInput = headerB64 + "." + claimsB64;
+  const key = await importPrivateKey(privateKeyPem);
+  const sig = await crypto.subtle.sign({ name: "RSASSA-PKCS1-v1_5" }, key, enc.encode(signingInput));
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=" +
+      encodeURIComponent(signingInput + "." + base64url(new Uint8Array(sig))),
+  });
+  const j = await res.json();
+  if (!res.ok || !j || !j.access_token) throw new Error("auth admin token olinmadi");
+  authAdminTokenCache.token = String(j.access_token);
+  authAdminTokenCache.expiresAt = Date.now() + Math.max(60, parseInt(j.expires_in || "3600", 10) - 60) * 1000;
+  return authAdminTokenCache.token;
+}
+
+async function deleteAuthUser(env, uid) {
+  try {
+    const token = await getAuthAdminToken(env);
+    const projectId = String(env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID);
+    const res = await fetch("https://identitytoolkit.googleapis.com/v1/projects/" + encodeURIComponent(projectId) + "/accounts:delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ localId: uid }),
+    });
+    if (res.ok) return "deleted";
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    const msg = data && data.error && data.error.message ? String(data.error.message) : "HTTP " + res.status;
+    return /USER_NOT_FOUND/.test(msg) ? "none" : "kept: " + msg.slice(0, 80);
+  } catch (err) {
+    return "kept: " + String((err && err.message) || err).slice(0, 80);
+  }
+}
+
+// Ixtiyoriy indeksli so'rov: indeks hali joylanmagan bo'lsa o'chirish to'xtamasin.
+async function optionalQuery(ctx, token, path, params) {
+  try { return await rtdbQuery(ctx.dbUrl, path, params, token); } catch (_) { return null; }
+}
+
+async function deleteAccountData(ctx, token, env, uid, emailDigits) {
+  const now = Date.now();
+  const [userRaw, ordersRaw, viewsShallow, repliesShallow, reviewsShallow, notifyShallow, redirectsRaw, replyIdxRaw] =
+    await Promise.all([
+      rtdbGet(ctx.dbUrl, "users/" + uid, token),
+      rtdbQuery(ctx.dbUrl, "orders", { orderBy: '"uid"', equalTo: JSON.stringify(uid) }, token),
+      rtdbQuery(ctx.dbUrl, "story_views", { shallow: "true" }, token),
+      rtdbQuery(ctx.dbUrl, "story_replies", { shallow: "true" }, token),
+      rtdbQuery(ctx.dbUrl, "reviews", { shallow: "true" }, token),
+      rtdbQuery(ctx.dbUrl, "notify_requests", { shallow: "true" }, token),
+      optionalQuery(ctx, token, "uid_redirect", { orderBy: '"to"', equalTo: JSON.stringify(uid) }),
+      optionalQuery(ctx, token, "story_reply_index", { orderBy: '"uid"', equalTo: JSON.stringify(uid) }),
+    ]);
+  const orders = toEntries(ordersRaw).filter((e) => String(e.val.uid) === uid && e.key === uid + "_" + String(e.val.id));
+  const active = orders.filter((e) => ACTIVE_ORDER_STATUSES.includes(String(e.val.status || "kutilmoqda")));
+  if (active.length) {
+    throw httpError(409, "faol buyurtmangiz bor — yetkazilgach yoki bekor qilingach hisobni o'chira olasiz", {
+      activeOrders: active.length,
+    });
+  }
+  const user = plainObj(userRaw);
+  const verifyDigits = phoneDigits(plainObj(user.verify).phone);
+  const digitsList = [verifyDigits, emailDigits].filter(Boolean);
+  const indexReads = await Promise.all(digitsList.map((d) => Promise.all([
+    rtdbGet(ctx.dbUrl, "phone_index/" + d, token),
+    rtdbGet(ctx.dbUrl, "phone_pw/" + d, token),
+  ])));
+
+  const u = {};
+  // Buyurtmalar — anonim holda qoladi (hisob-kitob, kafolat, ombor tarixi)
+  for (const e of orders) {
+    const base = "orders/" + e.key;
+    u[base + "/customerName"] = DELETED_NAME;
+    u[base + "/customerPhone"] = null;
+    u[base + "/customerAddress"] = null;
+    u[base + "/customerUsername"] = null;
+    u[base + "/customer"] = { name: DELETED_NAME };
+    u[base + "/deliveryMapLink"] = null;
+    u[base + "/delivery/address"] = null;
+    u[base + "/delivery/mapLink"] = null;
+    u[base + "/delivery/note"] = null;
+    u[base + "/userDeletedAt"] = now;
+  }
+  for (const sid of Object.keys(asMap(viewsShallow))) u["story_views/" + sid + "/" + uid] = null;
+  for (const sid of Object.keys(asMap(repliesShallow))) u["story_replies/" + sid + "/" + uid] = null;
+  for (const pid of Object.keys(asMap(reviewsShallow))) u["reviews/" + pid + "/" + uid] = null;
+  for (const pid of Object.keys(asMap(notifyShallow))) u["notify_requests/" + pid + "/" + uid] = null;
+  for (const e of toEntries(replyIdxRaw)) if (String(e.val.uid) === uid) u["story_reply_index/" + e.key] = null;
+  // Birlashtirilgan eski hisoblar shu uid'ga yo'naltirilgan bo'lsa — eski sessiya
+  // o'chirilgan hisobni qayta tiriltirmasin.
+  for (const e of toEntries(redirectsRaw)) if (String(e.val.to) === uid) u["uid_redirect/" + e.key] = null;
+  digitsList.forEach((d, i) => {
+    const [idx, pw] = indexReads[i];
+    if (idx && String(idx.uid) === uid) u["phone_index/" + d] = null;
+    if (pw && String(pw.uid) === uid) u["phone_pw/" + d] = null;
+    u["login_rate/ph_" + d] = null;
+  });
+  const refCode = safeChildKey(plainObj(user.phase2).referralCode);
+  if (refCode) u["refcodes/" + refCode] = null;
+  u["users/" + uid] = null;
+  u["loyalty_accounts/" + uid] = null;
+  u["order_chats/" + uid] = null;
+  u["ai_requests/" + uid] = null;
+  u["referrals/" + uid] = null;
+  u["customer_registrations/" + uid] = null;
+  u["customer_registration_pending/" + uid] = null;
+  u["admin_notifications/new_customer_" + uid] = null;
+  // Shaxsiy ma'lumotsiz iz: admin «mijoz hisobini o'chirdi» ni ko'radi
+  u["deleted_accounts/" + uid] = { at: now, orders: orders.length };
+  await rtdbPatch(ctx.dbUrl, "", u, token);
+  redirectCache.delete(uid);
+  return { orders: orders.length };
+}
+
+async function handleAccountDelete(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    if (body.confirm !== "DELETE") throw httpError(400, "tasdiq kerak (confirm: DELETE)");
+    let uid;
+    let emailDigits = "";
+    if (body.botAuth != null) {
+      // 🤖 Telegram'da /delete: bot mijozning O'Z ID'si bilan imzolaydi
+      const target = requireSafeUid(cleanText(body.uid, 128, true), 400);
+      const actor = await checkBotSignature(body, env, "account-delete", [target]);
+      if (actor !== target) throw httpError(403, "faqat o'z hisobingizni o'chira olasiz");
+      uid = target;
+    } else if (typeof body.initData === "string" && body.initData) {
+      const verified = await verifyTelegramInitData(body.initData, env.BOT_TOKEN);
+      if (!verified.ok) throw httpError(401, verified.error);
+      uid = requireSafeUid(verified.user.id, 401);
+    } else if (typeof body.idToken === "string" && body.idToken) {
+      // Bloklangan mijoz ham o'z ma'lumotini o'chira oladi (blok belgisi qoladi)
+      const claims = await verifyFirebaseIdToken(body.idToken, env);
+      uid = requireSafeUid(claims.sub, 401);
+      const m = String(claims.email || "").toLowerCase().match(/^(\d{9,15})@tel\.avtoa1\.app$/);
+      emailDigits = m ? phoneDigits(m[1]) : "";
+    } else {
+      throw httpError(401, "initData yoki idToken kerak");
+    }
+    if (getAdminIds(env).includes(uid)) throw httpError(403, "admin hisobini bu yerdan o'chirib bo'lmaydi");
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const result = await deleteAccountData(ctx, token, env, uid, emailDigits);
+    const authUser = await deleteAuthUser(env, uid);
+    return json({ ok: true, deleted: true, uid, orders: result.orders, auth: authUser });
+  } catch (e) {
+    return errorResponse(e);
   }
 }

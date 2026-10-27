@@ -131,6 +131,7 @@ function decodeCustomToken(t) {
 // ---------------------------------------------------------------------
 const DB_URL = 'https://test-rtdb.example';
 let db, tgCalls, tgFail, msgSeq, fetchCount = 0;
+const authDeletes = [];
 function resetWorld(data) { db = new FakeDB(data); tgCalls = []; tgFail = null; msgSeq = 1000; }
 function jsonResponse(obj, status, headers) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}) });
@@ -143,6 +144,10 @@ globalThis.fetch = async (input, init) => {
   if (url.startsWith('https://oauth2.googleapis.com/token')) return jsonResponse({ access_token: 'test-access-token', expires_in: 3600 });
   if (url.startsWith('https://www.googleapis.com/service_accounts/v1/jwk/securetoken')) {
     return jsonResponse({ keys: [GOOGLE_JWK] }, 200, { 'Cache-Control': 'public, max-age=3600' });
+  }
+  if (url.startsWith('https://identitytoolkit.googleapis.com/')) {
+    authDeletes.push({ url, body: JSON.parse(opts.body || '{}') });
+    return jsonResponse({});
   }
   if (url.startsWith('https://api.telegram.org/bot')) {
     const tail = url.slice('https://api.telegram.org/bot'.length);
@@ -556,10 +561,94 @@ async function main() {
   const pre = await worker.fetch(new Request('https://worker.test/upload', { method: 'OPTIONS' }), env, undefined);
   ok(/Authorization/.test(pre.headers.get('Access-Control-Allow-Headers') || ''), 'CORS: Authorization ruxsat etilgan');
 
+  // ===== 10) /account-delete — Google Play: hisobni o'chirish =====
+  console.log('▶ 10) /account-delete');
+  resetWorld(baseData());
+  const DU = '777000555';
+  db.set('users/' + DU + '/profile', { name: 'Jasur', phone: '+998901234567', lang: 'uz' });
+  db.set('users/' + DU + '/verify', { phone: '+998901234567', at: 1, src: 'bot' });
+  db.set('users/' + DU + '/cart', { '3': 2 });
+  db.set('users/' + DU + '/phase2/referralCode', 'JASUR42');
+  db.set('refcodes/JASUR42', DU);
+  db.set('phone_index/998901234567', { uid: DU, at: 1 });
+  db.set('story_views/reklama__k1/' + DU, { t: 1, n: 'Jasur' });
+  db.set('story_views/reklama__k1/' + TG, { t: 1, n: 'Ali' });
+  db.set('story_replies/reklama__k1/' + DU + '/r1', { t: 1, x: 'Narxi?' });
+  db.set('story_reply_index/aaaaaaaaaaaaaaaaaaaa', { sid: 'reklama__k1', uid: DU, rid: 'r1', n: 'Jasur' });
+  db.set('reviews/1/' + DU, { rating: 5, text: 'Zo\'r', userName: 'Jasur' });
+  db.set('notify_requests/3/' + DU, { at: 1 });
+  db.set('ai_requests/' + DU + '/q1', { q: 'salom' });
+  db.set('customer_registrations/' + DU, { uid: DU, name: 'Jasur', phone: '+998901234567' });
+  db.set('admin_notifications/new_customer_' + DU, { id: 'new_customer_' + DU, text: 'Jasur' });
+  db.set('uid_redirect/LegacyOfJasur000000000000001', { to: DU, at: 1 });
+  r = await call('/order-commit', {
+    initData: initDataFor(DU, 'Jasur'), attemptId: 'att_del_000001', items: [{ id: '1', size: '', qty: 1 }],
+    customer: { name: 'Jasur', phone: '+998901234567', address: 'Yunusobod 7' },
+    delivery: { method: 'courier', address: 'Yunusobod 7', mapLink: 'https://maps.example/x', note: 'domofon 12' },
+    payment: { method: 'Naqd pul (yetkazilganda)' },
+  });
+  const delOrderId = r.data.order.id;
+  r = await call('/account-delete', { initData: initDataFor(DU, 'Jasur'), confirm: 'DELETE' });
+  eq([r.status, r.data.activeOrders], [409, 1], 'faol buyurtma bor — avval yakunlansin (409)');
+  ok(db.read('users/' + DU + '/profile'), 'rad etilganda hech narsa o\'chmadi');
+  for (const st of ['qabul', 'yolda', 'yetkazildi']) await call('/order-status', { initData: initDataFor(ADMINS[0], 'Anvar'), uid: DU, orderId: delOrderId, status: st });
+  r = await call('/account-delete', { initData: initDataFor(DU, 'Jasur') });
+  eq(r.status, 400, 'tasdiqsiz (confirm) o\'chirilmaydi');
+  authDeletes.length = 0;
+  r = await call('/account-delete', { initData: initDataFor(DU, 'Jasur'), confirm: 'DELETE' });
+  ok(r.status === 200 && r.data.deleted === true, 'hisob o\'chirildi');
+  ok(r.fetches <= LIMIT, 'o\'chirish byudjetda (' + r.fetches + ')');
+  eq(db.read('users/' + DU), null, 'profil, savat, raqam tasdig\'i — o\'chdi');
+  eq(db.read('loyalty_accounts/' + DU), null, 'keshbek hisobi o\'chdi');
+  eq(db.read('phone_index/998901234567'), null, 'raqam indeksi o\'chdi (raqam bilan kirib bo\'lmaydi)');
+  eq(db.read('story_views/reklama__k1/' + DU), null, 'storis ko\'rishi o\'chdi');
+  ok(db.read('story_views/reklama__k1/' + TG), 'boshqa mijozning ko\'rishi joyida');
+  eq(db.read('story_replies/reklama__k1/' + DU), null, 'storis javoblari o\'chdi');
+  eq(db.read('story_reply_index/aaaaaaaaaaaaaaaaaaaa'), null, 'javob indeksi (ism) o\'chdi');
+  eq(db.read('reviews/1/' + DU), null, 'sharh o\'chdi');
+  eq(db.read('notify_requests/3/' + DU), null, '«kelganda xabar ber» o\'chdi');
+  eq(db.read('ai_requests/' + DU), null, 'AI suhbatlari o\'chdi');
+  eq(db.read('refcodes/JASUR42'), null, 'taklif kodi o\'chdi');
+  eq(db.read('customer_registrations/' + DU), null, 'ro\'yxatdan o\'tish yozuvi o\'chdi');
+  eq(db.read('admin_notifications/new_customer_' + DU), null, 'admin «yangi mijoz» yozuvi (ism) o\'chdi');
+  eq(db.read('uid_redirect/LegacyOfJasur000000000000001'), null, 'eski hisob yo\'naltirishi o\'chdi (qayta tirilmaydi)');
+  const anon = db.read('orders/' + DU + '_' + delOrderId);
+  ok(anon && anon.customerName === "O'chirilgan mijoz" && !anon.customerPhone && !anon.customerAddress && !anon.deliveryMapLink, 'buyurtma anonim holda saqlandi');
+  ok(anon && anon.delivery && !anon.delivery.address && !anon.delivery.note && anon.delivery.method === 'courier', 'yetkazish manzili/izohi o\'chdi, usul qoldi');
+  ok(anon && anon.total === 100000 && anon.status === 'yetkazildi', 'summa va holat (hisob-kitob) saqlandi');
+  ok(db.read('deleted_accounts/' + DU + '/at') > 0, 'shaxsiy ma\'lumotsiz iz qoldi');
+  ok(authDeletes.length === 1 && authDeletes[0].body.localId === DU && /accounts:delete$/.test(authDeletes[0].url), 'Firebase Authentication foydalanuvchisi o\'chirildi');
+  // Begona raqam indeksi tegilmaydi
+  resetWorld(baseData());
+  db.set('users/' + DU + '/verify', { phone: '+998901234567', at: 1 });
+  db.set('phone_index/998901234567', { uid: TG2, at: 2 });
+  r = await call('/account-delete', { initData: initDataFor(DU, 'Jasur'), confirm: 'DELETE' });
+  eq([r.status, db.read('phone_index/998901234567/uid')], [200, TG2], 'raqam boshqa hisobga o\'tgan bo\'lsa — uning indeksi tegilmaydi');
+  // Parolli (Telegram'siz) hisob
+  const pwUid = 'PwOnlyUid00000000000000000001';
+  db.set('users/' + pwUid + '/profile', { name: 'Olim', phone: '+998935550011' });
+  db.set('phone_pw/998935550011', { uid: pwUid, at: 1 });
+  r = await call('/account-delete', { idToken: idTokenFor(pwUid, { email: '998935550011@tel.avtoa1.app' }), confirm: 'DELETE' });
+  ok(r.status === 200 && db.read('users/' + pwUid) === null && db.read('phone_pw/998935550011') === null, 'parolli hisob va uning raqam indeksi o\'chdi');
+  // Telegram /delete — bot mijozning O'Z ID'si bilan
+  db.set('users/' + TG2 + '/profile', { name: 'Vali' });
+  r = await call('/account-delete', { uid: TG2, confirm: 'DELETE', botAuth: botAuth('account-delete', TG2, [TG2]) });
+  ok(r.status === 200 && db.read('users/' + TG2) === null, 'Telegram /delete — o\'z hisobini o\'chirdi');
+  r = await call('/account-delete', { uid: TG, confirm: 'DELETE', botAuth: botAuth('account-delete', TG2, [TG]) });
+  eq(r.status, 403, 'bot imzosi bilan BOSHQA mijozning hisobini o\'chirib bo\'lmaydi');
+  r = await call('/account-delete', { uid: TG, confirm: 'DELETE', botAuth: botAuth('account-delete', TG, [TG2]) });
+  eq(r.status, 401, 'imzo o\'chiriladigan uid\'ga bog\'langan');
+  r = await call('/account-delete', { initData: initDataFor(ADMINS[0], 'Anvar'), confirm: 'DELETE' });
+  eq(r.status, 403, 'admin hisobi bu yo\'l bilan o\'chmaydi');
+  db.set('blocked_users/777000666', true);
+  db.set('users/777000666/profile', { name: 'Blok' });
+  r = await call('/account-delete', { initData: initDataFor('777000666', 'Blok'), confirm: 'DELETE' });
+  ok(r.status === 200 && db.read('blocked_users/777000666') === true, 'bloklangan mijoz ham ma\'lumotini o\'chira oladi (blok qoladi)');
+
   // ===== 9) Firebase qoidalari (statik; emulator sinovi PR tavsifida) =====
   console.log('▶ 9) database.rules.json');
   const rules = JSON.parse(fs.readFileSync(path.join(ROOT, 'database.rules.json'), 'utf8').replace(/^\s*\/\/.*$/gm, '')).rules;
-  for (const node of ['phone_index', 'phone_pw', 'tg_login_req', 'login_rate', 'uid_redirect', 'account_merges', 'story_reply_index', 'tg_login']) {
+  for (const node of ['phone_index', 'phone_pw', 'tg_login_req', 'login_rate', 'uid_redirect', 'account_merges', 'story_reply_index', 'tg_login', 'deleted_accounts']) {
     ok(rules[node] && rules[node]['.read'] === false && rules[node]['.write'] === false, node + ': faqat server');
   }
   const uidRules = rules.users.$uid;

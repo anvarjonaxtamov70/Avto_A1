@@ -1,4 +1,4 @@
-# 📱 Avto A1 — Android ilova (APK) yig'ish
+# 📱 Avto A1 — Android ilova (APK + Google Play uchun AAB) yig'ish
 # Ilova Capacitor qobig'i: saytni (GitHub Pages) ochadi, shuning uchun saytdagi
 # har bir o'zgarish ilovada ham darhol ko'rinadi — APK'ni qayta yig'ish faqat
 # android-app/ o'zgarganda kerak.
@@ -74,21 +74,27 @@ jobs:
           export A1_KEY_PASSWORD="$A1_KEYSTORE_PASSWORD"
           export A1_KEY_ALIAS="$(trim "${RAW_ALIAS:-avtoa1}")"
           chmod +x gradlew
-          if [ "$HAS_KEY" = "true" ]; then ./gradlew --no-daemon assembleRelease; else ./gradlew --no-daemon assembleRelease assembleDebug; fi
+          # Google Play uchun AAB (App Bundle) ham yig'iladi — Play yangi ilovaga faqat .aab qabul qiladi.
+          if [ "$HAS_KEY" = "true" ]; then ./gradlew --no-daemon assembleRelease bundleRelease; else ./gradlew --no-daemon assembleRelease assembleDebug bundleRelease; fi
           mkdir -p ../out
           V="1.0.${A1_VERSION_CODE}"
           if [ "$HAS_KEY" = "true" ]; then
             cp app/build/outputs/apk/release/app-release.apk "../out/Avto-A1-${V}.apk"
+            cp app/build/outputs/bundle/release/app-release.aab "../out/Avto-A1-${V}-play.aab"
           else
             cp app/build/outputs/apk/release/app-release-unsigned.apk "../out/Avto-A1-${V}-unsigned.apk"
             cp app/build/outputs/apk/debug/app-debug.apk "../out/Avto-A1-${V}-debug.apk"
+            # Imzosiz AAB — faqat yig'ilishini tekshirish uchun (Play'ga imzolangani yuklanadi)
+            cp app/build/outputs/bundle/release/app-release.aab "../out/Avto-A1-${V}-unsigned.aab" || true
           fi
           ls -la ../out
 
       - uses: actions/upload-artifact@v4
         with:
           name: avto-a1-apk-${{ github.run_number }}
-          path: android-app/out/*.apk
+          path: |
+            android-app/out/*.apk
+            android-app/out/*.aab
           retention-days: 30
 
       - name: Release (faqat main + imzolangan)
@@ -100,4 +106,7 @@ jobs:
           body: |
             Avto A1 Android ilovasi. Telefonda yuklab oling va o'rnating
             («Noma'lum manbalardan o'rnatish»ga ruxsat bering).
-          files: android-app/out/*.apk
+            *-play.aab — Google Play Console'ga yuklash uchun (App Bundle).
+          files: |
+            android-app/out/*.apk
+            android-app/out/*.aab

@@ -128,6 +128,32 @@ async def worker_story_answer(worker_url, bot_token, actor, short, text, post=No
     return bool(code == 200 and data.get("ok")), code, data
 
 
+async def worker_account_delete(worker_url, bot_token, user_id, post=None):
+    """Telegram'da /delete: mijozning O'Z hisobini o'chiradi. Bot mijozning
+    o'z ID'si bilan imzolaydi (Worker faqat actor == uid bo'lsa qabul qiladi)."""
+    uid = str(int(user_id))
+    body = {"uid": uid, "confirm": "DELETE",
+            "botAuth": bot_auth(bot_token, "account-delete", uid, [uid])}
+    code, data = await (post or worker_post)(worker_url, "/account-delete", body)
+    return bool(code == 200 and data.get("ok")), code, data
+
+
+def account_delete_result_text(ok, status_code, data):
+    if ok:
+        return ("✅ <b>Hisobingiz o'chirildi.</b>\n\n"
+                "Profil, raqam, manzillar, savat, keshbek va javoblaringiz o'chirildi. "
+                "Buyurtmalar tarixi hisob-kitob uchun ismingiz va raqamingizsiz saqlanadi.\n\n"
+                "Do'konni yana ochsangiz — yangi hisob ochiladi.")
+    if status_code == 409 and (data or {}).get("activeOrders"):
+        return ("⏳ Sizda faol buyurtma bor. U yetkazilgach yoki bekor qilingach "
+                "hisobni o'chira olasiz.")
+    if status_code == 404:
+        return "⚠️ Bu imkoniyat hali yoqilmagan. Do'kon bilan bog'laning."
+    if status_code == 403:
+        return "⚠️ Bu hisobni bu yerdan o'chirib bo'lmaydi. Do'kon bilan bog'laning."
+    return "⚠️ Hozir o'chirib bo'lmadi. Birozdan keyin qayta urinib ko'ring."
+
+
 def story_answer_error_text(status_code, data):
     err = str((data or {}).get("error") or "").strip()
     if status_code == 404 and err in ("", "topilmadi"):
