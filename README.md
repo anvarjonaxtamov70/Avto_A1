@@ -99,6 +99,17 @@ Har bir PR (`main`'ga) ochilganda `.github/workflows/pr-check.yml` ishga tushib 
 
 Xato bo'lsa PR'da qizil ✗, toza bo'lsa yashil ✓ ko'rinadi.
 
+## Botni tozalash (admin)
+
+**Boshqaruv markazi → Xavfli hudud → «Botni tozalash»** botni «yangi»dek qiladi. Ishlashi uchun alohida parol kerak, uni Worker tekshiradi (`/admin-reset`).
+
+- **O'chadi:** barcha buyurtmalar, keshbek hisoblari va tarixi, statistika, bildirishnomalar (mijozniki va admin inbox), buyurtma chatlari, AI suhbatlari, storis javoblari va ko'rishlari, sharhlar, ommaviy xabarlar tarixi. Ismi yoki raqami yo'q foydalanuvchilar ham o'chadi.
+- **Qoladi:** tovarlar, narxlar va ombor qoldig'i, katalog, bannerlar, storislar, sozlamalar. Ismi va raqami bor mijozlar ro'yxatdan o'tgan holida qoladi: profil, tasdiqlangan raqam, manzillar, mashina, savat, mavzu. Bot ularni qayta ro'yxatdan o'tkazmaydi, «yangi mijoz» xabari ham qayta kelmaydi.
+
+**Mijozlar** oynasida faqat ismi **va** telefon raqami bor mijozlar ko'rinadi. Qolganlarini oynadagi «O'chirish» tugmasi (o'sha parol bilan) o'chiradi. Buyurtmasi bor foydalanuvchi bu tugma bilan o'chirilmaydi.
+
+Parol kodda yozilmagan, Worker'da faqat uning tuzli SHA-256 xeshi saqlanadi. Parolni almashtirish uchun Cloudflare'da `ADMIN_RESET_PASSWORD` secret qo'ying. Noto'g'ri parol 15 daqiqada ko'pi bilan 5 marta qabul qilinadi. Telegram chatidagi eski xabarlarni bot o'chira olmaydi (Telegram bunga ruxsat bermaydi).
+
 ## Mahalliy ko'rish
 
 Bu statik sayt — oddiy HTTP server yetarli:

@@ -7591,6 +7591,18 @@ html.lite .ad-row { animation: none !important; }
             <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
         </div>
     </div>
+
+    <!-- 🧹 XAVFLI HUDUD — botni «yangi»dek qilish (alohida parol, Worker /admin-reset tekshiradi) -->
+    <div class="ap2-sec-label ap2-sec-danger">Xavfli hudud</div>
+    <div class="ap2-grid">
+        <div class="ap2-tile ap2-tile-danger" style="--ac:#ff453a" onclick="window.A1Reset && A1Reset.open('full')" role="button" tabindex="0">
+            <span class="ap2-tile-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            </span>
+            <span class="ap2-tile-tx"><b>Botni tozalash</b><i>Buyurtma, keshbek, statistika va xabarlar</i></span>
+            <svg class="ap2-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </div>
+    </div>
 </div>
     
    
@@ -14107,7 +14119,8 @@ window._renderStats = () => {
     let monthNames = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
     monthNames.forEach(m => monthlyData[m] = 0);
 
-    totalCustomers = Object.keys(us).length;
+    // 👥 Mijoz = ismi VA raqami bor foydalanuvchi («Mijozlar» oynasi bilan bir xil qoida).
+    totalCustomers = Object.keys(us).filter(uid => !window._a1IsCompleteCustomer || window._a1IsCompleteCustomer(us[uid])).length;
     for (let uid in us) {
         if (!us[uid].orders) continue;
         let _region = (us[uid].profile && us[uid].profile.address) ? us[uid].profile.address : "Noma'lum";
@@ -19650,7 +19663,7 @@ document.addEventListener('click', function (e) {
 </script>
 <!-- 🌟 PHASE 2 MODULE: barcha 2-bosqich funksiyalari (mavjud globallardan keyin yuklanadi) -->
 <!-- 🌟 PHASE 2 MODULE (inlined for single-file deploy) -->
-<script>
+<script id="a1-phase2-js">
 /* ============================================================
    AVTO A1 — PHASE 2 MODULE
    🎁 Bonus/Cashback · 🏆 Achievement · 📊 Analitika ·
@@ -19820,8 +19833,11 @@ document.addEventListener('click', function (e) {
             if (typeof s.themeSwitched !== 'undefined') patch.themeSwitched = !!s.themeSwitched;
             if (typeof s.lang !== 'undefined') patch.lang = s.lang;
             if (typeof s.wishlistCount !== 'undefined') patch.wishlistCount = s.wishlistCount;
-            if (typeof s.notifications !== 'undefined') patch.notifications = clean(s.notifications);
-            if (typeof s.cashbackHistory !== 'undefined') patch.cashbackHistory = clean(s.cashbackHistory);
+            // Jurnallar serverdagi holat bir marta o'qilgandan KEYIN yoziladi: aks holda
+            // admin tozalagan (phase2.resetAt) eski bildirishnoma/keshbek tarixi
+            // telefondagi nusxadan serverga qaytib yozilishi mumkin edi.
+            if (P._remoteSeen && typeof s.notifications !== 'undefined') patch.notifications = clean(s.notifications);
+            if (P._remoteSeen && typeof s.cashbackHistory !== 'undefined') patch.cashbackHistory = clean(s.cashbackHistory);
             return firebase.database().ref('users/' + P.uid + '/phase2').update(patch)
                 .then(function () { P._writing = false; })
                 .catch(function () { P._writing = false; });
@@ -21002,11 +21018,21 @@ document.addEventListener('click', function (e) {
         if (data) {
             P.orders = toArray(data.orders);
             P.wishlistCount = toArray(data.wishlist).length;
+            if (!data.phase2) P._remoteSeen = true;
             if (data.phase2 && !P._writing) {
                 // Remote source-of-truth, lekin maydonlarni ehtiyotkorlik bilan birlashtiramiz.
                 // 🔐 Cashback YO'QOLMASLIGI uchun: lokal va remote qiymatlarning KATTASINI olamiz.
                 // (Telegram ilovani tez yopgani uchun ba'zan remote eskiroq bo'lishi mumkin.)
                 var r = data.phase2;
+                // 🧹 ADMIN «BOTNI TOZALASH»: server `phase2.resetAt` yozadi. Telefondagi
+                //    nusxa (keshbek, uning tarixi, bildirishnomalar, yutuqlar, kafolatlar)
+                //    nolga tushadi — aks holda eski balans ko'rinib turar va keyingi
+                //    save() bilan serverga qaytib yozilardi. Mavzu va til saqlanadi.
+                if (Number(r.resetAt) > (Number(P.state.resetAt) || 0)) {
+                    var keepUi = { theme: P.state.theme, themeSwitched: !!P.state.themeSwitched, resetAt: Number(r.resetAt) };
+                    if (typeof P.state.lang !== 'undefined') keepUi.lang = P.state.lang;
+                    P.state = Object.assign(defaultState(), keepUi);
+                }
                 // 💰 LEGERNI BIRLASHTIRISH (faqat MONOTON hisoblagichlar).
                 // ⚠️ ILGARI: `cashback` (balans) Math.max bilan birlashtirilardi. Balans
                 //    esa sarflanganda KAMAYADI — Math.max uni darhol eski (katta) qiymatga
@@ -21053,6 +21079,7 @@ document.addEventListener('click', function (e) {
                 if (typeof r.themeSwitched === 'boolean') P.state.themeSwitched = r.themeSwitched;
                 if (r.theme) P.state.theme = r.theme;
                 saveLocal();
+                P._remoteSeen = true;
             }
         }
         applyTheme(P.state.theme);
@@ -23660,6 +23687,53 @@ html.lite .st2-save::after { animation: none !important; }
 html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none !important; }
 </style>
 
+<script id="a1-customer-rule-js">
+/* ============================================================================
+   👥 «MIJOZ» QOIDASI — bitta joyda (Mijozlar oynasi, statistika, tozalash)
+   ----------------------------------------------------------------------------
+   Do'kon egasining talabi: mijoz = ismi VA telefon raqami bor foydalanuvchi.
+   Faqat ilovani ochib ketgan (anonim), botda faqat til tanlagan yoki raqam
+   bermagan foydalanuvchilar «Mijozlar» oynasida ko'rinmaydi va «Botni
+   tozalash» / «O'chirish» (Worker /admin-reset) ularni bazadan o'chiradi.
+
+   ⚠️ cloudflare-worker.js dagi customerIdentity() bilan AYNAN bir xil:
+      • ism  = profile.name, bo'lmasa profile.firstName (Telegram ismi);
+               «Nomsiz mijoz», «Mijoz», «Noma'lum» kabi zaxira yorliqlar ism emas;
+      • raqam = profile.phone, bo'lmasa tasdiqlangan verify.phone;
+               9 xonali -> 998 qo'shiladi, 10-15 xonali — o'zi (phoneDigits).
+   Sinov: .github/test-admin-reset.js (ikkala tomon bir xil natija beradi).
+   ============================================================================ */
+(function () {
+    'use strict';
+    var PLACEHOLDERS = ['nomsiz mijoz', 'ismsiz mijoz', 'nomsiz', 'ismsiz', 'mijoz', "noma'lum", "yo'q",
+        'kiritilmagan', 'null', 'undefined', '-', '\u2014'];
+    function text(v) {
+        return (typeof v === 'string' || typeof v === 'number') ? String(v).replace(/\s+/g, ' ').trim() : '';
+    }
+    function realName(v) {
+        var s = text(v);
+        if (!s) return '';
+        var k = s.toLowerCase().replace(/[\u02BB\u02BC\u2018\u2019`\u00B4]/g, "'");
+        return PLACEHOLDERS.indexOf(k) === -1 ? s : '';
+    }
+    function phoneDigits(v) {
+        var d = text(v).replace(/[^0-9]/g, '');
+        if (d.length === 9) return '998' + d;
+        return (d.length >= 10 && d.length <= 15) ? d : '';
+    }
+    function obj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
+
+    /** users/{uid} yozuvidan: ko'rsatiladigan ism, raqam va «to'liq mijozmi». */
+    window._a1CustomerInfo = function (user) {
+        var u = obj(user), p = obj(u.profile), v = obj(u.verify);
+        var name = realName(p.name) || realName(p.firstName);
+        var phone = phoneDigits(p.phone) ? text(p.phone) : (phoneDigits(v.phone) ? text(v.phone) : '');
+        return { name: name, phone: phone, complete: !!(name && phone) };
+    };
+    window._a1IsCompleteCustomer = function (user) { return window._a1CustomerInfo(user).complete; };
+})();
+</script>
+
 <script id="vip-stories-2026-js">
 /* ============================================================================
    ✦ QATLAM 2026.06 — JS
@@ -25482,11 +25556,18 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 
             var manual = (p.vip && p.vip.manual) ? p.vip.manual : null;
             var v = VIP.compute(u.orders, manual);
+            // 👥 Ism + raqam qoidasi (a1-customer-rule-js; Worker /admin-reset bilan bir xil).
+            //    Raqam profilda bo'lmasa — tasdiqlangan (verify) raqam ko'rsatiladi.
+            var info = window._a1CustomerInfo
+                ? window._a1CustomerInfo(u)
+                : { name: p.name || p.firstName || '', phone: p.phone || '', complete: true };
 
             out.push({
                 uid: String(uid),
-                name: p.name || p.firstName || 'Nomsiz mijoz',
-                phone: p.phone || '',
+                name: info.name || 'Nomsiz mijoz',
+                phone: info.phone,
+                complete: info.complete,
+                isAdmin: isAdminUid(uid),
                 address: p.address || '',
                 username: (p.username && p.username !== "Yo'q") ? String(p.username).replace(/^@/, '') : '',
                 orders: arr.length,
@@ -25537,9 +25618,18 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         }
     }
 
+    /* 🧹 Ismi yoki raqami yo'q foydalanuvchilar ro'yxatda KO'RSATILMAYDI (do'kon
+       egasining talabi). CS.all esa to'liq qoladi — VIP belgilari va tafsilot uchun.
+       O'chirsa bo'ladiganlar: admin emas va buyurtmasi yo'q (server ham shunday). */
+    function shown(c) { return c.complete !== false; }
+    function removable() {
+        return CS.all.filter(function (c) { return !shown(c) && !c.isAdmin && !c.orders; }).length;
+    }
+
     function applyFilters() {
         var q = CS.q.toLowerCase().trim();
         CS.view = CS.all.filter(function (c) {
+            if (!shown(c)) return false;
             if (!segMatch(c, CS.seg)) return false;
             if (!q) return true;
             return c.name.toLowerCase().indexOf(q) !== -1
@@ -25598,10 +25688,19 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 
     function segsHTML() {
         return '<div class="cst-segs" id="cst-segs">' + SEGS.map(function (s) {
-            var n = CS.all.filter(function (c) { return segMatch(c, s.id); }).length;
+            var n = CS.all.filter(function (c) { return shown(c) && segMatch(c, s.id); }).length;
             return '<button type="button" class="cst-seg' + (CS.seg === s.id ? ' on' : '') + '" data-seg="' + s.id + '">' +
                 s.icon + ' ' + E(s.label) + '<em>' + n + '</em></button>';
         }).join('') + '</div>';
+    }
+
+    /** Yashirilgan (ismi yoki raqami yo'q) foydalanuvchilarni bazadan o'chirish paneli. */
+    function incompleteHTML() {
+        var n = removable();
+        if (!n) return '';
+        return '<div class="cst-inc" id="cst-inc">' +
+            '<span class="cst-inc-tx"><b>' + n + ' ta</b> foydalanuvchining ismi yoki raqami yo\u2018q \u2014 ro\u2018yxatda ko\u2018rsatilmaydi</span>' +
+            '<button type="button" class="cst-inc-btn" id="cst-inc-del">O\u2018chirish</button></div>';
     }
 
     /* ---------------- 5.2 Mijoz kartasi ---------------- */
@@ -25663,8 +25762,16 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
     function renderShell() {
         var box = $('admin-customers-list');
         if (!box) return;
-        box.innerHTML = '<div class="cst-wrap">' + toolsHTML() + segsHTML() +
+        box.innerHTML = '<div class="cst-wrap">' + toolsHTML() + segsHTML() + incompleteHTML() +
             '<div id="cst-list"></div></div>';
+
+        // 🧹 Ismi yoki raqami yo'q foydalanuvchilarni o'chirish (alohida parol, server tekshiradi)
+        var incBtn = $('cst-inc-del');
+        if (incBtn) incBtn.onclick = function () {
+            if (!window.A1Reset) { toast('Ilovani yangilang', 'warning'); return; }
+            hap('light');
+            window.A1Reset.open('incomplete', { count: removable(), onDone: loadCustomers });
+        };
 
         // KPI raqamlarini sanab chiqaramiz
         var d = $('cst-kpi-data');
@@ -26046,7 +26153,12 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
         if (oldInput && oldInput.parentNode) oldInput.parentNode.style.display = 'none';
 
         openSheet('adminCustomersModal', 'adminModal');
+        loadCustomers();
+    }
 
+    /** Mijozlarni bazadan (qayta) o'qib chizadi — oynani qayta ochmasdan (history'ga yozmaydi). */
+    function loadCustomers() {
+        var box = $('admin-customers-list');
         var snapP = window._getUsersSnap
             ? window._getUsersSnap()
             : DB().ref('users').once('value');
@@ -43169,8 +43281,11 @@ html.lite #a1acct .aa-dim, html.lite #a1acct .aa-sheet { transition-duration: .0
             inBox.innerHTML = (o.input ? '<input type="' + (o.input.type || 'text') + '" autocomplete="' + (o.input.autocomplete || 'off') + '" placeholder="' + esc(o.input.placeholder || '') + '">' : '') + '<div class="aa-err"></div>';
             pri.textContent = o.primary || 'OK'; pri.disabled = false;
             pri.classList.toggle('aa-dan', !!o.danger);
-            sec.textContent = o.secondary || 'Yopish';
+            sec.textContent = o.secondary || 'Yopish'; sec.disabled = false;
+            var locked = false, closed = false;
             var close = function (v) {
+                if (closed) return;
+                closed = true;
                 SH.classList.remove('in');
                 setTimeout(function () { SH.classList.remove('on'); }, 260);
                 pri.onclick = sec.onclick = null; SH.querySelector('.aa-dim').onclick = null;
@@ -43181,11 +43296,13 @@ html.lite #a1acct .aa-dim, html.lite #a1acct .aa-sheet { transition-duration: .0
                 error: function (t) { var e = inBox.querySelector('.aa-err'); if (e) e.textContent = t || ''; },
                 busy: function (on, t) { pri.disabled = !!on; pri.textContent = on ? (t || 'Kuting\u2026') : (api.primary || o.primary || 'OK'); },
                 label: function (t) { api.primary = t; pri.textContent = t; },
+                // Uzib bo'lmaydigan amal ketayotganda oyna yopilmasin (Orqaga, fon, «Bekor»)
+                lock: function (on) { locked = !!on; sec.disabled = locked; },
                 close: close
             };
             pri.onclick = function () { if (o.onPrimary) o.onPrimary(api); else close(true); };
-            sec.onclick = function () { close(false); };
-            SH.querySelector('.aa-dim').onclick = function () { close(false); };
+            sec.onclick = function () { if (!locked) close(false); };
+            SH.querySelector('.aa-dim').onclick = function () { if (!locked) close(false); };
             SH.classList.add('on');
             requestAnimationFrame(function () { requestAnimationFrame(function () { SH.classList.add('in'); }); });
             hap('light');
@@ -43312,7 +43429,158 @@ html.lite #a1acct .aa-dim, html.lite #a1acct .aa-sheet { transition-duration: .0
     // Kirish/hisob almashganda (finish) — tinglovchini ham, kartani ham yangilaydi
     W.a1AccountRefresh = function () { watchVerify(); render(); };
     W.a1VerifyPhone = startVerify;
+    W.a1Sheet = sheet;   // boshqa oynalar ham shu pastki oynadan foydalanadi (masalan «Botni tozalash»)
     W.a1CloseSheet = function () { if (SH && SH.classList.contains('on')) { var b = SH.querySelector('.aa-sec'); if (b) b.click(); return true; } return false; };
+})();
+</script>
+<style id="a1-admin-reset-css">
+/* 🧹 «Botni tozalash» (Boshqaruv markazi) va «Mijozlar» oynasidagi tozalash paneli */
+#adminModal .ap2-sec-danger { margin-top: 26px; color: #ff453a; }
+#adminModal .ap2-tile-danger .ap2-tile-tx b { color: #ff453a; }
+#adminCustomersModal .cst-inc {
+    display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; padding: 10px 10px 10px 13px;
+    border-radius: 13px; background: rgba(255,69,58,.09); border: .5px solid rgba(255,69,58,.28);
+    color: var(--x-tx, var(--text-main)); font-size: 13px; line-height: 1.35;
+}
+#adminCustomersModal .cst-inc-tx { flex: 1 1 auto; min-width: 0; }
+#adminCustomersModal .cst-inc-btn {
+    flex: 0 0 auto; height: 32px; padding: 0 13px; border: 0; border-radius: 9px; cursor: pointer;
+    background: #ff453a; color: #fff; font: inherit; font-size: 13.5px; font-weight: 600;
+}
+#adminCustomersModal .cst-inc-btn:active { transform: scale(.96); opacity: .85; }
+</style>
+<script id="a1-admin-reset-js">
+/* ═══════════════════════════════════════════════════════════════════
+   🧹 BOTNI TOZALASH (admin) — Worker /admin-reset
+   • «full» (Boshqaruv markazi → Xavfli hudud): buyurtmalar, keshbek,
+     statistika, bildirishnoma va xabarlar o'chadi; tovar, narx, ombor va
+     ismi+raqami bor mijozlar (ro'yxatdan o'tgan holida) qoladi. Ismi yoki
+     raqami yo'q foydalanuvchilar ham o'chadi.
+   • «incomplete» (Mijozlar oynasi): faqat ismi yoki raqami yo'q
+     foydalanuvchilar (buyurtmasi borlari qoladi).
+   Alohida parol SERVERDA tekshiriladi — bu faylda parol ham, uning xeshi ham yo'q.
+   Server mijozlarni sahifalab ishlaydi, shuning uchun `cursor` bilan takrorlaymiz.
+   ═══════════════════════════════════════════════════════════════════ */
+(function () {
+    'use strict';
+    var W = window;
+    var CONFIRM = 'TOZALASH';
+    var running = false;
+    var toast = function (m, k) { try { if (typeof W.showToast === 'function') W.showToast(m, k || 'success'); } catch (e) {} };
+    var hap = function (k) { try { if (typeof W._hap === 'function') W._hap(k || 'light'); } catch (e) {} };
+    var ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-.8 11.1A2 2 0 0 1 15.2 22H8.8a2 2 0 0 1-2-1.9L6 9zm4 2v8h1.6v-8H10zm2.4 0v8H14v-8h-1.6z"/></svg>';
+
+    var FULL_HTML =
+        '<b>O\u2018chadi:</b> barcha buyurtmalar, keshbeklar, statistika, bildirishnomalar va xabarlar ' +
+        '(buyurtma chatlari, AI suhbatlari, storis javoblari), sharhlar, hamda ismi yoki raqami yo\u2018q foydalanuvchilar.<br><br>' +
+        '<b>Qoladi:</b> tovarlar, narxlar va ombor qoldig\u2018i, katalog, bannerlar, storislar; ismi va raqami bor mijozlar \u2014 ' +
+        'ro\u2018yxatdan o\u2018tgan holida.<br><br><b>Bu amalni qaytarib bo\u2018lmaydi.</b>';
+
+    function incompleteHtml(n) {
+        return (n ? '<b>' + n + ' ta</b> foydalanuvchining' : 'Bu foydalanuvchilarning') +
+            ' ismi yoki telefon raqami yo\u2018q. Ular savati, storis ko\u2018rishlari va boshqa ma\u2019lumotlari bilan butunlay o\u2018chiriladi. ' +
+            'Buyurtmasi bor foydalanuvchi o\u2018chirilmaydi.<br><br><b>Bu amalni qaytarib bo\u2018lmaydi.</b>';
+    }
+
+    function errorText(code, d, scanned) {
+        d = d || {};
+        if (code === 403 && d.wrongPassword) {
+            return 'Parol noto\u2018g\u2018ri' + (typeof d.attemptsLeft === 'number' ? ' \u2014 yana ' + d.attemptsLeft + ' ta urinish qoldi' : '');
+        }
+        if (code === 403) return 'Bu amal faqat admin uchun';
+        if (code === 429) {
+            return 'Juda ko\u2018p noto\u2018g\u2018ri urinish \u2014 ' + Math.max(1, Math.ceil((Number(d.retryAfter) || 900) / 60)) +
+                ' daqiqadan keyin qayta urinib ko\u2018ring';
+        }
+        if (code === 404) return 'Server hali yangilanmagan \u2014 Cloudflare Worker\u2019ni yangilang';
+        if (code === 401) return 'Xavfsiz ulanish yo\u2018q \u2014 ilovani qayta oching';
+        return (scanned ? 'Tozalash yarim yo\u2018lda to\u2018xtadi. ' : '') +
+            'Internetni tekshirib, qayta bosing \u2014 bu xavfsiz, ish davom ettiriladi.';
+    }
+
+    function doneText(full, sum) {
+        if (full) {
+            return '\u2705 Bot tozalandi: ' + sum.cleaned + ' ta mijoz yangidek' +
+                (sum.deleted ? ', ' + sum.deleted + ' ta ismi yoki raqami yo\u2018q foydalanuvchi o\u2018chirildi' : '');
+        }
+        return (sum.deleted ? '\uD83E\uDDF9 ' + sum.deleted + ' ta foydalanuvchi o\u2018chirildi' : 'O\u2018chiriladigan foydalanuvchi qolmadi') +
+            (sum.keptWithOrders ? ' \u00b7 ' + sum.keptWithOrders + ' tasida buyurtma bor \u2014 qoldirildi' : '');
+    }
+
+    /** Server sahifalab ishlaydi: `done` bo'lguncha `cursor` bilan takrorlaymiz. */
+    async function run(mode, password, api) {
+        var cursor = '', total = 0;
+        var sum = { scanned: 0, deleted: 0, cleaned: 0, keptWithOrders: 0 };
+        for (var step = 0; step < 5000; step++) {
+            var r = null;
+            try {
+                r = await W._workerPost('/admin-reset', { mode: mode, password: password, confirm: CONFIRM, cursor: cursor });
+            } catch (e) { r = null; }
+            var code = r && r.resp ? r.resp.status : 0, d = (r && r.data) || {};
+            if (code !== 200 || !d.ok) return { ok: false, code: code, data: d, sum: sum };
+            if (typeof d.total === 'number') total = d.total;
+            var pg = d.page || {};
+            sum.scanned += pg.scanned || 0;
+            sum.deleted += pg.deleted || 0;
+            sum.cleaned += pg.cleaned || 0;
+            sum.keptWithOrders += pg.keptWithOrders || 0;
+            if (d.done) return { ok: true, sum: sum };
+            if (!d.cursor || d.cursor === cursor) return { ok: false, code: 0, data: d, sum: sum };
+            cursor = d.cursor;
+            api.busy(true, 'Tozalanmoqda\u2026 ' + (total ? Math.min(sum.scanned, total) + ' / ' + total : sum.scanned));
+        }
+        return { ok: false, code: 0, data: {}, sum: sum };
+    }
+
+    /** mode: 'full' — botni tozalash; 'incomplete' — ismi yoki raqami yo'qlarni o'chirish. */
+    function open(mode, opts) {
+        opts = opts || {};
+        var full = mode !== 'incomplete';
+        if (!(typeof W.isAdmin === 'function' && W.isAdmin())) { toast('Bu amal faqat admin uchun', 'warning'); return; }
+        if (typeof W.a1Sheet !== 'function' || typeof W._workerPost !== 'function') { toast('Ilovani yangilang', 'warning'); return; }
+        if (running) { toast('Tozalash davom etmoqda\u2026', 'info'); return; }
+        var confirmed = false;
+        hap('light');
+        W.a1Sheet({
+            icon: ICON, color: '#ff453a', danger: true,
+            title: full ? 'Botni tozalash' : 'Ismi yoki raqami yo\u2018q foydalanuvchilar',
+            html: full ? FULL_HTML : incompleteHtml(opts.count),
+            input: { type: 'password', placeholder: 'Tozalash paroli', autocomplete: 'off' },
+            primary: full ? 'Tozalash' : 'O\u2018chirish', secondary: 'Bekor qilish',
+            onPrimary: async function (api) {
+                if (running) return;
+                var password = api.value();
+                if (!password) { api.error('Parolni kiriting'); return; }
+                if (!confirmed) {   // ikki bosqichli tasdiq — tasodifiy bosilmasin
+                    confirmed = true;
+                    api.error('');
+                    api.label(full ? 'Ha, hammasini o\u2018chirish' : 'Ha, o\u2018chirish');
+                    hap('warning');
+                    return;
+                }
+                running = true;
+                api.error('');
+                api.lock(true);
+                api.busy(true, 'Tozalanmoqda\u2026');
+                var res;
+                try { res = await run(full ? 'full' : 'incomplete', password, api); }
+                finally { running = false; api.lock(false); }
+                if (res.ok) {
+                    api.close(true);
+                    try { if (W._invalidateUsersCache) W._invalidateUsersCache(); } catch (e) {}
+                    hap('success');
+                    toast(doneText(full, res.sum), 'success');
+                    try { if (typeof opts.onDone === 'function') opts.onDone(res); } catch (e) {}
+                    return;
+                }
+                api.busy(false);
+                api.error(errorText(res.code, res.data, res.sum.scanned));
+                hap('error');
+            }
+        });
+    }
+
+    W.A1Reset = { open: open };
 })();
 </script>
 <script id="a1-android-back-js">
