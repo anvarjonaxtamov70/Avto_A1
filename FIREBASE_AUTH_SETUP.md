@@ -62,5 +62,4 @@ Botni ochganda brauzer konsolida `[Auth] Firebase'ga kirildi (uid=...)` yashil l
 
 ## ⚠️ Eslatmalar
 - **APK / brauzer rejimi:** `tg.initData` bo'lmagani uchun auth o'tkazib yuboriladi. Bunday foydalanuvchilar uchun rules'ni yoqishdan oldin alohida yechim kerak (yoki ularni faqat ommaviy `products` bilan cheklash).
-- **Referral ikki tomonlama bonus:** rules egalik bo'yicha cross-user yozuvni bloklaydi — bu bonusni keyin server (Worker) tomoniga ko'chirish kerak.
 - **Service-account kaliti** — eng maxfiy sir. Faqat Cloudflare Secret sifatida saqlanadi, hech qachon repo/kodga qo'yilmaydi.

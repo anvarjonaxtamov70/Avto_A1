@@ -6,10 +6,6 @@
 //                      adminga; admin esa har kimga yubora oladi).
 //  2) "/auth"     — Telegram initData HMAC bilan tekshiriladi,
 //                   Firebase CUSTOM TOKEN qaytaradi (uid = Telegram id)
-//  3) "/referral" — Taklif (referral) bonusi: taklif qilgan odamga
-//                   (inviter) bonusni SERVER (admin huquqi) bilan yozadi.
-//                   Mijoz xavfsiz qoidalarda boshqa user tuguniga yoza
-//                   olmagani uchun shu endpoint kerak. Idempotent.
 //  5) "/order-commit" — buyurtmani yozadi; "/order-status" — holatni
 //                   o'zgartiradi (admin, bot yoki mijozning o'zi bekor qilishi).
 //                   Ikkalasi ham Telegram xabarlarini SERVERDA yuboradi:
@@ -44,7 +40,6 @@
 //     ADMIN_ALERT_CHAT_ID (yangi mijoz xabari boradigan bitta Telegram chat)
 //     CUSTOMER_REGISTRATION_RATE_LIMIT (anonymous IP uchun soatlik limit, standart 20)
 //     FIREBASE_DB_URL  (mas: "https://avtoa1shop-default-rtdb.firebaseio.com")
-//     REFERRAL_BONUS   (mas: "20000")
 //     SHOP_PHONE       (mijozga "bekor qilindi" xabaridagi telefon, standart "+998 88 289 30 30")
 //
 //  ESLATMA: bu faylda atayin backslash-n belgisi ishlatilmagan
@@ -66,10 +61,6 @@ const cors = {
 //    Ilgari 5302078 yo'q edi — o'sha admin video yuklaganda 403 olardi.
 const DEFAULT_ADMIN_IDS = ["5105291033", "483425630", "5302078"];
 const DEFAULT_DB_URL = "https://avtoa1shop-default-rtdb.firebaseio.com";
-const DEFAULT_REFERRAL_BONUS = 20000;
-// Taklif qilingan do'stning BIRINCHI buyurtmasi shu summadan OSHIQ bo'lishi shart.
-// Aks holda taklif qilgan odamga bonus berilmaydi.
-const DEFAULT_REFERRAL_MIN_ORDER = 100000;
 const DEFAULT_FIREBASE_PROJECT_ID = "avtoa1shop";
 const TELEGRAM_INIT_MAX_AGE = 60 * 60;
 const CLOCK_SKEW_SECONDS = 300;
@@ -323,6 +314,115 @@ async function sniffMime(stream) {
   }
 }
 
+// ===================== /img : ImgBB rasm PROXY (tekshiruvli) =====================
+// MUAMMO: i.ibb.co ishlamay qolganda (yoki fayl topilmasa) xato bilan birga
+// O'Z RASMINI ("imgbb.com service unavailable") yuboradi. Brauzer uni oddiy
+// rasm deb chizadi — tovar rasmi o'rnida ImgBB yozuvi chiqib qoladi.
+// YECHIM: ilova i.ibb.co ni to'g'ridan-to'g'ri ochmaydi, shu route orqali oladi.
+// Bu yerda javob faqat quyidagi shartda o'tkaziladi:
+//   • upstream 200 qaytargan, Content-Type — rasm;
+//   • baytlar haqiqatan JPEG/PNG/WEBP/GIF (magic bytes) va hajmi chegarada.
+// Aks holda 502 (no-store) — <img> da onerror ishlaydi, ilova brend
+// placeholder qo'yadi. Muvaffaqiyatli javob Cloudflare keshida saqlanadi
+// (ImgBB keyin yiqilsa ham rasm keshdan beriladi).
+// Faqat ImgBB hostlari ruxsat etilgan — ochiq proxy emas.
+const IMG_PROXY_HOSTS = ["i.ibb.co", "image.ibb.co"];
+const IMG_PROXY_MAX_BYTES = 15 * 1024 * 1024;
+const IMG_PROXY_TIMEOUT_MS = 25 * 1000;
+const IMG_PROXY_CACHE_SECONDS = 365 * 24 * 60 * 60;
+
+function imgProxyFail(status, reason) {
+  return new Response(reason, {
+    status,
+    headers: { ...cors, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
+function imageMimeFromBytes(b) {
+  if (!b || b.length < 12) return null;
+  const s = (i, n) => String.fromCharCode.apply(null, Array.from(b.subarray(i, i + n)));
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b[0] === 0x89 && s(1, 3) === "PNG") return "image/png";
+  if (s(0, 4) === "RIFF" && s(8, 4) === "WEBP") return "image/webp";
+  if (s(0, 4) === "GIF8") return "image/gif";
+  return null;
+}
+
+async function handleImageProxy(request, execCtx) {
+  if (request.method !== "GET" && request.method !== "HEAD") return imgProxyFail(405, "Faqat GET");
+  const raw = new URL(request.url).searchParams.get("u") || "";
+  let target;
+  try { target = new URL(raw); } catch (_) { return imgProxyFail(400, "u noto'g'ri"); }
+  if (target.protocol !== "https:" && target.protocol !== "http:") return imgProxyFail(400, "u noto'g'ri");
+  if (!IMG_PROXY_HOSTS.includes(target.hostname) || target.port || target.username || target.password) {
+    return imgProxyFail(400, "ruxsat etilmagan manzil");
+  }
+  target.protocol = "https:";
+  target.search = "";
+  target.hash = "";
+
+  // Kesh kaliti faqat host + yo'l (query/sarlavhalar emas)
+  const cacheKey = new Request("https://img-proxy.avto-a1.internal/" + target.hostname + target.pathname);
+  const cache = (typeof caches !== "undefined" && caches.default) ? caches.default : null;
+  if (cache) {
+    try {
+      const hit = await cache.match(cacheKey);
+      if (hit) return request.method === "HEAD" ? new Response(null, { status: hit.status, headers: hit.headers }) : hit;
+    } catch (_) {}
+  }
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), IMG_PROXY_TIMEOUT_MS);
+  let upstream, bytes;
+  try {
+    upstream = await fetch(target.toString(), {
+      signal: ac.signal,
+      headers: { Accept: "image/webp,image/jpeg,image/png,image/gif;q=0.9,*/*;q=0.1" },
+      // Faqat 2xx Cloudflare keshida saqlanadi; xato javoblar keshlanmaydi
+      cf: { cacheEverything: true, cacheTtlByStatus: { "200-299": IMG_PROXY_CACHE_SECONDS, "300-599": 0 } },
+    });
+    let finalHost = "";
+    try { finalHost = new URL(upstream.url || target.toString()).hostname; } catch (_) {}
+    if (upstream.status !== 200 || !IMG_PROXY_HOSTS.includes(finalHost)) {
+      try { await upstream.body?.cancel(); } catch (_) {}
+      return imgProxyFail(502, "rasm manbasi xato: " + upstream.status);
+    }
+    const ct = String(upstream.headers.get("Content-Type") || "").toLowerCase();
+    const len = parseInt(upstream.headers.get("Content-Length") || "0", 10) || 0;
+    if (!ct.startsWith("image/") || len > IMG_PROXY_MAX_BYTES) {
+      try { await upstream.body?.cancel(); } catch (_) {}
+      return imgProxyFail(502, "rasm emas yoki juda katta");
+    }
+    bytes = new Uint8Array(await upstream.arrayBuffer());
+  } catch (_) {
+    return imgProxyFail(504, "rasm manbasi javob bermadi");
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!bytes.length || bytes.length > IMG_PROXY_MAX_BYTES) return imgProxyFail(502, "rasm hajmi noto'g'ri");
+  const mime = imageMimeFromBytes(bytes);
+  if (!mime) return imgProxyFail(502, "rasm baytlari noto'g'ri");
+
+  const res = new Response(bytes, {
+    status: 200,
+    headers: {
+      ...cors,
+      "Content-Type": mime,
+      "Content-Length": String(bytes.length),
+      "Cache-Control": "public, max-age=" + IMG_PROXY_CACHE_SECONDS + ", immutable",
+      "X-Content-Type-Options": "nosniff",
+      "Cross-Origin-Resource-Policy": "cross-origin",
+    },
+  });
+  if (cache) {
+    const put = cache.put(cacheKey, res.clone()).catch(() => {});
+    if (execCtx && typeof execCtx.waitUntil === "function") execCtx.waitUntil(put);
+  }
+  if (request.method === "HEAD") return new Response(null, { status: 200, headers: res.headers });
+  return res;
+}
+
 // Fayl kengaytmasidan MIME turini taxminlaymiz (video to'g'ri o'ynashi uchun muhim)
 function guessMime(p) {
   const ext = (p.split(".").pop() || "").toLowerCase();
@@ -509,6 +609,13 @@ export default {
       return handleMedia(request, env);
     }
 
+    // ---------- /img : ImgBB rasmini TEKSHIRIB beruvchi proxy ----------
+    // ImgBB xato bo'lsa o'z "service unavailable" rasmini qaytaradi; bu yerdan
+    // faqat haqiqiy rasm o'tadi, aks holda xato (ilova brend placeholder qo'yadi).
+    if (path === "/img") {
+      return handleImageProxy(request, execCtx);
+    }
+
     if (request.method !== "POST") {
       return new Response("Faqat POST", { status: 405, headers: cors });
     }
@@ -635,8 +742,6 @@ export default {
     if (path === "/story-answer") return handleStoryAnswer(request, env);
     // 🗑 Hisobni o'chirish (Google Play talabi): ilova, sayt yoki Telegram /delete
     if (path === "/account-delete") return handleAccountDelete(request, env);
-    if (path === "/referral") return handleReferralSecure(request, env);
-    if (path === "/referral-qualify") return handleReferralQualifySecure(request, env);
     if (path === "/stock-commit") return handleDeprecatedStockCommit(request, env);
     if (path === "/") return handleSendMessageSecure(request, env);
     return json({ ok: false, error: "topilmadi" }, 404);
@@ -1021,7 +1126,7 @@ async function createFirebaseCustomToken(uid, env) {
   return `${signingInput}.${sigB64}`;
 }
 
-// ===================== Google OAuth access token (/referral uchun) =====================
+// ===================== Google OAuth access token =====================
 // Service account JWT -> OAuth2 access_token (firebase.database scope).
 // Bu token bilan RTDB REST API'ga ADMIN huquqi bilan yoziladi.
 async function getAccessToken(env) {
@@ -3181,248 +3286,6 @@ async function handleOrderNotify(request, env) {
   }
 }
 
-async function referralIndexesMatch(ctx, token, refUid, redeemerUid, link) {
-  const [authoritative, firstIndex, secondIndex] = await Promise.all([
-    rtdbGet(ctx.dbUrl, "referralRedeemed/" + redeemerUid, token),
-    rtdbGet(ctx.dbUrl, "referrals/" + refUid + "/" + redeemerUid, token),
-    rtdbGet(ctx.dbUrl, "users/" + refUid + "/phase2/referrals/" + redeemerUid, token),
-  ]);
-  const expectedPaid = link.paid === true;
-  const expectedDate = Number(link.date) || 0;
-  const indexMatches = (value) => !!value && value.uid === redeemerUid &&
-    value.paid === expectedPaid && (Number(value.date) || 0) === expectedDate;
-  return !!authoritative && String(authoritative.code) === String(link.code) &&
-    String(authoritative.refUid) === refUid && indexMatches(firstIndex) && indexMatches(secondIndex);
-}
-
-async function handleReferralSecure(request, env) {
-  try {
-    const body = await readJsonBody(request);
-    const identity = await authenticateBody(body, env);
-    const code = cleanText(body.code, 40, true).toUpperCase();
-    if (!/^[A-Z0-9_-]{3,40}$/.test(code)) throw httpError(400, "kod noto'g'ri");
-    const ctx = getDbContext(env);
-    const token = await getAccessToken(env);
-    const refUidRaw = await rtdbGet(ctx.dbUrl, "refcodes/" + code, token);
-    if (!refUidRaw) throw httpError(404, "kod topilmadi");
-    const refUid = requireSafeUid(refUidRaw, 400);
-    if (refUid === identity.uid) throw httpError(400, "oz kodi");
-    const now = Date.now();
-    const path = "referralRedeemed/" + identity.uid;
-    const claim = await rtdbEtagMutate(ctx.dbUrl, path, token, (current) => {
-      if (current) {
-        if (String(current.code) !== code || String(current.refUid) !== refUid) {
-          throw httpError(409, "boshqa referral allaqachon ishlatilgan");
-        }
-        return { abort: true, result: current };
-      }
-      const value = { code, refUid, redeemerUid: identity.uid, date: now, paid: false, state: "pending" };
-      return { value, result: value };
-    });
-    const link = claim.result || claim.value;
-    const updates = {};
-    const firstIndexPath = "referrals/" + refUid + "/" + identity.uid;
-    const secondIndexPath = "users/" + refUid + "/phase2/referrals/" + identity.uid;
-    updates[firstIndexPath + "/uid"] = identity.uid;
-    updates[firstIndexPath + "/date"] = link.date;
-    updates[firstIndexPath + "/paid"] = link.paid === true;
-    updates[secondIndexPath + "/uid"] = identity.uid;
-    updates[secondIndexPath + "/date"] = link.date;
-    updates[secondIndexPath + "/paid"] = link.paid === true;
-    try {
-      await rtdbPatch(ctx.dbUrl, "", updates, token);
-    } catch (_) {
-      if (!await referralIndexesMatch(ctx, token, refUid, identity.uid, link)) {
-        throw httpError(503, "referral indekslari yakunlanmadi", { retryable: true });
-      }
-    }
-    return json({ ok: true, pending: link.paid !== true, paid: link.paid === true, refUid, duplicate: !claim.committed });
-  } catch (err) {
-    return errorResponse(err);
-  }
-}
-
-function deliveredUserOrders(raw) {
-  return toEntries(raw)
-    .map((entry) => ({ key: entry.key, order: entry.val }))
-    .filter((entry) => entry.order && entry.order.status === "yetkazildi")
-    .sort((a, b) =>
-      (Number(a.order.createdAt || a.order.id || a.key) || 0) -
-      (Number(b.order.createdAt || b.order.id || b.key) || 0)
-    );
-}
-
-async function handleReferralQualifySecure(request, env) {
-  try {
-    const body = await readJsonBody(request);
-    const identity = await authenticateBody(body, env);
-    const ctx = getDbContext(env);
-    const token = await getAccessToken(env);
-    const linkPath = "referralRedeemed/" + identity.uid;
-    const link = await rtdbGet(ctx.dbUrl, linkPath, token);
-    if (!link || !link.refUid || !link.code) throw httpError(404, "referral yoq");
-    const refUid = requireSafeUid(link.refUid, 400);
-    if (refUid === identity.uid) throw httpError(400, "oz kodi");
-    const codeOwner = await rtdbGet(ctx.dbUrl, "refcodes/" + String(link.code), token);
-    if (requireSafeUid(codeOwner, 400) !== refUid) throw httpError(409, "referral kodi egasi o'zgargan");
-
-    const payoutPath = "referral_payouts/" + identity.uid;
-    let payout = await rtdbGet(ctx.dbUrl, payoutPath, token);
-    let payoutClaimCommitted = false;
-    if (!payout && link.paid === true) {
-      return json({
-        ok: true,
-        duplicate: true,
-        legacyPaid: true,
-        bonus: Math.max(0, Number(link.bonus) || 0),
-        refUid,
-        orderAmount: Math.max(0, Number(link.orderAmount) || 0),
-      });
-    }
-    if (!payout) {
-      const orders = deliveredUserOrders(
-        await rtdbGet(ctx.dbUrl, "users/" + identity.uid + "/orders", token)
-      );
-      if (!orders.length) throw httpError(412, "serverda yetkazilgan buyurtma yoq");
-      const firstProjection = orders[0];
-      const firstOrderId = String(firstProjection.order.id || firstProjection.key);
-      if (!/^[A-Za-z0-9_-]{1,80}$/.test(firstOrderId) || firstProjection.key !== firstOrderId) {
-        throw httpError(409, "birinchi buyurtma proyeksiyasi noto'g'ri");
-      }
-      const firstOrderKey = identity.uid + "_" + firstOrderId;
-      const first = await rtdbGet(ctx.dbUrl, "orders/" + firstOrderKey, token);
-      if (!first || String(first.uid) !== identity.uid || String(first.id) !== firstOrderId ||
-          first.status !== "yetkazildi") {
-        throw httpError(409, "birinchi buyurtma canonical yozuvi mos emas");
-      }
-      const paidAmount = Math.max(0, Number(
-        first.payable != null ? first.payable : Number(first.total || 0) - Number(first.cashbackUsed || 0)
-      ) || 0);
-      const minimum = parseInt(env.REFERRAL_MIN_ORDER || String(DEFAULT_REFERRAL_MIN_ORDER), 10) || DEFAULT_REFERRAL_MIN_ORDER;
-      if (paidAmount <= minimum) throw httpError(412, "summa yetarli emas", { need: minimum, got: paidAmount });
-      const bonus = parseInt(env.REFERRAL_BONUS || String(DEFAULT_REFERRAL_BONUS), 10) || DEFAULT_REFERRAL_BONUS;
-      const proposed = {
-        state: "processing",
-        redeemerUid: identity.uid,
-        refUid,
-        orderId: firstOrderId,
-        orderKey: firstOrderKey,
-        orderAmount: paidAmount,
-        bonus,
-        createdAt: Date.now(),
-      };
-      const claim = await rtdbCreateIfNull(
-        ctx.dbUrl,
-        payoutPath,
-        proposed,
-        token,
-        (value) => value && String(value.refUid) === refUid &&
-          String(value.redeemerUid) === identity.uid && String(value.orderId) === firstOrderId &&
-          String(value.orderKey) === firstOrderKey && Number(value.orderAmount) === paidAmount &&
-          Number(value.bonus) === bonus
-      );
-      payout = claim.value;
-      payoutClaimCommitted = claim.created;
-    }
-
-    if (!payout || (payout.state !== "processing" && payout.state !== "paid") ||
-        String(payout.refUid) !== refUid || String(payout.redeemerUid) !== identity.uid ||
-        !payout.orderKey || !payout.orderId || !Number.isSafeInteger(Number(payout.orderAmount)) ||
-        !Number.isSafeInteger(Number(payout.bonus)) || Number(payout.bonus) < 0) {
-      throw httpError(409, "referral payout claim noto'g'ri");
-    }
-    const claimedBonus = Number(payout.bonus);
-    const claimedAmount = Number(payout.orderAmount);
-    const claimedOrderId = String(payout.orderId);
-    const claimedOrderKey = String(payout.orderKey);
-
-    const verifyQualifyingOrder = async () => {
-      const order = await rtdbGet(ctx.dbUrl, "orders/" + claimedOrderKey, token);
-      if (!order || String(order.uid) !== identity.uid || String(order.id) !== claimedOrderId || order.status !== "yetkazildi") {
-        throw httpError(409, "qualifying buyurtma yetkazilgan holatda emas");
-      }
-      const actualAmount = Math.max(0, Number(
-        order.payable != null ? order.payable : Number(order.total || 0) - Number(order.cashbackUsed || 0)
-      ) || 0);
-      if (actualAmount !== claimedAmount) throw httpError(409, "qualifying buyurtma summasi mos emas");
-      return order;
-    };
-    await verifyQualifyingOrder();
-
-    const loyaltyOp = "referral_" + (await sha256Hex(identity.uid)).slice(0, 36);
-    const loyalty = await mutateLoyalty(ctx, token, refUid, loyaltyOp, (account) => {
-      account.earned = Math.max(0, Number(account.earned) || 0) + claimedBonus;
-      return { type: "referral", amount: claimedBonus, orderId: claimedOrderId, orderKey: claimedOrderKey };
-    });
-    if (loyalty.operation.type !== "referral" || Number(loyalty.operation.amount) !== claimedBonus ||
-        String(loyalty.operation.orderId) !== claimedOrderId || String(loyalty.operation.orderKey) !== claimedOrderKey) {
-      throw httpError(409, "referral loyalty operatsiyasi mos emas");
-    }
-    await verifyQualifyingOrder();
-
-    const paidAt = payout.paidAt || Date.now();
-    const finalized = await rtdbEtagMutate(ctx.dbUrl, payoutPath, token, (current) => {
-      if (!current || String(current.refUid) !== refUid || String(current.orderKey) !== claimedOrderKey ||
-          Number(current.orderAmount) !== claimedAmount || Number(current.bonus) !== claimedBonus) {
-        throw httpError(409, "referral payout claim o'zgargan");
-      }
-      if (current.state === "paid") return { abort: true, result: current };
-      const next = { ...current, state: "paid", paidAt };
-      return { value: next, result: next };
-    });
-    payout = finalized.result || finalized.value;
-    await writeLoyaltyProjection(ctx, token, refUid, loyalty.account);
-
-    const indexValue = { uid: identity.uid, date: link.date || paidAt, paid: true, paidAt, bonus: claimedBonus };
-    const updates = {};
-    updates[linkPath + "/paid"] = true;
-    updates[linkPath + "/paidAt"] = paidAt;
-    updates[linkPath + "/bonus"] = claimedBonus;
-    updates[linkPath + "/orderCode"] = claimedOrderId;
-    updates[linkPath + "/orderAmount"] = claimedAmount;
-    updates["referrals/" + refUid + "/" + identity.uid] = indexValue;
-    updates["users/" + refUid + "/phase2/referrals/" + identity.uid] = indexValue;
-    updates["users/" + refUid + "/phase2/notifications/referral_" + identity.uid] = {
-      id: "referral_" + identity.uid,
-      icon: "🤝",
-      title: "Referral bonus!",
-      text: "Do'stingiz birinchi xaridini qildi. +" + claimedBonus + " so'm cashback qo'shildi!",
-      date: paidAt,
-      read: false,
-    };
-    updates["notification_outbox/referral_" + identity.uid] = {
-      type: "referral_paid", uid: refUid, redeemerUid: identity.uid,
-      bonus: claimedBonus, createdAt: paidAt, delivered: false,
-    };
-    try {
-      await rtdbPatch(ctx.dbUrl, "", updates, token);
-    } catch (_) {
-      const [linkAfter, firstIndex, secondIndex] = await Promise.all([
-        rtdbGet(ctx.dbUrl, linkPath, token),
-        rtdbGet(ctx.dbUrl, "referrals/" + refUid + "/" + identity.uid, token),
-        rtdbGet(ctx.dbUrl, "users/" + refUid + "/phase2/referrals/" + identity.uid, token),
-      ]);
-      const indexMatches = (value) => !!value && value.uid === identity.uid && value.paid === true &&
-        Number(value.date) === Number(indexValue.date) && Number(value.paidAt) === Number(paidAt) &&
-        Number(value.bonus) === claimedBonus;
-      if (!linkAfter || linkAfter.paid !== true || Number(linkAfter.paidAt) !== Number(paidAt) ||
-          Number(linkAfter.bonus) !== claimedBonus || String(linkAfter.orderCode) !== claimedOrderId ||
-          Number(linkAfter.orderAmount) !== claimedAmount || !indexMatches(firstIndex) || !indexMatches(secondIndex)) {
-        throw httpError(503, "referral to'lovi proyeksiyalari yakunlanmadi", { retryable: true });
-      }
-    }
-    return json({
-      ok: true,
-      bonus: claimedBonus,
-      refUid,
-      orderAmount: claimedAmount,
-      duplicate: payout.state === "paid" && !payoutClaimCommitted,
-    });
-  } catch (err) {
-    return errorResponse(err);
-  }
-}
-
 
 function escapeTelegramHtml(value) {
   return String(value == null ? "" : value)
@@ -4826,6 +4689,7 @@ async function deleteAccountData(ctx, token, env, uid, emailDigits) {
     if (pw && String(pw.uid) === uid) u["phone_pw/" + d] = null;
     u["login_rate/ph_" + d] = null;
   });
+  // Eski (o'chirilgan) referral tizimidan qolgan shaxsiy ma'lumotlar ham tozalanadi.
   const refCode = safeChildKey(plainObj(user.phase2).referralCode);
   if (refCode) u["refcodes/" + refCode] = null;
   u["users/" + uid] = null;

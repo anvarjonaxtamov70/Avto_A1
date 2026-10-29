@@ -24,7 +24,7 @@
 users/{uid}/profile        users/{uid}/cart        users/{uid}/wishlist
 users/{uid}/orders         users/{uid}/my_car      users/{uid}/addresses
 users/{uid}/phase2         products                reviews/{productId}/{uid}
-refcodes/{code}            stories                 broadcasts
+stories                    broadcasts
 bts_branches               notify_requests/{productId}/{uid}
 ai_requests/{uid}          ai_bulk_requests/{uid}  ai_admin_tasks/{taskId}
 ```
@@ -72,7 +72,6 @@ Ushbu repoga **xavfsiz target qoidalar** qo'shildi (`database.rules.json`). Qisq
 | `products`, `stories`, `bts_branches` | hamma (ommaviy katalog) | faqat admin |
 | `broadcasts`, `ai_admin_tasks` | faqat admin | faqat admin |
 | `reviews/{productId}/{uid}` | hamma | faqat o'sha foydalanuvchi |
-| `refcodes/{code}` | tizimga kirgan | faqat yaratish (mavjudini qayta yozib bo'lmaydi), qiymat = o'z uid |
 | `ai_requests/{uid}`, `ai_bulk_requests/{uid}` | egasi (admin hammasini) | egasi yoki admin |
 | `notify_requests/{productId}/{uid}` | admin | egasi yoki admin |
 | ildiz (boshqa hammasi) | yopiq | yopiq |
@@ -127,7 +126,6 @@ tekshiradi. Shuning uchun himoya ilovani buzmasdan qo'shildi.
 
 ## 6. Maxsus eslatmalar
 
-- **Referral (ikki tomonlama bonus):** Egalik qoidalari bir foydalanuvchining **boshqa** foydalanuvchi tuguniga (`users/{referrerUid}/phase2`) yozishini **ataylab bloklaydi**. Shuning uchun taklif qilgan tomonning bonusi **server tomonida** (Worker yoki Cloud Function) berilishi kerak. Bu cheklov PR #10 izohida ham qayd etilgan edi.
 - **Client-trust cheklovi:** Egasi o'z `users/{uid}` tuguniga erkin yozadi, demak cashback/balansni client'da soxtalashtirishi mumkin. To'liq himoya uchun pul/bonusga oid yozuvlar server-authoritative bo'lishi kerak (keyingi bosqich).
 - **Indekslar:** Kodda faqat `products` uchun `limitToLast(30)` bor (kalit tartibida — `.indexOn` shart emas). `orderByChild`/`equalTo` query'lar yo'q.
 
@@ -160,21 +158,19 @@ qattiqlashtirildi — 11-bandga qarang.
 - **XSS yopildi.** Sharh (`r.text`, `r.userName`) va buyurtma chati (`msg.text`) endi `escHtml()` bilan chiqariladi.
 - **Telegram HTML inʼyeksiyasi yopildi.** `parse_mode:"HTML"` xabarlarda mahsulot nomi/mijoz matni `escTg()` bilan ekranlanadi (xabar `400` bilan rad etilmaydi).
 - **Stok data-loss tuzatildi.** Buyurtmada endi butun `products` massivi `.set()` bilan qayta yozilmaydi; faqat sotilgan mahsulot/razmer stoki **atomik `transaction`** bilan kamaytiriladi (`_decrementStock`).
-- **Referral ikki tomonlama bonus** endi Worker `/referral` endpoint orqali (admin huquqi bilan, idempotent) beriladi. `refcodes` qiymati `String(uid)` yoziladi (qoida `newData.val() === auth.uid` bilan mos).
 - **Anti-DevTools** (F12/o'ng tugma/`Ctrl+U`/`user-select:none`) olib tashlandi — UX/accessibility tiklandi.
-- Qoidalarga **`referralRedeemed`** tuguni qo'shildi (Worker takror bonusni bloklash uchun ishlatadi; mijoz yoza olmaydi).
 
 ### Go-live (qo'lda) tartibi
 1. **Cloudflare Worker > Settings > Variables** (Secret):
    - `BOT_TOKEN`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (allaqachon kerak edi).
-   - Ixtiyoriy: `ADMIN_IDS="5105291033,483425630"`, `FIREBASE_DB_URL="https://avtoa1shop-default-rtdb.firebaseio.com"`, `REFERRAL_BONUS="20000"`.
-   - Service account'da **Realtime Database** yozish huquqi borligiga ishonch hosil qiling (`/referral` admin yozuvi uchun).
+   - Ixtiyoriy: `ADMIN_IDS="5105291033,483425630"`, `FIREBASE_DB_URL="https://avtoa1shop-default-rtdb.firebaseio.com"`.
+   - Service account'da **Realtime Database** yozish huquqi borligiga ishonch hosil qiling.
 2. **Firebase Console > Realtime Database > Rules** — `database.rules.json` ni qo'ying.
 3. **DB'da admin allowlist** yarating (bir marta, import yoki qo'lda):
    ```json
    { "admins": { "5105291033": true, "483425630": true } }
    ```
-4. Bitta sinov foydalanuvchi bilan tekshiring: buyurtma berish, sharh, chat, referral.
+4. Bitta sinov foydalanuvchi bilan tekshiring: buyurtma berish, sharh, chat.
 5. (Ixtiyoriy, kelgusi bosqich) Cashback/balansni ham server-authoritative qilish — hozir egasi o'z tuguniga yozadi.
 
 
@@ -238,7 +234,6 @@ admins
 | `products` | `.write: "newData.exists()"` — har kim narxlarni 0 qilardi | yozish: faqat admin (`stock` — tasdiqlangan mijoz faqat **kamaytiradi**) |
 | `orders` | `.write: "newData.exists()"` — soxta buyurtma / o'chirish | mijoz faqat yangi yaratadi; o'zgartirish: admin |
 | `reviews` | har kim istalgan nomdan sharh yozardi | faqat `auth.uid === $uid` |
-| `refcodes` | `.write: true` — referal kodni o'ziga o'girish | faqat bir marta yaratish, qiymat = o'z uid |
 | `stories` | har kim yozardi | faqat admin |
 | `notify_requests` | to'liq ochiq | o'qish: admin, yozish: o'z nomidan |
 | `ai_requests` | to'liq ochiq — begona odam AI budjetini yoqardi | faqat o'z suhbati |
