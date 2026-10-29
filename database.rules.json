@@ -130,7 +130,7 @@
 
         "phase2": {
           // ⚠️ Pul maydonlari (cashbackTotal/Spent/Refunded/cashback,
-          //    loyaltyProjection, referrals, processedOrders) — SERVER-OWNED.
+          //    loyaltyProjection, processedOrders) — SERVER-OWNED.
           //    Mijoz uchun yozish grant'i YO'Q -> faqat server yozadi, mijoz
           //    o'qiydi ($uid ".read" orqali). Faqat KOSMETIK / jurnal
           //    maydonlariga egasi yoza oladi.
@@ -158,7 +158,7 @@
           },
           "notifications": {
             // Bildirishnomalarni "o'qildi" belgilash kosmetik. Server ham
-            // referral bonus bildirishnomasini shu yerga yozadi (chetlab o'tib).
+            // bildirishnomalarni shu yerga yozadi (chetlab o'tib).
             ".write": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))"
           },
 
@@ -238,12 +238,6 @@
     "loyalty_accounts": {
       // Cashback hisobining ETag-CAS manbasi (earned/spent/refunded/reversed).
       // Faqat server; mijoz phase2 proyeksiyasini o'qiydi.
-      ".read": false,
-      ".write": false
-    },
-
-    "referral_payouts": {
-      // Referral to'lovi idempotentligi (exactly-once). Faqat server.
       ".read": false,
       ".write": false
     },
@@ -499,29 +493,6 @@
       // 🗑 Hisobini o'chirgan mijozlar (faqat vaqt va buyurtmalar soni — shaxsiy ma'lumotsiz).
       ".read": false,
       ".write": false
-    },
-
-    "refcodes": {
-      "$code": {
-        ".read": true,
-        ".write": "auth != null && !data.exists() && newData.val() === auth.uid",
-        ".validate": "newData.isString() && newData.val().length <= 64"
-      }
-    },
-
-    "referralRedeemed": {
-      // Faqat server (Worker) yozadi/o'qiydi.
-      ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
-      ".write": false
-    },
-
-    "referrals": {
-      ".read": "auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')",
-      ".write": false,
-      ".indexOn": ["paid", "date"],
-      "$inviterUid": {
-        ".read": "auth != null && (auth.uid === $inviterUid || root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
-      }
     },
 
     "notify_requests": {

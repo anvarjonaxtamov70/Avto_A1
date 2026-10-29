@@ -654,12 +654,12 @@
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap">
     <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800;900&family=Montserrat:wght@400;600;800&display=swap"></noscript>
-    <!-- 🌟 PHASE 2: Dark/Light + Bonus + Achievement + Analitika + Referral + Bildirishnoma + Kafolat -->
+    <!-- 🌟 PHASE 2: Dark/Light + Bonus + Achievement + Analitika + Bildirishnoma + Kafolat -->
     <!-- 🌟 PHASE 2 STYLES (inlined for single-file deploy) -->
     <style>
 /* ============================================================
    AVTO A1 — PHASE 2 STYLES
-   Bonus/Cashback · Achievements · Analitika · Referral ·
+   Bonus/Cashback · Achievements · Analitika ·
    Bildirishnomalar · Dark/Light · Kafolat kuzatuvi
    ⚡ Optimallashtirilgan: faqat transform/opacity animatsiyalar,
    GPU-friendly, prefers-reduced-motion hurmat qilinadi.
@@ -1575,18 +1575,6 @@ html[data-theme="light"] .p2-bar-track { background: rgba(0,0,0,0.07); }
     min-height: 3px;
 }
 .p2-month-lbl { font-size: 9px; color: var(--text-muted); white-space: nowrap; }
-
-/* ===================== REFERRAL ===================== */
-.p2-ref-code-box {
-    background: linear-gradient(135deg, rgba(48,209,88,0.14), rgba(255,255,255,0.03));
-    border: 1px dashed rgba(48,209,88,0.45);
-    border-radius: 18px; padding: 22px; text-align: center; margin-bottom: 16px;
-}
-.p2-ref-code {
-    font-size: 30px; font-weight: 900; letter-spacing: 3px;
-    color: var(--text-main,#fff); font-family: 'Inter', monospace; margin: 6px 0 4px;
-}
-.p2-ref-input { display: flex; gap: 8px; margin-top: 10px; }
 
 /* ===================== NOTIFICATIONS ===================== */
 .p2-notif {
@@ -6581,7 +6569,7 @@ html[data-theme="light"] .p2-warr-track { background: rgba(0,0,0,0.08); }
                     <button type="button" class="pfx-row" onclick="openModal('trustModal')"><span class="pfx-ic" style="--ic:#5e5ce6"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg></span><span class="pfx-lbl">Kafolat va yetkazib berish</span><span class="pfx-chev" aria-hidden="true">›</span></button>
                 </div>
                 <div class="pfx-grp pfx-gap">
-                    <button type="button" class="pfx-row pfx-danger" onclick="clearAppCache()"><span class="pfx-ic" style="--ic:#ff453a"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 1 1 0-12c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></span><span class="pfx-lbl">Ilovani yangilash</span><span class="pfx-chev" aria-hidden="true">›</span></button>
+                    <button type="button" class="pfx-row" onclick="clearAppCache()"><span class="pfx-ic" style="--ic:#8e8e93"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 1 1 0-12c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></span><span class="pfx-lbl">Ilovani yangilash</span><span class="pfx-chev" aria-hidden="true">›</span></button>
                 </div>
                 <div id="pf-build-tag" class="pfx-build"></div>
             </div>
@@ -8647,9 +8635,6 @@ window.currentUser = null;
     //     ichida ishlaydi" degan ogohlantirish chiqib, yuklash boshlanmasdi
     //     (foydalanuvchi "video tanlayapman, o'sha joyda qotib qolyapti" deb
     //      aytgan holat AYNAN shu edi);
-    //   • referral: `start_param` o'qilmasdi -> taklif havolalari umuman
-    //     ishlamasdi; `/referral` va `/referral-qualify` ga initData bo'sh
-    //     ketardi -> 20 000 so'm bonus HECH QACHON berilmasdi;
     //   • Telegram header/fon rangi mavzuga moslashmasdi;
     //   • BackButton ko'rinmasdi;
     //   • native showAlert / showConfirm o'rniga oddiy toast chiqardi;
@@ -9223,15 +9208,35 @@ document.addEventListener('touchmove', function(e) {
         } catch (e) { return url; }
     }
     window._thumb = _thumb;
-    // Rasm yuklanmasa: avval ORIGINAL (data-full) ga, u ham bo'lmasa brend placeholder
+    // 🛡 ImgBB "SERVICE UNAVAILABLE" RASMI MUAMMOSI
+    //    i.ibb.co xato bo'lganda (ishlamay qolsa, 404/503) xato o'rniga O'Z
+    //    reklama rasmini ("imgbb.com service unavailable") qaytaradi. Brauzer
+    //    uni oddiy rasm sifatida chizadi — `onerror` ishlamaydi va tovar rasmi
+    //    o'rnida ImgBB yozuvi turib qoladi. Shuning uchun i.ibb.co manzili
+    //    brauzerga HECH QACHON to'g'ridan-to'g'ri berilmaydi: Worker `/img`
+    //    orqali o'tadi. Worker faqat HAQIQIY rasmni (200 + rasm baytlari)
+    //    qaytaradi, aks holda xato beradi -> onerror -> brend placeholder.
+    function _isImgbb(url) {
+        return typeof url === 'string' && /^https?:\/\/(i|image)\.ibb\.co\//i.test(url);
+    }
+    function _safeImg(url) {
+        try {
+            if (!_isImgbb(url) || !window.TG_PROXY) return url;
+            return window.TG_PROXY + '/img?u=' + encodeURIComponent(url.replace(/^http:/i, 'https:'));
+        } catch (e) { return url; }
+    }
+    window._isImgbb = _isImgbb;
+    window._safeImg = _safeImg;
+    // Rasm yuklanmasa: avval ORIGINAL (data-full; ImgBB bo'lsa Worker orqali
+    // tekshirilgan nusxa) ga, u ham bo'lmasa brend placeholder
     function _imgFallback(img) {
         try {
             if (!img) return;
             var full = img.getAttribute('data-full');
-            if (full && img.src !== full && img.getAttribute('data-tried-full') !== '1') {
+            if (full && img.getAttribute('data-tried-full') !== '1') {
                 img.setAttribute('data-tried-full', '1');
-                img.src = full;
-                return;
+                var next = _safeImg(full);
+                if (next && img.src !== next) { img.src = next; return; }
             }
             img.onerror = null;
             img.src = window._brandPlaceholder ? window._brandPlaceholder('A1') : '';
@@ -19649,7 +19654,7 @@ document.addEventListener('click', function (e) {
 /* ============================================================
    AVTO A1 — PHASE 2 MODULE
    🎁 Bonus/Cashback · 🏆 Achievement · 📊 Analitika ·
-   🔗 Referral · 🔔 Bildirishnomalar · 🌙 Dark/Light · 🛡 Kafolat
+   🔔 Bildirishnomalar · 🌙 Dark/Light · 🛡 Kafolat
    ------------------------------------------------------------
    Mavjud ilovaga minimal teginish bilan integratsiya qilingan.
    Tashqi global'lar: firebase, window.currentUser, showToast,
@@ -19689,14 +19694,8 @@ document.addEventListener('click', function (e) {
         return cashbackRate();
     }
     window._cashbackRate = cashbackRate;
-    var REFERRAL_BONUS = 20000;   // referral bonusi — FAQAT taklif qilgan odamga (so'm)
-    var REFERRAL_MIN_ORDER = 100000; // do'stning 1-buyurtmasi shu summadan OSHIQ bo'lishi shart
     var WARRANTY_DAYS = 14;       // standart kafolat muddati (kun)
     var DAY = 86400000;
-    // 🤖 Bot foydalanuvchi nomi — referral havolasi (t.me/<bot>?startapp=KOD) uchun.
-    //    Agar bot nomi boshqacha bo'lsa — FAQAT shu yerni o'zgartirish kifoya.
-    //    Havola noto'g'ri bo'lsa ham referral ishlaydi: matnda KOD ham yuboriladi.
-    var BOT_USERNAME = 'avtoa1bot';
     var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     /* ----------------------- Holat ----------------------- */
@@ -19734,11 +19733,6 @@ document.addEventListener('click', function (e) {
             // {orderId: {t, cb, st}} — cashback/kafolat berilgan buyurtmalar.
             //   st: 'yetkazildi' (berilgan) | 'bekor' (qaytarib olingan)
             processedOrders: {},
-            referralCode: '',
-            referredBy: '',
-            referredByUid: '',   // kim taklif qilgani (uid) — "kim orqasidan kim kirgan"
-            referralPaid: false, // taklif qilgan odamga bonus to'langanmi
-            referrals: [],      // [{uid, date, paid}]
             notifications: [],  // [{id, icon, title, text, date, read}]
             warranties: [],     // [{id, name, code, start, days, qty, notified}]
             themeSwitched: false
@@ -19815,7 +19809,7 @@ document.addEventListener('click', function (e) {
         P._writing = true;
         try {
             // 🔒 SERVER-AUTHORITATIVE: pul maydonlari (cashbackTotal/Spent/Refunded/
-            //    cashback, loyaltyProjection, processedOrders, referrals ...) SERVER
+            //    cashback, loyaltyProjection, processedOrders ...) SERVER
             //    tomonidan (Worker) yoziladi. Yangi database.rules.json mijozga faqat
             //    KOSMETIK / jurnal maydonlarini yozishga ruxsat beradi. Shuning uchun
             //    `.set(butun state)` O'RNIGA faqat ruxsat etilgan kalitlarni `.update()`
@@ -20020,7 +20014,6 @@ document.addEventListener('click', function (e) {
         if (i.indexOf('🆕') > -1) return ['user', '#0a84ff'];
         if (i.indexOf('🏁') > -1 || /yetkaz/i.test(t)) return ['truck', '#30d158'];
         if (i.indexOf('🏆') > -1) return ['trophy', '#bf5af2'];
-        if (i.indexOf('🤝') > -1) return ['users', '#5e5ce6'];
         return ['bell', '#c9a84c'];
     }
     function nfDayStart(ts) { var d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
@@ -20436,7 +20429,6 @@ document.addEventListener('click', function (e) {
         { id: 'spent_5m', ic: '🏆', t: 'Premium xaridor', d: "5 000 000 so'm xarid qiling", goal: function (c) { return c.spent / 5000000; }, test: function (c) { return c.spent >= 5000000; } },
         { id: 'wish_5', ic: '❤️', t: 'Kollektsioner', d: '5 ta mahsulot saqlang', goal: function (c) { return c.wish / 5; }, test: function (c) { return c.wish >= 5; } },
         { id: 'cashback_100k', ic: '🎁', t: 'Bonus ovchisi', d: "100 000 so'm cashback to'plang", goal: function (c) { return c.cashbackTotal / 100000; }, test: function (c) { return c.cashbackTotal >= 100000; } },
-        { id: 'referral_1', ic: '🤝', t: "Do'st keltirgan", d: "Do'stingizni taklif qiling", goal: function (c) { return Math.min(1, c.referrals); }, test: function (c) { return c.referrals >= 1; } },
         { id: 'night_owl', ic: '🌙', t: 'Tungi qush', d: 'Tungi rejimni sinab ko\'ring', goal: function (c) { return c.themeSwitched ? 1 : 0; }, test: function (c) { return !!c.themeSwitched; } }
     ];
     P._ACH = ACH;
@@ -20450,7 +20442,6 @@ document.addEventListener('click', function (e) {
             delivered: delivered.length,
             spent: spent,
             wish: getWishCount(),
-            referrals: (P.state.referrals || []).length,
             cashbackTotal: P.state.cashbackTotal,
             themeSwitched: P.state.themeSwitched
         };
@@ -20663,235 +20654,6 @@ document.addEventListener('click', function (e) {
     }
 
     /* ============================================================
-       🔗 6. REFERRAL
-       ============================================================ */
-    function genCode(uid) {
-        var n = parseInt(uid);
-        // Ilova/brauzer mijozining uid'i raqam emas (Firebase anonim uid) — undan
-        // barqaror xesh olamiz (ilgari Date.now() ishlatilardi, kod tasodifiy edi).
-        if (!(n > 0) || String(n) !== String(uid)) {
-            var h = 2166136261, str = String(uid || Date.now());
-            for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
-            n = h;
-        }
-        var base = Math.abs(n).toString(36).toUpperCase();
-        return 'A1' + base.slice(-5).padStart(5, '0');
-    }
-    function ensureReferralCode() {
-        if (!P.uid) return;
-        if (!P.state.referralCode) {
-            P.state.referralCode = genCode(P.uid);
-            saveLocal();
-            saveRemote();
-        }
-        // kod -> uid xaritasi (referral ishlashi uchun)
-        // Har sync'da (sekundiga o'nlab marta) qayta urinmaslik uchun — bir sessiyada bir marta
-        if (P._rcTried === P.state.referralCode + '|' + P.uid) return;
-        P._rcTried = P.state.referralCode + '|' + P.uid;
-        if (hasFB()) {
-            // ⚠️ Avval mavjudligini tekshiramiz: qoidalar refcodes'ni faqat BIR marta
-            // yozishga ruxsat beradi (!data.exists()). Har yuklanishda qayta .set() qilish
-            // permission_denied (console xatosi) keltirib chiqarardi — endi faqat yo'q bo'lsa yozamiz.
-            try {
-                var _rcRef = firebase.database().ref('refcodes/' + P.state.referralCode);
-                _rcRef.once('value').then(function (s) {
-                    if (!s.exists()) { _rcRef.set(String(P.uid)).catch(function () {}); }
-                }).catch(function () {});
-            } catch (e) {}
-        }
-    }
-    /** Referral havolasi — bosilsa Mini App kod bilan ochiladi (startapp). */
-    function referralLink() {
-        var code = P.state.referralCode || '';
-        if (!BOT_USERNAME || !code) return '';
-        return 'https://t.me/' + BOT_USERNAME + '?startapp=' + encodeURIComponent(code);
-    }
-    P.referralLink = referralLink;
-
-    P.shareReferral = function () {
-        var code = P.state.referralCode;
-        var link = referralLink();
-        // Havola + KOD ikkalasi ham yuboriladi: bot nomi o'zgargan bo'lsa ham
-        // do'st kodni qo'lda kiritib referraldan foydalana oladi.
-        var msg = "🚗 Avto A1 — original avto ehtiyot qismlar\n\n" +
-            "Mening taklif kodim: " + code + "\n" +
-            (link ? "\nIlovani ochish: " + link + "\n" : '') +
-            "\nKodni kiritib, birinchi xaridingizni qilsangiz — ikkalamizga ham foyda!";
-        try {
-            if (window.tg && tg.openTelegramLink) {
-                tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link || 'https://t.me/') +
-                    '&text=' + encodeURIComponent(msg));
-                return;
-            }
-        } catch (e) {}
-        if (navigator.share) { navigator.share({ text: msg }).catch(function () {}); }
-        else if (navigator.clipboard) { navigator.clipboard.writeText(msg); toast('Taklif matni nusxalandi!', 'success'); }
-        hap('light');
-    };
-    P.copyReferral = function () {
-        if (navigator.clipboard) { navigator.clipboard.writeText(P.state.referralCode); toast('Kod nusxalandi!', 'success'); hap('selection'); }
-    };
-    // ============================================================
-    // 🤝 REFERRAL — QAYTA QURILGAN MANTIQ
-    // ------------------------------------------------------------
-    // ⚠️ ILGARI QANDAY XATO ISHLAGAN:
-    //   • kod kiritilishi BILANOQ ikki tomonga ham 20 000 so'm berilardi —
-    //     hech kim hech narsa sotib olmasa ham. Ya'ni odam 10 ta soxta akkaunt
-    //     ochib, bir-biriga kod kiritib, cheksiz "pul" yasashi mumkin edi;
-    //   • kiritgan odamning o'z bonusi CLIENT tomonda yozilardi (soxtalashtirish oson);
-    //   • "kim kimni taklif qilgani" faqat inviter tugunida array bo'lib yotardi —
-    //     tekshirib bo'lmaydi, holati (to'landi/to'lanmadi) yo'q edi.
-    //
-    // ENDI (talab bo'yicha):
-    //   1. Kod kiritilganda PUL BERILMAYDI — faqat "kim orqasidan kim kirgan"
-    //      bog'lanishi yoziladi (server: referralRedeemed/{uid} va referrals/{inviter}/{uid}).
-    //   2. Taklif qilgan odamga 20 000 so'm FAQAT shu shartlar bajarilganda:
-    //        • do'st haqiqatda xarid qilgan bo'lsa (buyurtma YETKAZILGAN),
-    //        • bu do'stning BIRINCHI buyurtmasi bo'lsa,
-    //        • va o'sha buyurtma 100 000 so'mdan OSHIQ bo'lsa.
-    //   3. Tekshiruv SERVER tomonda (Cloudflare Worker) bazadan o'qib bajariladi —
-    //      mijozning so'ziga ishonilmaydi. Takror to'lov server guard bilan bloklangan.
-    // ============================================================
-    P.redeemReferral = function (silentCode) {
-        var code = silentCode
-            ? String(silentCode).trim().toUpperCase()
-            : (function () {
-                var inp = document.getElementById('p2-ref-input');
-                return inp ? (inp.value || '').trim().toUpperCase() : '';
-            })();
-        if (!code) { if (!silentCode) toast('Kodni kiriting', 'warning'); return; }
-        if (P.state.referredBy) { if (!silentCode) toast('Siz allaqachon kod kiritgansiz', 'warning'); return; }
-        if (code === P.state.referralCode) { if (!silentCode) toast("O'z kodingizni kirita olmaysiz", 'warning'); return; }
-        if (!hasFB()) { if (!silentCode) toast('Internetni tekshiring', 'warning'); return; }
-
-        firebase.database().ref('refcodes/' + code).once('value').then(function (snap) {
-            var refUid = snap.val();
-            if (!refUid || String(refUid) === String(P.uid)) {
-                if (!silentCode) toast("Kod noto'g'ri", 'warning');
-                return;
-            }
-            // Faqat BOG'LANISH yoziladi — pul yo'q
-            P.state.referredBy = code;
-            P.state.referredByUid = String(refUid);
-            P.state.referralPaid = false;
-            pushNotif('🤝', 'Taklif kodi qabul qilindi',
-                "Birinchi buyurtmangiz " + fmtSom(REFERRAL_MIN_ORDER) + " so'mdan oshib yetkazilgach, " +
-                "sizni taklif qilgan do'stingiz " + fmtSom(REFERRAL_BONUS) + " so'm bonus oladi.", { silent: true });
-            save();
-
-            // Serverga bog'lanishni qayd etamiz (pul EMAS — faqat ro'yxatga olish)
-            try {
-                var _initData = (window.tg && tg.initData) ? tg.initData : '';
-                if (_initData) {
-                    fetch(TG_PROXY + '/referral', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ initData: _initData, code: code })
-                    }).catch(function () {});
-                }
-            } catch (e) {}
-
-            toast("✅ Kod qabul qilindi! Birinchi xaridingizdan keyin do'stingiz bonus oladi.", 'success');
-            hap('success');
-            evaluateAchievements();
-            renderProfile();
-            if (!silentCode) P.openReferral();
-        }).catch(function () { if (!silentCode) toast('Xatolik yuz berdi', 'warning'); });
-    };
-
-    /**
-     * Do'stning BIRINCHI buyurtmasi yetkazilgan va ≥ REFERRAL_MIN_ORDER bo'lsa —
-     * serverdan taklif qilgan odamga bonus berishni so'raymiz.
-     * Server baribir hammasini bazadan qayta tekshiradi (bu yerda faqat "turtki").
-     */
-    function maybeQualifyReferral(orders) {
-        if (!P.state.referredBy) return;          // bizni hech kim taklif qilmagan
-        if (P.state.referralPaid) return;         // allaqachon to'langan
-        if (P._refQualifySent) return;            // shu sessiyada yuborilgan
-        var arr = Array.isArray(orders) ? orders : [];
-        var delivered = arr.filter(function (o) { return o && o.status === 'yetkazildi'; });
-        if (!delivered.length) return;
-        // BIRINCHI yetkazilgan buyurtma (eng eski)
-        delivered.sort(function (a, b) { return (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0); });
-        var first = delivered[0];
-        var amount = cashbackBaseOf(first) || (parseInt(first.total, 10) || 0);
-        if (amount <= REFERRAL_MIN_ORDER) return;  // "oshiq" bo'lishi shart
-        var _initData = (window.tg && tg.initData) ? tg.initData : '';
-        if (!_initData) return;
-        P._refQualifySent = true;
-        fetch(TG_PROXY + '/referral-qualify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData: _initData })
-        }).then(function (r) { return r.json().catch(function () { return null; }); })
-          .then(function (j) {
-              if (j && j.ok) {
-                  P.state.referralPaid = true;
-                  save();
-                  pushNotif('🤝', 'Do\'stingiz bonus oldi!',
-                      "Sizni taklif qilgan do'stingizga " + fmtSom(j.bonus || REFERRAL_BONUS) + " so'm qo'shildi. Rahmat!", { silent: true });
-              } else {
-                  P._refQualifySent = false;   // keyingi sync'da yana urinamiz
-              }
-          }).catch(function () { P._refQualifySent = false; });
-    }
-    P.maybeQualifyReferral = maybeQualifyReferral;
-
-    /**
-     * Deep-link: t.me/<bot>?startapp=KOD orqali kirgan bo'lsa kodni avtomat qo'llaymiz.
-     * ⚠️ Ilgari deep-link umuman qo'llab-quvvatlanmasdi — kodni faqat qo'lda yozish
-     *    mumkin edi, shuning uchun referral amalda tarqalmasdi.
-     */
-    function applyStartParamReferral() {
-        try {
-            if (P.state.referredBy) return;
-            var sp = (window.tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param)
-                ? String(tg.initDataUnsafe.start_param).trim().toUpperCase() : '';
-            if (!sp || !/^A1[A-Z0-9]{3,10}$/.test(sp)) return;
-            if (sp === P.state.referralCode) return;
-            P.redeemReferral(sp);
-        } catch (e) {}
-    }
-    P.openReferral = function () {
-        ensureReferralCode();
-        var box = document.getElementById('p2-ref-body');
-        if (box) {
-            var refs = P.state.referrals || [];
-            var RI = {
-                users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
-                copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
-                share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/>',
-                user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
-                check: '<path d="M20 6 9 17l-5-5"/>',
-                ticket: '<path d="M3 9a2 2 0 0 0 0 6v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 0 0-6V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"/><path d="M13 4v16" stroke-dasharray="2 3"/>'
-            };
-            var sv = function (k, c) { return '<svg' + (c ? ' class="' + c + '"' : '') + ' viewBox="0 0 24 24" aria-hidden="true">' + RI[k] + '</svg>'; };
-            var paidN = refs.filter(function (r) { return r.paid === true || r.paid === 1; }).length;
-            box.innerHTML = '<div class="a1-in">' +
-                '<div class="a1-hero" style="--d:0;text-align:center;padding:22px 18px 18px"><div class="cb-hero-ic">' + sv('users') + '</div>' +
-                '<div class="cb-lbl">Sizning taklif kodingiz</div><div class="rf-code">' + esc(P.state.referralCode || '…') + '</div>' +
-                '<span class="rf-bonus">Har bir do\u2018st uchun ' + fmtSom(REFERRAL_BONUS) + ' so\u2018m</span>' +
-                '<p class="rf-note">Do\u2018stingiz kodni kiritib, birinchi buyurtmasini ' + fmtSom(REFERRAL_MIN_ORDER) + ' so\u2018mdan oshiq qilsa va u yetkazilgach — bonus sizga tushadi.</p>' +
-                '<div class="a1-btns"><button type="button" class="a1-btn" onclick="Phase2.copyReferral()">' + sv('copy') + 'Nusxa</button><button type="button" class="a1-btn is-gold" onclick="Phase2.shareReferral()">' + sv('share') + 'Ulashish</button></div></div>' +
-                (P.state.referredBy
-                    ? '<div class="a1-grp" style="--d:1;margin-top:12px"><div class="a1-row static"><span class="a1-ic" style="--ic:#30d158">' + sv('check') + '</span><span class="a1-t">Siz <b>' + esc(P.state.referredBy) + '</b> kodi orqali kirdingiz<small>' +
-                      (P.state.referralPaid ? 'Do\u2018stingiz bonusini oldi' : 'Birinchi buyurtmangiz ' + fmtSom(REFERRAL_MIN_ORDER) + ' so\u2018mdan oshib yetkazilgach, do\u2018stingiz bonus oladi') + '</small></span></div></div>'
-                    : '<div style="--d:1"><div class="a1-sec">Do\u2018stingizning kodi bormi?</div><div class="a1-grp"><div class="rf-in"><input id="p2-ref-input" placeholder="A1XXXXX" maxlength="12" autocomplete="off" autocapitalize="characters"><button type="button" class="a1-btn is-gold" onclick="Phase2.redeemReferral()">Tasdiqlash</button></div></div>' +
-                      '<p class="a1-foot">Kodni kiriting — do\u2018stingiz sizning birinchi xaridingizdan keyin bonus oladi.</p></div>') +
-                '<div style="--d:2"><div class="a1-sec">Taklif qilganlaringiz \u00B7 ' + refs.length + (paidN ? ' (' + paidN + ' bonus)' : '') + '</div>' +
-                (refs.length ? '<div class="a1-grp">' + refs.map(function (r) {
-                    var paid = (r.paid === true || r.paid === 1);
-                    return '<div class="a1-row static"><span class="a1-ic" style="--ic:' + (paid ? '#30d158' : '#8e8e93') + '">' + sv('user') + '</span>' +
-                        '<span class="a1-t" style="font-size:15px">Mijoz \u2022\u2022' + esc(String(r.uid).slice(-4)) + '<small>' + (paid ? 'Xarid qildi — bonus berildi' : 'Hali ' + fmtSom(REFERRAL_MIN_ORDER) + ' so\u2018mlik xarid qilmagan') + '</small></span>' +
-                        (paid ? '<span class="cb-amt is-plus">+' + fmtSom(REFERRAL_BONUS) + '</span>' : '<span class="a1-v" style="font-size:13px">kutilmoqda</span>') + '</div>';
-                }).join('') + '</div>'
-                    : '<div class="a1-empty" style="padding-top:26px"><span class="a1-empty-ic">' + sv('users') + '</span><b>Hali hech kim yo\u2018q</b><p>Kodingizni do\u2018stlaringizga yuboring — ular ham chegirma oladi, siz ham bonus.</p></div>') +
-                '</div></div>';
-        }
-        if (typeof openModal === 'function') openModal('p2ReferralModal');
-    };
-
-    /* ============================================================
        ANIMATSIYA YORDAMCHILARI
        ============================================================ */
     function animateCount(el, from, to, dur, isSom) {
@@ -20941,7 +20703,6 @@ document.addEventListener('click', function (e) {
             '<div class="p2-grid">' +
             tile('🏆', 'Yutuqlar', 'Phase2.openAchievements()', achBadgeHTML()) +
             tile('📊', 'Analitika', 'Phase2.openAnalytics()', '') +
-            tile('🔗', 'Referral', 'Phase2.openReferral()', '') +
             tile('🛡', 'Tovarlar kafolati', 'Phase2.openWarranty()', warrBadgeHTML()) +
             tile('🔔', 'Xabarlar', 'Phase2.openNotifs()', '<span class="p2-tile-badge" id="p2-tile-notif-badge"></span>') +
             tile(P.state.theme === 'light' ? '🌙' : '☀️', 'Mavzu', 'Phase2.toggleTheme(event)', '') +
@@ -21032,7 +20793,6 @@ document.addEventListener('click', function (e) {
                 '<div class="p2-modal-scroll" id="p2-notif-list"></div>') +
             modal('p2AchievementsModal', 'Yutuqlar', '<div class="p2-modal-scroll" id="p2-ach-body"></div>') +
             modal('p2AnalyticsModal', 'Analitika', '<div class="p2-modal-scroll" id="p2-an-body"></div>') +
-            modal('p2ReferralModal', 'Do\'stlarni taklif qilish', '<div class="p2-modal-scroll" id="p2-ref-body"></div>') +
             modal('p2WarrantyModal', 'Tovarlar kafolati', '<div class="p2-modal-scroll" id="p2-warr-body"></div>') +
             modal('p2CashbackModal', 'Cashback', '<div class="p2-modal-scroll" id="p2-cashback-body"></div>') +
             '<div id="p2-unlock" onclick="Phase2.closeUnlock()">' +
@@ -21207,8 +20967,6 @@ document.addEventListener('click', function (e) {
             if (sessionRefund > 0 && !firstRun) {
                 toast('↩️ ' + fmtSom(sessionRefund) + " so'm cashback qaytarildi", 'success');
             }
-            // 🔗 Referral: do'stning 1-buyurtmasi yetkazilgan bo'lsa — taklif qilganga bonus
-            try { maybeQualifyReferral(orders); } catch (e) {}
         }
         return changed;
     }
@@ -21290,11 +21048,6 @@ document.addEventListener('click', function (e) {
                 if (typeof r.achSeen === 'number') P.state.achSeen = Math.max(P.state.achSeen || 0, r.achSeen);
                 // processedOrders: ikkala manbani birlashtiramiz (cashback ikki marta berilmasligi uchun)
                 if (r.processedOrders) P.state.processedOrders = Object.assign({}, r.processedOrders, P.state.processedOrders || {});
-                if (r.referralCode) P.state.referralCode = r.referralCode;
-                if (r.referredBy) P.state.referredBy = r.referredBy;
-                if (r.referredByUid) P.state.referredByUid = r.referredByUid;
-                if (r.referralPaid === true) P.state.referralPaid = true;
-                if (r.referrals) P.state.referrals = toArray(r.referrals);
                 if (r.notifications) P.state.notifications = toArray(r.notifications);
                 if (r.warranties) P.state.warranties = toArray(r.warranties);
                 if (typeof r.themeSwitched === 'boolean') P.state.themeSwitched = r.themeSwitched;
@@ -21303,9 +21056,6 @@ document.addEventListener('click', function (e) {
             }
         }
         applyTheme(P.state.theme);
-        ensureReferralCode();
-        // 🔗 Deep-link orqali kelgan taklif kodini bir marta qo'llaymiz
-        applyStartParamReferral();
         // 🎁 Buyurtmalarni qayta hisoblash: yetkazilganlarga cashback+kafolat,
         //    bekor qilinganlardan qaytarib olish (ishonchli yo'l — har sync'da).
         reconcileOrders(getOrders());
@@ -21335,7 +21085,6 @@ document.addEventListener('click', function (e) {
             tries++;
             if (window.currentUser && !P.uid) {
                 P.uid = window.currentUser;
-                ensureReferralCode();
                 startAdminNotifications();
             }
             if ((window.currentUser && P.uid) || tries > 40) clearInterval(iv);
@@ -30187,6 +29936,21 @@ html body .flying-img.mo-fly {
       Z.natH = Z.img.naturalHeight || 0;
       resetTransform();
     });
+    // Katta rasm yuklanmasa: tekshirilgan original (ImgBB bo'lsa Worker /img),
+    // u ham bo'lmasa brend placeholder. ImgBB xato rasmi hech qachon chiqmaydi.
+    Z.img.addEventListener('error', function () {
+      var raw = Z.srcs[Z.index];
+      var step = Z.img.getAttribute('data-step') || '0';
+      if (step === '0') {
+        Z.img.setAttribute('data-step', '1');
+        var safe = window._safeImg ? window._safeImg(raw) : raw;
+        if (safe && safe !== Z.img.src) { Z.img.src = safe; return; }
+      }
+      if (step !== '2') {
+        Z.img.setAttribute('data-step', '2');
+        if (window._brandPlaceholder) Z.img.src = window._brandPlaceholder('A1');
+      }
+    });
 
     d.addEventListener('pointerdown', onDown);
     d.addEventListener('pointermove', onMove);
@@ -30312,6 +30076,16 @@ html body .flying-img.mo-fly {
     if (Z.scale < 1.02) animateTo(1, 0, 0);
   }
 
+  // Zoom uchun katta (≈1200px x DPR) rasm weserv orqali olinadi: ImgBB xato
+  // bersa weserv ham xato qaytaradi (ImgBB reklama rasmini emas), hajm esa
+  // 1.5-3 MB li originaldan bir necha barobar kichik.
+  function zoomSrc(raw) {
+    try {
+      if (typeof raw === 'string' && /^https?:\/\//i.test(raw) && raw.indexOf('/img?u=') === -1 && window._thumb) return window._thumb(raw, 1200);
+    } catch (e) {}
+    return raw;
+  }
+
   function updateCount() {
     if (!Z.count) return;
     Z.count.textContent = (Z.srcs.length > 1)
@@ -30325,7 +30099,8 @@ html body .flying-img.mo-fly {
     if (!Z.srcs.length) return;
     Z.index = Math.max(0, Math.min(Z.srcs.length - 1, index || 0));
     Z.natW = Z.natH = 0;
-    Z.img.src = Z.srcs[Z.index];
+    Z.img.setAttribute('data-step', '0');
+    Z.img.src = zoomSrc(Z.srcs[Z.index]);
     updateCount();
     if (Z.hint) Z.hint.style.opacity = '1';
     Z.el.classList.add('open');
@@ -34531,7 +34306,6 @@ html body #profile-section #p2-hub .p2-cashback-card::after { content: none !imp
 #pfx-app .p2-tile-badge { position: static; order: 2; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; font-size: 12px; font-weight: 700; box-sizing: border-box; }
 #pfx-app .p2-tile[onclick^="Phase2.openAchievements"] { --tic: #ff9f0a; --tm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94A5.01 5.01 0 0 0 11 15.9V19H7v2h10v-2h-4v-3.1a5.01 5.01 0 0 0 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z'/%3E%3C/svg%3E"); }
 #pfx-app .p2-tile[onclick^="Phase2.openAnalytics"] { --tic: #0a84ff; --tm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z'/%3E%3C/svg%3E"); }
-#pfx-app .p2-tile[onclick^="Phase2.openReferral"] { --tic: #30d158; --tm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z'/%3E%3C/svg%3E"); }
 #pfx-app .p2-tile[onclick^="Phase2.openWarranty"] { --tic: #5e5ce6; --tm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z'/%3E%3C/svg%3E"); }
 #pfx-app .p2-tile[onclick^="Phase2.openNotifs"] { --tic: #ff3b30; --tm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z'/%3E%3C/svg%3E"); }
 #pfx-app .p2-tile[onclick^="Phase2.toggleTheme"] { --tic: #636366; --tm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z'/%3E%3C/svg%3E"); }
@@ -37195,11 +36969,11 @@ html[data-theme="light"] body #brand-cards-wrap .a1b-logo { box-shadow: 0 0 0 .5
 /* ══════════════════════════════════════════════════════════════════
    🍏 AVTO A1 · iOS 26 — 2-bosqich
    Xarita tanlagich · Manzillarim · Ma'lumotlarim · Mening mashinam ·
-   Cashback · Yutuqlar · Analitika · Referral · Qoralamalar ·
+   Cashback · Yutuqlar · Analitika · Qoralamalar ·
    Xabar yuborish · Stories · AI tugmasi
    Tokenlar va .a1-* bloklari `a1-ios26-info` qatlamidan qayta ishlatiladi.
    ══════════════════════════════════════════════════════════════════ */
-:is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal, #map-picker-overlay, #addr-name-overlay) {
+:is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal, #map-picker-overlay, #addr-name-overlay) {
     --a-gold: #e2c46e; --a-gold2: #c9a84c; --a-goldbg: rgba(201,168,76,.14);
     --a-grad: linear-gradient(135deg, #f6dc7e 0%, #d4af37 48%, #a8851f 100%);
     --a-ink: #1a1405;
@@ -37215,7 +36989,7 @@ html[data-theme="light"] body #brand-cards-wrap .a1b-logo { box-shadow: 0 0 0 .5
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased; color: var(--a-tx);
 }
-html[data-theme="light"] :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal, #map-picker-overlay, #addr-name-overlay) {
+html[data-theme="light"] :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal, #map-picker-overlay, #addr-name-overlay) {
     --a-gold: #8a6a14; --a-gold2: #9c7c20; --a-goldbg: rgba(156,124,32,.1);
     --a-glass: rgba(255,255,255,.86); --a-glass2: #fff;
     --a-edge: inset 0 1px 0 #fff, inset 0 0 0 .5px rgba(120,90,30,.12);
@@ -37226,33 +37000,33 @@ html[data-theme="light"] :is(#addressesModal, #addAddressModal, #profileEditModa
     --a-green: #248a3d; --a-orange: #c76a00; --a-red: #d70015; --a-blue: #007aff;
     --a-sheet: rgba(255,255,255,.95);
 }
-html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal).modal-standard {
+html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal).modal-standard {
     background: radial-gradient(120% 55% at 50% -12%, rgba(201,168,76,.14), transparent 62%), #08080a !important;
     padding-left: 16px !important; padding-right: 16px !important;
 }
-html[data-theme="light"] body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal).modal-standard {
+html[data-theme="light"] body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal).modal-standard {
     background: radial-gradient(120% 55% at 50% -12%, rgba(201,168,76,.16), transparent 62%), #f6f1e6 !important;
 }
-html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal) > .modal-header {
+html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal) > .modal-header {
     margin: 2px 0 12px !important; padding: 0 2px !important; gap: 10px;
     background: transparent !important; border: 0 !important; box-shadow: none !important;
 }
-html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal) > .modal-header h2 {
+html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal) > .modal-header h2 {
     display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0 !important;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif !important;
     font-size: 32px !important; font-weight: 700 !important; letter-spacing: -.6px !important; line-height: 1.1 !important;
     color: var(--a-tx) !important; -webkit-text-fill-color: var(--a-tx) !important; background: none !important;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal) > .modal-header h2 .uic { display: none !important; }
-html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal) > .modal-header .close-btn {
+html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal) > .modal-header h2 .uic { display: none !important; }
+html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal) > .modal-header .close-btn {
     width: 32px !important; height: 32px !important; min-width: 32px; flex: 0 0 32px; padding: 0 !important; border-radius: 50% !important;
     display: inline-flex !important; align-items: center; justify-content: center;
     background: var(--a-fill) !important; color: var(--a-tx2) !important; border: 0 !important; box-shadow: none !important;
     font-size: 18px !important; font-weight: 600; line-height: 1 !important; transition: transform .3s var(--a-spring);
 }
-html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal) > .modal-header .close-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #p2ReferralModal, #adminDraftsModal) > .modal-header .close-btn:active { transform: scale(.86); }
+html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal) > .modal-header .close-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+html body :is(#addressesModal, #addAddressModal, #profileEditModal, #myCarModal, #p2CashbackModal, #p2AchievementsModal, #p2AnalyticsModal, #adminDraftsModal) > .modal-header .close-btn:active { transform: scale(.86); }
 
 /* ——— Umumiy forma maydoni (Ma'lumotlarim) ——— */
 .pe-f { position: relative; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 14px; box-sizing: border-box; cursor: text; }
@@ -37536,7 +37310,7 @@ html body #p2AnalyticsModal .p2-an-stats { gap: 10px; }
 html body #p2AnalyticsModal .p2-an-card { padding: 14px 15px; border: 0 !important; border-radius: 22px; background: var(--a-glass) !important; box-shadow: var(--a-edge), var(--a-drop) !important; }
 html body #p2AnalyticsModal .p2-an-num { font-size: 23px; font-weight: 750; letter-spacing: -.6px; color: var(--a-tx) !important; font-variant-numeric: tabular-nums; }
 html body #p2AnalyticsModal .p2-an-lbl { margin-top: 3px; font-size: 12.5px; font-weight: 500; color: var(--a-tx2); }
-html body :is(#p2AnalyticsModal, #p2AchievementsModal, #p2ReferralModal, #p2CashbackModal) .p2-sec-title { margin: 24px 6px 9px; font-size: 13px; font-weight: 600; letter-spacing: .2px; text-transform: uppercase; color: var(--a-tx2); }
+html body :is(#p2AnalyticsModal, #p2AchievementsModal, #p2CashbackModal) .p2-sec-title { margin: 24px 6px 9px; font-size: 13px; font-weight: 600; letter-spacing: .2px; text-transform: uppercase; color: var(--a-tx2); }
 html body #p2AnalyticsModal .p2-month-chart { height: 150px; padding: 16px 14px 12px; border-radius: 22px; background: var(--a-glass); box-shadow: var(--a-edge), var(--a-drop); }
 html body #p2AnalyticsModal .p2-month-bar { max-width: 26px; border-radius: 8px 8px 4px 4px; background: var(--a-grad); }
 html body #p2AnalyticsModal .p2-month-lbl { font-size: 11px; font-weight: 500; color: var(--a-tx2); }
@@ -37546,20 +37320,7 @@ html body #p2AnalyticsModal .p2-bar-name { width: 92px; font-size: 14px; font-we
 html body #p2AnalyticsModal .p2-bar-track { height: 8px; background: var(--a-fill); }
 html body #p2AnalyticsModal .p2-bar-fill { background: var(--a-grad); }
 html body #p2AnalyticsModal .p2-bar-val { width: 64px; font-size: 13px; font-weight: 650; color: var(--a-tx); font-variant-numeric: tabular-nums; }
-html body :is(#p2AnalyticsModal, #p2AchievementsModal, #p2CashbackModal, #p2ReferralModal) .p2-empty { padding: 50px 20px; color: var(--a-tx2); font-size: 14.5px; }
-
-/* ══════════════ 🤝 REFERRAL ══════════════ */
-.rf-code { margin: 14px 0 4px; font-size: 34px; font-weight: 800; letter-spacing: 4px; font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--a-tx); }
-.rf-bonus { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 99px; font-size: 13px; font-weight: 650; color: var(--a-green); background: color-mix(in srgb, var(--a-green) 14%, transparent); }
-.rf-note { margin: 10px auto 16px; max-width: 300px; font-size: 13px; line-height: 1.42; color: var(--a-tx2); }
-.rf-in { display: flex; gap: 8px; padding: 12px; }
-html body .rf-in input {
-    flex: 1; min-width: 0; height: 46px; margin: 0 !important; padding: 0 14px !important; border: 0 !important; outline: 0; border-radius: 14px !important;
-    background: var(--a-fill2) !important; box-shadow: none !important; transform: none !important; color: var(--a-tx) !important;
-    font: 600 17px/1 ui-monospace, "SF Mono", Menlo, monospace !important; letter-spacing: 2px; text-transform: uppercase; -webkit-appearance: none;
-}
-.rf-in .a1-btn { height: 46px; border-radius: 14px; padding: 0 16px; font-size: 15px; }
-.rf-ok { display: flex; align-items: center; gap: 12px; }
+html body :is(#p2AnalyticsModal, #p2AchievementsModal, #p2CashbackModal) .p2-empty { padding: 50px 20px; color: var(--a-tx2); font-size: 14.5px; }
 
 /* ══════════════ 📝 QORALAMALAR (admin) ══════════════ */
 html body #adminDraftsModal > .dr-clear {
@@ -37713,8 +37474,6 @@ html.lite body #shogird-launcher .shogird-orbit, html.lite body #shogird-launche
     :is(#map-picker-overlay, #addr-name-overlay) * { transition-duration: .01s !important; }
 }
 
-/* Uzun sarlavha — qirqilmasin */
-html body #p2ReferralModal .modal-header h2 { font-size: 28px !important; letter-spacing: -.6px !important; white-space: normal !important; overflow: visible !important; text-overflow: clip !important; line-height: 1.12 !important; }
 </style>
 <script id="a1-ios26-pages2-js">
 /* ══════════════════════════════════════════════════════════════════

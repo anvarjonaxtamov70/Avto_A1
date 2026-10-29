@@ -9,7 +9,6 @@ Avto ehtiyot qismlari uchun **Telegram Mini App** (Web App) katalogi. Butun ilov
 - 🎁 **Cashback** — har xariddan bonus
 - 🏆 **Yutuqlar (Achievements)** — progress va badge'lar
 - 📊 **Shaxsiy analitika** — sarf grafiklari va statistika
-- 🔗 **Referral** tizimi (ikki tomonlama bonus)
 - 🔔 **Bildirishnomalar** (buyurtma, cashback, yutuq, kafolat)
 - 🌙 **Dark / Light** rejim (Ivory & Gold light teması)
 - 🛡 **Kafolat kuzatuvi** — har mahsulotga 14 kun
