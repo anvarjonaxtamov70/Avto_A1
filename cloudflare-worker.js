@@ -24,6 +24,9 @@
 //       "/session"      — birlashtirilgan eski sessiya -> Telegram hisobi tokeni.
 // 10) "/account-delete" — mijoz o'z hisobini o'chiradi (shaxsiy ma'lumotlar
 //                   o'chadi, buyurtmalar anonim holda saqlanadi).
+// 11) "/admin-reset" — admin «Botni tozalash» (alohida parol bilan): buyurtma,
+//                   keshbek, statistika va xabarlar o'chadi; tovar/narx va
+//                   ismi+raqami bor mijozlar qoladi (fayl oxirida batafsil).
 //  9) "/story-reply" — mijozning storis javobi (server yozadi, adminlarga
 //                   «✍️ Javob yozish» tugmali kartochka); "/story-answer" —
 //                   admin javobi mijozga (ilovada + Telegram'da).
@@ -41,6 +44,7 @@
 //     CUSTOMER_REGISTRATION_RATE_LIMIT (anonymous IP uchun soatlik limit, standart 20)
 //     FIREBASE_DB_URL  (mas: "https://avtoa1shop-default-rtdb.firebaseio.com")
 //     SHOP_PHONE       (mijozga "bekor qilindi" xabaridagi telefon, standart "+998 88 289 30 30")
+//     ADMIN_RESET_PASSWORD («Botni tozalash» parolini almashtirish; bo'lmasa standart parol)
 //
 //  ESLATMA: bu faylda atayin backslash-n belgisi ishlatilmagan
 //  (ba'zi nusxalash vositalari uni buzadi). Newline kerak joyda
@@ -742,6 +746,8 @@ export default {
     if (path === "/story-answer") return handleStoryAnswer(request, env);
     // 🗑 Hisobni o'chirish (Google Play talabi): ilova, sayt yoki Telegram /delete
     if (path === "/account-delete") return handleAccountDelete(request, env);
+    // 🧹 Botni tozalash (faqat admin + alohida parol)
+    if (path === "/admin-reset") return handleAdminReset(request, env);
     if (path === "/stock-commit") return handleDeprecatedStockCommit(request, env);
     if (path === "/") return handleSendMessageSecure(request, env);
     return json({ ok: false, error: "topilmadi" }, 404);
@@ -4744,5 +4750,283 @@ async function handleAccountDelete(request, env) {
     return json({ ok: true, deleted: true, uid, orders: result.orders, auth: authUser });
   } catch (e) {
     return errorResponse(e);
+  }
+}
+
+// =====================================================================
+//  🧹 /admin-reset — BOTNI «YANGI»DEK QILISH (faqat admin + alohida parol)
+// ---------------------------------------------------------------------
+//  mode "full" (admin paneli → «Botni tozalash»):
+//    O'CHADI: barcha buyurtmalar (markaziy va har mijozdagi nusxa), buyurtma
+//      chatlari, holat mashinasi, checkout urinishlari, admin Telegram
+//      kartochkalari indeksi, keshbek hisoblari va tarixi, bildirishnomalar
+//      (mijozniki va admin inbox), AI suhbatlari, storis javoblari va
+//      ko'rishlar statistikasi, sharhlar, ommaviy xabarlar tarixi; ismi
+//      yoki raqami yo'q mijozlar (to'liq, izlari bilan).
+//    QOLADI: tovarlar, narxlar va ombor qoldig'i, katalog, bannerlar,
+//      storislar, sozlamalar; ismi VA raqami bor mijozlar — profil,
+//      tasdiqlangan raqam, manzillar, mashina, savat, sevimlilar, mavzu/til
+//      va ro'yxatdan o'tganlik belgisi (bot ham, ilova ham qayta so'ramaydi).
+//  mode "incomplete" (Mijozlar oynasi): faqat ismi yoki raqami yo'q
+//    mijozlarni o'chiradi. Buyurtmasi bori qoladi (tarix buzilmasin).
+//
+//  «Mijoz» qoidasi ilova bilan BITTA (index.html → a1-customer-rule-js):
+//    ism = profile.name yoki profile.firstName (zaxira yorliqlar emas),
+//    raqam = profile.phone yoki tasdiqlangan verify.phone (phoneDigits).
+//  Adminlar hech qachon o'chirilmaydi.
+//
+//  Parol — admin bo'lishning ustiga ALOHIDA tekshiruv. Repo OCHIQ, shuning
+//  uchun kodda parolning o'zi emas, faqat tuzli SHA-256 xeshi turadi.
+//  Almashtirish: Worker secret ADMIN_RESET_PASSWORD. Noto'g'ri parol —
+//  15 daqiqada ko'pi bilan 5 marta (login_rate, barcha isolate'lar uchun).
+//
+//  Bepul reja: CPU ~10 ms va 50 subrequest. Shuning uchun mijozlar 50
+//  tadan sahifalab ishlanadi: ilova `cursor` bilan qayta chaqiradi, toki
+//  `done: true`. Har qadam idempotent — uzilsa, qaytadan bosish xavfsiz.
+// =====================================================================
+const ADMIN_RESET_CONFIRM = "TOZALASH";
+const ADMIN_RESET_PAGE = 50;
+const ADMIN_RESET_SALT = "avto-a1-admin-reset|";
+const ADMIN_RESET_DEFAULT_SHA256 = "3c80803ad452c824c37c10c62c959bb6568ae5639f6d6896cc299068e99ab6e5";
+const ADMIN_RESET_FAIL_LIMIT = 5;
+const ADMIN_RESET_FAIL_WINDOW_MS = 15 * 60 * 1000;
+// "full" rejimda butunlay o'chadigan tugunlar. `notification_outbox` alohida
+// (yangi mijoz claim'lari qoladi). Eski referral tizimi qoldiqlari ham ketadi.
+const ADMIN_RESET_WIPE_NODES = [
+  "orders", "order_chats", "order_attempts", "order_state", "order_tg", "order_tg_index",
+  "loyalty_accounts", "admin_notifications", "admin_notification_reads",
+  "ai_requests", "story_replies", "story_reply_index", "story_views", "reviews",
+  "broadcasts", "referrals", "refcodes",
+];
+// Mijoz phase2'sidan faqat ko'rinish sozlamalari qoladi; keshbek, uning
+// tarixi, bildirishnomalar, yutuqlar, kafolatlar va h.k. — o'chadi.
+const ADMIN_RESET_KEEP_PHASE2 = ["theme", "themeSwitched", "lang", "wishlistCount"];
+// Ilova/bot zaxira yorliqlari — haqiqiy ism emas.
+const CUSTOMER_NAME_PLACEHOLDERS = [
+  "nomsiz mijoz", "ismsiz mijoz", "nomsiz", "ismsiz", "mijoz", "noma'lum", "yo'q",
+  "kiritilmagan", "null", "undefined", "-", "\u2014",
+];
+
+function customerText(value) {
+  return typeof value === "string" || typeof value === "number"
+    ? String(value).replace(/\s+/g, " ").trim()
+    : "";
+}
+
+function customerRealName(value) {
+  const text = customerText(value);
+  if (!text) return "";
+  const key = text.toLowerCase().replace(/[\u02BB\u02BC\u2018\u2019`\u00B4]/g, "'");
+  return CUSTOMER_NAME_PLACEHOLDERS.includes(key) ? "" : text;
+}
+
+// ⚠️ index.html dagi window._a1CustomerInfo bilan AYNAN bir xil bo'lishi shart
+//    (oyna nimani yashirsa, server aynan o'shani o'chiradi).
+function customerIdentity(user) {
+  const u = plainObj(user);
+  const profile = plainObj(u.profile);
+  const verify = plainObj(u.verify);
+  const name = customerRealName(profile.name) || customerRealName(profile.firstName);
+  const phone = phoneDigits(customerText(profile.phone)) || phoneDigits(customerText(verify.phone));
+  return { name, phone, complete: !!(name && phone) };
+}
+
+// RTDB `orderBy="$key"` tartibi (Firebase SDK nameCompare bilan bir xil):
+// 32-bitli butun son kalitlar oldin (son bo'yicha), qolganlari satr bo'yicha.
+// REST javobidagi kalitlar tartibi kafolatlanmagani uchun kursorni o'zimiz topamiz.
+function rtdbKeyInt(key) {
+  if (!/^-?(0*)[0-9]{1,10}$/.test(key)) return null;
+  const n = Number(key);
+  return n >= -2147483648 && n <= 2147483647 ? n : null;
+}
+
+function rtdbKeyCompare(a, b) {
+  if (a === b) return 0;
+  const ai = rtdbKeyInt(a);
+  const bi = rtdbKeyInt(b);
+  if (ai !== null && bi !== null) return ai - bi === 0 ? a.length - b.length : ai - bi;
+  if (ai !== null) return -1;
+  if (bi !== null) return 1;
+  return a < b ? -1 : 1;
+}
+
+async function readAdminResetPage(ctx, token, cursor) {
+  const params = { orderBy: '"$key"', limitToFirst: String(cursor ? ADMIN_RESET_PAGE + 1 : ADMIN_RESET_PAGE) };
+  if (cursor) params.startAt = JSON.stringify(cursor);
+  const users = asMap(await rtdbQuery(ctx.dbUrl, "users", params, token));
+  const keys = Object.keys(users)
+    .filter((k) => !cursor || rtdbKeyCompare(k, cursor) > 0)
+    .sort(rtdbKeyCompare)
+    .slice(0, ADMIN_RESET_PAGE);
+  return { keys, users, more: keys.length === ADMIN_RESET_PAGE };
+}
+
+async function adminResetPasswordHash(env) {
+  const custom = typeof env.ADMIN_RESET_PASSWORD === "string" ? env.ADMIN_RESET_PASSWORD : "";
+  return custom ? await sha256Hex(ADMIN_RESET_SALT + custom) : ADMIN_RESET_DEFAULT_SHA256;
+}
+
+// Faqat NOTO'G'RI urinishlar sanaladi (sahifalash har qadamda parolni qayta
+// yuboradi). Limit tugagan bo'lsa, to'g'ri parol ham tekshirilmaydi.
+async function assertAdminResetPassword(ctx, token, env, uid, password) {
+  const key = "admin_reset_" + uid;
+  const now = Date.now();
+  const current = plainObj(await rtdbGet(ctx.dbUrl, "login_rate/" + key, token));
+  const sameWindow = Number(current.windowStart) > 0 && now - Number(current.windowStart) < ADMIN_RESET_FAIL_WINDOW_MS;
+  const failures = sameWindow ? Math.max(0, Number(current.count) || 0) : 0;
+  if (failures >= ADMIN_RESET_FAIL_LIMIT) {
+    throw httpError(429, "juda ko'p noto'g'ri urinish — birozdan keyin qayta urinib ko'ring", {
+      retryAfter: Math.max(1, Math.ceil((Number(current.windowStart) + ADMIN_RESET_FAIL_WINDOW_MS - now) / 1000)),
+    });
+  }
+  const expected = await adminResetPasswordHash(env);
+  if (constantTimeEqual(await sha256Hex(ADMIN_RESET_SALT + password), expected)) return;
+  await consumeLoginRate(ctx, token, key, ADMIN_RESET_FAIL_LIMIT, ADMIN_RESET_FAIL_WINDOW_MS);
+  throw httpError(403, "parol noto'g'ri", {
+    wrongPassword: true,
+    attemptsLeft: Math.max(0, ADMIN_RESET_FAIL_LIMIT - failures - 1),
+  });
+}
+
+// O'chiriladigan (ismi yoki raqami yo'q) mijozlarning boshqa tugunlardagi izlari.
+// "full" rejimda AI suhbat, storis, sharh va h.k. tugunlar butunlay o'chgan bo'ladi.
+async function adminResetDropPaths(ctx, token, mode, uids) {
+  const drop = new Set(uids);
+  const full = mode === "full";
+  const [phoneIdx, phonePw, redirects, notifyReq, viewsShallow, repliesShallow, reviewsShallow, replyIdx] =
+    await Promise.all([
+      rtdbGet(ctx.dbUrl, "phone_index", token),
+      rtdbGet(ctx.dbUrl, "phone_pw", token),
+      rtdbGet(ctx.dbUrl, "uid_redirect", token),
+      rtdbGet(ctx.dbUrl, "notify_requests", token),
+      full ? null : rtdbQuery(ctx.dbUrl, "story_views", { shallow: "true" }, token),
+      full ? null : rtdbQuery(ctx.dbUrl, "story_replies", { shallow: "true" }, token),
+      full ? null : rtdbQuery(ctx.dbUrl, "reviews", { shallow: "true" }, token),
+      full ? null : rtdbGet(ctx.dbUrl, "story_reply_index", token),
+    ]);
+  const u = {};
+  for (const e of toEntries(phoneIdx)) if (drop.has(String(e.val.uid))) u["phone_index/" + e.key] = null;
+  for (const e of toEntries(phonePw)) if (drop.has(String(e.val.uid))) u["phone_pw/" + e.key] = null;
+  // Birlashtirilgan eski hisob o'chirilgan mijozga yo'naltirilgan bo'lsa — uni tiriltirmasin
+  for (const e of toEntries(redirects)) if (drop.has(String(e.val.to))) u["uid_redirect/" + e.key] = null;
+  for (const e of toEntries(notifyReq)) {
+    for (const uid of Object.keys(asMap(e.val))) if (drop.has(uid)) u["notify_requests/" + e.key + "/" + uid] = null;
+  }
+  for (const e of toEntries(replyIdx)) if (drop.has(String(e.val.uid))) u["story_reply_index/" + e.key] = null;
+  for (const uid of uids) {
+    u["users/" + uid] = null;
+    u["customer_registrations/" + uid] = null;
+    u["customer_registration_pending/" + uid] = null;
+    if (full) continue;
+    u["loyalty_accounts/" + uid] = null;
+    u["order_attempts/" + uid] = null;
+    u["order_chats/" + uid] = null;
+    u["ai_requests/" + uid] = null;
+    u["admin_notifications/new_customer_" + uid] = null;
+    for (const sid of Object.keys(asMap(viewsShallow))) u["story_views/" + sid + "/" + uid] = null;
+    for (const sid of Object.keys(asMap(repliesShallow))) u["story_replies/" + sid + "/" + uid] = null;
+    for (const pid of Object.keys(asMap(reviewsShallow))) u["reviews/" + pid + "/" + uid] = null;
+  }
+  return u;
+}
+
+async function adminResetUsersPage(ctx, token, env, mode, cursor, now) {
+  const page = await readAdminResetPage(ctx, token, cursor);
+  const admins = getAdminIds(env);
+  const stats = { scanned: page.keys.length, deleted: 0, cleaned: 0, keptWithOrders: 0 };
+  const drop = [];
+  const keep = [];
+  for (const uid of page.keys) {
+    const user = plainObj(page.users[uid]);
+    if (!admins.includes(uid) && !customerIdentity(user).complete) {
+      if (mode === "incomplete" && toEntries(user.orders).length) { stats.keptWithOrders++; continue; }
+      drop.push(uid);
+    } else if (mode === "full") {
+      keep.push({ uid, user });
+    }
+  }
+  const u = {};
+  if (keep.length) {
+    const markers = asMap(await rtdbQuery(ctx.dbUrl, "customer_registrations", { shallow: "true" }, token));
+    for (const { uid, user } of keep) {
+      const base = "users/" + uid;
+      u[base + "/orders"] = null;
+      for (const k of Object.keys(plainObj(user.phase2))) {
+        if (!ADMIN_RESET_KEEP_PHASE2.includes(k)) u[base + "/phase2/" + k] = null;
+      }
+      // Ilova shu belgini ko'rib telefondagi eski keshbek/bildirishnomalarni ham
+      // tozalaydi — aks holda ular ko'rinib turar va serverga qayta yozilardi.
+      u[base + "/phase2/resetAt"] = now;
+      // Umumiy tozalash bilan shu sahifa orasida yaratilgan yozuvlar ham qolmasin.
+      u["loyalty_accounts/" + uid] = null;
+      u["order_attempts/" + uid] = null;
+      u["order_chats/" + uid] = null;
+      u["ai_requests/" + uid] = null;
+      // Ro'yxatdan o'tganlik saqlanadi; admin inbox tozalangani uchun «yangi
+      // mijoz» xabari qayta yaratilmasin (Worker ham, bot ham notify:false'ni hurmat qiladi).
+      if (markers[uid]) u["customer_registrations/" + uid + "/notify"] = false;
+    }
+    stats.cleaned = keep.length;
+  }
+  if (drop.length) {
+    Object.assign(u, await adminResetDropPaths(ctx, token, mode, drop));
+    stats.deleted = drop.length;
+  }
+  if (Object.keys(u).length) await rtdbPatch(ctx.dbUrl, "", u, token);
+  for (const uid of drop) redirectCache.delete(uid);
+  return {
+    stats,
+    cursor: page.keys.length ? page.keys[page.keys.length - 1] : cursor,
+    done: !page.more,
+  };
+}
+
+async function handleAdminReset(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const identity = await authenticateBody(body, env);
+    if (!getAdminIds(env).includes(identity.uid)) throw httpError(403, "faqat admin");
+    const mode = body.mode === "full" || body.mode === "incomplete" ? body.mode : "";
+    if (!mode) throw httpError(400, "mode: full yoki incomplete");
+    if (body.confirm !== ADMIN_RESET_CONFIRM) throw httpError(400, "tasdiq kerak (confirm: " + ADMIN_RESET_CONFIRM + ")");
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!password || password.length > 128) throw httpError(400, "parol kerak");
+    const cursor = body.cursor == null || body.cursor === "" ? "" : requireSafeUid(body.cursor, 400);
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    await assertAdminResetPassword(ctx, token, env, identity.uid, password);
+
+    const now = Date.now();
+    const out = { ok: true, mode };
+    if (!cursor) {
+      // Birinchi qadam: umumiy tugunlar (faqat full), jurnal yozuvi, jami mijozlar soni.
+      const [usersShallow, outboxShallow] = await Promise.all([
+        rtdbQuery(ctx.dbUrl, "users", { shallow: "true" }, token),
+        mode === "full" ? rtdbQuery(ctx.dbUrl, "notification_outbox", { shallow: "true" }, token) : null,
+      ]);
+      out.total = Object.keys(asMap(usersShallow)).length;
+      const g = {};
+      if (mode === "full") {
+        for (const node of ADMIN_RESET_WIPE_NODES) g[node] = null;
+        // «Yangi mijoz» claim'lari QOLADI: ular Telegram'ga «Yangi mijoz ro'yxatdan
+        // o'tdi» xabari ikkinchi marta ketishini to'sadi (account-delete ham shunday).
+        for (const k of Object.keys(asMap(outboxShallow))) {
+          if (k.indexOf("new_customer_") !== 0) g["notification_outbox/" + k] = null;
+        }
+      }
+      g["audit_log/" + now + "_" + String(1000 + Math.floor(Math.random() * 9000))] = {
+        ts: now, kind: "admin_reset", mode, by: identity.uid, source: identity.source, users: out.total,
+      };
+      await rtdbPatch(ctx.dbUrl, "", g, token);
+    }
+    const page = await adminResetUsersPage(ctx, token, env, mode, cursor, now);
+    out.page = page.stats;
+    out.cursor = page.cursor;
+    out.done = page.done;
+    return json(out);
+  } catch (e) {
+    const response = errorResponse(e);
+    if (response.status === 429) response.headers.set("Retry-After", String(e.extra && e.extra.retryAfter || 900));
+    return response;
   }
 }
