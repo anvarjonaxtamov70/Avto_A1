@@ -805,10 +805,9 @@ function constantTimeEqual(a, b) {
 }
 
 function httpError(status, message, extra) {
-  const err = new Error(message);
-  err.status = status;
-  err.extra = extra || null;
-  return err;
+  // Object.assign: natija o'sha-o'sha (Error + status/extra), lekin Cloudflare
+  // muharriridagi TypeScript tekshiruvi "status Error'da yo'q" deb qizil chizmaydi.
+  return Object.assign(new Error(message), { status, extra: extra || null });
 }
 
 function errorResponse(err) {
@@ -856,7 +855,7 @@ async function readJsonBody(request) {
 
   let body;
   try {
-    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
   } catch (_) {
     throw httpError(400, "JSON noto'g'ri");
   }
@@ -2168,6 +2167,8 @@ async function resolveOrderStockItems(ctx, token, order) {
   //    (o'chirilgan tovarni omborga qaytarib bo'lmaydi) va `skipped` ro'yxatida
   //    adminga ko'rsatiladi. Noaniq holat (bir id — bir nechta tovar) ham
   //    xavfli taxmin o'rniga o'tkazib yuboriladi.
+  // Massiv + qo'shimcha `skipped` maydoni (JSDoc: muharrir tekshiruvi uchun)
+  /** @type {any} */
   const out = [];
   out.skipped = [];
   const lineKeys = new Set();
@@ -2628,6 +2629,7 @@ async function handleOrderStatus(request, env, execCtx) {
     // Lease faqat 15 s o'tgandagina yangilanadi (LEASE_RENEW_AFTER_MS). Odatiy
     // qabul/yo'lda o'tishida bu 3 ta ketma-ket GET+PUT ni (≈1-1.5 s) tejaydi.
     const statusClock = leaseClock(pending.leaseUntil, STATUS_LEASE_MS);
+    /** @type {any} */
     let stockItems = [];
     if (status === "bekor_qilingan") {
       stockItems = await resolveOrderStockItems(ctx, token, order);
@@ -4475,6 +4477,8 @@ async function handleStoryReply(request, env, execCtx) {
 
     const admins = getAdminIds(env).filter(isTelegramChatId).filter((id) => id !== identity.uid);
     const text = storyReplyCardText({ uid: identity.uid, name, username, phone, phoneVerified: !!vPhone, via, cap, x, e });
+    // Tugmalar har xil (callback_data yoki url) — JSDoc: muharrir tekshiruvi uchun
+    /** @type {Array<Record<string, string>>} */
     const row = [{ text: "✍️ Javob yozish", callback_data: "sra:" + short }];
     if (username) row.push({ text: "💬 Telegram", url: "https://t.me/" + username });
     const keyboard = { inline_keyboard: [row] };
