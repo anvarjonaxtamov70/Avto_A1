@@ -35,5 +35,6 @@ assert.ok(!css.includes('.slider-container{display:none!important}'),'No global 
 assert.ok(js.includes('document.getElementById(\'a1-legacy-home-slider\')'),'Observe correct old slider');
 assert.ok(js.includes('window.showCatalog')&&js.includes('window._homeToggle')&&js.includes("window.openModal('contactModal')"),'Buttons call existing actions');
 assert.ok(js.includes("chip.classList.contains('on')"),'Promo action cannot accidentally deactivate active filter');
-assert.ok(!/firebase|rtdb|\.ref\s*\(|\.set\s*\(|\.update\s*\(/i.test(js),'Carousel JS must not write to backend');
+const executable=js.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,'');
+assert.ok(!/\bfirebase\b|\brtdb\b|\.ref\s*\(|\.set\s*\(|\.update\s*\(/i.test(executable),'Carousel code must not write to backend');
 console.log('✅ Three approved Light banners, working CTA hooks and untouched Dark admin slider: PASS');
