@@ -54,3 +54,10 @@
 5. Faqat o'tgach `main`ga merge va jonli Telegram smoke test, rollback tayyor.
 
 **Asosiy xulosa:** kodning asosiy arxitekturasi va Light-mode kirish nuqtasi aniqlandi; barcha 46 ming satrni funksional jihatdan to'liq audit qildik deyish noto'g'ri. Ishni ana shu hujjat bo'yicha bosqichma-bosqich davom ettiramiz.
+
+## 2026-11-03: CSS va nav indikatorning chuqurroq tekshiruvi
+- `cardHTML(p)` (taxm. 10509+) haqiqiy mahsulot kartasini `.luxury-card`, `.img-wrap`, `.info`, `h4`, `.ac-pr`, `.btn-add-cart.ac-add` orqali yaratadi. Karta faqat tashqi foni oq bo'lsa ham `.info` oldingi qoramtir fonini saqlashi mumkin edi. PR #338 ning `avtoa1-light-only.css` faylida **Light-only** fonga va nom/narx contrastiga maxsus override kiritildi.
+- `#nav-indicator` mavjud JS `positionNavIndicator` yordamida `offsetLeft/offsetWidth` hisoblaydi (taxm. 11025+). Uning width, height, transform qiymatlarini yangi CSS bilan almashtirish mumkin emas. Light mode'dagi indikator faqat rang va soya bilan ko'k shishaga o'zgartirildi, dublyor `.nav-item.active` fon o'chirildi.
+- `sw.js` hujjat navigatsiyalariga network-first, oddiy CSS fayllarga esa maxsus kesh interception qo'llamaydi. Shunga qaramay mobil brauzer o'z HTTP-keshini ishlatishi mumkin; yangi CSS versiya `?v=1` bilan bog'langan. Real deploydan keyin CSS yangilanishini telefonda tekshirish kerak.
+- `#main-slider` eski Firebase/admin bannerlar bilan bog'liq. PR branch'ida hozir `approved-banner-live.js` va CSS mavjud, shuning uchun uni faqat manba-kodning oldingi snapshoti orqali emas, **joriy PR branch'i** orqali ham tekshirish kerak. Test borligi Firebase va telefon runtime'i tasdiqlanganini anglatmaydi.
+- PR head `21ee90958ae6061007b62bb09cf01883831b67b8` uchun GitHub Actions `PR Tekshiruv` yakuni `success` (tekshirilgan vaqtda). Jonli Telegram/iOS/Android test hali bajarilmadi; Draft holatda qoldirish tavsiya etiladi.
