@@ -3,7 +3,7 @@
 'use strict';
 function start(){
   const root=document.getElementById('a1-sky-light-carousel');
-  const legacy=document.querySelector('.slider-container');
+  const legacy=document.getElementById('a1-legacy-home-slider');
   if(!root||!legacy)return;
   const slides=Array.from(root.querySelectorAll('.sky-slide'));
   const dots=Array.from(root.querySelectorAll('.sky-dots button'));
