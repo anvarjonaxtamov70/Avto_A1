@@ -1,6 +1,7 @@
 'use strict';
-/* Sky Glass light-only regression guard.
-   No network or Firebase needed. Exits non-zero if CSS leaks to Dark mode. */
+/* Sky Glass light-only regression & cascade specificity guard.
+   No network or Firebase needed. Exits non-zero if CSS leaks to Dark mode
+   or if specificity is weaker than index.html body <style> overrides. */
 const fs = require('fs');
 const assert = require('node:assert/strict');
 
@@ -18,6 +19,8 @@ assert.match(html, /id="home-products"/, 'Original product catalogue must remain
 assert.match(html, /class="bottom-nav"/, 'Original navigation must remain');
 assert.match(css, /#2f8fd8/i, 'Approved primary blue missing');
 assert.match(css, /#247bc1/i, 'Approved deep blue missing');
+assert.match(css, /#5aaeea/i, 'Approved accent blue missing');
+assert.match(css, /#eaf6ff/i, 'Approved pale surface blue missing');
 assert.match(css, /backdrop-filter\s*:/, 'Glass blur missing');
 
 const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -26,8 +29,13 @@ for (let i = 0; i < clean.length; i++) {
   if (clean[i] === '{') {
     const selector = clean.slice(cursor, i).trim();
     const media = selector.startsWith('@media');
-    assert.ok(media || selector.startsWith('html[data-theme="light"][data-theme="light"]'),
-      'Unscoped CSS selector would affect Dark mode: ' + selector.slice(0, 100));
+    if (!media) {
+      for (const part of selector.split(',')) {
+        const sub = part.trim();
+        assert.ok(sub.startsWith('html[data-theme="light"][data-theme="light"]'),
+          'Unscoped CSS sub-selector would affect Dark mode: ' + sub.slice(0, 100));
+      }
+    }
     rules++; depth++; cursor = i + 1;
   } else if (clean[i] === '}') {
     depth--;
@@ -36,11 +44,29 @@ for (let i = 0; i < clean.length; i++) {
   }
 }
 assert.equal(depth, 0, 'CSS braces are unbalanced');
-assert.ok(rules >= 15, 'Expected Light-only CSS rules are missing');
+assert.ok(rules >= 25, 'Expected Light-only CSS rules are missing');
 assert.doesNotMatch(css, /html\[data-theme=["']dark["']\]/, 'CSS must not modify Dark mode');
+
+/* Cascade specificity guards against later <style> blocks in index.html */
+for (const required of [
+  '.header.hx h1',
+  '.search-input-container input.search-box',
+  '.cfs-chip.on',
+  '.luxury-card.bm-card',
+  '.luxury-card.ac-card',
+  '.luxury-card.bm-card .btn-add-cart.bm-btn:not(.is-out)',
+  '.luxury-card.ac-card .btn-add-cart.ac-add.ac-add.ac-add:not(.is-out):not(.a9-done)',
+  '.bottom-nav .nav-item svg.ni-o',
+  '.bottom-nav .nav-item.active svg.ni-f',
+  '.bottom-nav .nav-indicator',
+  '.lite body .bottom-nav.bottom-nav'
+]) {
+  assert.ok(clean.includes(required), 'Missing high-specificity override for: ' + required);
+}
+
 assert.equal((doc.match(/data-slide="/g) || []).length, 3, 'Demo must contain exactly three banner slides');
 assert.match(doc, /sky-carousel-dots/, 'Banner pagination is missing');
 assert.match(doc, /class="product-grid"/, 'Product grid demo is missing');
 assert.match(doc, /class="bottom-nav glass"/, 'Bottom glass navigation demo is missing');
 
-console.log('✅ Sky Glass: Light-only scope, original hooks, 3 slides, product cards, glass nav checked (' + rules + ' CSS rules).');
+console.log('✅ Sky Glass: Light-only scope, cascade specificity overrides, 3 slides, product cards, glass nav checked (' + rules + ' CSS rules).');
