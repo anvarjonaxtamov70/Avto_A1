@@ -28,6 +28,7 @@ const observers=[];
 class MutationObserver{constructor(fn){this.fn=fn;observers.push(this);}observe(node,opts){assert.ok(node===legacy||node===html);assert.ok(opts.attributeFilter);}}
 vm.runInNewContext(js,{window,document,MutationObserver},{filename:'approved-banner-live.js',timeout:1000});
 assert.equal(observers.length,1);
+assert.equal(root.getAttribute('tabindex'),'0','Carousel must be keyboard focusable');
 assert.equal(root.getAttribute('aria-hidden'),'true','Dark must hide carousel');
 assert.equal(slides[0].getAttribute('aria-hidden'),'false');
 theme='light';observers[0].fn();
@@ -39,6 +40,10 @@ buttons[1].fire('click');assert.equal(promoCalls,1,'Promo cannot disable active 
 root.fire('touchstart',{touches:[{clientX:240}]});
 root.fire('touchend',{changedTouches:[{clientX:70}]});
 assert.equal(slides[2].getAttribute('aria-hidden'),'false','Swipe advances to contact');
+root.fire('keydown',{key:'ArrowRight',preventDefault(){}});
+assert.equal(slides[0].getAttribute('aria-hidden'),'false','ArrowRight wraps to first slide');
+root.fire('keydown',{key:'ArrowLeft',preventDefault(){}});
+assert.equal(slides[2].getAttribute('aria-hidden'),'false','ArrowLeft wraps to third slide');
 buttons[0].fire('click');buttons[2].fire('click');
 assert.equal(catalogCalls,1);assert.equal(contactCalls,1);
 legacy.style.display='none';observers[0].fn();
@@ -47,4 +52,4 @@ legacy.style.display='';observers[0].fn();
 assert.equal(root.classList.contains('is-visible'),true,'Home restores carousel');
 theme='dark';observers[0].fn();
 assert.equal(root.classList.contains('is-visible'),false,'Dark hides Light-only carousel');
-console.log('✅ Runtime Light carousel: dots, swipe, three CTAs, theme and Home visibility — PASS');
+console.log('✅ Runtime Light carousel: dots, swipe, keyboard arrows, three CTAs, theme and Home visibility — PASS');

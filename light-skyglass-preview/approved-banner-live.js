@@ -8,6 +8,7 @@ function start(){
   const slides=Array.from(root.querySelectorAll('.sky-slide'));
   const dots=Array.from(root.querySelectorAll('.sky-dots button'));
   if(slides.length!==3||dots.length!==3)return;
+  if(!root.getAttribute('tabindex'))root.setAttribute('tabindex','0');
   let current=0,down=null;
   function select(i){
     current=(i+3)%3;
@@ -31,6 +32,12 @@ function start(){
     }
     if(action==='contact'&&typeof window.openModal==='function')window.openModal('contactModal');
   }));
+  root.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key==='ArrowLeft'){
+      if(typeof e.preventDefault==='function')e.preventDefault();
+      select(current+(e.key==='ArrowRight'?1:-1));
+    }
+  });
   root.addEventListener('touchstart',e=>{down=e.touches.length===1?e.touches[0].clientX:null},{passive:true});
   root.addEventListener('touchend',e=>{
     if(down===null||e.changedTouches.length!==1)return;

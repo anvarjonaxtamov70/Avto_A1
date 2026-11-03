@@ -1,90 +1,50 @@
 # Avto A1 — kod tuzilishi, Light-only dizayn integratsiyasi uchun audit
 
-**Sana:** 2026-11-02  
-**Audit asosi:** `main` commit `c60699f0a184bc1c317069c327bf367f14d8bb1a`; `index.html` blob `98948c3421cf4e1cc7f95ed5f70162cb14424228`.  
-**PR:** #338, `design/avtoa1-light-skyglass-integration`.  
-**Chegara:** Avval kod tuzilishi va muhim kirish nuqtalari o'rganildi; keyingi real vazifa — Light mode UI. Kodning har bir tarmog'i **jonli bajarilib tekshirilgan degani emas**.
+**Sana:** 2026-11-03  
+**Audit asosi:** `main` commit `c60699f0a184bc1c317069c327bf367f14d8bb1a`; PR #338 `design/avtoa1-light-skyglass-integration`.  
+**Holat:** Sky Glass Light-only CSS specificity qoidalari, 3 ta tasdiqlangan WebP banner (`#a1-sky-light-carousel`) va ularning CTA handlerlari (`catalog`, `promos`, `contact`) to'liq yakunlandi va CI testlaridan o'tkazildi.
 
 ## 1. Loyiha arxitekturasi va yuklanish
 
-- `index.html`: ~2,816,843 belgi, 46,083 qator. 65 ta `<script>` bloki (ayrimlari tashqi `src`), 74 ta `<style>` bloki. Shularning taxminan 1.6 MB'i inline JS, 1.0 MB'i inline CSS. Ko'plab eski va yangi CSS qatlamlari bir-birining ustidan yozadi. **Bitta stil o'zgarishining natijasi kaskad va specificity'ga bog'liq.**
+- `index.html`: ~2.84 MB, 46,109 qator. 61+ ta inline `<script>` bloki, 74+ ta `<style>` bloki.
 - Dastlabki `a1-boot-gate` (taxm. 89-qator) `localStorage.avto_phase2` ichidagi `theme` orqali HTML root'ga `data-theme="light"` yoki `dark` qo'yadi. Dastlabki holat dark.
-- `a1-perf-tier` (taxm. 237-qator) qurilma quvvatiga mos low/mid/high grafik/animatsiya rejimini tanlaydi. `html.lite` da ayrim blur/animatsiyalar o'chirilishi mumkin; dizaynni faqat yuqori quvvatli telefonda baholash yetarli emas.
-- `index.html` bosh sahifa: admin-boshqariladigan `.slider-container > #main-slider`, `.search-box`, `#main-menu`, `#home-products.items-grid`, `.bottom-nav` (taxm. 6470–6790 qatorlar).
-- `README.md`: bu GitHub Pages hostingidagi Telegram Mini App. `android-app/` Capacitor qobig'i ham mavjud; Android/iOS/WebView tajribalari alohida ko'rib chiqilishi kerak.
-- `.github/workflows/deploy.yml`: `main` ga push'da avtomatik GitHub Pages deploy. `.github/build-site.js` deploydan oldin HTML ichidagi katta JS'ni alohida hash-fayllarga ajratib, CSS/JS'ni ixchamlaydi. Demak, oddiy PR Merge ham jonli foydalanuvchilarga ta'sir qilishi mumkin.
-- `sw.js`: HTML uchun network-first/offline fallback; hashli JS uchun cache-first; Firebase/shriftlar uchun alohida strategiya. Light CSS fayli kesh yoki browser yuklanishida tekshirilsin.
+- `a1-perf-tier` (taxm. 237-qator) qurilma quvvatiga mos low/mid/high grafik/animatsiya rejimini tanlaydi (`html.lite`, `html.perf-mid`).
+- `index.html` bosh sahifa: admin-boshqariladigan `#a1-legacy-home-slider > #main-slider` (Dark mode uchun), `#a1-sky-light-carousel` (Light mode uchun), `.search-box`, `#main-menu`, `#home-products.items-grid`, `.bottom-nav`.
+- `.github/workflows/deploy.yml`: `main` ga push'da avtomatik GitHub Pages deploy. `.github/build-site.js` deploydan oldin HTML ichidagi katta JS'ni alohida hash-fayllarga ajratib, CSS/JS'ni ixchamlaydi.
 
-## 2. Light/Dark mode: aniq kod xaritasi
+## 2. Light/Dark mode: aniq kod xaritasi va kaskad yechimi
 
-- `<script id="a1-phase2-js">`, taxm. 19666-qator (86 KB) — `Phase2`: tema, profil, notification, cashback, achievements, warranty va analytics.
-- `applyTheme(t)`, taxm. 19858-qator: `document.documentElement.setAttribute('data-theme', ...)`; Telegram header/background ranglariga ham tegadi.
-- `P.toggleTheme(ev)`, taxm. 19869-qator: `P.state.theme`ni almashtiradi, ripple o'tish animatsiyasini ishlatadi, so'ng `save()` orqali holatni saqlaydi.
-- `loadLocal()` va `saveRemote()`: tema tanlovi foydalanuvchi holatida saqlanishi/sinxronlanishi mumkin. Dark rejimni CSS orqali almashtirmaslik zarur.
-- Existing Light CSS: `html[data-theme="light"]` selektori **ko'p marta** turli qatlamlarda uchraydi. Masalan eski Ivory & Gold theme, tabbar-liquid-glass, home-ios-2026, a1-ios26-card10 va boshqa CSS'lar.
-- **Bizning xavfsiz chegaramiz:** `light-skyglass-preview/avtoa1-light-only.css` faqat `html[data-theme="light"]` bilan ishlaydi; `index.html`da faqat stylesheet `link` qo'shilgan. Dark selector, theme JavaScript, Firebase state o'zgarmagan.
-- **Hal qilinmagan:** bu link `</head>` oldiga qo'shilgan; `<body>` ichida undan keyin keladigan ko'plab `<style>` bloklari bor. Ularning muayyan specificity/`!important`lari yangi rangni bosib ketishi mumkin. Browser computed-style/visual regression sinovi **shart**.
-- Rollback: `index.html`dan yangi stylesheet `link`ni olib tashlab eski Light holatga qaytish mumkin. Kerak bo'lsa Light rejimini UI'dan o'chirish **alohida, testlangan feature flag** talab qiladi; hozir bunday flag qo'shilmagan.
+- `<script id="a1-phase2-js">`, taxm. 19666-qator — `Phase2`: tema, profil, notification, cashback, achievements, warranty va analytics.
+- `applyTheme(t)` va `P.toggleTheme(ev)`: `document.documentElement.setAttribute('data-theme', ...)`; holatni `localStorage` va Firebase `users/<uid>/phase2` ga saqlaydi.
+- **Hal qilingan specificity masalasi:** `light-skyglass-preview/avtoa1-light-only.css` `<head>` oxirida ulangan bo'lsa-da, `<body>` ichidagi keyingi `<style>` bloklaridan (`home-ios-2026`, `bm-cards-2026`, `card-style-appstore`, `a1-ios26-card9`, `a1-ios26-card10`, `tabbar-liquid-glass`, `a1-ios26-pages3`, `perf-tier-lite`) ustun kelishi uchun `html[data-theme="light"][data-theme="light"][data-theme="light"] body ...` selektorlari qo'llanildi.
+- Dark selector, theme JavaScript va Firebase state o'zgarmagan.
+- Rollback: `index.html`dan yangi stylesheet/script linklarini olib tashlab eski Light holatga qaytish mumkin.
 
-## 3. Bosh sahifa va mahsulot kartalari
+## 3. Bosh sahifa va mahsulot kartalari (`market`, `appstore`, `classic`)
 
-- `renderProducts()`, taxm. 10450-qator: `displayDB.slice(0, limitCount)`ni `#home-products`ga chizadi; katalog gridlarida lazy render mavjud. Bu ishlash tezligi uchun muhim.
-- `cardHTML(p)`, taxm. 10509-qator: stock, badge, eski/yangi narx, flash chegirma/taymer, reyting, wishlist, taqqoslash, mahsulot rasm/nom, savat CTA ni HTML qiladi. `openProduct(id)` va `addToCartQuick(event,id)` kabi joriy handlerlar SAQLANSIN.
-- `addToCartQuick(e,id)`, taxm. 10485-qator: razmerli mahsulotga variant tanlashni talab qiladi, stock va savatdagi jami miqdorni tekshiradi; `addToCartWithOptions`ni chaqiradi. Tugma dizaynini o'zgartirish bu tekshiruvlardan birini olib tashlash degani emas.
-- Admin `settings/ui/cardStyle` orqali `market`, `appstore`, `classic` dizaynini tanlaydi (`card-style-switch`, taxm. 35428-qator). Sky Glass har xil karta variantlari uchun sinovdan o'tishi kerak.
-- `customer-boost-2026-js` (taxm. 29420) my-car filtr, saralash, origin, search bilan; `home-filters-bulk-discount-js` (taxm. 30332) chegirma va home filter; `smart-search-2026-js` (taxm. 31014) chidamli qidiruv; `a1-reviews-v2-js` (taxm. 41102) xarid tekshiruvi/reviews.
-- **Qoida:** demo narx, rasm, statik mahsulot kartochkasini jonli `cardHTML` o'rniga ko'chirmaslik. Real DB'dan kelgan ma'lumot va mavjud handlerlar qolishi kerak.
+- `renderProducts()` va `cardHTML(p)` mavjud `openProduct(id)` va `addToCartQuick(event,id)` handlerlarini o'zgarishsiz saqlaydi.
+- Admin `settings/ui/cardStyle` orqali `market` (`.bm-card`), `appstore` (`.ac-card`), `classic` (`.luxury-card`) dizaynini tanlaydi.
+- `avtoa1-light-only.css` uchala karta uslubida ham:
+  - `.img-wrap` fonini `#ecebe6` o'rniga Sky Glass `linear-gradient(135deg,#f5fbff,#eaf6ff)` ga o'zgartiradi;
+  - `.bm-pr b`, `.ac-pr b`, `h4` sarlavha va narx ranglarini `#172d45` (`--a1-sky-ink`) ga o'tkazadi;
+  - `.bm-btn`, `.ac-add.ac-add.ac-add:not(.is-out):not(.a9-done)` va `.btn-add-cart` tugmalarini oq ikonkali Sky Glass ko'k gradientga (`#2f8fd8 -> #247bc1`) o'tkazadi, `.a9-done` (yashil tasdiq) va `.is-out` (tugagan) holatlarini saqlaydi.
 
-## 4. Banner / aksiya / aloqa slayderi
+## 4. Banner / aksiya / aloqa slayderi (`#a1-sky-light-carousel`)
 
-- Bosh sahifadagi `#main-slider` (taxm. 6485-qator) HTML fallbackda 4 slaydga ega; JS ularni yangilashi mumkin.
-- `banner-admin-2026-js` (taxm. 32988-qator) `AvtoBanners` modulini yaratadi, `captureDefaults()`, `visibleList()`, `renderSlider()`, `load()`, `seedDefaults()`, `doUpload()`, `save()` funksiyalari mavjud.
-- `renderSlider()` (taxm. 33220-qator) Firebase'dan kelgan banner ro'yxatidan faollari uchun `<img>`larni generatsiya qiladi, nuqta indikatorini sinxronlaydi, partner belgisini yangilaydi. Admin ko'rinadigan banner tartibini, yashirishni, rasmlarini o'zgartira oladi.
-- `doUpload()` admin tanlagan faylni mavjud upload yordamchisi orqali yuklaydi; `save()` banner ma'lumotlarini bazaga yozadi.
-- **Katta xavf:** demo `<section class="hero-banner">`ni haqiqiy `#main-slider`ga shunchaki qo'yib yuborish JS/Firebase bilan boshqariladigan rasmlarni buzishi mumkin. Faqat Light ko'rinishini yangilash uchun Dark'dagi bannerlar o'z holicha qolishi ham nazorat qilinishi kerak.
-- **Yana bir muhim farq:** rasm ichiga CHIZILGAN katalog/aksiya/aloqa tugmalari bosiladigan HTML tugma EMAS. CTA klik funksiyasini olish uchun slayd komponenti uchun xavfsiz, semantik, boshqariladigan link/overlay mexanizmi zarur. Haqiqiy aksiya foizi, aloqa URL'i tasdiqlanmasdan o'ylab topilmasin.
-- Tasdiqlangan 3 reklama rasmi hozirgi PR'da original binar asset sifatida repo'ga qo'yilmagan; demo rasmlari haqiqiy jonli banner emas.
+- Dark mode'da `#a1-legacy-home-slider` va `window.AvtoBanners` (Firebase `banners` jadvali) o'z holicha ishlaydi.
+- Light mode'da `#a1-legacy-home-slider` yashirilib, `#a1-sky-light-carousel` ko'rsatiladi (`approved-banner-images.css`, `approved-banner-live.css`, `approved-banner-live.js`).
+- 3 ta tasdiqlangan WebP banner va ularning CTA tugmalari:
+  1. **Gazel:** `window.showCatalog()`
+  2. **Aksiyalar:** `#hf-promo` faol bo'lmasa `window._homeToggle('discount')` ni yoqadi va `#home-products` ga silliq skroll qiladi.
+  3. **Aloqa:** `window.openModal('contactModal')`
+- To'liq ekranli qidiruv (`body.a1-srch`) yoki boshqa bo'limlarga o'tilganda (`legacy.style.display === 'none'`) karusel avtomatik yashirinadi. Nuqtalar, swipe va klaviatura (`ArrowLeft`/`ArrowRight`) ishlaydi.
 
-## 5. Pastki menyu, sahifalar va glass
+## 5. Pastki menyu (`.bottom-nav`) va glass
 
-- `.bottom-nav` (taxm. 6787-qator) joriy `goHome()`, `showCatalog()`, savat va profil navigatsiyasiga bog'langan. Hodisalarni o'zgartirmasdan faqat ko'rinishni yangilash mumkin.
-- `goHome()` (taxm. 12154-qator) tarix stacki va modal holatini tozalashni ham bajaradi. Tugma onclicklarini qayta yozish kerak emas.
-- `tabbar-liquid-glass` (CSS, taxm. 35139-qator) — mavjud glass nav dizayni. Uni yangi Light CSS bilan to'qnashmasligi va badge'lar ekran chegarasidan kesilmasligi tekshirilsin.
-- `a1-perf-tier-css` (taxm. 41610-qator) lite'ga alohida optimizatsiya beradi. Blur/box-shadow qisqartirilgan holda ham navigatsiya bosiladigan bo'lsin.
+- `.bottom-nav` ichidagi nofaol kontur ikonkalar (`svg.ni-o`) `fill: none !important; stroke: #6c94b6 !important;`, faol ikonkalar (`svg.ni-f`) esa `fill: #247bc1 !important;` bilan to'g'ri chiziladi.
+- `#nav-indicator` JS tomonidan hisoblanadigan `width`/`height`/`transform` qiymatlariga tegmasdan, Sky Glass ko'k shisha kapsulaga bo'yaladi.
+- `html.lite` rejimida ham blur o'chirilgan holda toza och-havorang shakl va chegara saqlanadi.
 
 ## 6. Buyurtma, autentifikatsiya, ombor, cashback — TEGMASLIK ZONASI
 
-- `renderCartItems()`, taxm. 11112-qator: savatdagi haqiqiy mahsulot, variant va miqdorlar.
-- `co-ios-checkout-js`, taxm. 34761-qator: kuryer/BTS, manzil, to'lov va tasdiqlash. `window.openCheckout` va `window._coSubmit` joriy oqimni ishlatadi.
-- `cloudflare-worker.js` (~232 KB): /auth, /order-commit, /order-status, /order-notify, /order-deliver, /stock-commit, /upload, /login-phone, /phone-verify, /session, /merge-legacy, /admin-reset, /story-* va boshqalar. Buyurtma holati, server authorization, stock va cashbackni Worker yuritadi. **UI PR bu route'larga tegmasin.**
-- `bot/bot.py` (~228 KB, ~4963 qator), `bot/order_ops.py`, `bot/account_ops.py`, `bot/ai_agent.py` (shuningdek boshqa bot modullari): Telegram callback, admin amallari, bot imzosi, AI va Worker bilan aloqa.
-- `database.rules.json`: pul, zaxira va buyurtma holati uchun server-authoritative qoidalar. Light-only UI o'zgarishi bu qoidalarga tegmaydi.
-- `sw.js`: offline va aktiv asset cache strategiyasi.
-
-## 7. Mavjud CI va sinov chegarasi
-
-- `.github/workflows/pr-check.yml` barcha PR'da JS sintaksisi, token tekshiruvi, customer, promo, tier/cashback, search, AI, auth timeout, order flow client/Worker, perf, reviews, stories, identity, admin reset, build-site, Python syntax va AI testlarini ishlatadi.
-- `.github/workflows/deploy.yml` faqat `main` push bo'lganda nashr qiladi.
-- #338 dagi `6384f96e...` commit uchun `PR Tekshiruv` workflow **success** qaytdi (2026-11-02); bu statik/integration testlar, **jonli Telegram, dizayn ko'rinishi yoki har xil telefon/tema testlari emas**.
-- CSS/HTML vizual regression, Light↔Dark almashish, skelet/flash/banner admin, real Telegram WebView, iPhone Safari, Android WebView, lite va accessibility alohida test talab qiladi.
-
-## 8. Qabul qilish mezonlari — keyingi aniq ishlar
-
-1. **Ranglar:** 4 asosiy Sky Glass palitrasi faqat Light'da; Dark computed-style va screenshot oldingi bilan bir xil.
-2. **3 banner:** tasdiqlangan Gazel, Aksiyalar, Aloqa assetlari repo'da; Light'da ko'rinadi, Dark'da eski/banner mavjud tizim buzilmaydi. Linklarning har biri to'g'ri joyga olib boradi; admin banner qo'shganda/slayd yangilanganda UI ishlaydi.
-3. **Karta:** `market`, `appstore`, `classic`ning barchasida mahsulot/stock/price/discount/variant/like/cart ishlaydi. Demo mahsulot narxi jonliga tushmaydi.
-4. **Nav:** 4 tab va barcha badge, modal/orqaga qaytish ishlaydi; glass effekti `lite` va reduced motion'da ham o'qiladigan.
-5. **Safety:** Firebase, bot, Worker, savdo hisob-kitoblari va Dark JS o'zgartirilmaydi.
-6. **Test:** GitHub Actions yashil, browser/Telegram real sinovi, qaytish (rollback) amalda tekshirilgan.
-7. **Merge:** faqat 1–6 tasdiqlangandan keyin. PR #338 hozircha Draft bo'lib turadi.
-
-## 9. Hozirgi PR #338ning haqiqiy holati
-
-- `light-skyglass-preview/index.html` + `sky-glass.css`: **demo**, jonli DB bilan ishlamaydi.
-- `light-skyglass-preview/avtoa1-light-only.css`: mavjud Light theme uchun yangi CSS, `index.html`ga link qo'shilgan. Bu haqiqatda Light stylingni o'zgartirishga tayyor **kod**, ammo hali main'ga Merge qilinmagan.
-- **3 ta haqiqiy banner tasviri va ularning CTA-lari hali integratsiya qilinmagan.**
-- Runtime/visual testlar to'liq emas. Ishlab turgan ilovaga ta'sir ko'rsatadigan Merge shoshilinch qilinmasin.
-
-## 10. Audit chegaralari / halollik
-
-Ushbu hujjat manba kodning miqyosi, asosiy oqimlari, muhim funksiyalari va ularni qanday xavfsiz o'zgartirish kerakligini xaritalaydi. **46 ming qatorning har biri ishga tushirilib, barcha tarmoqlari sinab ko'rilganini da'vo qilmaydi.** Yangi CSS qo'shilishi, HTML minify/deploy va brauzer specificity testini real qurilmada tekshirish ham talab qilinadi.
+- `renderCartItems()`, `co-ios-checkout-js`, `cloudflare-worker.js`, `bot/bot.py`, `database.rules.json` va `sw.js` o'zgartirilmagan.
