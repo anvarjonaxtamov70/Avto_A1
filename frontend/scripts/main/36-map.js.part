@@ -1,0 +1,392 @@
+// ══════════════════════════════════════════════════════════════════
+// 🗺 XARITADAN MANZIL TANLASH — iOS 26 / Apple Maps uslubi (Leaflet + OSM)
+// ──────────────────────────────────────────────────────────────────
+// 🐞 ILGARI «Xaritadan belgilash» bosilganda HECH NARSA ochilmasdi:
+//    overlay'ning BARCHA CSS qoidalari faqat eski (endi chaqirilmaydigan)
+//    openDeliveryModal ichida inject qilinardi. Overlay sahifa oxiriga oddiy
+//    blok bo'lib qo'shilar, xarita balandligi 0 bo'lib, ochiq oyna ostida
+//    qolib ketardi. Endi CSS statik (`a1-ios26-pages2`), oyna har doim ustda.
+// Yangi mantiq:
+//   • Pin MARKAZDA turadi, xarita uning ostidan suriladi (Apple/Yandex kabi)
+//   • Surish to'xtagach manzil matni avtomatik aniqlanadi (OSM Nominatim)
+//   • Qidiruv: ko'cha / joy nomi bo'yicha (O'zbekiston ichida)
+//   • «Mening joylashuvim» — ko'k nuqta + aniqlik, Telegram LocationManager zaxira
+//   • Qorong'i mavzuda qora xarita, yorug'da — yorug'
+//   • Manzil matn + koordinata + Google havola bilan saqlanadi
+// ══════════════════════════════════════════════════════════════════
+window.YANDEX_API_KEY = ""; // (eski sozlama — endi ishlatilmaydi, Leaflet/OSM kalitsiz ishlaydi)
+window._pickedCoords = null;
+window._mapPickerObj = null;
+window._mapMarker = null;
+window._mapEngine = 'leaflet';
+
+(function () {
+    var DEF_CENTER = [39.6542, 66.9597]; // Samarqand (kuryer xizmati shu yerda)
+    var SVG = {
+        x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+        mag: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+        nav: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3 3 10.5l7.5 2.5L13 21z" fill="currentColor" stroke="none"/></svg>',
+        pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+        home: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>',
+        work: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="13" rx="2.5"/><path d="M8.5 7V5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2M2.5 13h19"/></svg>',
+        shop: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 4.5 4h15L21 9.5"/><path d="M3 9.5a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M5 12v8h14v-8"/></svg>',
+        dots: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>'
+    };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+    function hap(k) { try { if (typeof _hap === 'function') _hap(k); } catch (e) {} }
+    function $(id) { return document.getElementById(id); }
+    function isDark() { return document.documentElement.getAttribute('data-theme') !== 'light'; }
+    function fmtLL(lat, lng) { return lat.toFixed(5) + ', ' + lng.toFixed(5); }
+
+    /* ——— Leaflet yuklash (unpkg → jsDelivr zaxira) ——— */
+    var _leafletLoading = null;
+    function ensureLeaflet() {
+        if (window.L && window.L.map) return Promise.resolve();
+        if (_leafletLoading) return _leafletLoading;
+        var bases = ['https://unpkg.com/leaflet@1.9.4/dist/', 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/'];
+        _leafletLoading = new Promise(function (resolve, reject) {
+            var i = 0;
+            (function tryNext() {
+                if (i >= bases.length) { _leafletLoading = null; reject(new Error('xarita yuklanmadi')); return; }
+                var base = bases[i++];
+                var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = base + 'leaflet.css'; document.head.appendChild(css);
+                var js = document.createElement('script'); js.src = base + 'leaflet.js';
+                js.onload = function () { resolve(); };
+                js.onerror = function () { try { css.remove(); js.remove(); } catch (e) {} tryNext(); };
+                document.head.appendChild(js);
+            })();
+        });
+        return _leafletLoading;
+    }
+    window.ensureLeaflet = ensureLeaflet;
+
+    /* ——— Geokod (OSM Nominatim: 1 so'rov/soniya qoidasiga rioya qilamiz) ——— */
+    var G = { cache: {}, last: 0, ctrl: null };
+    function nomi(url) {
+        var wait = Math.max(0, 1100 - (Date.now() - G.last));
+        return new Promise(function (res) { setTimeout(res, wait); }).then(function () {
+            G.last = Date.now();
+            return fetch(url + (url.indexOf('?') > -1 ? '&' : '?') + 'accept-language=uz').then(function (r) { if (!r.ok) throw new Error('geo ' + r.status); return r.json(); });
+        });
+    }
+    function prettyAddr(j) {
+        if (!j) return '';
+        var a = j.address || {};
+        var street = a.road || a.pedestrian || a.footway || a.residential || a.street || '';
+        var line1 = [street, a.house_number].filter(Boolean).join(' ');
+        var area = a.neighbourhood || a.quarter || a.suburb || a.city_district || a.hamlet || '';
+        var city = a.city || a.town || a.village || a.county || a.state || '';
+        var parts = [line1 || j.name || '', area, city].filter(function (x, i, arr) { return x && arr.indexOf(x) === i; });
+        if (!parts.length && j.display_name) parts = String(j.display_name).split(',').slice(0, 3).map(function (s) { return s.trim(); });
+        return parts.join(', ');
+    }
+    window._a1Geo = {
+        reverse: function (lat, lng) {
+            var k = lat.toFixed(4) + ',' + lng.toFixed(4);
+            if (G.cache[k]) return Promise.resolve(G.cache[k]);
+            return nomi('https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&lat=' + lat + '&lon=' + lng)
+                .then(function (j) { var t = prettyAddr(j); G.cache[k] = t; return t; });
+        },
+        search: function (q, near) {
+            var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=7&countrycodes=uz&q=' + encodeURIComponent(q);
+            if (near) url += '&viewbox=' + (near.lng - .6) + ',' + (near.lat + .45) + ',' + (near.lng + .6) + ',' + (near.lat - .45);
+            return nomi(url).then(function (arr) { return (arr || []).map(function (j) { return { lat: +j.lat, lng: +j.lon, title: (j.name || prettyAddr(j).split(',')[0] || '').trim(), sub: prettyAddr(j) }; }); });
+        }
+    };
+
+    /* ——— Oxirgi saqlangan nuqta (xarita shu yerdan ochiladi) ——— */
+    function addrLL(a) {
+        if (!a) return null;
+        if (isFinite(+a.lat) && isFinite(+a.lng) && a.lat !== '' && a.lng !== '') return { lat: +a.lat, lng: +a.lng };
+        var m = String(a.mapLink || '').match(/q=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/) || String(a.address || '').match(/(-?\d{1,3}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/);
+        return m ? { lat: +m[1], lng: +m[2] } : null;
+    }
+    window._addrLatLng = addrLL;
+    function lastPoint() {
+        try { var A = (typeof getAddresses === 'function') ? getAddresses() : []; for (var i = A.length - 1; i >= 0; i--) { var p = addrLL(A[i]); if (p) return p; } } catch (e) {}
+        return null;
+    }
+
+    /* ——— Oyna ——— */
+    var S = { map: null, tiles: null, dark: null, me: null, geoT: 0, geoSeq: 0, addr: '', qT: 0 };
+    function build() {
+        var ov = $('map-picker-overlay');
+        if (ov) return ov;
+        ov = document.createElement('div');
+        ov.id = 'map-picker-overlay';
+        ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Xaritadan manzil tanlash');
+        ov.innerHTML =
+            '<div id="map-picker-map"></div>' +
+            '<div class="mp-load"><i></i>Xarita yuklanmoqda…</div>' +
+            '<div class="mp-pin" id="mp-pin" aria-hidden="true"><div class="mp-pin-stick"></div><div class="mp-pin-head"><b>A1</b></div><div class="mp-pin-dot"></div></div>' +
+            '<div class="mp-top"><button type="button" class="mp-circ" onclick="closeMapPicker()" aria-label="Yopish">' + SVG.x + '</button>' +
+                '<label class="mp-search" id="mp-search">' + SVG.mag + '<input id="mp-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Ko\u2018cha yoki joy nomini qidiring"><button type="button" class="mp-x" aria-label="Tozalash" onclick="window._mpClearQ()">' + SVG.x + '</button></label></div>' +
+            '<div class="mp-res" id="mp-res"></div>' +
+            '<div id="map-locate-hint" class="mp-hint">Xaritani suring — pin turgan joy tanlanadi</div>' +
+            '<div class="mp-side"><button type="button" id="map-locate-btn" class="mp-circ" onclick="locateMe()" aria-label="Mening joylashuvim">' + SVG.nav + '</button></div>' +
+            '<div id="map-picker-bar" class="mp-sheet"><div class="mp-grab"></div>' +
+                '<div class="mp-addr is-busy" id="mp-addr"><span class="a1-ic">' + SVG.pin + '</span><div class="mp-addr-tx"><b id="mp-addr-t">Joy aniqlanmoqda</b><small id="mp-addr-s">—</small></div></div>' +
+                '<button type="button" class="a1-btn is-gold mp-ok" id="mp-ok" onclick="confirmMapLocation()">Shu manzilni tanlash</button>' +
+                '<p class="mp-attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p></div>';
+        document.body.appendChild(ov);
+        var q = $('mp-q');
+        q.addEventListener('input', function () {
+            $('mp-search').classList.toggle('has-q', !!q.value);
+            clearTimeout(S.qT);
+            var v = q.value.trim();
+            if (v.length < 3) { showRes(null); return; }
+            S.qT = setTimeout(function () { doSearch(v); }, 650);
+        });
+        q.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(S.qT); if (q.value.trim().length >= 2) doSearch(q.value.trim()); } });
+        q.addEventListener('focus', function () { hint(false); });
+        return ov;
+    }
+    function hint(show, text) {
+        var h = $('map-locate-hint'); if (!h) return;
+        if (text) h.textContent = text;
+        h.classList.toggle('hide', !show);
+    }
+    function showRes(list, msg) {
+        var r = $('mp-res'); if (!r) return;
+        if (!list && !msg) { r.classList.remove('show'); r.innerHTML = ''; return; }
+        r.innerHTML = msg ? '<div class="mp-res-empty">' + esc(msg) + '</div>' : list.map(function (it, i) {
+            return '<button type="button" onclick="window._mpPick(' + i + ')"><span class="a1-ic">' + SVG.pin + '</span><span class="mp-res-tx"><b>' + esc(it.title || it.sub) + '</b><small>' + esc(it.sub) + '</small></span></button>';
+        }).join('');
+        r.classList.add('show');
+    }
+    function doSearch(v) {
+        showRes(null, 'Qidirilmoqda…');
+        var c = S.map ? S.map.getCenter() : null;
+        window._a1Geo.search(v, c ? { lat: c.lat, lng: c.lng } : null).then(function (list) {
+            S.results = list;
+            if ($('mp-q').value.trim() !== v) return;
+            if (!list.length) showRes(null, 'Hech narsa topilmadi — boshqacha yozib ko\u2018ring');
+            else showRes(list);
+        }).catch(function () { showRes(null, 'Qidiruv ishlamadi — internetni tekshiring'); });
+    }
+    window._mpPick = function (i) {
+        var it = S.results && S.results[i]; if (!it || !S.map) return;
+        showRes(null); try { $('mp-q').blur(); } catch (e) {}
+        S.map.flyTo([it.lat, it.lng], 17, { duration: .8 });
+        hap('selection');
+    };
+    window._mpClearQ = function () { var q = $('mp-q'); if (q) { q.value = ''; q.focus(); } $('mp-search').classList.remove('has-q'); showRes(null); };
+
+    function setAddr(title, sub, busy) {
+        var a = $('mp-addr'); if (!a) return;
+        a.classList.toggle('is-busy', !!busy);
+        $('mp-addr-t').textContent = title;
+        $('mp-addr-s').textContent = sub || '';
+    }
+    function onMoveEnd() {
+        var c = S.map.getCenter();
+        window._pickedCoords = { lat: c.lat, lng: c.lng };
+        var pin = $('mp-pin'); if (pin) pin.classList.remove('lift');
+        S.addr = '';
+        setAddr('Joy aniqlanmoqda', fmtLL(c.lat, c.lng), true);
+        clearTimeout(S.geoT);
+        var seq = ++S.geoSeq;
+        S.geoT = setTimeout(function () {
+            window._a1Geo.reverse(c.lat, c.lng).then(function (t) {
+                if (seq !== S.geoSeq) return;
+                S.addr = t || '';
+                setAddr(t || 'Belgilangan nuqta', fmtLL(c.lat, c.lng), false);
+            }).catch(function () {
+                if (seq !== S.geoSeq) return;
+                setAddr('Belgilangan nuqta', fmtLL(c.lat, c.lng), false);
+            });
+        }, 380);
+    }
+    function applyTiles() {
+        var dark = isDark();
+        S.dark = dark;
+        var el = $('map-picker-map'); if (el) el.classList.toggle('mp-dark', dark);
+        if (S.tiles) return;
+        /* OSM — Samarqand bo'yicha eng batafsil (binolar, o'zbekcha nomlar).
+           Ko'p xato bo'lsa — Esri zaxira manbasiga o'tamiz. */
+        var errs = 0, fell = false;
+        S.tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, maxNativeZoom: 19, crossOrigin: false, referrerPolicy: 'strict-origin-when-cross-origin' });
+        S.tiles.on('tileerror', function () {
+            if (fell || ++errs < 4) return;
+            fell = true;
+            try { S.map.removeLayer(S.tiles); } catch (e) {}
+            S.tiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 17 }).addTo(S.map);
+            var at = document.querySelector('#map-picker-overlay .mp-attr'); if (at) at.innerHTML = '\u00A9 Esri \u00B7 \u00A9 OpenStreetMap';
+        });
+        S.tiles.addTo(S.map);
+    }
+    function initMap(center, zoom) {
+        var el = $('map-picker-map');
+        S.map = L.map(el, { zoomControl: false, attributionControl: false, tap: false, zoomSnap: .25, inertia: true }).setView(center, zoom);
+        applyTiles();
+        S.map.on('movestart', function () { var p = $('mp-pin'); if (p) p.classList.add('lift'); hint(false); showRes(null); });
+        S.map.on('moveend', onMoveEnd);
+        window._mapPickerObj = S.map;
+    }
+
+    window.openMapPicker = function () {
+        var ov = build();
+        try { if (document.activeElement) document.activeElement.blur(); } catch (e) {}
+        ov.style.display = 'flex';
+        ov.classList.remove('mp-in'); void ov.offsetWidth; ov.classList.add('mp-in');
+        window._pickedCoords = null;
+        var q = $('mp-q'); if (q) { q.value = ''; $('mp-search').classList.remove('has-q'); }
+        showRes(null);
+        hint(true, 'Xaritani suring — pin turgan joy tanlanadi');
+        setTimeout(function () { hint(false); }, 3600);
+        setAddr('Joy aniqlanmoqda', '—', true);
+        // 🧭 Nazad tugmasi xaritani yopa olishi uchun navigatsiyaga ulaymiz
+        window._mapPrevActive = (activeModal && activeModal !== '__mappicker__') ? activeModal : (window._mapPrevActive || null);
+        activeModal = '__mappicker__';
+        window.history.pushState({ modal: '__mappicker__' }, '');
+        try { if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show(); } catch (e) {}
+        hap('light');
+
+        var start = lastPoint();
+        ensureLeaflet().then(function () {
+            requestAnimationFrame(function () {
+                if (!S.map) initMap(start ? [start.lat, start.lng] : DEF_CENTER, start ? 16 : 13);
+                else { applyTiles(); S.map.invalidateSize(); if (start) S.map.setView([start.lat, start.lng], 16, { animate: false }); }
+                ov.classList.add('is-ready');
+                setTimeout(function () { try { S.map.invalidateSize(); } catch (e) {} onMoveEnd(); }, 60);
+                if (!start) locate(true);
+            });
+        }).catch(function () {
+            showToast("Xarita yuklanmadi. Internetni tekshiring.", "warning");
+            setAddr('Xarita yuklanmadi', 'Internet aloqasini tekshiring', false);
+        });
+    };
+    window.closeMapPicker = function () {
+        if (activeModal === '__mappicker__') { window.history.back(); }
+        else { var ov = $('map-picker-overlay'); if (ov) ov.style.display = 'none'; }
+    };
+    // Tashqi chaqiruvlar uchun (moslik): xaritani shu nuqtaga olib boradi
+    window._placeMarker = function (lat, lng) {
+        window._pickedCoords = { lat: lat, lng: lng };
+        if (S.map) S.map.setView([lat, lng], Math.max(S.map.getZoom(), 16));
+    };
+
+    /* ——— 📍 Mening joylashuvim ——— */
+    function showMe(lat, lng, acc) {
+        if (!S.map || !window.L) return;
+        var icon = L.divIcon({ className: '', html: '<div class="mp-me"><i></i></div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+        if (S.me) S.me.setLatLng([lat, lng]); else S.me = L.marker([lat, lng], { icon: icon, interactive: false, keyboard: false }).addTo(S.map);
+        if (acc && acc < 300) {
+            if (S.acc) S.acc.setLatLng([lat, lng]).setRadius(acc);
+            else S.acc = L.circle([lat, lng], { radius: acc, stroke: false, fillColor: '#0a84ff', fillOpacity: .12, interactive: false }).addTo(S.map);
+        }
+    }
+    function viaTelegram(ok, fail) {
+        try {
+            var lm = (typeof tg !== 'undefined' && tg) ? tg.LocationManager : null;
+            if (!lm || !(tg.isVersionAtLeast && tg.isVersionAtLeast('8.0'))) { fail(); return; }
+            var go = function () {
+                if (!lm.isLocationAvailable) { fail(); return; }
+                lm.getLocation(function (loc) { if (loc && loc.latitude) ok(loc.latitude, loc.longitude, loc.horizontal_accuracy); else fail(); });
+            };
+            if (lm.isInited) go(); else lm.init(go);
+        } catch (e) { fail(); }
+    }
+    function locate(silent) {
+        var btn = $('map-locate-btn');
+        if (btn) btn.classList.add('locating');
+        if (!silent) hap('selection');
+        var done = function (lat, lng, acc) {
+            if (btn) btn.classList.remove('locating');
+            showMe(lat, lng, acc);
+            if (S.map) S.map.flyTo([lat, lng], 17, { duration: silent ? .01 : .8 });
+            if (!silent) hap('success');
+        };
+        var fail = function (code) {
+            if (btn) btn.classList.remove('locating');
+            if (silent) return;
+            var msg = "Joylashuvni aniqlab bo'lmadi";
+            if (code === 1) msg = "Joylashuvga ruxsat berilmadi. Telegram/telefon sozlamalaridan yoqing.";
+            else if (code === 3) msg = "Vaqt tugadi. Qayta urinib ko'ring.";
+            showToast(msg, "warning");
+        };
+        if (!navigator.geolocation) { viaTelegram(done, function () { fail(0); }); return; }
+        navigator.geolocation.getCurrentPosition(function (pos) {
+            done(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+        }, function (err) {
+            viaTelegram(done, function () { fail(err && err.code); });
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 });
+    }
+    window.locateMe = function () { locate(false); };
+
+    /* ——— ✅ Tasdiqlash → nom berish varag'i ——— */
+    window.confirmMapLocation = function () {
+        if (!window._pickedCoords) { showToast("Xaritani suring va nuqtani tanlang", "warning"); return; }
+        openAddrNameModal();
+    };
+    var CHIPS = [['Uy', 'home', SVG.home], ['Ish', 'work', SVG.work], ["Do'kon", 'map', SVG.shop], ['Boshqa', 'map', SVG.dots]];
+    window.openAddrNameModal = function () {
+        var ov = $('addr-name-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'addr-name-overlay';
+            ov.onclick = function (e) { if (e.target === ov) closeAddrNameModal(); };
+            ov.innerHTML =
+                '<div id="addr-name-sheet" role="dialog" aria-label="Manzilga nom berish"><div class="mp-grab"></div>' +
+                '<div class="an-h"><h3>Manzilni saqlash</h3><button type="button" class="mp-circ" style="width:32px;height:32px;box-shadow:none;background:var(--a-fill)" onclick="closeAddrNameModal()" aria-label="Yopish">' + SVG.x + '</button></div>' +
+                '<div class="an-addr"><span class="a1-ic">' + SVG.pin + '</span><p id="addr-name-coords"></p></div>' +
+                '<div class="an-chips" id="addr-name-chips">' + CHIPS.map(function (c, i) {
+                    return '<button type="button" class="an-chip ans-chip" data-i="' + i + '" onclick="ansPickChip(this,\'' + c[0].replace(/'/g, "\\'") + '\')">' + c[2] + c[0] + '</button>';
+                }).join('') + '</div>' +
+                '<div class="an-grp"><input type="text" id="addr-name-input" maxlength="40" placeholder="Nomi (masalan: Uy, Ish, Onamnikiga)" autocomplete="off">' +
+                '<input type="text" id="addr-name-extra" maxlength="120" placeholder="Uy / kvartira, podyezd, mo\u2018ljal (ixtiyoriy)" autocomplete="off"></div>' +
+                '<button type="button" class="a1-btn is-gold" id="addr-name-save" onclick="saveMapAddressWithName()">Saqlash</button></div>';
+            document.body.appendChild(ov);
+        }
+        var c = window._pickedCoords;
+        var cEl = $('addr-name-coords');
+        if (cEl && c) cEl.innerHTML = esc(S.addr || 'Xaritada belgilangan nuqta') + '<small>' + fmtLL(c.lat, c.lng) + '</small>';
+        var inp = $('addr-name-input'); if (inp) inp.value = '';
+        var ex = $('addr-name-extra'); if (ex) ex.value = '';
+        document.querySelectorAll('#addr-name-chips .ans-chip').forEach(function (b) { b.classList.remove('sel'); });
+        ov.style.display = 'flex';
+        requestAnimationFrame(function () { ov.classList.add('show'); });
+        hap('light');
+    };
+    window.closeAddrNameModal = function () {
+        var nm = $('addr-name-overlay');
+        if (nm) { nm.classList.remove('show'); setTimeout(function () { nm.style.display = 'none'; }, 260); }
+    };
+    window.ansPickChip = function (el, val) {
+        document.querySelectorAll('#addr-name-chips .ans-chip').forEach(function (c) { c.classList.remove('sel'); });
+        if (el) el.classList.add('sel');
+        var inp = $('addr-name-input'); if (inp) inp.value = val;
+        hap('selection');
+    };
+    window.saveMapAddressWithName = function () {
+        if (!window._pickedCoords) { showToast("Xaritada nuqtani belgilang", "warning"); return; }
+        var inp = $('addr-name-input');
+        var name = (inp && inp.value ? inp.value.trim() : '');
+        if (!name) { showToast("Manzilga nom bering (yoki tugmalardan birini tanlang)", "warning"); if (inp) inp.focus(); return; }
+        var sel = document.querySelector('#addr-name-chips .ans-chip.sel');
+        var type = sel ? CHIPS[+sel.getAttribute('data-i')][1] : 'map';
+        if (sel && CHIPS[+sel.getAttribute('data-i')][0] !== name) type = 'map';
+        var lat = window._pickedCoords.lat, lng = window._pickedCoords.lng;
+        var extra = ($('addr-name-extra') && $('addr-name-extra').value.trim()) || '';
+        var base = S.addr ? S.addr : ('📍 ' + fmtLL(lat, lng));
+        var addrText = extra ? (base + ' — ' + extra) : base;
+        var mapLink = 'https://www.google.com/maps?q=' + lat.toFixed(6) + ',' + lng.toFixed(6);
+        if (typeof getAddresses === 'function') {
+            var arr = getAddresses();
+            arr.push({ type: type, label: name, address: addrText, mapLink: mapLink, lat: +lat.toFixed(6), lng: +lng.toFixed(6) });
+            if (typeof saveAddresses === 'function') saveAddresses(arr);
+            window._dlvSelectedAddr = arr.length - 1;
+            if (typeof renderCourierAddresses === 'function') { try { renderCourierAddresses(); } catch (e) {} }
+            try { if (typeof window.renderAddresses === 'function') window.renderAddresses(); } catch (e) {}
+        }
+        var nm = $('addr-name-overlay');
+        if (nm) { nm.classList.remove('show'); setTimeout(function () { nm.style.display = 'none'; }, 260); }
+        window.history.back(); // '__mappicker__' popstate xaritani yopib, oldingi oynaga qaytaradi
+        showToast('📍 «' + esc(name) + '» manzili saqlandi', "success");
+        hap('success');
+    };
+})();
+
+
+
+

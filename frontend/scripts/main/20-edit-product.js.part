@@ -1,0 +1,142 @@
+// =====================================
+// 1. TAHRIRLASH (EDIT) FUNKSIYASI
+// =====================================
+window.saveEditProduct = function(keepDraft = false) {
+    let id = parseInt(document.getElementById('edit-id').value);
+    let n = document.getElementById('edit-name').value.trim();
+    let p = parsePrice(document.getElementById('edit-price').value);
+    let codeEl = document.getElementById('edit-code');
+    let pCode = codeEl ? codeEl.value.trim() : "";
+    
+    let unitEl = document.getElementById('edit-unit');
+    let pUnit = unitEl ? unitEl.value : 'dona';
+    
+    let descEl = document.getElementById('edit-desc');
+    let d = descEl ? descEl.value.trim() : "Tavsif kiritilmagan";
+    
+    let pType = document.getElementById('edit-prod-type').value;
+    
+    let img1El = document.getElementById('edit-img-url');
+    let img1 = img1El ? img1El.value : "";
+    let img2El = document.getElementById('edit-img-url2');
+    let img2 = img2El ? img2El.value : "";
+    let img3El = document.getElementById('edit-img-url3');
+    let img3 = img3El ? img3El.value : "";
+    let imagesArr = [img1, img2, img3].filter(u => u !== "");
+
+    // Faqat mashinani o'qiymiz (Motor/xadavoy turi olib tashlangan)
+    let sMods = Array.from(document.querySelectorAll('#editModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
+
+    if (!keepDraft) {
+        if (!n || !p || imagesArr.length === 0) { 
+            showToast("Ism, narx va kamida 1 ta rasm kerak!", "warning"); 
+            return; 
+        }
+        if (pType === 'oddiy' && sMods.length === 0) { 
+            showToast("Mashina rusumini tanlang!", "warning"); 
+            return; 
+        }
+    } else {
+        if (!n) { showToast("Tovarga hech bo'lmasa ism yozing!", "warning"); return; }
+    }
+
+    let sCats = sMods.length > 0 ? sMods : ["umumiy"];
+    
+    let idx = productsDB.findIndex(x => x.id === id);
+
+    if (idx !== -1) {
+        // 🏭 Ishlab chiqarilgan joy (Original / Rossiya / Xitoy) — tovarga saqlanadi.
+        //    Chip tanlanmagan bo'lsa MAVJUD qiymat saqlanib qoladi (o'chib ketmaydi).
+        let _edOriginEl = document.querySelector('#edit-origin-chips .origin-chip.selected');
+        let _edOrigin = _edOriginEl ? (_edOriginEl.getAttribute('data-origin') || "") : "";
+
+        productsDB[idx] = { 
+            ...productsDB[idx], 
+            name: n, 
+            price: p, 
+            code: pCode,
+            unit: pUnit, 
+            desc: d, 
+            origin: _edOrigin || productsDB[idx].origin || "",
+            // 🔎 Qidiruv so'zlari — har saqlashda formadan QAYTA olinadi.
+            //    (Obyekt `...productsDB[idx]` bilan qurilgani uchun aks holda
+            //     eski qiymat qolib ketardi.)
+            aliases: (function () {
+                try {
+                    var e = document.getElementById('edit-aliases');
+                    return e ? String(e.value || '').trim().slice(0, 300) : (productsDB[idx].aliases || '');
+                } catch (err) { return productsDB[idx].aliases || ''; }
+            })(),
+            img: imagesArr[0] || "", 
+            images: imagesArr, 
+            categories: sCats, 
+            category: sCats[0], 
+            product_type: pType 
+        };
+
+        if (pType === 'oddiy') {
+            let stockEl = document.getElementById('edit-stock');
+            productsDB[idx].stock = stockEl ? (parseInt(stockEl.value) || 0) : 10;
+            delete productsDB[idx].sizes; 
+            delete productsDB[idx].brand; 
+            delete productsDB[idx].model;
+        } else {
+            let brandEl = document.getElementById('edit-prod-brand');
+            let modelEl = document.getElementById('edit-prod-model');
+            
+            let brand = brandEl ? brandEl.value : "";
+            let model = modelEl ? modelEl.value : "";
+            
+            let sizes = [];
+            document.querySelectorAll('#edit-sizes-container .size-input-row').forEach(row => {
+                let sName = row.querySelector('.size-name').value.trim();
+                let sStock = parseInt(row.querySelector('.size-stock').value) || 0;
+                if (sName) sizes.push({ size: sName, stock: sStock });
+            });
+            
+            if (!keepDraft && sizes.length === 0) { 
+                showToast("Kamida 1 razmer kiriting!", "warning"); 
+                return; 
+            }
+            
+            productsDB[idx].brand = brand; 
+            productsDB[idx].model = model;
+            productsDB[idx].sizes = sizes;
+            productsDB[idx].stock = sizes.reduce((s, x) => s + x.stock, 0);
+        }
+
+        // 🔥 FLASH SALE (ixtiyoriy): flash narx asl narxdan kichik va soat > 0 bo'lsa —
+        //    narxni vaqtincha tushiramiz (price=flash, oldPrice=asl, flashUntil=tugash vaqti).
+        //    Aks holda flashni o'chiramiz (asl narxni tiklab). 'p' = asl narx (price maydoni).
+        (function(){
+            var fpEl = document.getElementById('edit-flash-price');
+            var fhEl = document.getElementById('edit-flash-hours');
+            var fp = fpEl ? parsePrice(fpEl.value) : 0;
+            var fh = fhEl ? (parseFloat(String(fhEl.value).replace(',', '.')) || 0) : 0;
+            if (fp > 0 && fp < p && fh > 0) {
+                productsDB[idx].oldPrice = p;
+                productsDB[idx].price = fp;
+                productsDB[idx].flashUntil = Date.now() + Math.round(fh * 3600000);
+            } else {
+                productsDB[idx].price = p;
+                delete productsDB[idx].oldPrice;
+                delete productsDB[idx].flashUntil;
+            }
+        })();
+
+        if (!keepDraft) {
+            delete productsDB[idx].is_draft; 
+        } else {
+            productsDB[idx].is_draft = true; 
+        }
+        
+        window._formDirty = false;
+        saveProductAt(idx).then(() => {
+            showToast(keepDraft ? "⏳ Qoralama saqlandi!" : "✅ Mijozlarga chiqarildi!", "success");
+            displayDB = _sortDisplayDB(productsDB.filter(p => !p.is_draft).slice().reverse());
+            renderProducts();
+            if(typeof filterAdminDrafts === 'function') filterAdminDrafts();
+            closeEditGoBack();
+        });
+    }
+};

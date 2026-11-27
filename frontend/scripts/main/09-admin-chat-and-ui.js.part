@@ -1,0 +1,947 @@
+// =====================================
+    // ADMIN: MIJOZ BILAN YOZISHMA (CHAT)
+    // =====================================
+    let currentAdminChatUid = null;
+    let currentAdminChatOrderId = null;
+
+// YANGI:
+window.openAdminChat = (uid, orderId) => {
+    currentAdminChatUid = uid;
+    currentAdminChatOrderId = orderId;
+    
+    // Avval adminOrdersModal ni yashiramiz
+    document.getElementById('adminOrdersModal').style.display = 'none';
+    
+    renderAdminChatMessages();
+    
+    // Keyin chatni ochamiz
+    let m = document.getElementById('adminChatModal');
+    m.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    activeModal = 'adminChatModal';
+    window.history.pushState({ modal: 'adminChatModal' }, "");
+    tg.BackButton.show();
+    updateBtns();
+}
+
+    // Xabarlarni o'qib, ekranga chizish
+    window.renderAdminChatMessages = () => {
+        let box = document.getElementById('admin-chat-messages');
+        box.innerHTML = '<p style="text-align:center; color:gray;">Yuklanmoqda...</p>';
+    // ⚡ XOTIRA OQISHINI TUZATISH: eski listenerni o'chirib, keyin yangisini ulaymiz
+    if (window._adminChatRef) { try { window._adminChatRef.off('value'); } catch(e){} }
+    // 💬 order_chats/{uid}/{orderId} — buyurtma SERVER-OWNED, chat alohida tugunda.
+    window._adminChatRef = db.ref('order_chats/' + currentAdminChatUid + '/' + currentAdminChatOrderId);
+    window._adminChatRef.on('value', snapshot => {
+            var val = snapshot.val();
+            var msgs = [];
+            if (val && typeof val === 'object') {
+                msgs = Object.keys(val).sort().map(function (k) { return val[k]; }).filter(Boolean);
+            }
+            if (msgs.length > 0) {
+                let chatHtml = '';
+                msgs.forEach(msg => {
+                    let isMe = msg.sender === 'admin';
+                    chatHtml += `
+                            <div style="display: flex; justify-content: ${isMe ? 'flex-end' : 'flex-start'};">
+                                <div style="max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 13px; 
+                                     background: ${isMe ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.1)'}; 
+                                     color: ${isMe ? '#000' : 'white'}; border-bottom-${isMe ? 'right' : 'left'}-radius: 2px;">
+                                    ${escHtml(msg.text)}
+                                    <div style="font-size: 9px; opacity: 0.7; text-align: right; margin-top: 4px;">${escHtml(msg.time)}</div>
+                                </div>
+                            </div>
+                        `;
+                });
+                box.innerHTML = chatHtml;
+            } else {
+                box.innerHTML = `<div style="color: gray; text-align: center; font-size: 12px; margin-top: 20px;">Hali xabarlar yo'q.</div>`;
+            }
+            box.scrollTop = box.scrollHeight; // Har doim pastga tushirib qo'yish
+        });
+    }
+
+    // Admindan xabar jo'natish — order_chats ga push (sender:'admin'). Admin initData
+    // bilan auth bo'lgani uchun qoidalar bu yozuvga ruxsat beradi. Buyurtma yozuviga
+    // (users/{uid}/orders) ENDI TEGMAYMIZ — u SERVER-OWNED.
+    window.sendAdminMessage = () => {
+        let input = document.getElementById('admin-chat-input');
+        let text = input.value.trim();
+        if(!text) return;
+        if (!currentAdminChatUid || currentAdminChatOrderId == null) return;
+
+        let now = new Date();
+        let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+
+        // Kod (best-effort) — Telegram xabarida ko'rsatish uchun
+        var _sentCode = currentAdminChatOrderId;
+        try {
+            (window.allFetchedOrders || []).some(function (o) {
+                if (o && String(o.uI) === String(currentAdminChatUid) && String(o.id) === String(currentAdminChatOrderId)) {
+                    _sentCode = o.code || currentAdminChatOrderId; return true;
+                }
+                return false;
+            });
+        } catch (e) {}
+
+        var _send = function () {
+            try {
+                db.ref('order_chats/' + currentAdminChatUid + '/' + currentAdminChatOrderId)
+                  .push({ sender: 'admin', text: text, time: timeString })
+                  .then(function () {
+                        input.value = '';   // jonli listener o'zi qayta chizadi
+                        var _uidStr = String(currentAdminChatUid);
+                        // 🔔 Ilova ichidagi bildirishnoma — HAR mijozga (ilova/saytdan Telegram'siz
+                        //    buyurtma bergan mijoz ham javobni ko'radi). Bitta kalit — ro'yxat
+                        //    ustidan yozilmaydi (admin yozish huquqi bor: phase2/notifications).
+                        try {
+                            var _nid = 'oc_' + String(currentAdminChatOrderId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60) + '_' + Date.now();
+                            db.ref('users/' + _uidStr + '/phase2/notifications/' + _nid).set({
+                                id: _nid, icon: '\uD83D\uDCE9', title: '#' + String(_sentCode).slice(0, 40) + ' buyurtma bo\u2018yicha javob',
+                                text: text.slice(0, 300), date: Date.now(), read: false, kind: 'order_chat', orderId: String(currentAdminChatOrderId)
+                            }).catch(function () {});
+                        } catch (e) {}
+                        // MIJOZGA TELEGRAM ORQALI XABAR — faqat Telegram hisobi bo'lsa (uid = Telegram ID)
+                        if (/^[1-9]\d{2,19}$/.test(_uidStr)) tgProxySend({
+                            chat_id: currentAdminChatUid,
+                            text: `📩 <b>#${escTg(_sentCode)}</b> buyurtmangiz bo'yicha Admindan javob keldi:\n\n💬 <i>"${escTg(text)}"</i>\n\nJavob berish uchun Avto_A1 do'koniga kiring.`,
+                            parse_mode: "HTML"
+                        });
+                  })
+                  .catch(function () { showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning"); });
+            } catch (e) { showToast("Xabar saqlanmadi — internetni tekshiring", "warning"); }
+        };
+        if (window._ensureAuth) { window._ensureAuth().then(_send, _send); }
+        else _send();
+    }
+    
+    function openAdminStats() {
+        document.getElementById('adminModal').style.display = 'none';
+        let sM = document.getElementById('adminStatsModal');
+        sM.style.display = 'flex';
+        activeModal = 'adminStatsModal';
+        window.history.pushState({ modal: 'adminStatsModal' }, "");
+        
+        let c = document.getElementById('admin-stats-content');
+        c.innerHTML = '<p style="text-align:center; margin-top:30px;"><span class="hourglass" style="transform:scale(0.5); display:inline-block;"></span></p>';
+        
+        db.ref('users').once('value', (s) => {
+            let totalRevenue = 0;
+            let todayRevenue = 0;
+            let totalCustomers = 0;
+            let productSales = {}; 
+            let todayDate = new Date().toLocaleDateString('uz-UZ');
+
+            if(s.exists()) {
+                let us = s.val();
+                totalCustomers = Object.keys(us).length;
+                
+                for(let uid in us) {
+                    if(us[uid].orders) {
+                        us[uid].orders.forEach(o => {
+                            // Faqat muvaffaqiyatli 'yetkazildi' bo'lganlar daromadga qo'shiladi
+                            if(o.status === 'yetkazildi') {
+                                totalRevenue += o.total;
+                                if(o.date === todayDate) todayRevenue += o.total;
+                            }
+                            
+                            // Tovarlar reytingini hisoblash
+                            if(o.items && o.status !== 'bekor_qilingan') {
+                                for(let pid in o.items) {
+                                    productSales[pid] = (productSales[pid] || 0) + o.items[pid];
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+
+            // Top 5 ta eng ko'p sotilgan tovarni saralash
+            let topProducts = Object.keys(productSales)
+                .map(id => ({ id: id, count: productSales[id] }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+
+            let topHtml = topProducts.map(tp => {
+                let p = productsDB.find(x => x.id == tp.id);
+                let pName = p ? p.name : "O'chirilgan tovar";
+                return `<div style="display:flex; justify-content:space-between; margin-bottom:8px; background:rgba(255,255,255,0.05); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);"><span>${pName}</span><span style="color:var(--luxury-gold); font-weight:800;">${tp.count} ta</span></div>`;
+            }).join('');
+            
+            if(topHtml === '') topHtml = "<p style='color:gray; font-size:13px; text-align:center;'>Hali tovar sotilmagan.</p>";
+
+            c.innerHTML = `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom: 15px;">
+                    <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                        <div style="font-size:26px; margin-bottom:5px;">📈</div>
+                        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Bugungi savdo</div>
+                        <div style="font-size:14px; font-weight:800; color:#34c759; margin-top:5px;">${todayRevenue.toLocaleString()} so'm</div>
+                    </div>
+                    <div class="luxury-card" style="padding:15px; text-align:center; display:block;">
+                        <div style="font-size:26px; margin-bottom:5px;">👥</div>
+                        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Jami Mijozlar</div>
+                        <div style="font-size:18px; font-weight:800; color:#fff; margin-top:5px;">${totalCustomers} kishi</div>
+                    </div>
+                </div>
+                
+                <div class="luxury-card" style="padding:20px; display:block; margin-bottom:25px; text-align:center; border: 1px solid rgba(212, 175, 55, 0.3);">
+                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:1px;">Umumiy savdo (tushum)</div>
+                    <div style="font-size:26px; font-weight:800; color:var(--luxury-gold);">${totalRevenue.toLocaleString()} so'm</div>
+                    <div style="font-size:10px; color:gray; margin-top:5px;">(Faqat yetkazib berilgan buyurtmalar)</div>
+                </div>
+
+                <h3 style="font-size:16px; margin-bottom:15px; color:white; display:flex; align-items:center; gap:8px;"><svg class="uic" aria-hidden="true"><use href="#i-award"></use></svg>Xit Savdolar (Top 5)</h3>
+                ${topHtml}
+            `;
+        });
+    }
+    
+
+// 🎛 ADMIN buyurtma filtrlari — iOS uslubidagi chiplar (faqat ko'rinish).
+window._aoFilterBar = function () {
+    var F = [['barchasi','Barchasi','var(--ao-gray)'],['kutilmoqda','Kutilmoqda','var(--ao-yellow)'],['qabul','Qabul','var(--ao-blue)'],['yolda',"Yo'lda",'var(--ao-orange)'],['yetkazildi','Yetkazildi','var(--ao-green)'],['bekor_qilingan','Bekor','var(--ao-red)']];
+    return '<div class="ao-chips" role="tablist">' + F.map(function (f, i) {
+        return '<button type="button" role="tab" aria-selected="' + (i === 0) + '" class="ao-chip' + (i === 0 ? ' is-active' : '') + '" style="--c:' + f[2] + '" onclick="filterAdminOrders(\'' + f[0] + '\', this)">' +
+            '<i class="ao-dot"></i><span>' + f[1] + '</span><b class="ao-cnt" data-cnt="' + f[0] + '"></b></button>';
+    }).join('') + '</div>';
+};
+window._aoUpdateCounts = function () {
+    var all = window.allFetchedOrders || [], c = { barchasi: all.length };
+    all.forEach(function (o) { var k = o.status || 'kutilmoqda'; c[k] = (c[k] || 0) + 1; });
+    document.querySelectorAll('#adminOrdersModal .ao-cnt').forEach(function (el) {
+        var n = c[el.getAttribute('data-cnt')] || 0; el.textContent = n ? n : '';
+    });
+};
+
+// 🧭 ADMIN buyurtmalar: tartib + HAQIQIY (server) holat.
+//  1) Tartib: server buyurtma id si "1729…-hash" ko'rinishida (matn). `b.id - a.id`
+//     bunday id da NaN berib, tartibni buzardi — yangi buyurtmalar ro'yxat
+//     o'rtasida yo'qolib qolardi. Endi createdAt (yoki id ning raqamli boshi).
+//  2) Holat: `users/{uid}/orders` — faqat proyeksiya; eski oqimda o'zgargan
+//     buyurtmalarda u eskirib qolishi mumkin (ekranda "Kutilmoqda", serverda
+//     aslida "Bekor"). Admin `orders/` ni o'qiy oladi — ko'rsatishdan oldin
+//     holatni o'sha yerdan olamiz. Xato bo'lsa — jim, eski xatti-harakat.
+window._aoOrderTime = function (o) {
+    var c = Number(o && o.createdAt);
+    if (c > 0) return c;
+    var n = parseInt(String(o && o.id != null ? o.id : ''), 10);
+    return isFinite(n) ? n : 0;
+};
+window._aoSortOrders = function (arr) {
+    return arr.sort(function (a, b) { return window._aoOrderTime(b) - window._aoOrderTime(a); });
+};
+window._aoCanonStatus = function (arr) {
+    if (!arr || !arr.length || typeof db === 'undefined') return Promise.resolve(arr);
+    var read = db.ref('orders').once('value').then(function (snap) {
+        var all = (snap && snap.val()) || {};
+        arr.forEach(function (o) {
+            var c = all[String(o.uI) + '_' + String(o.id)];
+            if (!c || typeof c !== 'object') return;
+            var st = c.status || 'kutilmoqda';
+            if ((o.status || 'kutilmoqda') !== st) { o._projStatus = o.status || 'kutilmoqda'; o.status = st; }
+            if (!o.createdAt && c.createdAt) o.createdAt = c.createdAt;
+        });
+        return arr;
+    }).catch(function () { return arr; });
+    // Sekin tarmoqda ro'yxatni ushlab turmaymiz (3 s dan keyin bor ma'lumot bilan).
+    var timeout = new Promise(function (res) { setTimeout(function () { res(arr); }, 3000); });
+    return Promise.race([read, timeout]);
+};
+  function openAdminOrders() { 
+    try { if (window._aoHideDetail) window._aoHideDetail(); } catch (e) {}
+    document.getElementById('adminModal').style.display = 'none'; 
+    let aM = document.getElementById('adminOrdersModal'); 
+    aM.style.display = 'flex'; 
+    activeModal = 'adminOrdersModal'; 
+    window.history.pushState({ modal: 'adminOrdersModal' }, ""); 
+    let c = document.getElementById('admin-orders-list'); 
+    
+    aM.querySelector('.modal-header h2').innerHTML = '📦 Buyurtmalar';
+    
+    c.innerHTML = `
+        ${window._aoFilterBar()}
+        <div id="admin-orders-render-box">${window._skel(6)}</div>
+    `;
+
+    window.allFetchedOrders = []; 
+
+    window._getUsersSnap().then((s) => { 
+        let aO = []; 
+        if(s.exists()) { 
+            let us = s.val(); 
+            for(let uid in us) { 
+                if(us[uid].orders) { 
+                    let ph = us[uid].profile ? us[uid].profile.phone : ""; 
+                    let nm = us[uid].profile ? us[uid].profile.name : ""; 
+                    // Qotib qolishni oldini olish uchun Object.values ishlatamiz
+                    let userOrdersArr = Array.isArray(us[uid].orders) ? us[uid].orders : Object.values(us[uid].orders);
+                    userOrdersArr.forEach(o => { 
+                        if(o && (o.id || o.code)) aO.push({ uI: uid, uN: nm, uP: ph, ...o }); 
+                    }); 
+                } 
+            } 
+        } 
+        window._aoCanonStatus(aO).then(() => {
+            window._aoSortOrders(aO);
+            window.allFetchedOrders = aO;
+            window.lastOrdersRef = null;
+            renderAdminOrdersUI(aO);
+        });
+    }); 
+}
+    
+// ✅ Tasdiq oynasi (Telegram'da tg.showConfirm, brauzerda window.confirm).
+window._a1Confirm = function (text) {
+    return new Promise(function (resolve) {
+        try {
+            if (typeof tg !== 'undefined' && tg.showConfirm && tg.isVersionAtLeast && tg.isVersionAtLeast('6.2')) {
+                tg.showConfirm(text, function (ok) { resolve(!!ok); });
+                return;
+            }
+        } catch (e) {}
+        try { resolve(window.confirm(text)); } catch (e) { resolve(false); }
+    });
+};
+
+// 🧾 Buyurtma tarkibi matni — SERVER `itemDetails` afzal (yangi buyurtmalarda
+//    `items` kalitlari "l_<hash>" — ulardan nom tiklab bo'lmaydi; ilgari shu
+//    sabab mijoz xabarida tovarlar ro'yxati BO'SH chiqardi).
+window._orderDetailLines = function (o) {
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        var lines = '';
+        o.itemDetails.forEach(function (it) {
+            var _opt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || ''); var sz = _opt ? ' (' + _opt + ')' : '';
+            var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
+            lines += "\n\u25AA\uFE0F " + it.name + sz + " \u2014 " + (it.qty || 0) + " x " +
+                (Number(it.unitPrice) || 0).toLocaleString() + " = " + (Number(line) || 0).toLocaleString() + " so'm";
+        });
+        return { lines: lines, total: Number(o.total) || 0 };
+    }
+    return window._orderItemsSummary((o && o.items) || {});
+};
+
+// ⌛ Holat soatchasi matnlari: [jarayon, natija].
+window._aoStatusLbl = function (st, from) {
+    if (st === 'qabul') return ['Qabul qilinmoqda\u2026', 'Qabul qilindi'];
+    if (st === 'yolda') return ["Yo'lga chiqarilmoqda\u2026", "Yo'lga chiqdi"];
+    if (st === 'yetkazildi') return ['Yetkazildi deb belgilanmoqda\u2026', 'Yetkazib berildi'];
+    if (st === 'bekor_qilingan') return from === 'yetkazildi' ? ['Qaytarilmoqda\u2026', 'Qaytarildi'] : ['Bekor qilinmoqda\u2026', 'Bekor qilindi'];
+    return ["Holat o'zgartirilmoqda\u2026", "Holat o'zgartirildi"];
+};
+
+// 🔄 Holat o'zgargach OCHIQ ko'rinishlarni joyida yangilaydi (serverga bormasdan):
+//    buyurtma sahifasi (yangi holat + keyingi tugma), yig'ish oynasi va orqadagi ro'yxat.
+window._aoAfterStatus = function (uid, id) {
+    var same = function (o) { return !!o && String(o.uI) === String(uid) && String(o.id) === String(id); };
+    var shown = function (elId) {
+        var m = document.getElementById(elId);
+        var d = m && m.style ? m.style.display : '';
+        return !!d && d !== 'none';
+    };
+    try {
+        var k = window._aoDetailKey;
+        if (k && String(k.uid) === String(uid) && String(k.id) === String(id) && shown('adminOrderSheetModal') && window._aoRenderDetail) {
+            window._aoRenderDetail(false);
+        }
+    } catch (e) {}
+    try { if (same(window._pickOrder) && shown('adminOrderPickModal') && window._renderPick) window._renderPick(); } catch (e) {}
+    // Orqadagi ro'yxat — animatsiyasiz qayta chiziladi (paginatsiya saqlanadi).
+    try {
+        if (window.lastOrdersRef && document.getElementById('admin-orders-render-box') && typeof renderAdminOrdersUI === 'function') {
+            renderAdminOrdersUI(window.lastOrdersRef);
+        }
+    } catch (e) {}
+};
+
+// ✨ Yangi holat kartasi mayin "joyiga tushadi" (WAAPI — lite rejimdagi CSS
+//    animatsiya o'chirgichi unga ta'sir qilmaydi; zaif qurilmada umuman yo'q).
+window._aoPulseHero = function () {
+    var hero = document.querySelector('#ao-detail .ao-hero');
+    if (!hero || !hero.animate || document.documentElement.classList.contains('lite')) return;
+    try {
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    } catch (e) {}
+    hero.animate([{ transform: 'scale(.97)', opacity: .6 }, { transform: 'none', opacity: 1 }],
+        { duration: 360, easing: 'cubic-bezier(.2,.8,.2,1)' });
+};
+
+// 🔎 Bitta buyurtmaning HAQIQIY (server) holatini qayta o'qiydi — butun `users`
+//    daraxtini yuklamasdan (409: boshqa admin/bot allaqachon o'zgartirgan).
+window._aoRefreshOne = function (uid, id) {
+    try {
+        if (typeof db === 'undefined' || !db || !db.ref) return Promise.resolve(null);
+        return db.ref('orders/' + String(uid) + '_' + String(id)).once('value').then(function (s) {
+            var c = s && s.val ? s.val() : null;
+            if (!c || typeof c !== 'object') return null;
+            (window.allFetchedOrders || []).forEach(function (o) {
+                if (o && String(o.uI) === String(uid) && String(o.id) === String(id)) {
+                    o.status = c.status || 'kutilmoqda';
+                    if (c.statusUpdatedAt) o.statusUpdatedAt = c.statusUpdatedAt;
+                }
+            });
+            try { window._aoAfterStatus(uid, id); } catch (e) {}
+            return c;
+        }).catch(function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+};
+
+async function changeOrderStatus(uid, orderId, newStatus) {
+        // 🔒 SERVER-AUTHORITATIVE: holat Worker /order-status orqali o'zgaradi.
+        //    Server ikkala yozuvni (+ stok qaytarish, cashback) yangilaydi va
+        //    YANGI Worker mijozga hamda BARCHA adminlarga xabarni o'zi yuboradi
+        //    (bot'dagi kartochkalar ham yangilanadi).
+        var _ord = null, oldStatus = null, displayCode = orderId;
+        try {
+            (window.allFetchedOrders || []).some(function (o) {
+                if (o && String(o.uI) === String(uid) && String(o.id) === String(orderId)) { _ord = o; return true; }
+                return false;
+            });
+        } catch (e) {}
+        if (_ord) { oldStatus = _ord.status || 'kutilmoqda'; displayCode = _ord.code || orderId; }
+
+        // ⏳ Ikki marta bosishdan himoya: bitta o'zgarish tugamaguncha yangisi boshlanmaydi.
+        if (window._aoStatusBusy) return;
+        window._aoStatusBusy = true;
+
+        // ⚠️ Qaytarib bo'lmaydigan amallar — tasdiq so'raymiz (tasodifiy bosish).
+        if (newStatus === 'bekor_qilingan') {
+            var _q = (oldStatus === 'yetkazildi')
+                ? ("#" + displayCode + " QAYTARILDI deb belgilansinmi?\n\nTovarlar omborga qaytadi, berilgan cashback qaytarib olinadi. Bu amalni qaytarib bo'lmaydi.")
+                : ("#" + displayCode + " bekor qilinsinmi?\n\nTovarlar omborga qaytadi, mijozga xabar boradi. Bu amalni qaytarib bo'lmaydi.");
+            var _yes = false;
+            try { _yes = await window._a1Confirm(_q); } catch (e) {}
+            if (!_yes) { window._aoStatusBusy = false; return; }
+        }
+
+        // ⌛ Soatcha DARHOL — xuddi buyurtma berilgandagidek (lekin qisqaroq:
+        //    admin kuniga o'nlab marta bosadi). Ilgari tugma bosilgach bir necha
+        //    soniya hech narsa ko'rinmasdi, keyin butun ro'yxat qayta yuklanardi.
+        var _L = window._ordLoader;
+        var _txt = window._aoStatusLbl(newStatus, oldStatus);
+        try { if (_L) _L.show(_txt[0], { minSpin: 650, hold: 760, sub: '#' + displayCode }); } catch (e) {}
+        try { if (window._hap) window._hap('light'); } catch (e) {}
+        var _finish = function (ok, text) {
+            window._aoStatusBusy = false;
+            try { if (_L && _L.finish) return _L.finish(ok, text); } catch (e) {}
+            return Promise.resolve();
+        };
+
+        // ✅ Server tasdiqlagan holatni qo'llash (oddiy yo'l ham, kechikkan javob ham).
+        var _apply = function (data) {
+            // Xabarlar alohida so'rovda (adminlar kartochkasi + mijoz xabari).
+            if (data.deliver) { try { window._a1OrderDeliver(data.deliver); } catch (e) {} }
+            // ⚡ OPTIMISTIK: ro'yxatdagi yozuv shu yerning o'zida yangilanadi. Ochiq
+            //    sahifa (buyurtma / yig'ish) joyida qayta chiziladi: yangi holat +
+            //    keyingi tugma. Butun `users` daraxtini qayta yuklash (eng sekin
+            //    qism edi) endi shart emas — keyingi ochilishda yangisi olinadi.
+            if (_ord) {
+                _ord.status = data.status || newStatus;
+                _ord.statusUpdatedAt = Date.now();
+                delete _ord._projStatus;
+            }
+            try { window._invalidateUsersCache(); } catch (e) {}
+            try { window._aoAfterStatus(uid, orderId); } catch (e) {}
+        };
+
+        var _resp, _data, _req, _timer;
+        try {
+            _req = window._workerPost('/order-status', { uid: String(uid), orderId: String(orderId), status: newStatus, notifyMode: 'split' });
+            // ⏱ Javob 20 s kelmasa soatcha ekranni abadiy to'sib qolmasin. So'rov
+            //    fonda davom etadi: kech bo'lsa ham muvaffaqiyatli kelsa qo'llanadi
+            //    (takroriy bosish ham xavfsiz — server "duplicate" qaytaradi).
+            var _wp = await Promise.race([_req, new Promise(function (res) { _timer = setTimeout(function () { res(null); }, window._aoStatusTimeoutMs || 20000); })]);
+            clearTimeout(_timer);
+            if (!_wp) {
+                _finish(false, "Javob kelmadi");
+                showToast("Server javob bermadi — holat birozdan keyin o'zi yangilanadi", "warning");
+                _req.then(function (late) {
+                    if (late && late.resp && late.resp.ok && late.data && late.data.ok) _apply(late.data);
+                    else { try { window._aoRefreshOne(uid, orderId); } catch (e) {} }
+                }, function () { try { window._aoRefreshOne(uid, orderId); } catch (e) {} });
+                return;
+            }
+            _resp = _wp.resp; _data = _wp.data;
+        } catch (e) {
+            clearTimeout(_timer);
+            _finish(false, "Internet yo'q");
+            showToast("Holat saqlanmadi — internetni tekshiring", "warning");
+            return;
+        }
+        if (!_resp.ok || !_data || !_data.ok) {
+            // 🩺 Serverning ANIQ sababini ko'rsatamiz.
+            var _emsg = (_data && _data.error) ? String(_data.error)
+                        : ("server javobi " + (_resp ? _resp.status : '?'));
+            if (_data && _data.retryable) _emsg = "boshqa o'zgarish bajarilmoqda — birozdan keyin qayta bosing";
+            var _cur = _data && (_data.currentStatus || _data.from || _data.canonicalStatus);
+            var _known = { kutilmoqda: "Kutilmoqda", qabul: "Qabul qilingan", yolda: "Yo'lda", yetkazildi: "Yetkazilgan", bekor_qilingan: "Bekor qilingan" };
+            if (_resp && _resp.status === 409 && _cur && _cur !== newStatus) {
+                _emsg = "bu buyurtma allaqachon \u00AB" + (_known[_cur] || _cur) + "\u00BB — sahifa yangilandi";
+            }
+            _finish(false, "Holat saqlanmadi");
+            showToast("Holat saqlanmadi: " + _emsg, "warning");
+            try { if (window._dwarn) window._dwarn('[order-status] xato:', _resp && _resp.status, _data); } catch (e) {}
+            // Boshqa admin/bot allaqachon o'zgartirgan — server aytgan HAQIQIY holatni
+            // shu yerning o'zida ko'rsatamiz (butun ro'yxatni qayta yuklamasdan).
+            if (_resp && _resp.status === 409) {
+                try { window._invalidateUsersCache(); } catch (e) {}
+                if (_ord && _cur && _known[_cur]) { _ord.status = _cur; try { window._aoAfterStatus(uid, orderId); } catch (e) {} }
+                else { try { window._aoRefreshOne(uid, orderId); } catch (e) {} }
+            }
+            return;
+        }
+
+        var _anim = _finish(true, _data.duplicate ? "Holat allaqachon shunday edi" : _txt[1]);
+        _apply(_data);
+        // Soatcha yopilgach — yangi holat kartasi mayin "joyiga tushadi".
+        Promise.resolve(_anim).then(function () { try { if (window._aoPulseHero) window._aoPulseHero(); } catch (e) {} });
+        if (Array.isArray(_data.restockSkipped) && _data.restockSkipped.length) {
+            var _sk = _data.restockSkipped.map(function (x) { return '• ' + (x.name || x.id) + (x.size && x.size !== 'Universal' ? ' (' + x.size + ')' : ''); }).join('\n');
+            Promise.resolve(_anim).then(function () {
+                try {
+                    var _skTxt = "Bu tovarlar omborga QAYTARILMADI (katalogdan o'chirilgan yoki razmeri o'zgargan):\n\n" + _sk + "\n\nKerak bo'lsa qoldiqni qo'lda to'g'rilang.";
+                    if (typeof tg !== 'undefined' && tg.showAlert) tg.showAlert(_skTxt); else alert(_skTxt);
+                } catch (e) {}
+            });
+        }
+
+        // 📨 Yangi Worker xabarlarni O'ZI yuboradi (notify:"server").
+        //    Eski Worker bilan moslik: maydon bo'lmasa brauzer yuboradi.
+        if (_data.notify === 'server' || _data.duplicate) return;
+        let statusText = "";
+        let mijozMsg = "";
+        let _sum = window._orderDetailLines(_ord || {});
+        let _ordTotal = (_ord && _ord.total) || _sum.total;
+        let _detail = _sum.lines
+            ? ("\n\n🛒 Buyurtma tarkibi:" + _sum.lines + "\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm")
+            : (_ordTotal ? ("\n\n💰 Jami: " + _ordTotal.toLocaleString() + " so'm") : "");
+        if (newStatus === "qabul") {
+            statusText = "✅ QABUL QILINDI";
+            mijozMsg = `✅ #${displayCode} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!${_detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.`;
+        } else if (newStatus === "yolda") {
+            statusText = "🚚 YO'LGA CHIQDI";
+            mijozMsg = `🚚 #${displayCode} raqamli buyurtmangiz yo'lga chiqdi!\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.`;
+        } else if (newStatus === "yetkazildi") {
+            statusText = "🏁 YETKAZIB BERILDI";
+            mijozMsg = `🏁 #${displayCode} raqamli buyurtmangiz yetkazib berildi.\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.`;
+        } else if (newStatus === "bekor_qilingan") {
+            statusText = (oldStatus === 'yetkazildi') ? "↩️ QAYTARILDI" : "❌ BEKOR QILINDI";
+            mijozMsg = `❌ #${displayCode} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: ${(window.ShopInfo && ShopInfo.mainPhone()) || '+998 88 289 30 30'}`;
+        }
+        let adminMsg = `🔄 <b>Buyurtma holati o'zgardi</b>\n\n🆔 Buyurtma: <b>#${escTg(displayCode)}</b>\n📊 Yangi holat: <b>${statusText}</b>`;
+        try {
+            for (var _i = 0; _i < ADMIN_IDS.length; _i++) {
+                if (String(ADMIN_IDS[_i]) === String(currentUser)) continue;
+                try { await tgProxySend({ chat_id: ADMIN_IDS[_i], text: adminMsg, parse_mode: "HTML" }); } catch (e) {}
+            }
+            if (uid && uid !== "Noma'lum" && /^\d+$/.test(String(uid)) && mijozMsg !== "") {
+                await tgProxySend({ chat_id: uid, text: mijozMsg });
+            }
+        } catch(e) {
+            showToast("Xato: SMS jo'natilmadi!", "warning");
+        }
+    }
+    function openModal(id) {
+        if (activeModal === id) return;
+        if(id === 'cartModal') {
+            renderCartItems();
+            // 🔢 NUMBER COUNT-UP: cart ochilganda jami summa "yuqoriga sanab" chiqadi
+            //    (faqat ochilganda — har +/- da emas). reduced-motion/lite da darhol.
+            try {
+                var _rmCnt = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+                          || document.documentElement.classList.contains('lite') || window.__perfLite;
+                if (!_rmCnt && window.animateValue && window._cartTotal > 0) {
+                    setTimeout(function(){ window.animateValue('cart-total-sum', window._cartTotal); }, 60);
+                }
+            } catch(e){}
+        }
+        let m = document.getElementById(id);
+        // 🛒 Agar boshqa modal ochiq bo'lsa - uni xotirada saqlab, yashiramiz.
+        // Yangi modal yopilganда (popstate) - eski modal qaytib ochiladi.
+        // Bu 'savatdan kafolatga -> orqaga -> savatga qaytish' muammosini hal qiladi.
+        if (activeModal && activeModal !== id) {
+            window._modalStack = window._modalStack || [];
+            window._modalStack.push(activeModal);
+            const prev = document.getElementById(activeModal);
+            if (prev) prev.style.display = 'none';
+        }
+        m.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        activeModal = id;
+        window.history.pushState({ modal: id }, "");
+        tg.BackButton.show();
+        updateBtns();
+    }
+    function closeModal() { if(activeModal) window.history.back(); }
+
+    // 🎬 MODALNI QAYTA KO'RSATISH — yopilish animatsiyasini BEKOR QILIB.
+    // ------------------------------------------------------------------
+    // ⚠️ NIMA UCHUN KERAK (haqiqiy xato tuzatildi):
+    //    "Orqaga" bosilganda pastdagi `popstate` avval joriy oynani yopadi
+    //    (0.2 soniyalik chiqish animatsiyasi bilan), keyin esa ba'zi
+    //    hollarda AYNI O'SHA oynani qaytadan ko'rsatadi. Eng aniq misol:
+    //    to'lov oynasida "Karta" tafsilotidan orqaga qaytish — kod
+    //    `paymentModal` ni qayta ko'rsatadi.
+    //    Natijada oyna `display:flex` bo'ladi-yu, chiqish animatsiyasi uni
+    //    shaffof qilib turadi va 0.2 soniyadan keyin butunlay yashiradi —
+    //    ya'ni mijoz "orqaga" bosganda TO'LOV OYNASI YO'QOLIB QOLARDI.
+    //    Bu yordamchi qayta ko'rsatishdan OLDIN yopilishni bekor qiladi.
+    function _reshowModal(id) {
+        var el = (typeof id === 'string') ? document.getElementById(id) : id;
+        if (!el) return null;
+        try { if (window._modalCancelClose) window._modalCancelClose(el); } catch (e) {}
+        el.style.display = 'flex';
+        return el;
+    }
+    window._reshowModal = _reshowModal;
+    // 🏠 To'liq bosh menyuga qaytish (ilovada buyurtmadan keyin).
+    //    Telegram'da buyurtmadan keyin mini app YOPILADI (tg.close) va keyingi
+    //    ochilishda hammasi yangidan boshlanadi. Ilovada esa «yopish» yo'q —
+    //    shuning uchun barcha oynalar yopiladi, savat qayta chiziladi va
+    //    bosh sahifa ko'rsatiladi (aks holda savat eski buyurtma bilan qolardi).
+    window.a1ResetToHome = function () {
+        try {
+            document.querySelectorAll('.modal-standard').forEach(function (m) {
+                if (m.style.display && m.style.display !== 'none') {
+                    try { if (window._modalCancelClose) window._modalCancelClose(m); } catch (e) {}
+                    m.style.display = 'none';
+                }
+            });
+            var sh = document.getElementById('coSheet');
+            if (sh) { sh.classList.remove('open', 'on', 'show'); sh.style.display = 'none'; setTimeout(function () { sh.style.display = ''; }, 400); }
+            activeModal = null;
+            if (Array.isArray(window._modalStack)) window._modalStack.length = 0;
+            document.body.style.overflow = '';
+            historyStack = ['main-menu'];
+            try { window.history.replaceState({ section: 'main-menu' }, ''); } catch (e) {}
+            showSection('main-menu');
+            if (typeof window.updateNav === 'function') window.updateNav('nav-home');
+            try { if (typeof window.renderCartItems === 'function') window.renderCartItems(); } catch (e) {}
+            try { updateCartBadge(); } catch (e) {}
+            updateBtns();
+            var c = document.querySelector('.container'); if (c) c.scrollTop = 0;
+        } catch (e) { try { location.reload(); } catch (e2) {} }
+    };
+    function goHome() { if(activeModal) closeModal(); if(historyStack.length > 1 || historyStack[historyStack.length - 1] !== 'main-menu') { historyStack = ['main-menu']; window.history.pushState({ section: 'main-menu' }, ""); showSection('main-menu'); } updateNav('nav-home'); }
+
+        // 🧭 MUKAMMAL NAVIGATSIYA VA OYNALARNI YOPISH XARITASI (Qotishlarga qarshi)
+        window.addEventListener('popstate', function(e) {
+            if (activeModal) {
+                let current = activeModal;
+
+                // 🔍 0-. RASMNI KATTALASHTIRISH qatlami — ENG yuqori prioritet.
+                //    Fayl oxiridagi "QATLAM 2026.20" qo'shgan `#pmz` overlay'i.
+                //    Bu yerda hal qilinishi SHART: aks holda «Nazad» bosilganda
+                //    pastdagi shartlar tovar oynasini ham yopib yuborardi, ya'ni
+                //    bitta emas IKKI oyna yopilardi.
+                if (current === '__zoom__') {
+                    if (window._closeZoomOverlay) window._closeZoomOverlay();
+                    activeModal = window._zoomPrevActive || null;
+                    window._zoomPrevActive = null;
+                    updateBtns();
+                    return;
+                }
+
+                // 📸 STORIES oynasi (fayl oxiridagi "a1-stories-26" qatlami) — xuddi
+                //    zoom kabi: FAQAT storis yopiladi, ostidagi oyna (masalan admin
+                //    Stories boshqaruvi) joyida qoladi.
+                if (current === '__story__') {
+                    if (window._a1svHideFromHistory) window._a1svHideFromHistory();
+                    activeModal = window._a1svPrevActive || null;
+                    window._a1svPrevActive = null;
+                    updateBtns();
+                    return;
+                }
+                // 📊 Storis statistikasi (kim ko'rdi / javoblar) — FAQAT shu oyna yopiladi;
+                //    ostidagi storis yoki admin boshqaruvi joyida qoladi.
+                if (current === '__storyins__') {
+                    if (window._a1svInsHideFromHistory) window._a1svInsHideFromHistory();
+                    activeModal = window._a1svInsPrev || null;
+                    window._a1svInsPrev = null;
+                    updateBtns();
+                    return;
+                }
+
+                // 🆕 0a. SKANER overlay'i — eng yuqori prioritet, oldingi modalga qaytadi
+                if (current === '__scanner__') {
+                    let cleanup = () => { let ov = document.getElementById('scanner-overlay'); if (ov) ov.remove(); };
+                    if (window._h5qr) {
+                        let r = window._h5qr; window._h5qr = null;
+                        try { r.stop().then(() => { try { r.clear(); } catch(e2){} cleanup(); }).catch(cleanup); }
+                        catch(e2) { cleanup(); }
+                    } else { cleanup(); }
+                    activeModal = window._scannerPrevActive || null;
+                    window._scannerPrevActive = null;
+                    if (!activeModal) {
+                        document.body.style.overflow = '';
+                        let cont = document.querySelector('.container'); if(cont) cont.classList.remove('blur-bg');
+                    }
+                    updateBtns();
+                    return;
+                }
+
+                // 🆕 0b. XARITA tanlash oynasi — Nazad bosilsa xavfsiz yopiladi (qotmaydi)
+                if (current === '__mappicker__') {
+                    // Agar nom berish qatlami ochiq bo'lsa — faqat uni yopamiz, xarita qoladi
+                    let nm = document.getElementById('addr-name-overlay');
+                    if (nm && nm.classList.contains('show')) {
+                        nm.classList.remove('show');
+                        setTimeout(function(){ nm.style.display = 'none'; }, 220);
+                        window.history.pushState({ modal: '__mappicker__' }, ""); // map hali ochiq
+                        updateBtns();
+                        return;
+                    }
+                    // Xaritani yopamiz
+                    let ovm = document.getElementById('map-picker-overlay');
+                    if (ovm) ovm.style.display = 'none';
+                    activeModal = window._mapPrevActive || null;
+                    window._mapPrevActive = null;
+                    if (!activeModal) {
+                        document.body.style.overflow = '';
+                        let cont = document.querySelector('.container'); if(cont) cont.classList.remove('blur-bg');
+                    }
+                    updateBtns();
+                    return;
+                }
+
+
+                // 🎬 Modal YOPILISH animatsiyasi (QATLAM 2026.17).
+                //    Ilgari bu yerda `display='none'` edi — oyna BIR ZUMDA
+                //    g'oyib bo'lardi: ochilishi silliq, yopilishi keskin.
+                //    `_modalHide` avval qisqa chiqish animatsiyasini o'ynatib,
+                //    keyin yashiradi. Qatlam yuklanmagan bo'lsa — eski xatti-harakat.
+                if (window._modalHide) window._modalHide(document.getElementById(current));
+                else document.getElementById(current).style.display = 'none';
+    
+                // 0c. 🧾 Buyurtma sahifasidan -> buyurtmalar ro'yxatiga
+                if (current === 'adminOrderSheetModal') {
+                    window._aoDetailKey = null;
+                    activeModal = 'adminOrdersModal';
+                    _reshowModal('adminOrdersModal');
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = [];
+                    updateBtns();
+                    // Yig'ish/chat belgilari yangilansin (animatsiyasiz, paginatsiya saqlanadi)
+                    try { if (window.lastOrdersRef) renderAdminOrdersUI(window.lastOrdersRef); } catch (e) {}
+                    return;
+                }
+
+                // 1. Admin Chatdan -> Buyurtmalarga qaytish
+                if (current === 'adminOrderPickModal') {
+                    // 📋 Yig'ish oynasidan orqaga -> buyurtma sahifasiga (u yerdan ochilgan bo'lsa) yoki ro'yxatga
+                    if (window._aoBackToDetail && window._aoBackToDetail()) { updateBtns(); return; }
+                    activeModal = 'adminOrdersModal';
+                    _reshowModal('adminOrdersModal');
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = [];
+                    updateBtns();
+                    return;
+                }
+
+                if (current === 'adminChatModal') {
+                    // ⚡ Listenerni uzamiz (xotira oqishi bo'lmasligi uchun)
+                    if (window._adminChatRef) { try { window._adminChatRef.off('value'); window._adminChatRef = null; } catch(e){} }
+                    if (window._aoBackToDetail && window._aoBackToDetail()) { updateBtns(); return; }
+                    activeModal = 'adminOrdersModal';
+                    _reshowModal('adminOrdersModal');
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
+                    updateBtns();
+                    // ⚠️ pushState YO'Q — history allaqachon adminOrders'da (iOS swipe mos)
+                    return;
+                }
+
+                // 1b. AI Chat yopilganda listenerni uzamiz
+                if (current === 'aiChatModal') {
+                    if (window._aiChatRef) { try { window._aiChatRef.off('value'); window._aiChatRef = null; } catch(e){} }
+                }
+
+                // 1c. 💳 TO'LOV oynasi (Nazad tugmasi):
+                //   - Payme tafsiloti ochiq bo'lsa -> to'lov usullari ro'yxatiga qaytamiz
+                //   - Aks holda (usullar ro'yxati ochiq) -> savatga qaytamiz (stack orqali, pastda)
+                if (current === 'paymentModal') {
+                    var _cd = document.getElementById('card-details');
+                    var _ad = document.getElementById('app-pay-details');
+                    var _subOpen = (_cd && !_cd.classList.contains('hidden')) || (_ad && !_ad.classList.contains('hidden'));
+                    if (_subOpen) {
+                        if (_cd) _cd.classList.add('hidden');
+                        if (_ad) _ad.classList.add('hidden');
+                        document.getElementById('payment-options').classList.remove('hidden');
+                        _reshowModal('paymentModal');
+                        activeModal = 'paymentModal';
+                        document.body.style.overflow = 'hidden';
+                        window.history.pushState({ modal: 'paymentModal' }, "");
+                        updateBtns();
+                        return;
+                    }
+                    // usullar ro'yxati ochiq edi -> savatga (modal stack case 5 hal qiladi)
+                }
+    
+                // 2. Tahrirlash oynasidan -> Tovar yoki Qoralamalarga qaytish
+                if (current === 'editModal') {
+                    // ⚠️ TUZATILDI (tur to'qnashuvi): ilgari bu yerda
+                    //    `window.currentDraftFolder = false` yozilardi. Lekin o'sha
+                    //    o'zgaruvchi BOSHQA maqsadda — ochilgan papka NOMINI (batch_id
+                    //    satri) saqlash uchun ishlatiladi. Natijada qoralamani tahrirlab
+                    //    "orqaga" bosilganda papka nomi `false` ga aylanib,
+                    //    filterAdminDrafts hech narsa topa olmasdi va admin
+                    //    "Bu papkada tovar topilmadi" degan bo'sh ekranni ko'rardi —
+                    //    qoralamalar joyida turgani holda. Endi alohida bayroq bor.
+                    if (window._editCameFromDrafts) {
+                        activeModal = 'adminDraftsModal';
+                        _reshowModal('adminDraftsModal');
+                        window._editCameFromDrafts = false;   // faqat bayroqni tozalaymiz
+                        // Papka ichidagi ro'yxatni yangilaymiz (tahrir natijasi ko'rinsin)
+                        try {
+                            if (window.currentDraftFolder && typeof filterAdminDrafts === 'function') {
+                                filterAdminDrafts('all');
+                            }
+                        } catch (e) {}
+                    } else {
+                        activeModal = 'productModal';
+                        _reshowModal('productModal');
+                    }
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = []; // 🧭 stack toza
+                    updateBtns();
+                    return;
+                }
+    
+                // 2b. 📸 STORY COMPOSER — qaerdan ochilgan bo'lsa, o'sha yerga qaytadi
+                //     (admin Stories oynasi, yoki to'g'ridan-to'g'ri imo/halqa orqali -> hech qayerga)
+                if (current === 'storyComposerModal') {
+                    var _scFrom = window._storyComposerFrom || null;
+                    window._storyComposerFrom = null;
+                    if (_scFrom && document.getElementById(_scFrom)) {
+                        activeModal = _scFrom;
+                        _reshowModal(_scFrom);
+                        document.body.style.overflow = 'hidden';
+                        window._modalStack = [];
+                        updateBtns();
+                        return;
+                    }
+                    // Imo/halqa orqali ochilgan — butunlay yopamiz
+                    document.body.style.overflow = '';
+                    window._modalStack = [];
+                    activeModal = null;
+                    updateBtns();
+                    return;
+                }
+
+                // 2b-2. 🖼 BANNER TAHRIRLASH -> Bannerlar ro'yxatiga qaytish.
+                //       Composer FAQAT banner boshqaruvidan ochiladi, shuning
+                //       uchun qaytish manzili doimo bir xil (`_storyComposerFrom`
+                //       kabi holat saqlash kerak emas).
+                if (current === 'bannerComposerModal') {
+                    activeModal = 'bannerAdminModal';
+                    _reshowModal('bannerAdminModal');
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = [];
+                    updateBtns();
+                    try { if (window.AvtoBanners) window.AvtoBanners.repaintAdmin(); } catch (e) {}
+                    return;
+                }
+
+                // 2c. 👤 MIJOZ TAFSILOTI -> Mijozlar ro'yxatiga qaytish
+                if (current === 'customerDetailModal') {
+                    activeModal = 'adminCustomersModal';
+                    _reshowModal('adminCustomersModal');
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = [];
+                    updateBtns();
+                    return;
+                }
+
+                // 3. Maxsus Admin oynalaridan -> Admin Panelga qaytish
+                if (current === 'adminOrdersModal' || current === 'adminStatsModal' || current === 'adminInventoryModal' || current === 'adminCustomersModal' || current === 'adminDraftsModal' || current === 'adminStoriesModal' || current === 'bannerAdminModal' || current === 'bulkDiscountModal') {
+                    activeModal = 'adminModal';
+                    _reshowModal('adminModal');
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = []; // 🧭 stack toza
+                    updateBtns();
+                    // ⚠️ pushState YO'Q — endi ichki modallar pushState bilan ochiladi,
+                    //    history allaqachon adminModal'da. Qo'lda pushState iOS swipe'ni buzardi.
+                    return;
+                }
+    
+                // 4. Qo'shish oynalaridan -> Admin Panelga qaytish (Faqatgina o'ziga qaytamiz)
+                if (current === 'addProductModal' || current === 'aiBulkModal') {
+                    activeModal = 'adminModal';
+                    _reshowModal('adminModal');
+                    document.body.style.overflow = 'hidden';
+                    window._modalStack = []; // 🧭 stack toza (ikkinchi nazad to'g'ri ishlash uchun)
+                    updateBtns();
+                    return;
+                }
+
+                // 5. 🛒 MODAL STACK: agar oldingi modal saqlangan bo'lsa - unga qaytamiz.
+                //    Bu 'savat -> kafolat -> orqa' muammosini hal qiladi: kafolat
+                //    yopilganда savat oynasi qaytib ochiladi (asosiy menyu emas).
+                if (window._modalStack && window._modalStack.length > 0) {
+                    const prevId = window._modalStack.pop();
+                    activeModal = prevId;
+                    // `_reshowModal` — yopilish animatsiyasini bekor qilib ko'rsatadi
+                    // (yuqoridagi izohga qara). Bu yerda ham izchil ishlatamiz.
+                    const prevEl = _reshowModal(prevId);
+                    if (prevId === 'cartModal') renderCartItems();
+                    document.body.style.overflow = 'hidden';
+                    updateBtns();
+                    return;
+                }
+
+                // Boshqa har qanday oyna butunlay yopiladi va Asosiy ekranga tushadi
+                document.body.style.overflow = '';
+                window._modalStack = [];   // 🛒 stack ham tozalanadi (xavfsizlik)
+                let cont = document.querySelector('.container');
+                if(cont) cont.classList.remove('blur-bg');
+                activeModal = null;
+                updateBtns();
+                
+                let cS = historyStack[historyStack.length - 1];
+                if(cS === 'profile-section') updateNav('nav-profile');
+                else if(cS === 'katalog-menu') updateNav('nav-catalog');
+                else if(cS === 'wishlist-section') updateNav('nav-wishlist');
+                else updateNav('nav-home');
+                return;
+            }
+            
+            if (searchActive) { exitSearch(); return; }
+            
+            if (historyStack.length > 1) {
+                historyStack.pop();
+                let pId = historyStack[historyStack.length - 1];
+                document.querySelectorAll('#content-area > div').forEach(d => { d.classList.add('hidden'); });
+                let _a1f = false; try { _a1f = !!(window._a1FillGrid && window._a1FillGrid(pId)); } catch(e){}   // ⚡ lazy bo'lim
+                document.getElementById(pId).classList.remove('hidden');
+                if (_a1f) { try { if (window._catDecorateVisible) window._catDecorateVisible(); } catch(e){} }
+                document.getElementById(pId).classList.add('animate-slide-up');
+                let sC = document.querySelector('.slider-container');
+                if(sC) sC.style.display = (pId === 'main-menu') ? 'block' : 'none';
+                if(pId === 'profile-section') updateNav('nav-profile');
+                else if(pId === 'katalog-menu') updateNav('nav-catalog');
+                else if(pId === 'wishlist-section') updateNav('nav-wishlist');
+                else updateNav('nav-home');
+                updateBtns();
+            } else {
+                tg.close();
+            }
+        });
+
+    tg.onEvent('backButtonClicked', function() { window.history.back(); });
+    function goBack() { window.history.back(); }
+    function updateBtns() { let iD = historyStack.length > 1; let bB = document.getElementById('back-btn'); if(bB) bB.style.display = iD ? 'flex' : 'none'; if (iD || activeModal || searchActive) tg.BackButton.show(); else tg.BackButton.hide(); }
+    updateBtns();
+    let aS = document.getElementById('main-slider'); if (aS) { setInterval(() => { if (document.hidden || activeModal || searchActive) return; if (aS.scrollWidth - aS.clientWidth <= aS.scrollLeft + 5) aS.scrollTo({ left: 0, behavior: 'smooth' }); else aS.scrollBy({ left: aS.clientWidth, behavior: 'smooth' }); }, 3500); } 
+
+    // 🤝 'HAMKORLIK' badge — faqat FARA_CLUB_SAM banneri (2-slayd, index 1) faol
+    // bo'lganda ko'rinadi. Slider scroll qilinganda (qo'lda yoki avtomat) chaqiriladi.
+    window.updatePartnerBadge = function() {
+        var sl = document.getElementById('main-slider');
+        var badge = document.getElementById('slider-partner-badge');
+        if (!sl || !badge) return;
+        var w = sl.clientWidth || 1;
+        var idx = Math.round(sl.scrollLeft / w);
+        // FARA_CLUB_SAM = 4-slayd (index 3). Faqat shu slaydда 'HAMKORLIK' badge ko'rinadi.
+        badge.style.opacity = (idx === 3) ? '1' : '0';
+    };
+    // Boshlang'ich holat (1-banner faol -> badge yashirin)
+    setTimeout(() => { if (window.updatePartnerBadge) window.updatePartnerBadge(); }, 300);

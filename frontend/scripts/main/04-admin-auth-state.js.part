@@ -1,0 +1,329 @@
+    // =====================================
+    // 🔐 ADMIN TEKSHIRUVI (himoya darajasi: defense-in-depth)
+    // =====================================
+    // Imkon bo'lsa — TASDIQLANGAN auth.uid bo'yicha (haqiqiy chegara baribir
+    // Firebase rules'da: faqat admins/{uid}==true yoza/o'qiy oladi). Auth hali
+    // tayyor bo'lmaganda (yoki APK/brauzer) — kosmetik fallback (currentUser).
+    // Shu sababli ADMIN_IDS ni brauzerda "soxtalashtirish" tugmalarni ko'rsatishi
+    // mumkin, ammo qoidalar yoqilgach DB amallari baribir rad etiladi.
+    window.isAdmin = function () {
+        try {
+            var adminStr = ADMIN_IDS.map(String);
+            var au = (window.firebase && firebase.auth && firebase.auth().currentUser)
+                ? String(firebase.auth().currentUser.uid) : null;
+            if (au) return adminStr.indexOf(au) !== -1;
+            return adminStr.indexOf(String(window.currentUser)) !== -1
+                || adminStr.indexOf(String(parseInt(window.currentUser))) !== -1;
+        } catch (e) {
+            return ADMIN_IDS.indexOf(parseInt(window.currentUser)) !== -1;
+        }
+    };
+
+    // ⚡️ TELEGRAM PREMIUM HAPTIC (VIBRATSIYA) TIZIMI
+    // Endi window._hap orqali yo'naltiriladi: Telegram ichida native haptic,
+    // brauzer/APK'da esa navigator.vibrate ZAXIRASI ishlaydi (xato bermaydi).
+const Haptics = {
+    light:     () => { try { window._hap && window._hap('light'); } catch (e) {} }, // Mayin (tugma uchun)
+    medium:    () => { try { window._hap && window._hap('medium'); } catch (e) {} }, // O'rtacha (savat uchun)
+    success:   () => { try { window._hap && window._hap('success'); } catch (e) {} }, // Zo'r (xarid uchun)
+    warning:   () => { try { window._hap && window._hap('warning'); } catch (e) {} }, // Ogohlantirish
+    selection: () => { try { window._hap && window._hap('selection'); } catch (e) {} } // Menyu almashganda
+};
+
+    
+    // =====================================
+    // 🧠 1. MIJOZNI DASTLABKI TANISH (Kutmasdan darhol o'qiydi)
+    // =====================================
+    let tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
+    const urlParams = new URLSearchParams(window.location.search);
+    let urlName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
+    let urlPhone = urlParams.get('phone') ? decodeURIComponent(urlParams.get('phone')) : "";
+    let botRegion = urlParams.get('region') ? decodeURIComponent(urlParams.get('region')) : "Noma'lum";
+
+    let userName = "Mijoz";
+    let isFromTelegram = false;
+
+    if (tgUser) {
+        window.currentUser = parseInt(tgUser.id);
+        userName = tgUser.first_name || "Mijoz";
+        isFromTelegram = true;
+    } else if (urlName) {
+        window.currentUser = "tg_url_" + Date.now();
+        userName = urlName;
+        isFromTelegram = true;
+    } else {
+        let savedUser = localStorage.getItem('avto_a1_user');
+        if (savedUser) {
+            try {
+                let parsed = JSON.parse(savedUser);
+                window.currentUser = parsed.id;
+                userName = parsed.name || "Mijoz";
+                urlPhone = parsed.phone || "";
+            } catch(e) { localStorage.removeItem('avto_a1_user'); }
+        }
+    }
+
+    // =====================================
+    // 📦 2. BAZA VA O'ZGARUVCHILAR
+    // =====================================
+    let cart = {}; try { cart = JSON.parse(localStorage.getItem('avto_cart')) || {}; } catch(e) { localStorage.removeItem('avto_cart'); }
+    let productsDB = [], displayDB = [], historyStack = ['main-menu'], activeModal = null, searchActive = false, myOrders = [], wishlist = [], isDataLoaded = false;
+    let myProfile = { name: userName, phone: urlPhone, address: botRegion !== "Noma'lum" ? botRegion : "" };
+
+    // =====================================
+    // 🔐 3. EKRANNI (LOGIN) SOZLASh
+    // =====================================
+    function checkUserLogin() {
+        let loginScreen = document.getElementById('login-screen');
+        if (!loginScreen) return;
+        
+        if (window.currentUser) {
+            loginScreen.classList.add('hidden');
+            initUserData(); // Login bor, srazi bazani o'qishga ruxsat beramiz
+        } else {
+            loginScreen.classList.remove('hidden');
+        }
+        updateProfileUI();
+    }
+
+    window._manualLoginLegacy = function() {
+        let nameEl = document.getElementById('login-name');
+        let phoneEl = document.getElementById('login-phone');
+        let nameVal = nameEl.value.trim();
+        let phoneVal = phoneEl.value.trim();
+        // Faqat raqamlar (+998 dan keyin 9 ta = O'zbekiston mobil raqami)
+        let digits = phoneVal.replace(/[^0-9]/g, '');
+
+        // 🧈 9/9: qo'pol toast o'rniga maydon ostida yumshoq xatolik
+        let ok = true;
+        if (window._loginSetErr) {
+            if (!nameVal) { window._loginSetErr('login-name', "Ismingizni kiriting"); ok = false; }
+            // 998 + 9 raqam = 12 ta raqam
+            if (digits.length < 12) { window._loginSetErr('login-phone', "To'liq raqam kiriting: +998 90 123 45 67"); ok = false; }
+        } else if (!nameVal || digits.length < 12) {
+            ok = false;
+        }
+        if (!ok) {
+            try { Haptics.warning(); } catch(e) {}
+            // Birinchi xato maydonga fokus
+            if (!nameVal) nameEl.focus(); else phoneEl.focus();
+            return;
+        }
+
+        // Tugma "yuklanmoqda" holatiga o'tadi (ikki marta bosishning oldini oladi)
+        let btn = document.getElementById('login-submit-btn');
+        if (btn) { if (btn.dataset.busy === '1') return; btn.dataset.busy = '1'; btn.classList.add('is-loading'); btn.textContent = 'Kirilmoqda...'; }
+
+        let fakeId = "apk_" + digits;
+        window.currentUser = fakeId;
+        myProfile.name = nameVal;
+        myProfile.phone = phoneVal;
+
+        localStorage.setItem('avto_a1_user', JSON.stringify({ id: fakeId, name: nameVal, phone: phoneVal }));
+
+        try { Haptics.success(); } catch(e) {}
+        // Kichik kechikish — tugma holati ko'rinib, o'tish silliq bo'ladi
+        setTimeout(function(){
+            let ls = document.getElementById('login-screen');
+            if (ls) ls.classList.add('login-leaving');
+            setTimeout(function(){
+                if (ls) { ls.classList.add('hidden'); ls.classList.remove('login-leaving'); }
+                if (btn) { btn.dataset.busy = '0'; btn.classList.remove('is-loading'); btn.textContent = 'Tizimga kirish'; }
+            }, 280);
+            // 🆔 ANONIM FIREBASE KIRISH — mijozga HAQIQIY auth.uid beradi (yangi
+            //    qoidalar buni talab qiladi). uid o'rnatilgach ism/telefon profilга
+            //    yoziladi (egaga ruxsat), so'ng bazani o'qish boshlanadi.
+            var _proceed = function (u) {
+                if (u && u.uid) window.currentUser = u.uid; else window.currentUser = fakeId;
+                if (u && u.uid) {
+                    try {
+                        localStorage.setItem('avto_registration_pending', JSON.stringify({
+                            uid: String(u.uid), name: nameVal, phone: phoneVal
+                        }));
+                    } catch (e) {}
+                }
+                // (Oldindan Promise.reject yaratilmaydi — u «ushlanmagan xato» bo'lib chiqardi)
+                var _profileWrite = null;
+                try {
+                    if (typeof db !== 'undefined' && db.ref) {
+                        _profileWrite = db.ref('users/' + window.currentUser + '/profile').update({ name: nameVal, phone: phoneVal });
+                    }
+                } catch (e) { _profileWrite = Promise.reject(e); }
+                if (!_profileWrite) _profileWrite = Promise.reject(new Error('Firebase mavjud emas'));
+                // Anonymous authning o'zi ro'yxatdan o'tish EMAS. Faqat ism/telefon
+                // profili muvaffaqiyatli yozilgandan keyin server hodisasini yaratamiz.
+                _profileWrite.then(function () {
+                    if (window._registerCustomerOnce) {
+                        return window._registerCustomerOnce({ name: nameVal, phone: phoneVal });
+                    }
+                }).catch(function (e) {
+                    if (window._dwarn) window._dwarn('[profil] ro\'yxatdan o\'tish yozilmadi:', e);
+                });
+                updateProfileUI();
+                showToast("Xush kelibsiz, " + nameVal + "!", "success");
+                initUserData(); // Mijoz qo'lda kirgandan keyin ruxsat beramiz
+            };
+            if (window._ensureAuth) {
+                window._ensureAuth().then(_proceed, function () { _proceed(null); });
+            } else {
+                _proceed(null);
+            }
+        }, 180);
+    };
+
+    window._manualLogin_legacy_removed = null;
+
+    // DARHOL TEKSHIRAMIZ
+    checkUserLogin();
+
+    // =====================================
+    // ⚙️ 4. ADMIN TUGMASI VA FIREBASE YUKLASH
+    // =====================================
+    async function initUserData() {
+        // 1. Admin tekshiruvi (Mijoz topilgandan keyin) — DB kerak emas, darhol
+        if (window.isAdmin()) { 
+            let adminBtn = document.getElementById('nav-admin'); 
+            if(adminBtn) adminBtn.classList.remove('hidden'); 
+            let scanBtn = document.getElementById('scanSearchBtn');
+            if(scanBtn) scanBtn.classList.remove('hidden');
+            // Admin tugmasi qo'shildi => menyu ustunlari 5->6 o'zgardi: kapsulani to'g'rilaymiz
+            try { if (window._recalcNavIndicator) window._recalcNavIndicator(60); } catch(e) {}
+        }
+
+        // 🔐 DB'ga murojaatdan OLDIN auth tugashini kutamiz.
+        // Shunda Firebase rules yoqilganda token tayyor bo'ladi (permission xatosi bo'lmaydi).
+        // Auth muvaffaqiyatsiz bo'lsa ham (APK/brauzer) promise hal bo'ladi va davom etadi.
+        try { window._authOk = !!(await window._authReady); } catch (e) { window._authOk = false; }
+
+        // 🆔 BRAUZER/APK KIMLIGI = ANONIM FIREBASE UID.
+        //    Yangi qoidalar auth.uid === $uid ni talab qiladi. Telegram tashqarisida
+        //    (initData yo'q) DB o'qishdan OLDIN anonim uid'ni o'rnatamiz — aks holda
+        //    "apk_" / "tg_url_" kabi soxta id'lar bo'yicha yozuvlar rad etilardi.
+        try {
+            if (!(tg && tg.initData) && window._ensureAuth) {
+                var _anonUser = await window._ensureAuth();
+                if (_anonUser && _anonUser.uid) window.currentUser = _anonUser.uid;
+            }
+        } catch (e) {}
+
+        // Manual profil yozilib, Worker vaqtincha ishlamagan bo'lsa pending hodisa
+        // Firebase UID bilan saqlanadi va keyingi ochilishlarda tasdiqlanguncha qayta
+        // reconcile qilinadi. Endpoint deterministic bo'lgani uchun retry dublikat emas.
+        if (!(tg && tg.initData) && window._registerCustomerOnce) {
+            try {
+                var _pendingReg = JSON.parse(localStorage.getItem('avto_registration_pending') || 'null');
+                if (_pendingReg && String(_pendingReg.uid) === String(window.currentUser)) {
+                    window._registerCustomerOnce({ name: _pendingReg.name || '', phone: _pendingReg.phone || '' });
+                }
+            } catch (e) {}
+        }
+
+        // 🚨 JIM QOLMASLIK: qoidalar qattiqlashtirilgandan keyin auth ishlamasa
+        //    ilova "hech narsa yuklanmadi" holatiga tushadi va SABABI ko'rinmaydi.
+        //    Telegram ichidagi foydalanuvchi uchun auth SHART — shuning uchun
+        //    muvaffaqiyatsiz bo'lsa ochiq ogohlantirish beramiz (jimgina sinmaydi).
+        if (!window._authOk && isFromTelegram && tgUser) {
+            if (window._dwarn) window._dwarn('[auth] Firebase auth o\'rnatilmadi — Worker /auth yoki BOT_TOKEN sozlanmagan bo\'lishi mumkin.');
+            try {
+                showToast("Xavfsiz ulanish o'rnatilmadi — ma'lumotlar saqlanmasligi mumkin. Ilovani qayta ochib ko'ring.", "warning");
+            } catch (e) {}
+        }
+
+        // Auth tugagach admin tugmasini TASDIQLANGAN identifikator bo'yicha qayta baholaymiz.
+        // (Soxta currentUser tugmani ko'rsatgan bo'lsa, auth uid admin bo'lmasa — yashiriladi.)
+        try {
+            var _adminBtn2 = document.getElementById('nav-admin');
+            var _scanBtn2 = document.getElementById('scanSearchBtn');
+            var _amAdmin = window.isAdmin();
+            if (_adminBtn2) _adminBtn2.classList.toggle('hidden', !_amAdmin);
+            if (_scanBtn2) _scanBtn2.classList.toggle('hidden', !_amAdmin);
+            // Tugmalar soni o'zgargan bo'lishi mumkin => kapsulani qayta to'g'rilaymiz
+            try { if (window._recalcNavIndicator) window._recalcNavIndicator(60); } catch(e) {}
+        } catch (e) {}
+
+        // 2. Telegramdagi ma'lumotlarni bazaga yozish
+        if (isFromTelegram && tgUser) {
+            var _tgProfile = {
+                uid: window.currentUser,
+                username: tgUser.username ? "@" + tgUser.username : "Yo'q",
+                firstName: tgUser.first_name || "",
+                lastName: tgUser.last_name || ""
+            };
+            try {
+                // Worker profil yozilishidan OLDIN eski profil bor-yo'qligini
+                // tekshiradi. Shu tartib rolloutda mavjud mijozlarni «yangi» deb
+                // qayta e'lon qilmaydi; yangi Telegram userda esa profil hali yo'q.
+                if (window._registerCustomerOnce) {
+                    await window._registerCustomerOnce({
+                        name: [tgUser.first_name || '', tgUser.last_name || ''].join(' ').trim(),
+                        username: tgUser.username || '',
+                        phone: myProfile.phone || ''
+                    });
+                }
+                await db.ref('users/' + window.currentUser + '/profile').update(_tgProfile);
+            } catch (e) {
+                if (window._dwarn) window._dwarn('[profil] Telegram profili/hodisasi yozilmadi:', e);
+                // Notification xatosi profilni saqlashni bloklamasin.
+                try { await db.ref('users/' + window.currentUser + '/profile').update(_tgProfile); } catch (_) {}
+            }
+        }
+
+        // 3. Savat va Tarixni tortib olish
+        db.ref('users/' + window.currentUser).on('value', (snap) => {
+            if (snap.exists()) {
+                let data = snap.val(); 
+                cart = data.cart || {}; 
+                myOrders = (window._toOrdersArray ? window._toOrdersArray(data.orders) : (data.orders || []));
+                wishlist = data.wishlist || [];
+                window.myOrders = myOrders; window.wishlist = wishlist; // Phase2 doim yangi ma'lumot o'qishi uchun
+                if(data.profile) { myProfile = data.profile; updateProfileUI(); }
+
+                // 🚗📍 MASHINA VA MANZILLARNI SERVERDAN TIKLASH
+                // ⚠️ ILGARI: `my_car` va `addresses` faqat localStorage'dan
+                //    o'qilardi (localStorage-first). Firebase'ga yozilsa ham,
+                //    QAYTA O'QILMASDI. Natijada mijoz boshqa telefondan kirsa
+                //    yoki ilova keshini tozalasa — saqlangan mashinasi va
+                //    manzillari "Belgilanmagan" bo'lib ko'rinardi (aslida
+                //    bazada turardi).
+                // ENDI: lokal BO'SH bo'lsagina serverdan tiklaymiz. Shunday
+                //    qilib "yangi telefon" holati tuzatiladi, lekin lokal
+                //    o'zgarishlar eski server javobi bilan BOSILMAYDI.
+                try {
+                    if (typeof data.my_car === 'string' && data.my_car &&
+                        !localStorage.getItem('avto_my_car')) {
+                        localStorage.setItem('avto_my_car', data.my_car);
+                        if (typeof window.renderMyCar === 'function') window.renderMyCar();
+                    }
+                    var _lsAddr = localStorage.getItem('avto_addresses');
+                    if (data.addresses && (!_lsAddr || _lsAddr === '[]')) {
+                        var _remoteAddr = Array.isArray(data.addresses)
+                            ? data.addresses
+                            : Object.values(data.addresses);
+                        if (_remoteAddr.length) {
+                            localStorage.setItem('avto_addresses', JSON.stringify(_remoteAddr));
+                            if (typeof window.renderAddresses === 'function') window.renderAddresses();
+                        }
+                    }
+                } catch(e) { _dwarn('[profil] mashina/manzil tiklash xatosi:', e); }
+
+                _updateVipStatus(); // ⭐ VIP holatini buyurtma tarixi bo'yicha yangilash
+                try { if (window.Phase2) window.Phase2.sync(data, window.currentUser, window.productsDB || productsDB); } catch(e){ _dwarn('[Phase2] sync xato:', e); }
+                
+                if(!isDataLoaded) { 
+                    updateCartBadge(); 
+                    if(activeModal === 'cartModal') renderCartItems(); 
+                    if(window._moSectionOpen && window._moSectionOpen()) renderMyOrders(); 
+                    isDataLoaded = true; 
+                } else {
+                    setTimeout(() => {
+                        if(window._moSectionOpen && window._moSectionOpen()) renderMyOrders();
+                        if(activeModal === 'orderDetailModal' && window._moRefreshDetail) window._moRefreshDetail();
+                        if(activeModal === 'orderDetailModal' && typeof renderChatMessages === 'function') renderChatMessages();
+                    }, 50);
+                }
+            }
+        });
+    }
+
+    // (generateOrderCode o'chirildi — buyurtma kodini endi SERVER beradi.)
+

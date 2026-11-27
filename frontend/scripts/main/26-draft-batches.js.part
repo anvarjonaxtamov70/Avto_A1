@@ -1,0 +1,555 @@
+// ==========================================
+// 📁 QORALAMALAR PAPKALARI (BATCHES) MANTIG'I
+// ==========================================
+window.currentDraftFolder = null;
+
+/** Marka filtrini tozalaydi (u yashirib qo'ygan qoralamalarni qaytaradi). */
+window._draftResetFilter = function () {
+    window.currentDraftFilter = 'all';
+    var sel = document.getElementById('draft-brand-filter');
+    if (sel) sel.value = 'all';
+    if (typeof filterAdminDrafts === 'function') filterAdminDrafts('all');
+};
+
+window.openAdminDrafts = () => {
+    document.getElementById('adminModal').style.display = 'none';
+    let m = document.getElementById('adminDraftsModal');
+    m.style.display = 'flex';
+    activeModal = 'adminDraftsModal';
+    window.history.pushState({ modal: 'adminDraftsModal' }, "");
+    showDraftFolders();
+};
+
+window.closeDraftsModalCustom = () => {
+    if (document.getElementById('draft-items-view').style.display === 'block') {
+        backToFolders();
+    } else {
+        closeModal();
+    }
+};
+
+window.showDraftFolders = () => {
+    document.getElementById('draft-folders-view').style.display = 'block';
+    document.getElementById('draft-items-view').style.display = 'none';
+    document.getElementById('drafts-modal-title').innerHTML = "📝 Qoralamalar (Papkalar)";
+    
+    let drafts = productsDB.filter(p => p.is_draft);
+    let folders = {};
+    
+    drafts.forEach(p => {
+        let bId = p.batch_id || "Boshqalar";
+        if(!folders[bId]) folders[bId] = 0;
+        folders[bId]++;
+    });
+
+    let html = Object.keys(folders).map(bId => `
+        <div class="admin-card" style="position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; aspect-ratio: 1/1;" onclick="openDraftFolder('${bId}')">
+            <div style="position:absolute; top:10px; right:40px; cursor:pointer; background:rgba(255,255,255,0.1); padding:6px; border-radius:5px; font-size:14px;" onclick="renameFolder(event, '${bId}')">✏️</div>
+            <div style="position:absolute; top:10px; right:10px; cursor:pointer; background:rgba(255,69,58,0.1); padding:6px; border-radius:5px; font-size:14px; color:var(--accent-red);" onclick="deleteFolder(event, '${bId}')">🗑️</div>
+            
+            <div style="font-size:40px; margin-bottom:10px; filter: drop-shadow(0 4px 10px rgba(212,175,55,0.4));">📁</div>
+            <h3 style="font-size:12px; margin-bottom:5px; color:var(--luxury-gold); text-align:center;">${window._prettyBatch(bId)}</h3>
+            <p style="font-size:11px; font-weight:bold; color:var(--accent-green); background:rgba(48,209,88,0.1); padding:3px 8px; border-radius:6px;">${folders[bId]} ta tovar</p>
+        </div>
+    `).join('');
+
+    if(Object.keys(folders).length === 0) {
+        html = '<div style="grid-column: span 2; text-align:center; padding: 40px; background: rgba(255,255,255,0.05); border-radius: 16px;"><span style="font-size:40px;">📭</span><p style="color:gray; margin-top:10px;">Qoralamalar yo\'q.</p></div>';
+    }
+    document.getElementById('draft-folders-list').innerHTML = html;
+};
+
+// PAPKANI O'ZINI TO'LIQ O'CHIRISH
+window.deleteFolder = (e, batchId) => {
+    e.stopPropagation();
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm("Ushbu papkadagi BARCHA tovarlarni o'chirib tashlaysizmi?", function(ok) {
+            if(ok) executeDeleteFolder(batchId);
+        });
+    } else {
+        if(confirm("Ushbu papkadagi BARCHA tovarlarni o'chirib tashlaysizmi?")) executeDeleteFolder(batchId);
+    }
+};
+
+window.executeDeleteFolder = (batchId) => {
+    // #7: eng so'nggi holat ustida ishlaymiz (begona tovarlar yo'qolmaydi)
+    window._rewriteProductsSafely(function (fresh) {
+        let itemsToDelete = fresh.filter(p => p.is_draft && (p.batch_id || "Boshqalar") === batchId);
+        itemsToDelete.forEach(draft => {
+            let draftIndex = fresh.findIndex(p => p.id === draft.id);
+            if (draftIndex !== -1) {
+                fresh.splice(draftIndex, 1);
+                if (draft.has_conflict) {
+                    let oldIndex = fresh.findIndex(p => p.name.toLowerCase() === draft.name.toLowerCase() && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
+                    if (oldIndex !== -1) {
+                        delete fresh[oldIndex].is_draft;
+                        fresh[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+                    }
+                }
+            }
+        });
+        return fresh;
+    }).then(() => {
+        showToast("Papka va uning ichidagi tovarlar o'chirildi!", "success");
+        showDraftFolders();
+    }).catch(() => showToast("Saqlashda xato!", "warning"));
+};
+
+window.openDraftFolder = (batchId) => {
+    window.currentDraftFolder = batchId;
+    document.getElementById('draft-folders-view').style.display = 'none';
+    document.getElementById('draft-items-view').style.display = 'block';
+    
+    let displayTitle = window._prettyBatch(batchId);
+    if(displayTitle.length > 15) displayTitle = displayTitle.substring(0, 15) + '...';
+    document.getElementById('drafts-modal-title').innerHTML = `📁 ${displayTitle}`;
+    
+    document.getElementById('draft-search-input').value = '';
+    filterAdminDrafts('all');
+};
+
+window.backToFolders = () => {
+    window.currentDraftFolder = null;
+    showDraftFolders();
+};
+
+window.renameFolder = (e, oldName) => {
+    e.stopPropagation();
+    let currentDisplay = window._prettyBatch(oldName);
+    let newName = prompt("Papkaning yangi nomini kiriting:", currentDisplay);
+    if(!newName || newName.trim() === "" || newName === currentDisplay) return;
+    
+    let finalNewName = newName.trim();
+    // #7: butun massivni qayta yozmaymiz — faqat o'zgargan tovarlarning
+    // batch_id maydonini ATOMIK multi-path update() bilan yangilaymiz.
+    let updates = {};
+    productsDB.forEach((p, idx) => {
+        if(p.is_draft && (p.batch_id || "Boshqalar") === oldName) {
+            p.batch_id = finalNewName;
+            updates['products/' + idx + '/batch_id'] = finalNewName;
+        }
+    });
+
+    if(Object.keys(updates).length > 0) {
+        db.ref().update(updates).then(() => {
+            showToast("Papka nomi o'zgardi!", "success");
+            showDraftFolders();
+        }).catch(() => showToast("Saqlashda xato!", "warning"));
+    }
+};
+
+window.filterAdminDrafts = (filterBrand = null) => {
+    if (filterBrand) window.currentDraftFilter = filterBrand;
+    let q = document.getElementById('draft-search-input').value.toLowerCase().trim();
+    let c = document.getElementById('admin-drafts-list');
+    
+    let drafts = productsDB.filter(p => p.is_draft === true && (p.batch_id || "Boshqalar") === window.currentDraftFolder);
+    let totalInFolder = drafts.length;   // marka filtridan OLDINGI son
+
+    if (window.currentDraftFilter && window.currentDraftFilter !== 'all') {
+        drafts = drafts.filter(p => {
+            let catsStr = (p.categories || []).join(' ');
+            if (window.currentDraftFilter === 'gaz') return catsStr.includes('gazel') || catsStr.includes('volga') || catsStr.includes('sobol') || catsStr.includes('uaz');
+            if (window.currentDraftFilter === 'chevy') return catsStr.includes('chevy');
+            if (window.currentDraftFilter === 'daewoo') return catsStr.includes('daewoo');
+            return true;
+        });
+    }
+
+    if (q) drafts = drafts.filter(p => p.name.toLowerCase().includes(q));
+    
+    if (drafts.length === 0) {
+        // ⚠️ ILGARI har qanday holatda bitta quruq "Bu papkada tovar topilmadi"
+        //    chiqardi. Eng chalg'itadigan holat: AI qo'shgan qoralamalarga marka
+        //    BELGILANMAYDI (bot `categories: ["umumiy"]` yozadi), shuning uchun
+        //    admin marka filtrini tanlasa — hamma AI qoralamasi yashirinardi va
+        //    admin ular "yo'qolgan" deb o'ylardi. Endi sabab aytiladi.
+        if (totalInFolder > 0 && window.currentDraftFilter && window.currentDraftFilter !== 'all') {
+            c.innerHTML = '<div style="text-align:center; padding:26px 18px;">' +
+                '<div style="font-size:38px; opacity:.6; margin-bottom:10px;">🔍</div>' +
+                '<div style="font-size:14px; font-weight:700; color:var(--text-main); margin-bottom:6px;">' +
+                    'Marka filtri ' + totalInFolder + ' ta tovarni yashirdi</div>' +
+                '<div style="font-size:12.5px; color:var(--text-muted); line-height:1.55; margin-bottom:14px;">' +
+                    "AI qo'shgan qoralamalarga marka hali belgilanmagan — " +
+                    "tahrirlashda markani tanlaysiz.</div>" +
+                '<button type="button" onclick="window._draftResetFilter()" ' +
+                    'style="padding:12px 20px; border:none; border-radius:13px; cursor:pointer; font-family:inherit; ' +
+                    'font-size:13.5px; font-weight:800; background:var(--gold-gradient); color:#2a2000;">' +
+                    'Hammasini ko\'rsatish</button></div>';
+            return;
+        }
+        c.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">' +
+            (q ? "Qidiruv bo'yicha topilmadi." : "Bu papkada tovar topilmadi.") + '</p>';
+        return;
+    }
+
+    c.innerHTML = drafts.map(p => {
+        let firstCat = (p.categories && p.categories[0]) ? p.categories[0].split('-').slice(0,2).join(' ').toUpperCase().replace(/CHEVY/g, 'CHEVROLET') : '';
+        let conflictBadge = p.has_conflict ? `<div style="color:#ff453a; font-size:10px; font-weight:bold; margin-bottom:4px;">⚠️ DUBLIKAT (Eskisi yashirildi)</div>` : '';
+        
+        return `
+        <div class="inventory-item" style="display:flex; justify-content:space-between; align-items:center; border: 1px solid ${p.has_conflict ? 'rgba(255,69,58,0.4)' : 'var(--glass-border)'};">
+            <div class="inv-info" style="flex:1; cursor:pointer;" onclick="editDraft(${p.id})">
+                ${conflictBadge}
+                <h4 style="color:var(--luxury-gold); margin-bottom:5px;">${p.name}</h4>
+                <p style="font-weight:bold; font-size:12px;">${p.price.toLocaleString()} so'm <span style="color:gray; font-size:10px; margin-left:10px; background:rgba(255,255,255,0.1); padding:2px 5px; border-radius:5px;">${firstCat}</span></p>
+            </div>
+            <div class="inv-controls" style="display:flex; gap:12px; align-items:center; padding-left:10px;">
+                <span style="font-size:22px; cursor:pointer;" onclick="editDraft(${p.id})">✏️</span>
+                <span style="font-size:22px; cursor:pointer; color:#ff453a; filter: grayscale(0.2);" onclick="deleteDraft(${p.id}, ${p.has_conflict ? 'true' : 'false'})">🗑️</span>
+            </div>
+        </div>
+        `;
+    }).join('');
+};
+
+window.editDraft = (id) => {
+    document.getElementById('adminDraftsModal').style.display = 'none';
+    openProduct(id);
+    setTimeout(() => { let editBtn = document.getElementById('pm-edit-btn'); if (editBtn) editBtn.click(); }, 100);
+};
+
+window.deleteDraft = (id, hasConflict) => {
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm(hasConflict ? "Yangi narxni bekor qilib, eskisini tiklaymizmi?" : "Bu qoralamani o'chirasizmi?", function(ok) {
+            if(ok) processDraftDeletion(id, hasConflict);
+        });
+    } else {
+        if(confirm("Bu qoralamani o'chirasizmi?")) processDraftDeletion(id, hasConflict);
+    }
+};
+
+window.processDraftDeletion = (id, hasConflict) => {
+    // #7: eng so'nggi holat ustida (id bo'yicha) ishlaymiz — begona tovarlar yo'qolmaydi
+    window._rewriteProductsSafely(function (fresh) {
+        let draftIndex = fresh.findIndex(p => p.id === id);
+        let draftName = "";
+        if (draftIndex !== -1) {
+            draftName = fresh[draftIndex].name.toLowerCase();
+            fresh.splice(draftIndex, 1);
+        }
+        if (hasConflict && draftName) {
+            let oldIndex = fresh.findIndex(p => p.name.toLowerCase() === draftName && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
+            if (oldIndex !== -1) {
+                delete fresh[oldIndex].is_draft;
+                fresh[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+            }
+        }
+        return fresh;
+    }).then(() => {
+        showToast(hasConflict ? "O'chirildi va eskisi tiklandi!" : "Qoralama o'chirildi!");
+        filterAdminDrafts(); // Oynadagi tovarlarni yangilash
+        
+        // Agar papka bo'shab qolgan bo'lsa, avtomat orqaga qaytarish
+        let draftsInFolder = productsDB.filter(p => p.is_draft === true && (p.batch_id || "Boshqalar") === window.currentDraftFolder);
+        if(draftsInFolder.length === 0) backToFolders();
+    }).catch(() => showToast("Saqlashda xato!", "warning"));
+};
+
+// Mashina tugmalarini (chiplarni) bosganda belgilaydigan funksiya
+window.toggleChip = function(el) {
+    if (el) {
+        el.classList.toggle('selected');
+    }
+};    
+// 🛍️ SAVATNI CHIZISH VA RASM KO'RSATISH (Qotishlarsiz yagona versiya)
+window.renderCartItems = () => {
+    let c = document.getElementById('cart-items-container'); 
+    let b = document.getElementById('main-checkout-btn'); 
+    let footer = document.getElementById('cart-total-footer'); 
+    let pWrap = document.getElementById('cart-progress-wrap');
+    let t = 0; 
+    
+    if(!c) return; 
+    c.innerHTML = '';
+    
+    if(!cart || Object.keys(cart).length === 0) { 
+        c.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 50px 20px; text-align:center;">
+            <div style="font-size: 80px; animation: floatCart 2s ease-in-out infinite; filter: drop-shadow(0 15px 15px rgba(212,175,55,0.3)); margin-bottom: 20px;">🛒</div>
+            <h3 style="color: #fff; margin: 0 0 8px 0; font-size: 20px; font-weight: 800;">Savatingiz bo'p-bo'sh</h3>
+            <p style="color: gray; font-size: 14px; margin: 0 0 25px 0; line-height: 1.5;">Hozircha hech narsa tanlamadingiz.<br>Katalogda ajoyib zapchastlar bor!</p>
+            <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); padding: 14px 35px; border-radius: 16px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.3s; box-shadow: 0 8px 15px rgba(0,0,0,0.3);">
+                🛍️ TOVARLARNI KO'RISH
+            </button>
+        </div>`; 
+        
+        if(b) b.style.display = 'none'; 
+        if(footer) footer.style.display = 'none'; 
+        if(pWrap) pWrap.style.display = 'none';
+        // ⛑ Savat bo'sh -> ishonch belgilari ham yashirin
+        var tBdg = document.getElementById('cart-trust-badges');
+        if(tBdg) tBdg.style.display = 'none';
+        return; 
+    } 
+    // ⛑ Savatda tovar bor -> ishonch belgilari ko'rinadi (1-2 kun, kafolat, pul qaytarish)
+    var tBdg2 = document.getElementById('cart-trust-badges');
+    if(tBdg2) tBdg2.style.display = 'flex';
+
+    if(b) b.style.display = 'block';
+    if(footer) footer.style.display = 'block'; 
+    
+    t = 0; 
+    for(let safeId in cart) { 
+        let [baseId, carOptRaw] = String(safeId).split('||');
+        let p = productsDB.find(x => x.id == baseId); 
+        if(!p) continue; 
+        
+        let qty = parseInt(cart[safeId]) || 0;
+        let sum = p.price * qty;
+        t += sum; 
+        
+        let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+        let displayName = carOpt && carOpt !== "Universal" ? `${p.name} <br><span style="color:var(--text-muted); font-size:11px;">(Razmer: <b style="color:var(--luxury-gold);">${carOpt}</b>)</span>` : p.name;
+        
+        c.innerHTML += `
+            <div class="cart-row">
+                <div class="cart-content-wrap">
+                <img src="${_thumb(p.img, 140)}" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" loading="lazy" decoding="async" data-full="${(p.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)">
+                
+                <div class="cart-info">
+                    <h4 style="line-height: 1.4;">${displayName}</h4>
+                    <span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span>
+                </div>
+                
+                <div class="cart-controls">
+                    <button onclick="chg('${safeId}',-1)">-</button>
+                    <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
+                    <button onclick="chg('${safeId}',1)">+</button>
+                </div>
+                </div>
+                <div class="swipe-delete" onclick="chg('${safeId}', -${qty})">🗑</div>
+            </div>`; 
+    } 
+    
+    if(typeof animatePrice === 'function') animatePrice('cart-total-sum', t);
+    else { let tSum = document.getElementById('cart-total-sum'); if(tSum) tSum.innerText = t.toLocaleString() + " so'm"; }
+
+    if(pWrap) {
+        pWrap.style.display = 'block';
+        let target = (window.VIP && window.VIP.freeDeliveryTarget) ? window.VIP.freeDeliveryTarget() : 3000000;
+        let percent = Math.min((t / target) * 100, 100);
+        let pBar = document.getElementById('cart-progress-bar');
+        let pMsg = document.getElementById('cart-progress-msg');
+        if(pBar) pBar.style.width = percent + '%';
+        if(pMsg) {
+            if(percent >= 100) {
+                pMsg.innerHTML = '🎉 Tabriklaymiz! Dostavka <b>BEPUL</b>!';
+                pMsg.style.color = '#30d158';
+            } else {
+                pMsg.innerHTML = `Bepul dostavka uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
+                pMsg.style.color = 'var(--luxury-gold)';
+            }
+        }
+    }
+};
+// 🏠 OYNA TASHQARISIGA BOSGANDA YOPILISHI (Professional ergonomics)
+window.onclick = function(event) {
+    const modals = ['productModal', 'cartModal', 'paymentModal', 'profileEditModal'];
+    modals.forEach(id => {
+        let m = document.getElementById(id);
+        if (event.target == m) {
+            closeModal();
+        }
+    });
+};
+
+// ➖➕ SAVATDAGI SONNI O'ZGARTIRISH (Toza va yagona versiya)
+window.chg = (safeId, d) => { 
+    let [baseId, carOptRaw] = String(safeId).split('||');
+    let p = productsDB.find(x => x.id == baseId);
+    if(!p) return;
+    
+    let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+    
+    let st = 10;
+    if (p.product_type === 'razmerli' && p.sizes) {
+        let sizeObj = p.sizes.find(s => s.size === carOpt);
+        if(sizeObj) st = sizeObj.stock;
+    } else {
+        st = p.stock !== undefined ? p.stock : 10;
+    }
+    
+    let totalInCart = 0;
+    for(let cid in cart) { if(cid.startsWith(baseId + "||" + (carOptRaw||""))) totalInCart += parseInt(cart[cid]) || 0; }
+    
+    if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+    
+    let currentQty = parseInt(cart[safeId]) || 0;
+    let newQty = currentQty + d;
+    
+    if (newQty <= 0) {
+        delete cart[safeId]; 
+    } else {
+        cart[safeId] = newQty;
+    }
+    
+    saveLocalCart(); 
+    updateCartBadge(); 
+    renderCartItems(); 
+};
+
+// 🛍️ SAVATNI CHIZISH VA RASM KO'RSATISH (Qotishlarsiz yagona versiya)
+window.renderCartItems = () => {
+    let c = document.getElementById('cart-items-container'); 
+    let b = document.getElementById('main-checkout-btn'); 
+    let footer = document.getElementById('cart-total-footer'); 
+    let pWrap = document.getElementById('cart-progress-wrap');
+    let t = 0; 
+    
+    if(!c) return; 
+    c.innerHTML = '';
+    
+    if(!cart || Object.keys(cart).length === 0) { 
+        c.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 50px 20px; text-align:center;">
+            <div style="font-size: 80px; animation: floatCart 2s ease-in-out infinite; filter: drop-shadow(0 15px 15px rgba(212,175,55,0.3)); margin-bottom: 20px;">🛒</div>
+            <h3 style="color: #fff; margin: 0 0 8px 0; font-size: 20px; font-weight: 800;">Savatingiz bo'p-bo'sh</h3>
+            <p style="color: gray; font-size: 14px; margin: 0 0 25px 0; line-height: 1.5;">Hozircha hech narsa tanlamadingiz.<br>Katalogda ajoyib zapchastlar bor!</p>
+            <button onclick="closeModal(); showCatalog();" style="background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05)); color: var(--luxury-gold); border: 1px solid var(--luxury-gold); padding: 14px 35px; border-radius: 16px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.3s; box-shadow: 0 8px 15px rgba(0,0,0,0.3);">
+                🛍️ TOVARLARNI KO'RISH
+            </button>
+        </div>`; 
+        
+        if(b) b.style.display = 'none'; 
+        if(footer) footer.style.display = 'none'; 
+        if(pWrap) pWrap.style.display = 'none';
+        // ⛑ Savat bo'sh -> ishonch belgilari ham yashirin
+        var tBdg = document.getElementById('cart-trust-badges');
+        if(tBdg) tBdg.style.display = 'none';
+        return; 
+    } 
+    // ⛑ Savatda tovar bor -> ishonch belgilari ko'rinadi (1-2 kun, kafolat, pul qaytarish)
+    var tBdg2 = document.getElementById('cart-trust-badges');
+    if(tBdg2) tBdg2.style.display = 'flex';
+
+    if(b) b.style.display = 'block';
+    if(footer) footer.style.display = 'block'; 
+    
+    t = 0; 
+    // ⚡ TEZLIK: har element uchun innerHTML += qilish (butun konteynerni
+    // qayta parse qiladi) o'rniga massivga yig'ib, OXIRIDA bir marta yozamiz.
+    let _rows = [];
+    for(let safeId in cart) { 
+        let [baseId, carOptRaw] = String(safeId).split('||');
+        let p = productsDB.find(x => x.id == baseId); 
+        if(!p) continue; 
+        
+        let qty = parseInt(cart[safeId]) || 0;
+        let sum = p.price * qty;
+        t += sum; 
+        
+        let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+        let displayName = carOpt && carOpt !== "Universal" ? `${p.name} <br><span style="color:var(--text-muted); font-size:11px;">(Razmer: <b style="color:var(--luxury-gold);">${carOpt}</b>)</span>` : p.name;
+        
+        _rows.push(`
+            <div class="cart-row">
+                <div class="cart-content-wrap">
+                <img src="${_thumb(p.img, 140)}" loading="lazy" decoding="async" style="width: 65px; height: 65px; border-radius: 12px; object-fit: cover; background: #fff;" data-full="${(p.img||'').replace(/"/g,'&quot;')}" onload="this.style.opacity=1" onerror="window._imgFallback(this)">
+                <div class="cart-info">
+                    <h4 style="line-height: 1.4;">${displayName}</h4>
+                    <span style="color:var(--luxury-gold); font-weight:700;">${sum.toLocaleString()} so'm</span>
+                </div>
+                
+                <div class="cart-controls">
+                    <button onclick="chg('${safeId}',-1)">-</button>
+                    <span style="color:white; font-weight:bold; width:25px; text-align:center; font-size: 16px;">${qty}</span>
+                    <button onclick="chg('${safeId}',1)">+</button>
+                </div>
+                </div>
+                <div class="swipe-delete" onclick="chg('${safeId}', -${qty})">🗑</div>
+            </div>`); 
+    } 
+    c.innerHTML = _rows.join(''); // ⚡ bir marta yozish — DOM bir marta yangilanadi
+    
+// t - bu savatdagi jami summa o'zgaruvchisi
+animatePrice('cart-total-sum', t);
+
+    if(pWrap) {
+        pWrap.style.display = 'block';
+        let target = (window.VIP && window.VIP.freeDeliveryTarget) ? window.VIP.freeDeliveryTarget() : 3000000;
+        let percent = Math.min((t / target) * 100, 100);
+        let pBar = document.getElementById('cart-progress-bar');
+        let pMsg = document.getElementById('cart-progress-msg');
+        if(pBar) pBar.style.width = percent + '%';
+        if(pMsg) {
+            if(percent >= 100) {
+                pMsg.innerHTML = '🎉 Tabriklaymiz! Dostavka <b>BEPUL</b>!';
+                pMsg.style.color = '#30d158';
+            } else {
+                pMsg.innerHTML = `Bepul dostavka uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
+                pMsg.style.color = 'var(--luxury-gold)';
+            }
+        }
+    }
+};
+
+// 🚀 UCHUVCHI TOVAR ANIMATSIYASI (FLY TO CART)
+window.flyToCartAnimation = (e, imgSrc) => {
+    let clientX = e.clientX || (e.touches && e.touches.length > 0 ? e.touches[0].clientX : null);
+    let clientY = e.clientY || (e.touches && e.touches.length > 0 ? e.touches[0].clientY : null);
+    if (!clientX || !clientY) return; 
+
+    let flyingImg = document.createElement('img');
+    flyingImg.src = imgSrc || window._brandPlaceholder('A1');
+    flyingImg.className = 'flying-img';
+    
+    flyingImg.style.left = (clientX - 30) + 'px';
+    flyingImg.style.top = (clientY - 30) + 'px';
+    flyingImg.style.width = '60px';
+    flyingImg.style.height = '60px';
+    document.body.appendChild(flyingImg);
+
+    let cartNav = document.getElementById('nav-cart');
+    if(!cartNav) return;
+    
+    let targetRect = cartNav.getBoundingClientRect();
+    let targetX = targetRect.left + (targetRect.width / 2) - 10;
+    let targetY = targetRect.top + (targetRect.height / 2) - 10;
+
+    setTimeout(() => {
+        flyingImg.style.left = targetX + 'px';
+        flyingImg.style.top = targetY + 'px';
+        flyingImg.style.width = '15px';
+        flyingImg.style.height = '15px';
+        flyingImg.style.opacity = '0.4';
+        flyingImg.style.transform = 'rotate(360deg)';
+    }, 20);
+
+    setTimeout(() => {
+        flyingImg.remove();
+        cartNav.classList.add('cart-bounce');
+        if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        setTimeout(() => cartNav.classList.remove('cart-bounce'), 400);
+    }, 700); 
+};
+
+// 🛡️ MODALNI XAVFSIZ OCHISH (Qotishlarga qarshi)
+//   ⚠️ Bu funksiya ASOSIY (oxirgi declared) openModal — eskini yozib qo'yadi.
+//   Modal stack: agar boshqa modal ochiq bo'lsa, uning ID si stack'ga saqlanadi
+//   va u yashiriladi. Yangi modal yopilganда (popstate) eski qaytib ochiladi.
+//   Bu 'savat -> kafolat -> orqa -> savat' qotishi muammosini hal qiladi.
+window.openModal = function(id) { 
+    if (activeModal === id) return; 
+
+    if(id === 'cartModal') renderCartItems(); 
+
+    let m = document.getElementById(id); 
+    if(!m) return;
+
+    // 🛒 Boshqa modal ochiq bo'lsa - xotirada saqlab, yashiramiz
+    if (activeModal && activeModal !== id) {
+        window._modalStack = window._modalStack || [];
+        window._modalStack.push(activeModal);
+        const prev = document.getElementById(activeModal);
+        if (prev) prev.style.display = 'none';
+    }
+
+    m.style.display = 'flex'; 
+    document.body.style.overflow = 'hidden'; 
+    activeModal = id; 
+
+    window.history.pushState({ modal: id }, ""); 
+    if(typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show(); 
+    updateBtns(); 
+};

@@ -1,0 +1,282 @@
+    // ===================================================
+// 🌊 SUV TO'LQINI (RIPPLE EFFECT) JONLANTIRUVCHISI
+// ===================================================
+document.addEventListener('click', function(e) {
+    // Qaysi tugmalarda to'lqin bo'lishini belgilaymiz
+    let target = e.target.closest('.btn-checkout, .pm-sticky-btn, .btn-add-cart, .nav-item');
+    if (!target) return;
+    
+    // To'lqin shaklini yaratamiz
+    let circle = document.createElement('span');
+    let diameter = Math.max(target.clientWidth, target.clientHeight);
+    let radius = diameter / 2;
+    
+    // Barmoq tekkan aniq nuqtani (x, y) hisoblaymiz
+    let rect = target.getBoundingClientRect();
+    let x = e.clientX - rect.left;
+    let y = e.clientY - rect.top;
+    
+    circle.style.width = circle.style.height = `${diameter}px`;
+    circle.style.left = `${x - radius}px`;
+    circle.style.top = `${y - radius}px`;
+    circle.classList.add('ripple');
+    
+    // Eski to'lqinlarni tozalab, yangisini qo'shamiz
+    let existing = target.querySelector('.ripple');
+    if (existing) existing.remove();
+    
+    target.appendChild(circle);
+    
+    // Animatsiya tugagach, to'lqinni o'chiramiz
+    setTimeout(() => circle.remove(), 600);
+});
+
+// Elementlarni BIR MARTA topib saqlaymiz
+// Endi scroll bo'lganida qayta qidirish shart emas
+const bottomNavEl = document.querySelector('.bottom-nav');
+const aiBtnEl = document.querySelector('.ai-luxury-btn');
+
+let lastScrollTop = 0;
+let isScrolling = false;
+
+window.addEventListener("scroll", function() {
+    if (!isScrolling) {
+        window.requestAnimationFrame(function() {
+            let st = window.pageYOffset || document.documentElement.scrollTop;
+            
+            // Sahifa biroz pastga tushganda header kichrayadi
+            if (st > 40) {
+                document.body.classList.add("scrolled");
+            } else {
+                document.body.classList.remove("scrolled");
+            }
+
+            // Modal ochiq bo'lmasa menyuni yashiramiz/ko'rsatamiz
+            if (!activeModal) {
+                if (st > lastScrollTop && st > 50) {
+                    // ⚠️ Menyu yashirinishi O'CHIRILDI (foydalanuvchi so'rovi):
+                    // Menyu doim qotib turadi. Faqat AI tugma yashirinadi.
+                    if(aiBtnEl) aiBtnEl.classList.add("ai-hidden");
+                } else {
+                    if(aiBtnEl) aiBtnEl.classList.remove("ai-hidden");
+                }
+            }
+            
+            lastScrollTop = st <= 0 ? 0 : st;
+            isScrolling = false;
+        });
+        isScrolling = true;
+    }
+}, { passive: true }); // passive: true — scroll hech qachon to'xtamaydi
+
+// ===================================================
+// 🎉 BAYRAMONA XARID (CONFETTI YOMG'IRI)
+// ===================================================
+window.shootConfetti = () => {
+    // Telefonni vibratsiya qildiramiz (Mijoz maza qiladi)
+    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    
+    // Tilla, ko'k, oq va yashil ranglar
+    const colors = ['#D4AF37', '#007aff', '#ffffff', '#30d158', '#e5c07b']; 
+    
+    // 70 ta bayram qog'ozi yog'diramiz
+    for (let i = 0; i < 70; i++) {
+        let conf = document.createElement('div');
+        conf.className = 'confetti-piece';
+        
+        // Ekranning har xil joyidan tushadi
+        conf.style.left = Math.random() * 100 + 'vw';
+        conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        // Ba'zilarini dumaloq, ba'zilarini uzun qog'oz qilamiz
+        if (Math.random() > 0.5) { 
+            conf.style.borderRadius = '50%'; 
+            conf.style.width = '12px'; 
+            conf.style.height = '12px'; 
+        }
+        
+        // Tushish tezligi va boshlanish vaqti har xil
+        conf.style.animationDuration = (Math.random() * 2 + 2) + 's';
+        conf.style.animationDelay = (Math.random() * 0.3) + 's';
+        
+        document.body.appendChild(conf);
+        
+        // Animatsiya tugagach, tozalab tashlaymiz (Telefon qotmasligi uchun)
+        setTimeout(() => conf.remove(), 4500);
+    }
+};
+// 🔦 QIDIRUV SPOTLIGHT DVIJOGI
+document.addEventListener('DOMContentLoaded', () => {
+    let searchInput = document.getElementById('searchInput');
+    if(searchInput) {
+        searchInput.addEventListener('focus', () => {
+            document.body.classList.add('search-focused');
+        });
+        searchInput.addEventListener('blur', () => {
+            // Agar matn yozilmagan bo'lsa fon yana yorishadi
+            if(searchInput.value.trim() === '') {
+                document.body.classList.remove('search-focused');
+            }
+        });
+    }
+});
+
+// Qidiruvdan chiqishda Spotlight'ni ham o'chiramiz
+const originalExitSearch = window.exitSearch;
+window.exitSearch = () => {
+    document.body.classList.remove('search-focused');
+    if(typeof originalExitSearch === 'function') originalExitSearch();
+};
+// 🔢 RAQAMLARNI SILLIQ HISOB-KITOB QILUVCHI MOTOR
+window.animatePrice = (id, end) => {
+    let obj = document.getElementById(id);
+    if(!obj) return;
+    
+    // Hozirgi ekrandagi raqamni aniqlaymiz (so'm so'zini olib tashlab)
+    let start = parseInt(obj.innerText.replace(/[^0-9]/g, '')) || 0;
+    if(start === end) return; // Agar raqam o'zgarmagan bo'lsa, to'xtaymiz
+    
+    let duration = 800; // Animatsiya tezligi (800ms)
+    let startTime = null;
+    
+    function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        let progress = Math.min((timestamp - startTime) / duration, 1);
+        
+        // Matematik hisob: boshlang'ich va oxirgi raqam orasidagi yo'l
+        let current = Math.floor(progress * (end - start) + start);
+        
+        // Ekranga chiroyli qilib chiqaramiz
+        obj.innerHTML = current.toLocaleString() + " so'm";
+        
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        }
+    }
+    window.requestAnimationFrame(step);
+};
+const revealObserver = new IntersectionObserver((entries, observer) => {
+    // 🎬 STAGGERED ENTRY: ayni vaqtda ko'ringan kartalar KETMA-KET (45ms oraliq)
+    //    paydo bo'ladi. Animatsiyani CSS transition (reveal-item) beradi; biz faqat
+    //    '.active' ni staggered VAQTDA qo'shamiz -> transition-delay ishlatilmaydi,
+    //    shu sababli micro-interaction (press) kechikmaydi. lite/reduced-motion da
+    //    darhol (oraliqsiz). Skrollda 1-2 ta kelganda oraliq ~0 -> sezilmaydi.
+    var reduce = false, lite = false;
+    try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e){}
+    try { lite = document.documentElement.classList.contains('lite') || window.__perfLite; } catch(e){}
+    var i = 0;
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            var el = entry.target;
+            observer.unobserve(entry.target);
+            if (reduce || lite) { el.classList.add('active'); return; }
+            var delay = Math.min(i, 8) * 45;   // eng ko'pi 8 ta karta staggerlanadi
+            i++;
+            if (delay > 0) setTimeout(function(){ el.classList.add('active'); }, delay);
+            else el.classList.add('active');
+        }
+    });
+}, { 
+    threshold: 0.05,
+    rootMargin: '0px 0px -10px 0px'
+});
+
+function initReveal() {
+    document.querySelectorAll('.luxury-card, .section-title, .neon-brand-card').forEach(el => {
+        // Agar allaqachon ko'ringan bo'lsa — o'tkazib yuboramiz
+        // Bu tepaga qaytganda rasmlar o'chib-yonishini to'xtatadi
+        if (el.classList.contains('active')) return;
+        if (el.classList.contains('reveal-item')) return;
+        
+        el.classList.add('reveal-item');
+        revealObserver.observe(el);
+    });
+    // 🌊 Yangi render bo'lgan kartalar rasmlarini parallax kuzatuviga ulaymiz
+    try { if (typeof window._scanParallax === 'function') window._scanParallax(); } catch(e){}
+}
+
+/* ====================================================================
+   🌊 KARTA PARALLAX — mahsulot rasmlari skrollda yengil "suzadi".
+   - FAQAT transform (GPU-friendly), rAF-throttle bilan; IntersectionObserver
+     orqali FAQAT ekrandagi rasmlarga ishlaydi -> telefonni QIZDIRMAYDI.
+   - lite rejim / reduced-motion / __perfLite bo'lsa BUTUNLAY o'chadi.
+   - Reveal tizimiga TEGMAYDI: reveal kartaga (.luxury-card), parallax esa
+     uning ichidagi RASMGA (.img-wrap img) ta'sir qiladi -> to'qnashmaydi.
+   - img-wrap'da overflow:hidden + radial-mask bor -> qirralar ko'rinmaydi.
+   ==================================================================== */
+(function(){
+    var reduce = false;
+    try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e){}
+    function disabled(){
+        // 📱 Ilovada (Android ilova / iPhone bosh ekran ilovasi) parallax O'CHIQ:
+        //    har skroll kadrida rasm o'lchamini o'qib, transform yozish butun
+        //    sahifa uslubini qayta hisoblatardi (o'lchovda 400+ marta) — skroll
+        //    va rasmlar ochilishidagi asosiy «tutilish» shu edi.
+        try { return reduce || document.documentElement.classList.contains('lite') || window.__perfLite; }
+        catch(e){ return true; }
+    }
+
+    var visible = new Set();
+    var ticking = false;
+    var AMP = 7;          // px — siljish amplitudasi (juda nozik, premium his)
+    var io = null;
+
+    function ensureObserver(){
+        if (io) return io;
+        io = new IntersectionObserver(function(entries){
+            entries.forEach(function(en){
+                var img = en.target;
+                if (en.isIntersecting){
+                    visible.add(img);
+                    img.style.willChange = 'transform';
+                } else {
+                    visible.delete(img);
+                    img.style.willChange = '';
+                    img.style.transform = 'scale(1.08)';   // ko'rinishdan chiqdi -> baseline
+                }
+            });
+            schedule();
+        }, { threshold: 0 });
+        return io;
+    }
+
+    function apply(){
+        ticking = false;
+        if (disabled()) return;
+        var vh = window.innerHeight || document.documentElement.clientHeight || 1;
+        var mid = vh / 2;
+        visible.forEach(function(img){
+            var r = img.getBoundingClientRect();
+            var c = r.top + r.height / 2;
+            var rel = (c - mid) / vh;                       // -1 (tepa) .. +1 (past)
+            if (rel > 1) rel = 1; else if (rel < -1) rel = -1;
+            var y = (rel * AMP).toFixed(2);
+            img.style.transform = 'scale(1.08) translate3d(0,' + y + 'px,0)';
+        });
+    }
+    function schedule(){
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(apply);
+    }
+
+    function attach(){
+        var c = document.querySelector('.container');     // asosiy skroll konteyneri
+        if (c) c.addEventListener('scroll', schedule, { passive: true });
+        window.addEventListener('scroll', schedule, { passive: true });
+        window.addEventListener('resize', schedule, { passive: true });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
+    else attach();
+
+    // Render/loadMore'dan keyin initReveal ichidan chaqiriladi.
+    window._scanParallax = function(){
+        if (disabled()) return;
+        var obs = ensureObserver();
+        document.querySelectorAll('.luxury-card .img-wrap img:not(.ux-parallax)').forEach(function(img){
+            img.classList.add('ux-parallax');
+            obs.observe(img);
+        });
+        schedule();
+    };
+})();

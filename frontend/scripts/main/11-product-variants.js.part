@@ -1,0 +1,228 @@
+// =====================================
+// MASHINA VA RAZMER TANLASH, SAVAT (YANGILANGAN)
+// =====================================
+
+window.selectCarModel = (btn) => {
+    document.querySelectorAll('.pm-car-btn').forEach(b => {
+        b.style.background = 'rgba(255,255,255,0.05)';
+        b.style.color = 'white';
+        b.style.borderColor = 'var(--glass-border)';
+        b.classList.remove('selected');
+    });
+    btn.style.background = 'rgba(212, 175, 55, 0.2)';
+    btn.style.color = 'var(--luxury-gold)';
+    btn.style.borderColor = 'var(--luxury-gold)';
+    btn.classList.add('selected');
+    window.currentSelectedCar = btn.getAttribute('data-car');
+};
+
+window.selectSizeModel = (btn, stock) => {
+    document.querySelectorAll('.pm-size-btn').forEach(b => {
+        b.style.background = 'rgba(255,255,255,0.05)';
+        b.style.color = 'white';
+        b.style.borderColor = 'var(--glass-border)';
+        b.classList.remove('selected');
+    });
+    btn.style.background = 'rgba(212, 175, 55, 0.2)';
+    btn.style.color = 'var(--luxury-gold)';
+    btn.style.borderColor = 'var(--luxury-gold)';
+    btn.classList.add('selected');
+    
+    window.currentSelectedCar = btn.getAttribute('data-size');
+    window.currentSelectedStock = stock;
+    
+    // Zaxira yozuvini yangilash
+    let box = document.getElementById('dynamic-stock-info');
+    let buyB = document.getElementById('pm-buy-btn');
+    if(!box || !buyB) return;
+    
+    // isAdmin(): tasdiqlangan auth.uid bo'yicha — ilovadagi admin (uid satr) ham tanilsin
+    let isAdmin = (typeof window.isAdmin === 'function') ? window.isAdmin() : (typeof currentUser !== 'undefined' && typeof ADMIN_IDS !== 'undefined' && ADMIN_IDS.includes(currentUser));
+    let stockText = isAdmin ? `✅ Sotuvda bor: ${stock} ta` : `✅ Sotuvda bor`;
+    
+    if(stock <= 0) {
+        box.innerHTML = `<span style="color:#ff453a; font-weight:bold;">❌ Sotuvda qolmagan</span>`;
+        buyB.disabled = true; buyB.innerText = "Tugagan";
+    } else {
+        box.innerHTML = `<span style="color:var(--accent-green); font-weight:bold;">${stockText}</span>`;
+        buyB.disabled = false; buyB.innerText = "Savatga qo'shish";
+    }
+};
+
+window.updateDynamicStock = (st) => {
+    let box = document.getElementById('dynamic-stock-info');
+    let buyB = document.getElementById('pm-buy-btn');
+    if(!box || !buyB) return;
+    
+    let isAdmin = (typeof currentUser !== 'undefined' && typeof ADMIN_ID !== 'undefined' && currentUser === ADMIN_ID);
+    let stockText = isAdmin ? `✅ Sotuvda bor: ${st} ta` : `✅ Sotuvda bor`;
+    
+    if(st <= 0) {
+        box.innerHTML = `<span style="color:#ff453a; font-weight:bold;">❌ Sotuvda qolmagan</span>`;
+        buyB.disabled = true; buyB.innerText = "Tugagan";
+    } else {
+        box.innerHTML = `<span style="color:var(--accent-green); font-weight:bold;">${stockText}</span>`;
+        buyB.disabled = false; buyB.innerText = "Savatga qo'shish";
+    }
+};
+
+window.addToCartWithOptions = (finalId) => { 
+    cart[finalId] = (cart[finalId] || 0) + 1; 
+    saveLocalCart(); 
+    updateCartBadge(); 
+    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium'); 
+    Haptics.success(); // ✅ Muvaffaqiyatli tebranish qo'shildi
+    showToast('Savatda!'); 
+};
+
+// 🚨 TO'LIQ VA XATOSIZ SAVAT FUNKSIYASI 🚨
+
+
+window.chg = (fullId, d) => { 
+    let [baseId, carOpt] = String(fullId).split('||');
+    let p = productsDB.find(x => x.id == baseId);
+    if(!p) return;
+    
+    let st = 10;
+    if (p.product_type === 'razmerli' && p.sizes) {
+        let sizeObj = p.sizes.find(s => s.size === carOpt);
+        if(sizeObj) st = sizeObj.stock;
+    } else {
+        st = p.stock !== undefined ? p.stock : 10;
+    }
+    
+    let totalInCart = 0;
+    for(let cid in cart) { if(cid.startsWith(baseId + "||" + (carOpt||""))) totalInCart += cart[cid]; }
+    
+    if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+    cart[fullId] += d; 
+    if(cart[fullId] <= 0) delete cart[fullId]; 
+    saveLocalCart(); updateCartBadge(); renderCartItems(); 
+};
+
+// =====================================
+// RAZMERLI TOVARLAR UCHUN ADMIN MANTIQI
+// =====================================
+window.toggleProductTypeFields = () => {
+    let type = document.getElementById('admin-prod-type').value;
+    if(type === 'razmerli') {
+        document.getElementById('admin-oddiy-fields').style.display = 'none';
+        document.getElementById('admin-razmerli-fields').style.display = 'block';
+    } else {
+        document.getElementById('admin-oddiy-fields').style.display = 'block';
+        document.getElementById('admin-razmerli-fields').style.display = 'none';
+    }
+};
+
+window.updateBrandModels = () => {
+    let brand = document.getElementById('admin-prod-brand').value;
+    let box = document.getElementById('admin-brand-models-box');
+    let select = document.getElementById('admin-prod-model');
+    
+    select.innerHTML = ''; 
+    
+    if(brand === 'gaz') {
+        box.style.display = 'none'; 
+    } else if (brand === 'daewoo') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="nexia1">Nexia 1</option>
+            <option value="nexia2">Nexia 2</option>
+            <option value="matiz">Matiz</option>
+            <option value="tico">Tico</option>
+            <option value="damas">Damas</option>
+        `;
+    } else if (brand === 'chevy') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="cobalt">Cobalt</option>
+            <option value="gentra">Gentra</option>
+            <option value="lacetti">Lacetti</option>
+            <option value="spark">Spark</option>
+            <option value="nexia3">Nexia 3</option>
+        `;
+    } else if (brand === 'uaz') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="patriot">Patriot</option>
+            <option value="hunter">Hunter</option>
+        `;
+    } else {
+        box.style.display = 'none';
+    }
+};
+
+window.addSizeField = () => {
+    let container = document.getElementById('admin-sizes-container');
+    let div = document.createElement('div');
+    div.style.display = 'flex';
+    div.style.gap = '8px';
+    div.style.marginBottom = '8px';
+    div.className = 'size-input-row';
+    div.innerHTML = `
+        <input type="text" placeholder="Razmer (masalan: 92.5)" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-name">
+        <input type="number" placeholder="Soni" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-stock">
+        <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
+    `;
+    container.appendChild(div);
+};
+
+// 🚨 MUAMMOLARNI TO'LIQ HAL QILUVCHI KOD (NUQTADAN HIMOYALANGAN)
+
+window.updateCartBadge = () => {
+    let tot = 0;
+    for(let key in cart) {
+        if(cart[key]) {
+            let val = parseInt(cart[key]);
+            if(!isNaN(val)) tot += val;
+        }
+    }
+    let b = document.getElementById('nav-badge'); 
+    if(!b) return;
+    b.innerText = tot; 
+    if(tot > 0) { 
+        b.classList.add('show'); 
+        b.classList.remove('pulse'); 
+        void b.offsetWidth; 
+        b.classList.add('pulse'); 
+    } else { 
+        b.classList.remove('show'); 
+    } 
+};
+
+window.addToCartWithOptions = (finalId) => { 
+    // Firebase xato bermasligi uchun nuqtani himoyalaymiz
+    let safeId = finalId.replace(/\./g, "_dot_");
+    cart[safeId] = (parseInt(cart[safeId]) || 0) + 1; 
+    saveLocalCart(); 
+    updateCartBadge(); 
+    if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium'); 
+    Haptics.success(); // ✅ Muvaffaqiyatli tebranish qo'shildi
+    showToast('Savatda!'); 
+};
+
+
+window.chg = (safeId, d) => { 
+    let [baseId, carOptRaw] = String(safeId).split('||');
+    let p = productsDB.find(x => x.id == baseId);
+    if(!p) return;
+    
+    let carOpt = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+    
+    let st = 10;
+    if (p.product_type === 'razmerli' && p.sizes) {
+        let sizeObj = p.sizes.find(s => s.size === carOpt);
+        if(sizeObj) st = sizeObj.stock;
+    } else {
+        st = p.stock !== undefined ? p.stock : 10;
+    }
+    
+    let totalInCart = 0;
+    for(let cid in cart) { if(cid.startsWith(baseId + "||" + (carOptRaw||""))) totalInCart += parseInt(cart[cid]) || 0; }
+    
+    if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+    cart[safeId] = (parseInt(cart[safeId]) || 0) + d; 
+    if(cart[safeId] <= 0) delete cart[safeId]; 
+    saveLocalCart(); updateCartBadge(); renderCartItems(); 
+};
+

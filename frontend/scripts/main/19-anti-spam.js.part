@@ -1,0 +1,161 @@
+// =====================================
+// 🛑 SPAM VA "BOMBA" HUJUMLARIDAN HIMOYA (ANTI-SPAM)
+// =====================================
+
+// 1. Izoh qoldirish tugmasi uchun himoya (10 soniya)
+let lastReviewTime = 0;
+const originalSubmitReview = window.submitReview;
+window.submitReview = () => {
+    let now = Date.now();
+    if (now - lastReviewTime < 10000) { 
+        if(typeof showToast === 'function') showToast("Shoshmang! Keyingi izohgacha biroz kuting.", "warning");
+        return;
+    }
+    lastReviewTime = now;
+    if (typeof originalSubmitReview === 'function') {
+        originalSubmitReview();
+    }
+};
+// ============================================================
+// 🔧 TUZATILGAN: RASM YUKLASH TIZIMI (iOS + Telegram uchun)
+// ============================================================
+
+// URL inputga yozilganda preview ko'rsatuvchi funksiya
+window.updateImgPreviews = (prefix) => {
+    let urls = [
+        document.getElementById(`${prefix}-img-url`)?.value,
+        document.getElementById(`${prefix}-img-url2`)?.value,
+        document.getElementById(`${prefix}-img-url3`)?.value,
+    ].filter(u => u && u.startsWith('http'));
+    
+    let box = document.getElementById(`${prefix}-img-previews`);
+    if (!box) return;
+    
+    if (urls.length === 0) {
+        box.innerHTML = '';
+        return;
+    }
+    
+    box.innerHTML = urls.map((url, i) => `
+        <div style="position:relative; display:inline-block;">
+            <img src="${url}" 
+                 style="width:75px; height:75px; object-fit:cover; border-radius:12px; border:2px solid var(--luxury-gold); display:block; background:#1c1c1e;"
+                 onerror="this.style.border='2px solid #ff453a'; this.src=window._brandPlaceholder('Xato')">
+            <span style="position:absolute; top:-7px; right:-7px; background:var(--luxury-gold); color:#000; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">${i+1}</span>
+        </div>
+    `).join('');
+};
+
+// ✅ TUZATILGAN: EditModal ochish (pushState ishlatadi)
+window.openEditModal = function(e, directId = null) {
+    if (e) e.stopPropagation();
+    let id = directId;
+    if (!id) {
+        let btn = document.getElementById('pm-buy-btn');
+        if (btn) id = btn.getAttribute('data-id');
+    }
+    let p = productsDB.find(x => x.id == id);
+    if (!p) return;
+    document.getElementById('edit-id').value = p.id;
+    document.getElementById('edit-name').value = p.name;
+    document.getElementById('edit-price').value = formatNumber(p.price);
+    let editCodeEl = document.getElementById('edit-code');
+    if (editCodeEl) editCodeEl.value = p.code || "";
+    // 🔎 Qidiruv so'zlari
+    let editAliasEl = document.getElementById('edit-aliases');
+    if (editAliasEl) editAliasEl.value = p.aliases || "";
+
+    // 🔥 Flash sale maydonlarini to'ldirish: aktiv flash bo'lsa, narx maydonida ASL
+    //    narx (oldPrice), flash maydonida chegirma narx va qolgan soat ko'rsatiladi.
+    (function(){
+        var efp = document.getElementById('edit-flash-price');
+        var efh = document.getElementById('edit-flash-hours');
+        if (!efp || !efh) return;
+        var now = Date.now();
+        if (p.flashUntil && p.flashUntil > now && p.oldPrice && Number(p.oldPrice) > Number(p.price)) {
+            document.getElementById('edit-price').value = formatNumber(p.oldPrice); // asl narx
+            efp.value = formatNumber(p.price);                                       // flash narx
+            efh.value = Math.max(0, Math.round(((p.flashUntil - now) / 3600000) * 10) / 10);
+        } else {
+            efp.value = '';
+            efh.value = '';
+        }
+    })();
+    document.getElementById('edit-desc').value = p.desc || "";
+
+    // 🏭 Saqlangan «ishlab chiqarilgan joy» chipini tiklaymiz — aks holda
+    //    tahrirlashda u har safar birinchi variantga («Original») tushib
+    //    qolardi va saqlash bilan tovarning haqiqiy qiymati buzilardi.
+    (function () {
+        var want = String(p.origin || '').trim();
+        var chips = document.querySelectorAll('#edit-origin-chips .origin-chip');
+        if (!chips.length) return;
+        var hit = null;
+        chips.forEach(function (c) {
+            if (want && c.getAttribute('data-origin') === want) hit = c;
+        });
+        if (typeof selectOrigin === 'function') selectOrigin(hit || chips[0], 'edit');
+    })();
+
+    let pType = p.product_type || 'oddiy';
+    document.getElementById('edit-prod-type').value = pType;
+    toggleEditProductTypeFields();
+
+    if (pType === 'oddiy') {
+        document.getElementById('edit-stock').value = p.stock !== undefined ? p.stock : 10;
+    } else {
+        document.getElementById('edit-prod-brand').value = p.brand || "";
+        updateEditBrandModels();
+        if (p.model) setTimeout(() => { let m = document.getElementById('edit-prod-model'); if (m) m.value = p.model; }, 60);
+        let sCont = document.getElementById('edit-sizes-container');
+        sCont.innerHTML = '';
+        (p.sizes || []).forEach(s => {
+            let div = document.createElement('div');
+            div.className = 'size-input-row';
+            div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;';
+            div.innerHTML = `<input type="text" value="${s.size}" class="size-name" style="flex:1;padding:10px;background:rgba(0,0,0,0.5);color:white;border:1px solid var(--glass-border);border-radius:8px;"><input type="number" value="${s.stock}" class="size-stock" style="flex:1;padding:10px;background:rgba(0,0,0,0.5);color:white;border:1px solid var(--glass-border);border-radius:8px;"><button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red);color:white;border:none;border-radius:8px;padding:0 15px;cursor:pointer;font-weight:bold;">X</button>`;
+            sCont.appendChild(div);
+        });
+        if (!p.sizes || p.sizes.length === 0) addEditSizeField();
+    }
+
+    // Rasmlarni yuklash va preview ko'rsatish
+    let imgs = (p.images && p.images.length > 0) ? p.images : (p.img ? [p.img] : []);
+    let urlIds = ['edit-img-url', 'edit-img-url2', 'edit-img-url3'];
+    urlIds.forEach((id, i) => { let el = document.getElementById(id); if (el) el.value = imgs[i] || ""; });
+
+    // 🔄 Interaktiv rasm boshqaruvi (tartiblash, asosiy tanlash, o'chirish)
+    updateImgPreviews('edit');
+
+    // Chip tanlovlarini yuklash
+    document.querySelectorAll('#editModal .cat-chip').forEach(c => c.classList.remove('selected'));
+    let cats = p.categories || [p.category];
+    cats.forEach(c => {
+        if (!c) return;
+        // 1) To'g'ridan-to'g'ri moslik (yangi sxema: "chevy-cobalt")
+        let direct = document.querySelector(`#editModal .model-chip[data-val="${c}"]`);
+        if (direct) { direct.classList.add('selected'); return; }
+        // 2) Eski sxema (model-tur, mas: "chevy-cobalt-motor") — oxirgi qismni tashlaymiz
+        let parts = c.split('-'); let t = parts.pop(); let m = parts.join('-');
+        let mC = document.querySelector(`#editModal .model-chip[data-val="${m}"]`); if (mC) mC.classList.add('selected');
+        let tC = document.querySelector(`#editModal .type-chip[data-val="${t}"]`); if (tC) tC.classList.add('selected');
+    });
+
+    document.getElementById('productModal').style.display = 'none';
+    document.getElementById('editModal').style.display = 'flex';
+    activeModal = 'editModal';
+    // ✅ pushState (replaceState emas!) — back tugmasi ishlaydi
+    window.history.pushState({ modal: 'editModal' }, "");
+    tg.BackButton.show();
+    updateLivePreview('edit');
+    window._formDirty = false;
+    updateBtns();
+};
+
+
+window.closeEditGoBack = () => {
+    // 🧭 Soddalashtirildi: oddiy history.back() — popstate handler editModal case'i hammasini hal qiladi
+    //    (drafts'dan kelgan bo'lsa adminDraftsModal'ga, aks holda productModal'ga qaytadi).
+    window.history.back();
+};
+    

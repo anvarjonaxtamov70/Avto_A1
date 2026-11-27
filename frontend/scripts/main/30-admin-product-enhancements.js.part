@@ -1,0 +1,209 @@
+// ============================================================
+// 💎 ADMIN TOVAR MODULI — ZAMONAVIYLASHTIRISH (2026)
+// Bu blok script oxirida turadi: window.* funksiyalar mavjudlarini
+// xavfsiz qayta belgilaydi (override) va yangilarini qo'shadi.
+// ============================================================
+
+// ---------- 1) NARX FORMATI ----------
+window.formatNumber = (n) => { n = parseInt(n) || 0; return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+window.parsePrice = (str) => parseInt(String(str == null ? '' : str).replace(/[^\d]/g, '')) || 0;
+/**
+ * 💰 NARXNI MINGGA YAXLITLASH — chiroyli, «do'kon narxi» ko'rinishi uchun.
+ *
+ * Foizli hisob-kitob deyarli har doim xunuk son beradi:
+ *   312 000 + 3%  = 321 360  ->  321 000
+ *   321 501       ->            322 000   (500 va undan yuqorisi TEPAGA)
+ *
+ * Qoida: oxirgi 3 xona yaxlitlanadi (eng yaqin 1000 ga). 500 dan kichik
+ * bo'lsa pastga, 500 va undan katta bo'lsa tepaga.
+ *
+ * ⚠️ Bu bot'dagi `bulk_adjust_price` bilan AYNI qoida
+ * (`int(round(cur / 1000.0)) * 1000`) — ikki joyda boshqa natija
+ * chiqmasligi uchun ataylab bir xil qilingan.
+ */
+window._roundSom = function (n) {
+    var v = Number(n);
+    if (!isFinite(v) || v <= 0) return 0;
+    return Math.round(v / 1000) * 1000;
+};
+window.formatPriceInput = (el) => {
+    if (!el) return;
+    let d = el.value.replace(/[^\d]/g, '');
+    el.value = d ? formatNumber(d) : '';
+    let prefix = (el.id && el.id.indexOf('edit') === 0) ? 'edit' : ((el.id && el.id.indexOf('add') === 0) ? 'add' : null);
+    if (prefix) updateLivePreview(prefix);
+    window._formDirty = true;
+};
+
+// ---------- 2) MARKA -> MODEL (to'liq, izchil ro'yxat) ----------
+window.BRAND_MODELS = {
+    chevy: [['damas','Damas'],['cobalt','Cobalt'],['gentra','Gentra'],['lacetti','Lacetti'],['malibu1','Malibu 1'],['malibu2','Malibu 2'],['tracker2','Tracker 2'],['nexia3','Nexia 3'],['spark','Spark'],['onix','Onix'],['captiva1','Captiva 1'],['captiva2','Captiva 2'],['captiva3','Captiva 3'],['captiva4','Captiva 4'],['labo','Labo'],['matiz','Matiz'],['epica','Epica']],
+    daewoo: [['nexia1','Nexia 1'],['nexia2','Nexia 2'],['matiz','Matiz'],['tico','Tico']],
+    uaz: [['patriot','Patriot'],['hunter','Hunter']]
+};
+window.buildModelOptions = (brand) => (BRAND_MODELS[brand] || []).map(m => `<option value="${m[0]}">${m[1]}</option>`).join('');
+window.updateBrandModels = () => {
+    let brandEl = document.getElementById('admin-prod-brand');
+    let box = document.getElementById('admin-brand-models-box');
+    let select = document.getElementById('admin-prod-model');
+    if (!brandEl || !box || !select) return;
+    let brand = brandEl.value;
+    if (brand === 'gaz' || !brand) { box.style.display = 'none'; select.innerHTML = ''; }
+    else { box.style.display = 'block'; select.innerHTML = buildModelOptions(brand); }
+};
+window.updateEditBrandModels = () => {
+    let brandEl = document.getElementById('edit-prod-brand');
+    let box = document.getElementById('edit-brand-models-box');
+    let select = document.getElementById('edit-prod-model');
+    if (!brandEl || !box || !select) return;
+    let brand = brandEl.value;
+    if (brand === 'gaz' || !brand) { box.style.display = 'none'; select.innerHTML = ''; }
+    else { box.style.display = 'block'; select.innerHTML = buildModelOptions(brand); }
+};
+
+// ---------- 3) RASMLARNI BOSHQARISH (tartiblash / asosiy / o'chirish) ----------
+window.getImgInputs = (prefix) => ['', '2', '3'].map(s => document.getElementById(`${prefix}-img-url${s}`));
+window.readImgUrls = (prefix) => getImgInputs(prefix).map(el => el ? el.value.trim() : '').filter(u => u);
+window.setImgUrls = (prefix, arr) => { getImgInputs(prefix).forEach((el, i) => { if (el) el.value = (arr && arr[i]) ? arr[i] : ''; }); };
+window.removeImg = (prefix, i) => { let a = readImgUrls(prefix); a.splice(i, 1); setImgUrls(prefix, a); updateImgPreviews(prefix); window._formDirty = true; };
+window.moveImg = (prefix, i, dir) => { let a = readImgUrls(prefix); let j = i + dir; if (j < 0 || j >= a.length) return; let t = a[i]; a[i] = a[j]; a[j] = t; setImgUrls(prefix, a); updateImgPreviews(prefix); window._formDirty = true; };
+window.setMainImg = (prefix, i) => { let a = readImgUrls(prefix); if (i <= 0 || i >= a.length) return; let x = a.splice(i, 1)[0]; a.unshift(x); setImgUrls(prefix, a); updateImgPreviews(prefix); window._formDirty = true; };
+
+window.updateImgPreviews = (prefix) => {
+    let urls = readImgUrls(prefix);
+    let box = document.getElementById(`${prefix}-img-previews`);
+    if (!box) return;
+    if (urls.length === 0) { box.innerHTML = ''; updateLivePreview(prefix); return; }
+    box.innerHTML = urls.map((url, i) => `
+        <div class="img-thumb-wrap" style="margin:4px;">
+            <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;border:2px solid ${i===0?'var(--luxury-gold)':'var(--glass-border)'};display:block;background:#fff;" onerror="this.style.borderColor='#ff453a';this.src=window._brandPlaceholder('Xato')">
+            <button type="button" class="img-ctrl img-del" onclick="removeImg('${prefix}',${i})" title="O'chirish">✕</button>
+            <button type="button" class="img-ctrl" style="top:-8px;left:-8px;background:${i===0?'var(--luxury-gold)':'rgba(0,0,0,0.7)'};color:${i===0?'#000':'#fff'};" onclick="setMainImg('${prefix}',${i})" title="${i===0?'Asosiy rasm':'Asosiy qilish'}">⭐</button>
+            <div class="img-move-row">
+                ${i>0?`<button type="button" class="img-ctrl" style="position:relative;width:24px;height:24px;font-size:11px;" onclick="moveImg('${prefix}',${i},-1)">◀</button>`:''}
+                ${i<urls.length-1?`<button type="button" class="img-ctrl" style="position:relative;width:24px;height:24px;font-size:11px;" onclick="moveImg('${prefix}',${i},1)">▶</button>`:''}
+            </div>
+        </div>
+    `).join('');
+    updateLivePreview(prefix);
+};
+
+// ---------- 4) RASM YUKLASH (progress bilan, XHR) ----------
+function uploadFileWithProgress(file, onProgress) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64 = reader.result.split(',')[1];
+            const fd = new FormData();
+            fd.append('key', IMGBB_API_KEY);
+            fd.append('image', base64);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://api.imgbb.com/1/upload');
+            xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100)); };
+            xhr.onload = () => {
+                try { let j = JSON.parse(xhr.responseText); if (j && j.success) resolve(j.data.url); else reject(new Error(j && j.error && j.error.message ? j.error.message : 'ImgBB rad etdi')); }
+                catch (err) { reject(err); }
+            };
+            xhr.onerror = () => reject(new Error('Tarmoq xatosi'));
+            xhr.send(fd);
+        };
+        reader.onerror = () => reject(new Error("Fayl o'qilmadi"));
+        reader.readAsDataURL(file);
+    });
+}
+
+window.handleMultiImgUpload = async function(event, prefix) {
+    let existing = readImgUrls(prefix);
+    let slots = 3 - existing.length;
+    if (slots <= 0) { showToast("Maksimum 3 ta rasm. Avval birortasini o'chiring.", "warning"); event.target.value = ''; return; }
+    const files = Array.from(event.target.files).slice(0, slots);
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    const box = document.getElementById(`${prefix}-img-previews`);
+    if (box) {
+        let existHtml = existing.map(url => `<div class="img-thumb-wrap" style="margin:4px;opacity:0.5;"><img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;border:2px solid var(--glass-border);background:#fff;"></div>`).join('');
+        let progHtml = files.map((f, i) => `<div class="up-prog" id="up-prog-${prefix}-${i}" style="margin:4px;"><span class="up-pct">0%</span><div class="up-bar"></div></div>`).join('');
+        box.innerHTML = existHtml + progHtml;
+    }
+
+    let uploaded = [];
+    for (let i = 0; i < files.length; i++) {
+        let cell = document.getElementById(`up-prog-${prefix}-${i}`);
+        try {
+            let url = await uploadFileWithProgress(files[i], (pct) => {
+                if (cell) { let b = cell.querySelector('.up-bar'); let t = cell.querySelector('.up-pct'); if (b) b.style.width = pct + '%'; if (t) t.innerText = pct + '%'; }
+            });
+            uploaded.push(url);
+            if (cell) { let t = cell.querySelector('.up-pct'); if (t) t.innerText = '✅'; let b = cell.querySelector('.up-bar'); if (b) b.style.width = '100%'; }
+        } catch (err) {
+            if (cell) { let t = cell.querySelector('.up-pct'); if (t) t.innerText = '❌'; }
+            showToast(`${i + 1}-rasm xatosi: ${err.message}`, 'warning');
+        }
+    }
+
+    if (uploaded.length > 0) {
+        setImgUrls(prefix, existing.concat(uploaded));
+        updateImgPreviews(prefix);
+        window._formDirty = true;
+        showToast(`✅ ${uploaded.length} ta rasm yuklandi!`, 'success');
+    } else {
+        updateImgPreviews(prefix);
+        showToast("❌ Rasm yuklanmadi. Qaytadan urinib ko'ring.", 'warning');
+    }
+};
+
+// ---------- 5) JONLI KO'RINISH (Live preview) ----------
+window.updateLivePreview = (prefix) => {
+    let box = document.getElementById(`${prefix}-live-preview`);
+    if (!box) return;
+    let nameEl = document.getElementById(`${prefix}-name`);
+    let name = nameEl ? nameEl.value.trim() : '';
+    let priceEl = document.getElementById(`${prefix}-price`);
+    let price = priceEl ? parsePrice(priceEl.value) : 0;
+    let codeEl = document.getElementById(`${prefix}-code`);
+    let code = codeEl ? codeEl.value.trim() : '';
+    let img = readImgUrls(prefix)[0] || '';
+    if (!name && !price && !img) { box.innerHTML = `<div class="lp-empty">Maydonlarni to'ldiring — bu yerda mijozga qanday ko'rinishi chiqadi</div>`; return; }
+    let mainName = (name || 'Tovar nomi').split('·')[0].trim();
+    box.innerHTML = `
+        <div class="lp-card">
+            <img src="${img || window._brandPlaceholder('Rasm')}" onerror="this.src=window._brandPlaceholder('Rasm')">
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; color:#fff; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${mainName || 'Tovar nomi'}</div>
+                ${code ? `<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">🔖 ${code}</div>` : ''}
+                <div style="color:var(--luxury-gold); font-weight:800; font-size:14px; margin-top:4px;">${price ? price.toLocaleString() : 0} so'm</div>
+            </div>
+        </div>`;
+};
+
+// ---------- 6) DB YOZISH (faqat o'zgargan tovar) va XAVFSIZ ID ----------
+// ⚠️ ILGARI XATO: tovar MASSIV INDEKSI bo'yicha yozilardi
+//    (`products/{idx}`). `_rewriteProductsSafely` esa massivni `filter()`
+//    qiladi — bitta tovar o'chirilsa, undan KEYINGI barcha indekslar suriladi.
+//    Natijada tahrirlash oynasi o'chirishdan OLDIN ochilgan bo'lsa, saqlash
+//    tahrirlangan tovarni BOSHQA tovar ustiga yozib yuborardi.
+//    Endi yozishdan oldin o'sha indeksdagi tovar AYNAN shu `id` ga tegishli
+//    ekani tekshiriladi; mos kelmasa — `id` bo'yicha to'g'ri joy topiladi.
+window.saveProductAt = (idx) => {
+    if (idx < 0 || idx >= productsDB.length) return Promise.reject(new Error("Noto'g'ri indeks"));
+    var prod = productsDB[idx];
+    var pid = prod && prod.id;
+    if (pid == null) return db.ref('products/' + idx).set(prod);   // id yo'q — eski yo'l
+
+    return db.ref('products/' + idx).transaction(function (cur) {
+        // Bu joyda boshqa tovar turgan bo'lsa — YOZMAYMIZ (bekor qilamiz)
+        if (cur && cur.id != null && String(cur.id) !== String(pid)) return;
+        return prod;
+    }).then(function (res) {
+        if (res && res.committed) return res;
+        // Indeks siljigan — id bo'yicha haqiqiy joyni topamiz
+        return db.ref('products').once('value').then(function (snap) {
+            var fresh = [];
+            if (snap.exists()) snap.forEach(function (c) { if (c.val()) fresh.push(c.val()); });
+            var real = fresh.findIndex(function (p) { return p && String(p.id) === String(pid); });
+            if (real < 0) throw new Error('Tovar bazada topilmadi');
+            return db.ref('products/' + real).set(prod);
+        });
+    });
+};

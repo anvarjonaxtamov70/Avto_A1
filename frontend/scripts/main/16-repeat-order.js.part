@@ -1,0 +1,53 @@
+// ===================================================
+// 1. TAKRORIY BUYURTMA (REPEAT ORDER)
+// ===================================================
+window.reorderItems = () => {
+    let o = myOrders.find(x => String(x.id) === String(currentOpenOrderId));
+    if (!o || (!o.items && !Array.isArray(o.itemDetails))) return;
+    let addedCount = 0; let outOfStock = [];
+
+    // ⚠️ Server yozgan buyurtmada `items` kalitlari "l_<hash>" — ulardan tovar
+    //    id sini tiklab bo'lmaydi (ilgari "Qayta buyurtma" HECH NARSA qo'shmasdi).
+    //    `itemDetails` (id, razmer/mashina, soni) afzal; eski buyurtmalar — `items`.
+    let srcItems = {};
+    if (Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        o.itemDetails.forEach(function (it) {
+            if (!it || it.id == null) return;
+            let opt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || 'Universal');
+            let k = String(it.id) + '||' + opt;
+            srcItems[k] = (srcItems[k] || 0) + (parseInt(it.qty) || 1);
+        });
+    } else {
+        srcItems = o.items;
+    }
+
+    for (let safeId in srcItems) {
+        let parts = String(safeId).split('||');
+        let baseId = parts[0];
+        let carOpt = parts[1] ? parts[1].replace(/_dot_/g, ".") : "Universal";
+        let p = productsDB.find(x => x.id == baseId);
+        if (!p) continue;
+
+        let stockLeft = 10;
+        if (p.product_type === 'razmerli' && p.sizes) {
+            let sz = p.sizes.find(s => s.size === carOpt);
+            if (sz) stockLeft = sz.stock;
+        } else {
+            stockLeft = p.stock !== undefined ? p.stock : 10;
+        }
+
+        if (stockLeft <= 0) { outOfStock.push(p.name); continue; }
+
+        let finalSafeId = baseId + "||" + (carOpt ? carOpt.replace(/\./g, "_dot_") : "Universal");
+        cart[finalSafeId] = (parseInt(cart[finalSafeId]) || 0) + (parseInt(srcItems[safeId]) || 1);
+        addedCount++;
+    }
+    saveLocalCart(); updateCartBadge();
+
+    if (addedCount > 0) {
+        showToast(`${addedCount} ta tovar savatga qo'shildi!`, 'success');
+        setTimeout(() => { closeModal(); setTimeout(() => openModal('cartModal'), 300); }, 1000);
+    }
+    if (outOfStock.length > 0) setTimeout(() => { showToast(`Tugagan: ${outOfStock.slice(0,2).join(', ')}`, 'warning'); }, 1500);
+};
+

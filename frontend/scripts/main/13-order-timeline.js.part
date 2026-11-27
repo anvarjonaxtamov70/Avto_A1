@@ -1,0 +1,186 @@
+// ==========================================
+// 📦 1. VIZUAL KUZATUV ZANJIRI (TIMELINE)
+// ==========================================
+window.getTimelineHTML = (status) => {
+    var X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    var C = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+    if (status === 'bekor_qilingan') {
+        return '<div class="mo-cancelled">' + X + '<div><b>Buyurtma bekor qilingan</b><span>Ishlatilgan mablag\' va cashback qaytarilgan.</span></div></div>';
+    }
+    var FLOW = ['kutilmoqda', 'qabul', 'yolda', 'yetkazildi'];
+    var LBL = ['Kutilmoqda', 'Qabul', "Yo'lda", 'Yetkazildi'];
+    var HINT = {
+        kutilmoqda: "Do'kon buyurtmangizni ko'rib chiqmoqda",
+        qabul: "Buyurtma qabul qilindi va tayyorlanmoqda",
+        yolda: "Buyurtmangiz yo'lda — tez orada yetib boradi",
+        yetkazildi: "Buyurtma yetkazib berildi. Xaridingiz uchun rahmat!"
+    };
+    var cur = Math.max(0, FLOW.indexOf(status || 'kutilmoqda'));
+    var done = status === 'yetkazildi';
+    return '<div class="mo-hint">' + (HINT[FLOW[cur]] || '') + '</div><div class="mo-steps">' + FLOW.map(function (f, i) {
+        var c = (i < cur || (i === cur && done)) ? 'done' : (i === cur ? 'cur' : '');
+        return '<div class="mo-step ' + c + '"><i>' + (c === 'done' ? C : '') + '</i><span>' + LBL[i] + '</span></div>';
+    }).join('') + '</div>';
+};
+
+// 🧾 BUYURTMA QATORLARI HTML — SERVER `itemDetails` ni AFZAL ko'radi.
+//    Server buyurtmasi { itemDetails:[{id,name,size,qty,unitPrice,lineTotal}] }
+//    beradi (nom/narx buyurtma vaqtida qotirilgan). Eski buyurtmalar (itemDetails
+//    yo'q) uchun ESKI yo'l: `items` map (baseId||carOpt) + productsDB lookup.
+window._odItemsHTML = function (o) {
+    var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
+    var iH = '';
+    var _th = (typeof window._thumb === 'function') ? window._thumb : function (u) { return u; };
+    function row(imgSrc, nameHTML, qty, lineTotal) {
+        var imgTag = imgSrc
+            ? '<img class="mo-li-img" src="' + escHtml(_th(imgSrc, 160)) + '" alt="" loading="lazy" decoding="async" onerror="this.style.visibility=\'hidden\'">'
+            : '<span class="mo-li-img"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg></span>';
+        return '<div class="mo-li">' + imgTag +
+            '<div class="mo-li-mid"><div class="mo-li-nm">' + nameHTML + '</div>' +
+            '<div class="mo-li-meta">' + qty + ' dona</div></div>' +
+            '<span class="mo-li-sum">' + (Number(lineTotal) || 0).toLocaleString() + "</span></div>";
+    }
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        o.itemDetails.forEach(function (it) {
+            var p = pdb.find(function (x) { return x.id == it.id; });
+            var imgSrc = p ? (p.img || p.image || '') : '';
+            var carOpt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || '');
+            var carOptHTML = carOpt ? '<span class="mo-li-opt">' + escHtml(carOpt) + '</span>' : '';
+            var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
+            iH += row(imgSrc, escHtml(it.name) + carOptHTML, (it.qty || 0), line);
+        });
+        return iH;
+    }
+    // Eski buyurtmalar uchun zaxira
+    for (var fullId in (o && o.items ? o.items : {})) {
+        var parts = String(fullId).split('||');
+        var baseId = parts[0];
+        var carOptRaw = parts[1];
+        var pp = pdb.find(function (x) { return x.id == baseId; });
+        if (!pp) continue;
+        var co = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+        var coHTML = (co && co !== "Universal") ? '<span class="mo-li-opt">' + escHtml(co) + '</span>' : '';
+        iH += row(pp.img || pp.image || '', escHtml(pp.name) + coHTML, o.items[fullId], (pp.price * o.items[fullId]));
+    }
+    return iH;
+};
+
+// ==========================================
+// 📦 2. BUYURTMA ICHIGA KIRISH (KABINETDAN)
+// ==========================================
+window.openOrderDetails = (id) => { 
+     let o = myOrders.find(x => x.id == id);
+    if(!o) return; 
+    
+    currentOpenOrderId = id; 
+    
+    document.getElementById('od-code').innerText = "#" + (o.code || o.id); 
+    document.getElementById('od-date').innerText = [o.date, o.time].filter(Boolean).join(" \u00B7 "); 
+    
+    // Eski yozuv o'rniga Zanjirni ulaymiz
+    document.getElementById('od-status').innerHTML = getTimelineHTML(o.status || 'kutilmoqda'); 
+    document.getElementById('od-status').setAttribute('data-st', o.status || 'kutilmoqda');
+    
+    document.getElementById('od-items').innerHTML = window._odItemsHTML(o);
+    document.getElementById('od-total').innerText = (Number(o.total) || 0).toLocaleString() + " so'm";
+    try { window._renderOrderCancel(o); } catch (e) {}
+    
+    // CHAT FUNKSIYASI SHU YERDA CHAQIRILADI (Yo'qolib ketmaydi)
+    if(typeof renderChatMessages === 'function') renderChatMessages();
+    openModal('orderDetailModal'); 
+};
+
+// ==========================================
+// ❌ MIJOZ BUYURTMANI O'ZI BEKOR QILADI
+//    Ilgari bunday imkoniyat umuman yo'q edi — mijoz faqat adminga yozib
+//    so'rashi mumkin edi. Endi do'kon hali QABUL QILMAGAN ("kutilmoqda")
+//    buyurtmani mijozning o'zi bekor qila oladi. Server (Worker) buni qayta
+//    tekshiradi: faqat o'z buyurtmasi va faqat "kutilmoqda" holatida.
+//    Tovarlar omborga, ishlatilgan cashback mijozga qaytadi; adminlarga
+//    ogohlantirish boradi.
+// ==========================================
+window._renderOrderCancel = function (o) {
+    var box = document.getElementById('od-cancel-box');
+    if (!box) return;
+    var st = String((o && o.status) || 'kutilmoqda');
+    if (!o || st !== 'kutilmoqda' || !o.id) { box.innerHTML = ''; return; }
+    box.innerHTML = '<button type="button" id="od-cancel-btn" class="mo-btn mo-danger" onclick="cancelMyOrder(\'' + escHtml(String(o.id)) + '\')">' +
+        'Buyurtmani bekor qilish</button>' +
+        '<div class="mo-note">Do\'kon buyurtmani qabul qilgunga qadar bekor qilish mumkin.</div>';
+};
+
+window.cancelMyOrder = async function (orderId) {
+    var o = (window.myOrders || myOrders || []).find(function (x) { return x && String(x.id) === String(orderId); });
+    if (!o) return;
+    if (String(o.status || 'kutilmoqda') !== 'kutilmoqda') {
+        showToast("Buyurtma allaqachon qabul qilingan — do'kon bilan bog'laning", "warning");
+        return;
+    }
+    if (!currentUser) { showToast("Xavfsiz ulanish kerak", "warning"); return; }
+    var ok = await window._a1Confirm("#" + (o.code || o.id) + " buyurtmasini bekor qilasizmi?\n\nBu amalni qaytarib bo'lmaydi.");
+    if (!ok) return;
+    var btn = document.getElementById('od-cancel-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerText = '⏳ Bekor qilinmoqda...'; }
+    var r;
+    try {
+        r = await window._workerPost('/order-status', { uid: String(currentUser), orderId: String(o.id), status: 'bekor_qilingan', notifyMode: 'split' });
+    } catch (e) {
+        showToast("Internetni tekshiring", "warning");
+        try { window._renderOrderCancel(o); } catch (e2) {}
+        return;
+    }
+    if (r && r.resp && r.resp.ok && r.data && r.data.ok) {
+        if (r.data.deliver) { try { window._a1OrderDeliver(r.data.deliver); } catch (e) {} }
+        o.status = 'bekor_qilingan';
+        showToast("Buyurtma bekor qilindi");
+        try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
+        try { document.getElementById('od-status').innerHTML = getTimelineHTML('bekor_qilingan'); } catch (e) {}
+        try { window._renderOrderCancel(o); } catch (e) {}
+        try { if (typeof renderMyOrders === 'function') renderMyOrders(); } catch (e) {}
+        return;
+    }
+    var err = (r && r.data && r.data.error) ? String(r.data.error) : '';
+    if (r && r.resp && r.resp.status === 409 && r.data && r.data.currentStatus) {
+        o.status = r.data.currentStatus;
+        try { document.getElementById('od-status').innerHTML = getTimelineHTML(o.status); } catch (e) {}
+        showToast("Buyurtma allaqachon qabul qilingan — do'kon bilan bog'laning", "warning");
+    } else if (r && r.resp && r.resp.status === 403) {
+        showToast("Bu buyurtmani bekor qilib bo'lmaydi", "warning");
+    } else {
+        showToast("Bekor qilinmadi" + (err ? ": " + err : ""), "warning");
+    }
+    try { window._renderOrderCancel(o); } catch (e) {}
+};
+
+// 🧾 ADMIN buyurtma qatorlari — SERVER `itemDetails` ni afzal ko'radi, eski
+//    buyurtmalar uchun `items` map + productsDB zaxira yo'li.
+window._adminOrderItemsHTML = function (o) {
+    var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
+    var rows = '';
+    function row(nameHTML, qty, sum) {
+        return '<div class="ao-item"><span class="ao-item-nm">' + nameHTML + '</span>' +
+            '<span class="ao-item-q">\u00D7' + qty + '</span>' +
+            '<span class="ao-item-p">' + (Number(sum) || 0).toLocaleString() + ' s</span></div>';
+    }
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        o.itemDetails.forEach(function (it) {
+            var carOpt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || '');
+            var nm = escHtml(it.name) + (carOpt ? '<span class="ao-opt">' + escHtml(carOpt) + '</span>' : '');
+            var line = (it.lineTotal != null) ? it.lineTotal : ((Number(it.unitPrice) || 0) * (Number(it.qty) || 0));
+            rows += row(nm, (it.qty || 0), line);
+        });
+        return rows;
+    }
+    for (var pid in (o && o.items ? o.items : {})) {
+        var parts = String(pid).split('||');
+        var baseId = parts[0];
+        var carOptRaw = parts[1];
+        var p = pdb.find(function (x) { return x.id == baseId; });
+        if (!p) continue;
+        var co = carOptRaw ? carOptRaw.replace(/_dot_/g, ".") : "";
+        var nm2 = escHtml(p.name) + ((co && co !== "Universal") ? '<span class="ao-opt">' + escHtml(co) + '</span>' : '');
+        rows += row(nm2, o.items[pid], (p.price * o.items[pid]));
+    }
+    return rows;
+};
+

@@ -1,0 +1,292 @@
+// ==========================================
+    // TOZALANGAN SAVAT VA TO'LOV MANTIQI
+    // ==========================================
+    function renderCartItems() {
+        let c = document.getElementById('cart-items-container'); 
+        let b = document.getElementById('main-checkout-btn'); 
+        let t = 0; 
+        c.innerHTML = '';
+        if(Object.keys(cart).length === 0) { 
+            c.innerHTML = window._emptyState({
+                icon: '<svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>',
+                title: "Savatingiz bo'sh",
+                desc: "Hozircha hech narsa qo'shmadingiz. Eng yaxshi tovarlarni tanlab, savatga qo'shing.",
+                btnText: "Xaridni boshlash",
+                btnAction: "closeModal(); showCatalog()"
+            }); 
+            if(b) b.style.display = 'none'; 
+        } else {
+            for(let fullId in cart) { 
+                let [baseId, carOpt] = String(fullId).split('||');
+                let p = productsDB.find(x => x.id == baseId); 
+                if(!p) continue; 
+                t += p.price * cart[fullId]; 
+                let displayName = carOpt && carOpt !== "Universal" && carOpt !== "undefined" ? `${p.name} <span style="color:var(--luxury-gold); font-size:11px;">(${carOpt})</span>` : p.name;
+                // DIQQAT: Xatolik aynan shu tugmada yashiringan edi, to'g'irlandi!
+                c.innerHTML += `<div class="cart-row"><div class="cart-content-wrap"><div class="cart-info"><h4>${displayName}</h4><span style="color:var(--luxury-gold); font-weight:700;">${(p.price * cart[fullId]).toLocaleString()} so'm</span></div><div class="cart-controls"><button onclick="chg('${fullId}',-1)">-</button><span class="cart-qty" style="color:var(--text-main); font-weight:bold; width:20px; text-align:center;">${cart[fullId]}</span><button onclick="chg('${fullId}',1)">+</button></div></div><div class="swipe-delete" onclick="chg('${fullId}', -${cart[fullId]})">🗑</div></div>`; 
+            } 
+            if(b) b.style.display = 'block';
+        } 
+        let tSum = document.getElementById('cart-total-sum');
+        if(tSum) tSum.innerText = t.toLocaleString() + " so'm";
+        window._cartTotal = t;   // 🔢 count-up animatsiyasi uchun (cart ochilganda)
+        // 🌟 PROGRESS BAR HISOB-KITOBI
+    let pWrap = document.getElementById('cart-progress-wrap');
+    let pBar = document.getElementById('cart-progress-bar');
+    let pMsg = document.getElementById('cart-progress-msg');
+    
+    if(pWrap && pBar && pMsg) {
+        if(t > 0) {
+            pWrap.style.display = 'block';
+            let target = (window.VIP && window.VIP.freeDeliveryTarget) ? window.VIP.freeDeliveryTarget() : 3000000;
+            let percent = (t / target) * 100;
+            if(percent >= 100) {
+                pBar.style.width = '100%';
+                pBar.style.background = '#30d158';
+                pBar.style.boxShadow = '0 0 15px #30d158';
+                pMsg.innerHTML = '🎉 Tabriklaymiz! Yetkazib berish <b>BEPUL</b>!';
+                pMsg.style.color = '#30d158';
+                if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            } else {
+                pBar.style.width = percent + '%';
+                pBar.style.background = 'linear-gradient(90deg, #ff453a, #ff9500)';
+                pBar.style.boxShadow = 'none';
+                pMsg.innerHTML = `Yetkazib berish bepul bo'lishi uchun yana <b>${(target - t).toLocaleString()} so'm</b> qoldi`;
+                pMsg.style.color = 'var(--luxury-gold)';
+            }
+        } else {
+            pWrap.style.display = 'none';
+        }
+    }
+    }
+
+    function chg(fullId, d) { 
+        let [baseId, carOpt] = String(fullId).split('||');
+        let p = productsDB.find(x => x.id == baseId);
+        if(!p) return;
+        
+        let st = 10;
+        if (p.product_type === 'razmerli' && p.sizes) {
+            let sizeObj = p.sizes.find(s => s.size === carOpt);
+            if(sizeObj) st = sizeObj.stock;
+        } else {
+            st = p.stock !== undefined ? p.stock : 10;
+        }
+        
+        let totalInCart = 0;
+        for(let cid in cart) { if(cid.startsWith(baseId + "||" + (carOpt||""))) totalInCart += cart[cid]; }
+        
+        if(d > 0 && totalInCart >= st) { showToast("Omborda bunday ko'p emas", "warning"); return; }
+        cart[fullId] = (cart[fullId] || 0) + d; 
+        if(cart[fullId] <= 0) delete cart[fullId]; 
+        saveLocalCart(); updateCartBadge(); renderCartItems(); 
+    }
+
+    // 🎯 Yetkazib berish turiga qarab to'lov usullari kartochkalarini ko'rsatish/yashirish.
+    //   To'lov usullari endi FAQAT ikkita: Payme va naqd pul (karta orqali
+    //   o'tkazma olib tashlandi). 'bts' -> faqat Payme (naqd yo'q).
+    function applyPaymentMethodVisibility() {
+        var elApp  = document.getElementById('pay-opt-app');
+        var elCash = document.getElementById('pay-opt-cash');
+        // .pay-method-card CSS'ida display:flex !important — shuning uchun ko'rsatish/yashirishda
+        // ham 'important' bilan boshqaramiz.
+        var show = function(el){ if(el) el.style.setProperty('display', 'flex', 'important'); };
+        var hide = function(el){ if(el) el.style.setProperty('display', 'none', 'important'); };
+
+        var method = (window.selectedDelivery && window.selectedDelivery.method) || null;
+        if (method === 'bts') {
+            // BTS pochta filialiga jo'natishdan oldin to'lov olinadi — naqd YO'Q.
+            show(elApp); hide(elCash);
+        } else {
+            // Kuryer (manzilga) yoki noma'lum holat — Payme va naqd pul.
+            show(elApp); show(elCash);
+        }
+    }
+
+    function openPaymentModal() { 
+        if (Object.keys(cart).length === 0) return; 
+        if (!myProfile.phone) { 
+            showToast("Raqam kiriting!", "warning"); 
+            setTimeout(() => { closeModal(); showProfile(); setTimeout(() => openModal('profileEditModal'), 300); }, 1500); 
+            return; 
+        } 
+        
+        document.getElementById('cartModal').style.display = 'none'; 
+        document.getElementById('payment-options').classList.remove('hidden'); 
+        var _appDet = document.getElementById('app-pay-details');
+        if(_appDet) _appDet.classList.add('hidden');
+
+        // 🎯 YETKAZIB BERISH TURIGA QARAB TO'LOV USULLARINI CHEKLASH
+        //   - Kuryer (manzilga): Payme va naqd pul.
+        //   - BTS Pochta filialiga: oldindan to'lash kerak -> "Naqd pul" YASHIRILADI,
+        //     faqat Payme qoladi.
+        //   Eslatma: .pay-method-card CSS'ida display:flex !important bo'lgani uchun
+        //   yashirishda ham 'important' ishlatamiz (aks holda !important ustun keladi).
+        applyPaymentMethodVisibility();
+
+        // Jami summani SAVATDAN QAYTA hisoblaymiz (eskirgan _cartTotal'ga tayanmaymiz)
+        var _sum = _recalcCartTotal();
+        var _payDisp = document.getElementById('pay-amount-display');
+        if(_payDisp) _payDisp.textContent = _sum.toLocaleString() + " so'm";
+        
+        let m = document.getElementById('paymentModal'); 
+        m.style.display = 'flex'; 
+        document.body.style.overflow = 'hidden';
+        // 🧭 Nazad bitta qadam orqaga: oldingi oynani (yetkazish/savat) stack'ga qo'yamiz
+        window._modalStack = window._modalStack || [];
+        window._modalStack.push(activeModal || 'cartModal');
+        activeModal = 'paymentModal';
+        window.history.pushState({ modal: 'paymentModal' }, ""); 
+        tg.BackButton.show(); 
+        updateBtns(); 
+    }
+    
+    // 🔢 Savat jami summasini doim TOZA hisoblaydi (manba: cart + productsDB)
+    function _recalcCartTotal() {
+        var t = 0;
+        try {
+            for (var fullId in cart) {
+                var baseId = String(fullId).split('||')[0];
+                var p = productsDB.find(function(x){ return x.id == baseId; });
+                if (p) t += p.price * cart[fullId];
+            }
+        } catch(e) {}
+        window._cartTotal = t;
+        return t;
+    }
+    
+    function selectPayment(t) { 
+        var _gross = _recalcCartTotal();
+        // 🎁 Cashback ishlatilgan bo'lsa — ko'rsatiladigan summa TO'LANADIGAN summa
+        var _cbUse = 0;
+        try { if (window._cbGetApplied) _cbUse = window._cbGetApplied(_gross); } catch(e) {}
+        var _sum = Math.max(0, _gross - _cbUse);
+        var _cbLine = _cbUse > 0 ? ("\nCashback: −" + _cbUse.toLocaleString() + " so'm") : '';
+        // 🎁 «Sizga qaytadi» — naqd to'lovda oyna emas, NATIVE dialog chiqadi,
+        //    shuning uchun cashback va'dasi shu matnga ham qo'shiladi.
+        var _cbEarnLine = '';
+        try {
+            var _r = window._cashbackRate ? window._cashbackRate() : 0.008;
+            var _e = Math.round(_sum * _r);
+            if (_e > 0) {
+                _cbEarnLine = "\nSizga qaytadi: " + _e.toLocaleString() + " so'm cashback ("
+                    + (+(_r * 100).toFixed(2)) + '%)';
+            }
+        } catch (e) {}
+        if(t === 'cash') { 
+            // Naqd pul — tasdiqlash so'rash
+            tg.showConfirm("Buyurtmani tasdiqlaysizmi?\n\nTovarlar: " + _gross.toLocaleString() + " so'm" + _cbLine +
+                "\nTo'lanadi: " + _sum.toLocaleString() + " so'm" + _cbEarnLine +
+                "\nTo'lov: Naqd pul (yetkazilganda)", function(ok) {
+                if(ok) {
+                    confirmOrder('Naqd pul (yetkazilganda)');
+                }
+            });
+        } else if(t === 'app' || t === 'card') {        } else if(t === 'app') {
+            document.getElementById('payment-options').classList.add('hidden');
+            document.getElementById('app-pay-details').classList.remove('hidden');
+            // Summani ko'rsatish
+            var el = document.getElementById('app-pay-amount');
+            if(el) el.textContent = _sum.toLocaleString() + " so'm";
+        }
+    }
+    // Payme oynasidan ORTGA — to'lov usullari ro'yxatiga qaytish
+    function backToPaymentOptions() {
+        var _ad = document.getElementById('app-pay-details'); if (_ad) _ad.classList.add('hidden');
+        document.getElementById('payment-options').classList.remove('hidden');
+    }
+    function copyCard() { 
+        navigator.clipboard.writeText("5614681874796349").then(function(){
+            showToast("Karta raqami nusxalandi!", "success");
+        }).catch(function(){ 
+            // Fallback: manual select
+            var t = document.createElement('textarea');
+            t.value = "5614681874796349";
+            document.body.appendChild(t);
+            t.select();
+            document.execCommand('copy');
+            document.body.removeChild(t);
+            showToast("Nusxalandi!", "success"); 
+        });
+    }
+    // Payme ilovasini ochish (deeplink). Click olib tashlandi — faqat Payme.
+    function openPayApp(provider) {
+        tg.HapticFeedback.impactOccurred('medium');
+        if(provider === 'payme') {
+            // Payme ilovasini ochish — P2P o'tkazma sahifasi
+            try { tg.openLink('https://payme.uz/home/main'); } catch(e) { window.open('https://payme.uz', '_blank'); }
+            showToast("Payme ochildi. Kartaga o'tkazing!", "success");
+        }
+    }
+
+    // (O'CHIRILDI: eski `confirmOrder` — u brauzerda stokni o'zi kamaytirar va
+    //  adminga faqat ADMIN_IDS[0] ga xabar yuborardi. Pastdagi
+    //  `window.confirmOrder` (server-authoritative, Worker /order-commit) uni
+    //  baribir almashtirib qo'yardi, ya'ni bu kod hech qachon ishlamasdi, lekin
+    //  o'qiganni chalg'itardi.)
+
+    function renderMyOrders() {
+        let c = document.getElementById('orders-list-container');
+        if (!c) return;
+        let sub = document.getElementById('mo-subtitle');
+        if (!myOrders || myOrders.length === 0) {
+            if (sub) sub.textContent = '';
+            c.innerHTML = window._emptyState({ icon: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg>', title: "Buyurtmalar yo'q", desc: "Hali buyurtma bermagansiz. Birinchi buyurtmangizni hoziroq bering!", btnText: "Xarid qilish", btnAction: "closeModal(); showCatalog()" });
+            return;
+        }
+        // 🧭 ENG YANGISI TEPADA. Ilgari tartib umuman yo'q edi: RTDB kalitlari
+        //    (eski "0,1,2…" + yangi "1729…-hash") aralash kelib, yangi buyurtma
+        //    ro'yxat OXIRIDA yo'qolib qolardi.
+        const T = function (o) {
+            var c0 = Number(o && o.createdAt); if (c0 > 0) return c0;
+            var n = parseInt(String(o && o.id != null ? o.id : ''), 10); return isFinite(n) ? n : 0;
+        };
+        const list = myOrders.filter(Boolean).slice().sort((a, b) => T(b) - T(a));
+        const ST = { kutilmoqda: 'Kutilmoqda', qabul: 'Qabul qilindi', yolda: "Yo'lda", yetkazildi: 'Yetkazildi', bekor_qilingan: 'Bekor qilingan' };
+        const STEP = { kutilmoqda: 1, qabul: 2, yolda: 3, yetkazildi: 4 };
+        const active = list.filter(o => ['kutilmoqda', 'qabul', 'yolda'].includes(o.status || 'kutilmoqda')).length;
+        if (sub) sub.textContent = list.length + ' ta buyurtma' + (active ? ' \u00B7 ' + active + ' ta faol' : '');
+
+        const now = new Date();
+        const today = now.toLocaleDateString('uz-UZ');
+        const yest = new Date(now.getTime() - 864e5).toLocaleDateString('uz-UZ');
+        const thumb = (typeof window._thumb === 'function') ? window._thumb : (u => u);
+        const BOX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg>';
+        let lastDay = null;
+
+        c.innerHTML = list.map((o, i) => {
+            const st = o.status || 'kutilmoqda';
+            let lines = [];
+            try { lines = window._aoLines ? window._aoLines(o) : []; } catch (e) {}
+            const first = lines.find(l => l.img) || null;
+            const nItems = lines.length || (Array.isArray(o.itemDetails) ? o.itemDetails.length : Object.keys(o.items || {}).length);
+            const pic = first
+                ? '<img src="' + escHtml(thumb(first.img, 160)) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">'
+                : '';
+            const more = nItems > 1 ? '<i class="mo-more">+' + (nItems - 1) + '</i>' : '';
+            const names = lines.slice(0, 2).map(l => escHtml(l.name)).join(', ') + (lines.length > 2 ? '\u2026' : '');
+            const step = STEP[st] || 0;
+            const prog = (st !== 'bekor_qilingan' && st !== 'yetkazildi')
+                ? '<span class="mo-prog" aria-hidden="true"><i style="width:' + (step / 4 * 100) + '%"></i></span>' : '';
+            const dk = o.date || '';
+            let head = '';
+            if (dk !== lastDay) {
+                lastDay = dk;
+                head = '<div class="mo-day" style="--i:' + i + '">' + escHtml(dk === today ? 'Bugun' : dk === yest ? 'Kecha' : (dk || 'Sanasiz')) + '</div>';
+            }
+            return head + '<button type="button" class="mo-o mo-st-' + escHtml(st) + '" style="--i:' + i + '" onclick="openOrderDetails(\'' + escHtml(String(o.id)) + '\')">' +
+                '<span class="mo-pic">' + BOX + pic + more + '</span>' +
+                '<span class="mo-mid">' +
+                    '<span class="mo-code">#' + escHtml(o.code || o.id) + '</span>' +
+                    '<span class="mo-names">' + (names || (nItems + ' ta mahsulot')) + '</span>' +
+                    '<span class="mo-meta">' + escHtml(String(o.time || '').slice(0, 5)) + (nItems ? ' \u00B7 ' + nItems + ' ta' : '') + '</span>' +
+                '</span>' +
+                '<span class="mo-end">' +
+                    '<span class="mo-pill">' + (ST[st] || escHtml(st)) + '</span>' +
+                    '<span class="mo-sum">' + (Number(o.total) || 0).toLocaleString() + '<small>so\'m</small></span>' +
+                '</span>' +
+                '<span class="mo-chev">\u203A</span>' + prog +
+            '</button>';
+        }).join('');
+    }
+

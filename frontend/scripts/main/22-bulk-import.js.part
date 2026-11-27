@@ -1,0 +1,137 @@
+// =====================================
+// 🚀 AQLLI OMMAVIY QO'SHISH (SMART BULK IMPORT)
+// =====================================
+
+window.currentDraftFilter = 'all';
+
+window.openAdminDrafts = () => {
+    document.getElementById('adminModal').style.display = 'none';
+    let m = document.getElementById('adminDraftsModal');
+    m.style.display = 'flex';
+    activeModal = 'adminDraftsModal';
+    window.history.pushState({ modal: 'adminDraftsModal' }, "");
+    
+    document.getElementById('draft-search-input').value = '';
+    filterAdminDrafts('all');
+};
+
+// Filtrlash va qidirish tizimi
+window.filterAdminDrafts = (filterBrand = null) => {
+    if (filterBrand) window.currentDraftFilter = filterBrand;
+    
+    let q = document.getElementById('draft-search-input').value.toLowerCase().trim();
+    let c = document.getElementById('admin-drafts-list');
+    let drafts = productsDB.filter(p => p.is_draft === true);
+    
+    // Brand (Mashina) bo'yicha filter
+    if (window.currentDraftFilter !== 'all') {
+        drafts = drafts.filter(p => {
+            let catsStr = (p.categories || []).join(' ');
+            if (window.currentDraftFilter === 'gaz') return catsStr.includes('gazel') || catsStr.includes('volga') || catsStr.includes('sobol') || catsStr.includes('uaz');
+            if (window.currentDraftFilter === 'chevy') return catsStr.includes('chevy');
+            if (window.currentDraftFilter === 'daewoo') return catsStr.includes('daewoo');
+            return true;
+        });
+    }
+
+    // Qidiruv bo'yicha filter (Nomidan yoki Partiya nomidan qidiradi)
+    if (q) {
+        drafts = drafts.filter(p => p.name.toLowerCase().includes(q) || (p.batch_id && p.batch_id.toLowerCase().includes(q)));
+    }
+    
+    if (drafts.length === 0) {
+        c.innerHTML = '<p style="text-align:center; color:gray; margin-top:20px;">Qoralamalar topilmadi.</p>';
+        return;
+    }
+
+    c.innerHTML = drafts.map(p => {
+      let firstCat = (p.categories && p.categories[0]) ? p.categories[0].split('-').slice(0,2).join(' ').toUpperCase().replace(/CHEVY/g, 'CHEVROLET') : '';
+        // Dublikat va Partiya dizaynlari
+        let conflictBadge = p.has_conflict ? `<div style="color:#ff453a; font-size:10px; font-weight:bold; margin-bottom:4px;">⚠️ DUBLIKAT (Eskisi yashirildi)</div>` : '';
+        let batchInfo = p.batch_id ? `<div style="color:gray; font-size:9px; margin-top:4px;">📁 ${window._prettyBatch(p.batch_id)}</div>` : '';
+        
+        return `
+        <div class="inventory-item" style="display:flex; justify-content:space-between; align-items:center; border: 1px solid ${p.has_conflict ? 'rgba(255,69,58,0.4)' : 'var(--glass-border)'};">
+            <div class="inv-info" style="flex:1; cursor:pointer;" onclick="editDraft(${p.id})">
+                ${conflictBadge}
+                <h4 style="color:var(--luxury-gold); margin-bottom:5px;">${p.name}</h4>
+                <p style="font-weight:bold; font-size:12px;">${p.price.toLocaleString()} so'm <span style="color:gray; font-size:10px; margin-left:10px; background:rgba(255,255,255,0.1); padding:2px 5px; border-radius:5px;">${firstCat}</span></p>
+                ${batchInfo}
+            </div>
+            <div class="inv-controls" style="display:flex; gap:12px; align-items:center; padding-left:10px;">
+                <span style="font-size:22px; cursor:pointer;" onclick="editDraft(${p.id})">✏️</span>
+                <span style="font-size:22px; cursor:pointer; color:#ff453a; filter: grayscale(0.2);" onclick="deleteDraft(${p.id}, ${p.has_conflict ? 'true' : 'false'})">🗑️</span>
+            </div>
+        </div>
+        `;
+    }).join('');
+};
+
+window.editDraft = (id) => {
+    document.getElementById('adminDraftsModal').style.display = 'none';
+    // 🧭 Qaytish uchun ALOHIDA bayroq — `currentDraftFolder` papka nomini saqlaydi
+    //    va uni buzib bo'lmaydi (aks holda papka bo'sh ko'rinib qolardi).
+    window._editCameFromDrafts = true;
+    // To'g'ridan-to'g'ri editModal'ni ochamiz (productModal'ni o'tkazib yuboramiz)
+    // — bu navigatsiyani sodda qiladi va history'da ortiqcha entry qoldirmaydi.
+    if (typeof openEditModal === 'function') {
+        openEditModal(null, id);
+    } else {
+        // Zaxira: eski yo'l (productModal orqali)
+        openProduct(id);
+        setTimeout(() => { let editBtn = document.getElementById('pm-edit-btn'); if (editBtn) editBtn.click(); }, 100);
+    }
+};
+
+// 🗑️ Qoralamani o'chirish va Eskisini tiklash
+window.deleteDraft = (id, hasConflict) => {
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm(hasConflict ? "Yangi narxni bekor qilib, eskisini tiklaymizmi?" : "Bu qoralamani o'chirasizmi?", function(ok) {
+            if(ok) processDraftDeletion(id, hasConflict);
+        });
+    } else {
+        if(confirm("Bu qoralamani o'chirasizmi?")) processDraftDeletion(id, hasConflict);
+    }
+};
+
+window.processDraftDeletion = (id, hasConflict) => {
+    let draftIndex = productsDB.findIndex(p => p.id === id);
+    let draftName = "";
+    
+    if(draftIndex !== -1) {
+        draftName = productsDB[draftIndex].name.toLowerCase();
+        productsDB.splice(draftIndex, 1); // Qoralamani uchirib tashlaymiz
+    }
+    
+    // Agar u dublikat bo'lgan bo'lsa, eski yashirilgan tovarni topib QAYTA TIKLAYMIZ
+    if (hasConflict && draftName) {
+        let oldIndex = productsDB.findIndex(p => p.name.toLowerCase() === draftName && p.is_draft && p.desc && p.desc.includes("DIQQAT"));
+        if (oldIndex !== -1) {
+            delete productsDB[oldIndex].is_draft; // Yashirinishdan chiqaramiz
+            productsDB[oldIndex].desc = "Narxi saqlab qolindi (Tiklandi)";
+        }
+    }
+    
+    // ⚠️ ILGARI: `db.ref('products').set(productsDB)` — butun katalogni
+    //    XOTIRADAGI (eskirgan bo'lishi mumkin) nusxa bilan qayta yozardi.
+    //    `productsDB` sahifa ochilganda BIR MARTA o'qiladi va `products` ga
+    //    listener YO'Q. Ya'ni sahifa ochilgandan keyin bot yoki boshqa admin
+    //    qo'shgan HAR QANDAY tovar shu yozuvda JIMGINA O'CHIB KETARDI.
+    //    Endi `_rewriteProductsSafely` ishlatiladi: u avval ENG SO'NGGI
+    //    holatni o'qiydi, o'zgartirishni o'shanga qo'llaydi.
+    window._rewriteProductsSafely(function (fresh) {
+        var byId = {};
+        productsDB.forEach(function (p) { if (p && p.id != null) byId[String(p.id)] = p; });
+        // Serverdagi ro'yxatni asos qilamiz; lokalda o'zgargan tovarlarni
+        // ustiga qo'yamiz; lokalda BUTUNLAY yo'q (o'chirilgan) tovarni tashlaymiz.
+        return fresh
+            .filter(function (p) { return p && p.id != null && byId[String(p.id)]; })
+            .map(function (p) { return byId[String(p.id)]; });
+    }).then(function () {
+        showToast(hasConflict ? "O'chirildi va eskisi tiklandi!" : "Qoralama o'chirildi!");
+        filterAdminDrafts(); // Oynani yangilab qoyish
+    }).catch(function () {
+        showToast("Saqlashda xato — qayta urinib ko'ring", "warning");
+    });
+};
+

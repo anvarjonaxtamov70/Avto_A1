@@ -1,0 +1,128 @@
+// =====================================
+// ✍️ TAVSIF UCHUN AVTO-MATN SHABLONLARI
+// =====================================
+window.addDescTemplate = (prefix, text) => {
+    let textarea = document.getElementById(`${prefix}-desc`);
+    if (textarea) {
+        // Agar yozuv qutisi bo'sh bo'lmasa, yangi qatordan qo'shadi, bo'sh bo'lsa shundayligicha yozadi
+        if (textarea.value.trim() !== '') {
+            textarea.value += '\n' + text;
+        } else {
+            textarea.value = text;
+        }
+        showToast("Matn qo'shildi!", "success");
+    }
+};
+
+// ==========================================
+// 🤖 AI KO'PRIK (FIREBASE ORQALI PYTHONGA)
+// ==========================================
+
+// ==========================================
+// 🤖 PREMIUM AI KO'PRIK VA CHAT MOTORI
+//
+// ⚠️⚠️ O'LIK KOD — 2026.22 dan boshlab BU BLOK ISHLAMAYDI.
+//   `openAiChat`, `sendAiMessage` va `renderAiChat` fayl OXIRIDAGI
+//   «QATLAM 2026.22 — SHOGIRD AI» blokida qayta yozilgan va u keyin
+//   yuklangani uchun AYNAN O'SHA ishlaydi.
+//   Bu yerni tahrirlash HECH NARSAGA ta'sir qilmaydi — fayl oxiridagi
+//   id'si "shogird-ai-2026-js" bo'lgan skript blokini tahrirlang.
+//   (Izohda marker satrini SO'ZMA-SO'Z yozib bo'lmaydi: sinov skript
+//    blokini aynan shu satr bo'yicha topadi va izohga tushib qolardi.)
+//   Ataylab o'chirilmadi: eski keshdagi ilova bir muddat shu nomlarga
+//   tayanishi mumkin. Keyingi tozalashda olib tashlanadi.
+// ==========================================
+window.openAiChat = () => {
+    activeModal = 'aiChatModal';
+    document.getElementById('aiChatModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden'; 
+    
+    if (typeof historyStack !== 'undefined') {
+        window.history.pushState({ modal: 'aiChatModal' }, "");
+    }
+
+    // 🛑 Xabarlarni bazadan real-vaqtda o'qish (Listener)
+    if(window.currentUser) {
+        // ⚡ XOTIRA OQISHINI TUZATISH: eski listenerni o'chirib, keyin yangisini ulaymiz
+        if (window._aiChatRef) { try { window._aiChatRef.off('value'); } catch(e){} }
+        window._aiChatRef = db.ref('ai_requests/' + window.currentUser);
+        window._aiChatRef.on('value', snap => {
+            if(snap.exists()) {
+                let data = snap.val();
+                if(data.messages) {
+                    renderAiChat(data.messages);
+                } else {
+                    renderAiChat([]);
+                }
+            } else {
+                renderAiChat([]); 
+            }
+        });
+    }
+};
+
+    window.sendAiMessage = () => {
+    let input = document.getElementById('ai-chat-input');
+    let text = input.value.trim();
+    if(!text || !currentUser) return;
+    
+    input.value = ''; 
+    let box = document.getElementById('ai-chat-box');
+    
+    box.innerHTML += `
+        <div class="msg-bot-luxury" id="ai-typing-indicator" style="padding: 12px 18px !important; width: max-content;">
+            <div class="luxury-typing">
+                <div class="luxury-dot"></div><div class="luxury-dot"></div><div class="luxury-dot"></div>
+            </div>
+        </div>`;
+    box.scrollTop = box.scrollHeight;
+    
+    db.ref('ai_requests/' + currentUser).once('value', snap => {
+        let data = snap.exists() ? snap.val() : { messages: [] };
+        if(!data.messages) data.messages = [];
+        data.messages.push({ sender: 'user', text: text, time: Date.now() });
+        data.needs_processing = true; 
+        db.ref('ai_requests/' + currentUser).set(data);
+    });
+};
+
+window.renderAiChat = (messages) => {
+    let box = document.getElementById('ai-chat-box');
+    
+    let html = `
+        <div class="msg-bot-luxury">
+            Assalomu alaykum! Men sizning shaxsiy yordamchingizman.<br>
+            Qanday ehtiyot qismlar yoki xizmatlar kerakligini bemalol so'rashingiz mumkin.
+        </div>`;
+    
+    messages.forEach(m => {
+        let isMe = m.sender === 'user';
+        let bubbleClass = isMe ? 'msg-user-luxury' : 'msg-bot-luxury';
+        
+        let productsHtml = '';
+        if(m.found_products && m.found_products.length > 0) {
+            productsHtml = '<div style="margin-top: 12px; display:flex; flex-direction:column; gap:8px;">';
+            m.found_products.forEach(id => {
+                let p = productsDB.find(x => x.id == id);
+                if(p) {
+                    productsHtml += `
+                    <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(212,175,55,0.2); border-radius: 8px; padding: 8px; display:flex; align-items:center; gap: 10px; cursor:pointer;" onclick="closeModal(); setTimeout(() => openProduct(${p.id}), 300)">
+                        <img src="${p.img || ''}" style="width:45px; height:45px; object-fit:contain; border-radius:6px; background:#fff; padding: 2px;">
+                        <div style="flex:1;">
+                            <div style="font-size:13px; font-weight:600; color:#fff;">${p.name}</div>
+                            <div style="font-size:12px; color:#D4AF37; font-weight: bold; margin-top:3px;">${p.price.toLocaleString()} so'm</div>
+                        </div>
+                        <div style="color:#D4AF37; font-size: 16px;">›</div>
+                    </div>`;
+                }
+            });
+            productsHtml += '</div>';
+        }
+
+        html += `<div class="${bubbleClass}">${m.text}${productsHtml}</div>`;
+    });
+    
+    box.innerHTML = html;
+    setTimeout(() => { box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, 100);
+};
+
