@@ -653,6 +653,30 @@ async function main() {
   const lw = await notifyAgain(lk);
   ok(lw.fetches <= LIMIT && db.read('notification_outbox/' + lk).delivered === true, 'watchdog yetkazdi (' + lw.fetches + ')');
 
+  // Reservation race: a product can be hidden after quote creation.
+  const workerSource = fs.readFileSync(path.join(ROOT, 'cloudflare-worker.js'), 'utf8');
+  const reservationSource = workerSource.slice(workerSource.indexOf('async function reserveQuoteItems('), workerSource.indexOf('async function releaseQuoteItems('));
+  const item = {id:'1', name:'Test', size:'Universal', sizeKey:null, productKey:'0', lineKey:'i0', qty:2};
+  const quote = {items:[item]};
+  let product = {id:'1', stock:5, is_draft:true};
+  let releases = 0;
+  const reserve = new Function('reservationMarkerKey','renewAttemptLeaseIfDue','rtdbEtagMutate','cloneJson','releaseQuoteItems', reservationSource + ';return reserveQuoteItems;')(
+    async () => 'marker', async () => {}, async (url, key, token, mutate) => {
+      const result = mutate(product);
+      if (!result.abort) product = result.value;
+      return result;
+    }, clone, async () => { releases++; }
+  );
+  const runReserve = () => reserve({dbUrl:'mock'}, 'token', CUSTOMER, 'attempt', quote, 'attemptPath', 'owner', 1, {});
+  const hidden = await runReserve();
+  ok(!hidden.ok && product.stock === 5 && releases === 1, 'draft after quote: no new reservation');
+  product.is_draft = false;
+  const live = await runReserve();
+  ok(live.ok && product.stock === 3, 'active product reserves normally');
+  product.is_draft = true;
+  const replay = await runReserve();
+  ok(replay.ok && product.stock === 3 && releases === 1, 'existing reservation remains idempotent after hiding');
+
   // ===== 10) Eskirgan initData =====
   console.log('▶ 10) eskirgan initData');
   const oldInit = await call('/order-status', { initData: initDataFor(ADMINS[0], 2 * 3600), uid: CUSTOMER, orderId: '1', status: 'qabul' });
