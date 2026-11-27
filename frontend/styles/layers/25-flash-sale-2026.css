@@ -1,0 +1,53 @@
+
+/* ================================================================
+   🔥 FLASH SALE — cheklangan vaqtli chegirma (countdown bilan)
+   - Narx p.price'ga "singdiriladi", asl narx p.oldPrice'da -> mavjud
+     cart/buyurtma kodi O'ZGARMAYDI (narx avtomatik to'g'ri).
+   - Muddat tugagach applyFlashState() asl narxni tiklaydi.
+   ================================================================ */
+/* 🔥 FLASH GURUHI — sariq tugma TEPASIDA, toza vertikal stack:
+   1-qator: taymer (countdown) | 2-qator: -% chegirma | 3-qator: eski narx (chizilgan).
+   Rasm USTIDA hech narsa yo'q (taymer rasmdan olindi). Masofalar nozik (gap/margin). */
+.card-flash {
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: 5px; margin: 2px 0 9px;
+}
+.card-flash .cf-timer {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: linear-gradient(135deg, #ff453a, #ff2d55); color: #fff;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.3px; line-height: 1.1;
+    padding: 3px 9px; border-radius: 999px;
+    box-shadow: 0 2px 9px rgba(255,69,58,0.34);
+}
+.card-flash .cf-timer .flash-cd { font-variant-numeric: tabular-nums; }
+.card-flash .cf-disc {
+    font-size: 11px; font-weight: 800; color: #0a0a0c; line-height: 1.25;
+    background: linear-gradient(135deg, #f2d98a, #C9A84C);
+    padding: 2px 8px; border-radius: 999px; letter-spacing: 0.3px;
+}
+.card-flash .cf-old {
+    font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.42);
+    text-decoration: line-through; letter-spacing: 0.2px; line-height: 1;
+}
+html[data-theme="light"] .card-flash .cf-old { color: #9b8e74; }
+@media (prefers-reduced-motion: no-preference) {
+    .card-flash .cf-timer { animation: cfPulse 1.9s ease-in-out infinite; }
+}
+@keyframes cfPulse {
+    0%,100% { box-shadow: 0 2px 9px rgba(255,69,58,0.34); }
+    50%     { box-shadow: 0 2px 15px rgba(255,69,58,0.60); }
+}
+html.lite .card-flash .cf-timer { animation: none !important; }
+
+/* Detal oynasidagi countdown */
+.pm-flash-cd {
+    display: flex; align-items: center; gap: 6px; justify-content: center;
+    margin: 10px 0 0; padding: 9px 12px; border-radius: 12px;
+    background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.32);
+    color: #ff453a; font-weight: 800; font-size: 13px;
+}
+.pm-flash-cd .flash-cd { font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
+html[data-theme="light"] .pm-flash-cd { background: rgba(216,57,43,0.10); border-color: rgba(216,57,43,0.30); color: #c0392b; }
+
+/* Admin flash-sale guruhi (qizil chap chiziq) */
+.flash-admin-group { border-left-color: #ff453a !important; }

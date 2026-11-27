@@ -1,0 +1,353 @@
+
+/* ===========================================================================
+   0) OYNA QOBIG'I — sarlavha va tugma paneli QIMIRLAMAYDI, faqat tana skroll
+   (fayl o'rtasidagi `layer-sheet-layout` qatlami bilan bir xil model)
+   =========================================================================== */
+#bannerAdminModal,
+#bannerComposerModal {
+    /* `!important` SHART: global `.modal-standard { padding-top: ... !important }`
+       qoidasini yengish uchun — safe-top FAQAT bir marta qo'llanadi. */
+    padding: 0 !important;
+    padding-top: var(--safe-top, 0px) !important;
+    overflow: hidden !important;
+    flex-direction: column;
+}
+/* Composer ro'yxat ustida turadi (storyComposerModal bilan bir qatlamda) */
+#bannerComposerModal { z-index: 3200; }
+/* Sarlavha ustidagi "tortish dastasi" bu oynalarda matn ustiga tushib qolardi */
+#bannerAdminModal::before,
+#bannerComposerModal::before { display: none !important; }
+
+#banner-admin-body,
+#banner-composer-body {
+    flex: 1 1 auto;
+    min-height: 0;                 /* flex ichida skroll ishlashi uchun SHART */
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    padding: 16px 18px 26px;
+}
+
+/* ——— Sarlavha ——— */
+.bnr-hd {
+    flex: 0 0 auto;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--glass-border);
+    background: var(--bg-dark);
+}
+html[data-theme="light"] .bnr-hd { background: #F4EEE2; }
+.bnr-hd > div { min-width: 0; flex: 1; }
+.bnr-hd h2 {
+    margin: 0; font-size: 19px; font-weight: 800; letter-spacing: .2px; color: var(--text-main);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bnr-hd span {
+    display: block; margin-top: 3px; font-size: 12px; font-weight: 600; color: var(--luxury-gold);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bnr-hd .close-btn { flex: none; }
+
+/* ——— Pastdagi tugma paneli ——— */
+.bnr-foot {
+    flex: 0 0 auto;
+    padding: 14px 18px calc(16px + var(--safe-bottom, 0px));
+    border-top: 1px solid var(--glass-border);
+    background: var(--bg-dark);
+}
+html[data-theme="light"] .bnr-foot { background: #F4EEE2; }
+.bnr-save {
+    width: 100%; padding: 16px; border: none; cursor: pointer;
+    border-radius: 17px; font-size: 16px; font-weight: 800; font-family: inherit;
+    background: var(--gold-gradient); color: #2a2000;
+    box-shadow: 0 12px 28px rgba(201, 168, 76, .32);
+    position: relative; overflow: hidden;
+    transition: transform .18s ease, opacity .2s ease;
+}
+.bnr-save:active { transform: translateY(1px) scale(.99); }
+.bnr-save:disabled { opacity: .55; cursor: default; box-shadow: none; }
+
+/* ===========================================================================
+   1) RO'YXAT — KPI lenta, qo'shish tugmasi, banner kartalari
+   =========================================================================== */
+.bnr-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 13px; }
+.bnr-sum-b {
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 12px 6px; text-align: center;
+}
+html:not([data-theme="light"]) .bnr-sum-b {
+    background: linear-gradient(158deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .012)), var(--card-bg);
+}
+.bnr-sum-b b { display: block; font-size: 21px; font-weight: 900; color: var(--luxury-gold); line-height: 1.1; }
+.bnr-sum-b span { display: block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: var(--text-muted); }
+
+.bnr-warn {
+    background: rgba(255, 159, 10, .11); border: 1px solid rgba(255, 159, 10, .3);
+    border-radius: 15px; padding: 12px 14px; margin-bottom: 13px;
+    font-size: 12.5px; font-weight: 600; line-height: 1.55; color: var(--text-main);
+}
+.bnr-warn b { color: #ff9f0a; }
+
+.bnr-hint {
+    display: flex; gap: 9px; align-items: flex-start;
+    background: rgba(0, 199, 190, .08); border: 1px solid rgba(0, 199, 190, .24);
+    border-radius: 15px; padding: 12px 14px; margin-bottom: 14px;
+    font-size: 12px; font-weight: 600; line-height: 1.55; color: var(--text-muted);
+}
+.bnr-hint svg { width: 15px; height: 15px; flex: none; margin-top: 1px; color: #00c7be; }
+.bnr-hint b { color: var(--text-main); }
+
+.bnr-add {
+    width: 100%; display: flex; align-items: center; gap: 13px; cursor: pointer;
+    padding: 15px 16px; margin-bottom: 16px; text-align: left; font-family: inherit;
+    border: 1px dashed rgba(201, 168, 76, .5); border-radius: 19px;
+    background: linear-gradient(140deg, rgba(201, 168, 76, .14), rgba(201, 168, 76, .03));
+    transition: transform .18s var(--ds-ease, ease), border-color .2s ease;
+}
+.bnr-add:active { transform: scale(.985); border-color: var(--luxury-gold); }
+.bnr-add-ic {
+    flex: none; width: 42px; height: 42px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 300; line-height: 1;
+    background: var(--gold-gradient); color: #2a2000;
+    box-shadow: 0 8px 20px rgba(201, 168, 76, .3);
+}
+.bnr-add-tx { min-width: 0; }
+.bnr-add-tx b { display: block; font-size: 14.5px; font-weight: 800; color: var(--text-main); }
+.bnr-add-tx i { display: block; font-style: normal; font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+/* ——— Banner kartasi ——— */
+.bnr-card {
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    border-radius: 20px; overflow: hidden; margin-bottom: 12px;
+    animation: bnrRise .42s both;
+}
+html:not([data-theme="light"]) .bnr-card {
+    background: linear-gradient(158deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .012)), var(--card-bg);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .22);
+}
+html[data-theme="light"] .bnr-card { box-shadow: 0 6px 18px rgba(110, 85, 35, .08); }
+.bnr-card.is-off { opacity: .58; }
+@keyframes bnrRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .bnr-card { animation: none; } }
+
+/* Ko'rinish AYNAN bosh sahifadagi slayder kabi: oltin nisbat + cover */
+.bnr-thumb {
+    position: relative; cursor: pointer;
+    aspect-ratio: 1.618 / 1; background: rgba(127, 127, 127, .12);
+}
+.bnr-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bnr-thumb::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(180deg, transparent 62%, rgba(0, 0, 0, .72) 100%);
+}
+.bnr-pos {
+    position: absolute; top: 10px; right: 10px; z-index: 2;
+    min-width: 24px; height: 24px; padding: 0 7px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-style: normal; font-size: 12px; font-weight: 900;
+    background: rgba(0, 0, 0, .6); color: #fff;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, .18);
+}
+/* Bosh sahifadagi «HAMKORLIK» belgisining aynan nusxasi */
+.bnr-hamkor, .bnr-stage-hamkor {
+    position: absolute; top: 10px; left: 10px; z-index: 2;
+    background: rgba(0, 0, 0, .55); color: var(--luxury-gold, #C9A84C);
+    font-size: 9px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 5px 11px; border-radius: 8px;
+    border: 1px solid rgba(212, 175, 55, .25);
+    -webkit-backdrop-filter: blur(8px) saturate(150%); backdrop-filter: blur(8px) saturate(150%);
+    pointer-events: none;
+}
+.bnr-hidden-tag {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3;
+    padding: 7px 14px; border-radius: 11px;
+    font-size: 11.5px; font-weight: 800; letter-spacing: .6px;
+    background: rgba(0, 0, 0, .68); color: #fff;
+    border: 1px solid rgba(255, 255, 255, .2);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+
+.bnr-mid { padding: 12px 14px 0; }
+.bnr-mid > b {
+    display: block; font-size: 14px; font-weight: 800; color: var(--text-main);
+    line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bnr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.bnr-chip {
+    font-size: 10.5px; font-weight: 700; padding: 4px 9px; border-radius: 8px;
+    background: rgba(127, 127, 127, .15); color: var(--text-muted);
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bnr-chip.is-gold { background: rgba(201, 168, 76, .18); color: var(--luxury-gold); }
+.bnr-chip.is-off { background: rgba(255, 69, 58, .14); color: #ff6a60; }
+
+.bnr-acts { display: flex; gap: 7px; padding: 12px 14px 14px; }
+.bnr-mini {
+    flex: 1 1 0; min-width: 0; height: 40px; cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 13px; border: 1px solid var(--glass-border);
+    background: rgba(127, 127, 127, .12); color: var(--text-main);
+    transition: transform .16s ease, background .2s ease, color .2s ease, opacity .2s ease;
+}
+.bnr-mini svg { width: 17px; height: 17px; }
+.bnr-mini:active { transform: scale(.93); }
+.bnr-mini:disabled { opacity: .3; cursor: default; }
+.bnr-mini.is-edit { background: rgba(201, 168, 76, .16); border-color: rgba(201, 168, 76, .35); color: var(--luxury-gold); }
+.bnr-mini.is-del { background: rgba(255, 69, 58, .13); border-color: rgba(255, 69, 58, .3); color: #ff6a60; }
+
+.bnr-empty { text-align: center; padding: 44px 22px; }
+.bnr-empty .ic { display: block; margin: 0 auto 14px; width: 54px; height: 54px; color: var(--luxury-gold); opacity: .75; }
+.bnr-empty .ic svg { width: 100%; height: 100%; }
+.bnr-empty b { display: block; font-size: 16.5px; font-weight: 800; color: var(--text-main); margin-bottom: 7px; }
+.bnr-empty p { font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin: 0; }
+
+/* ===========================================================================
+   2) COMPOSER — bloklar, rasm tanlash, JONLI KO'RINISH, sifat, kalitlar
+   =========================================================================== */
+.bnr-block {
+    background: var(--card-bg); border: 1px solid var(--glass-border);
+    border-radius: 20px; padding: 16px; margin-bottom: 14px;
+}
+html:not([data-theme="light"]) .bnr-block {
+    background: linear-gradient(158deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .012)), var(--card-bg);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .2);
+}
+.bnr-lbl {
+    font-size: 11.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 12px;
+}
+.bnr-tip {
+    margin: 11px 0 0; font-size: 11.5px; font-weight: 600; line-height: 1.6; color: var(--text-muted);
+}
+.bnr-tip b { color: var(--text-main); }
+.bnr-tip svg { width: 13px; height: 13px; vertical-align: -2px; color: var(--luxury-gold); }
+
+/* ——— Rasm manbasini tanlash ——— */
+.bnr-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.bnr-pick {
+    position: relative; overflow: hidden; cursor: pointer; text-align: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    border-radius: 17px; padding: 15px 11px; min-height: 106px;
+    border: 1px solid var(--glass-border); background: rgba(127, 127, 127, .1);
+    transition: transform .18s var(--ds-ease, ease), border-color .2s ease, background .2s ease;
+}
+.bnr-pick:active { transform: scale(.955); }
+.bnr-pick.on { border-color: var(--luxury-gold); background: rgba(201, 168, 76, .12); }
+.bnr-pick-ic { display: block; width: 27px; height: 27px; color: var(--luxury-gold); }
+.bnr-pick-ic svg { width: 100%; height: 100%; }
+.bnr-pick b { font-size: 14px; font-weight: 800; color: var(--text-main); }
+.bnr-pick i { font-style: normal; font-size: 11px; color: var(--text-muted); line-height: 1.3; }
+/* ⚠️ `display:none` EMAS: iOS WKWebView'da yashirilgan input'ni `.click()` bilan
+   ochish ba'zan UMUMAN ishlamaydi — galereya ochilmaydi. Shuning uchun input
+   kartaning USTIDA shaffof qatlam bo'lib turadi (tovar rasmlarida ishlab
+   turgan usul bilan bir xil): bosish HAQIQATDA input'ga tushadi. */
+.bnr-file-over {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; z-index: 4; font-size: 0;
+}
+
+.bnr-up { margin-top: 13px; height: 30px; border-radius: 11px; background: rgba(127, 127, 127, .14); position: relative; overflow: hidden; }
+.bnr-up.hidden { display: none; }
+.bnr-up i { position: absolute; inset: 0 auto 0 0; width: 3%; background: var(--gold-gradient); border-radius: 11px; transition: width .25s ease; }
+.bnr-up span {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 11.5px; font-weight: 800; color: var(--text-main); text-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+}
+
+/* ——— JONLI KO'RINISH ("oyna") — bosh sahifa slayderining aynan nusxasi ———
+   O'lchamlar `.slider-container` / `.slider img` dan ko'chirilgan: oltin nisbat
+   1.618:1, cover, 20px radius, tilla hoshiya, tubida qoraygan gradient. Shuning
+   uchun bu yerda ko'rilgan kesish HAQIQATDA ham xuddi shunday bo'ladi. */
+.bnr-stage {
+    position: relative; overflow: hidden;
+    aspect-ratio: 1.618 / 1; border-radius: 20px;
+    border: 1px solid rgba(212, 175, 55, .2);
+    background: rgba(127, 127, 127, .12);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35), 0 0 15px rgba(212, 175, 55, .08);
+}
+.bnr-stage img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bnr-stage-fade {
+    position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, .9) 100%);
+}
+.bnr-stage-dots {
+    position: absolute; left: 0; right: 0; bottom: 10px; z-index: 3;
+    display: flex; justify-content: center; align-items: center; gap: 6px; pointer-events: none;
+}
+.bnr-stage-dots i {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: rgba(255, 255, 255, .45); box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+}
+.bnr-stage-dots i.on {
+    width: 20px; border-radius: 4px;
+    background: linear-gradient(90deg, var(--luxury-gold-light, #f2d98a), var(--luxury-gold, #C9A84C));
+}
+.bnr-stage-x {
+    position: absolute; top: 9px; right: 9px; z-index: 4; cursor: pointer;
+    width: 30px; height: 30px; border-radius: 50%; border: none; font-size: 19px; line-height: 1;
+    background: rgba(0, 0, 0, .6); color: #fff;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.bnr-stage.is-empty { border-style: dashed; border-color: var(--glass-border); box-shadow: none; }
+.bnr-stage-ph {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 9px; padding: 18px; text-align: center;
+}
+.bnr-stage-ph svg { width: 32px; height: 32px; color: var(--text-muted); opacity: .6; }
+.bnr-stage-ph span { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+
+/* ——— Sifat xulosasi ——— */
+.bnr-qual { margin-top: 12px; border-radius: 15px; padding: 12px 14px; border: 1px solid; }
+.bnr-qual.hidden { display: none; }
+.bnr-qual b { display: block; font-size: 13.5px; font-weight: 800; }
+.bnr-qual span { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 700; opacity: .85; color: var(--text-muted); }
+.bnr-qual p { margin: 6px 0 0; font-size: 11.5px; font-weight: 600; line-height: 1.55; color: var(--text-muted); }
+.bnr-qual.is-wait { background: rgba(127, 127, 127, .12); border-color: var(--glass-border); }
+.bnr-qual.is-wait b { color: var(--text-muted); }
+.bnr-qual.is-hi { background: rgba(48, 209, 88, .1); border-color: rgba(48, 209, 88, .3); }
+.bnr-qual.is-hi b { color: #30d158; }
+.bnr-qual.is-ok { background: rgba(201, 168, 76, .12); border-color: rgba(201, 168, 76, .32); }
+.bnr-qual.is-ok b { color: var(--luxury-gold); }
+.bnr-qual.is-mid { background: rgba(255, 159, 10, .11); border-color: rgba(255, 159, 10, .3); }
+.bnr-qual.is-mid b { color: #ff9f0a; }
+.bnr-qual.is-low { background: rgba(255, 69, 58, .11); border-color: rgba(255, 69, 58, .32); }
+.bnr-qual.is-low b { color: #ff6a60; }
+
+/* ——— Maydonlar ——— */
+.bnr-field { display: block; margin-bottom: 12px; }
+.bnr-field > span {
+    display: block; margin-bottom: 6px;
+    font-size: 11.5px; font-weight: 700; color: var(--text-muted);
+}
+.bnr-input {
+    width: 100%; box-sizing: border-box; font-family: inherit;
+    padding: 13px 14px; border-radius: 14px;
+    border: 1px solid var(--glass-border); background: rgba(127, 127, 127, .1);
+    color: var(--text-main); font-size: 14px; font-weight: 600;
+    transition: border-color .2s ease, background .2s ease;
+}
+.bnr-input:focus { outline: none; border-color: var(--luxury-gold); background: rgba(201, 168, 76, .08); }
+
+/* ——— Kalit (switch) ——— */
+.bnr-sw {
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+    padding: 13px 0; border-top: 1px solid var(--glass-border);
+}
+.bnr-sw-tx { flex: 1; min-width: 0; }
+.bnr-sw-tx b { display: block; font-size: 13.5px; font-weight: 800; color: var(--text-main); }
+.bnr-sw-tx i { display: block; font-style: normal; font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.45; }
+.bnr-sw-el {
+    flex: none; width: 46px; height: 28px; border-radius: 999px; position: relative;
+    background: rgba(127, 127, 127, .28); transition: background .24s var(--ds-ease, ease);
+}
+.bnr-sw-el i {
+    position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+    transition: transform .24s var(--ds-spring, ease);
+}
+.bnr-sw.on .bnr-sw-el { background: var(--gold-gradient); }
+.bnr-sw.on .bnr-sw-el i { transform: translateX(18px); }

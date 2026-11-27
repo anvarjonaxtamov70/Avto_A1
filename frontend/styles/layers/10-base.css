@@ -1,0 +1,327 @@
+
+/* ═══════════════════════════════════════════════════════════════════
+   📦 ADMIN BUYURTMALAR — iOS uslubidagi nozik dizayn (faqat ko'rinish).
+   Mantiq/handlerlar o'zgarmagan; barcha klasslar `ao-` prefiksli.
+   ═══════════════════════════════════════════════════════════════════ */
+#adminOrdersModal, #adminOrderPickModal, #adminOrderSheetModal {
+    --ao-gold: #e2c46e; --ao-gold2: #c9a84c; --ao-goldbg: rgba(201,168,76,.13); --ao-page: #121212;
+    --ao-bg2: #1c1c1e; --ao-sep: rgba(84,84,88,.38);
+    --ao-tx: #f5f5f7; --ao-tx2: rgba(235,235,245,.62); --ao-tx3: rgba(235,235,245,.3);
+    --ao-fill: rgba(118,118,128,.24); --ao-fill2: rgba(118,118,128,.14);
+    --ao-blue: #0a84ff; --ao-green: #30d158; --ao-orange: #ff9f0a; --ao-yellow: #ffd60a; --ao-red: #ff453a; --ao-gray: #8e8e93;
+    --ao-ease: cubic-bezier(.32,.72,0,1); --ao-spring: cubic-bezier(.34,1.4,.64,1);
+}
+html[data-theme="light"] #adminOrdersModal, html[data-theme="light"] #adminOrderPickModal, html[data-theme="light"] #adminOrderSheetModal {
+    --ao-gold: #8a6a14; --ao-gold2: #9c7c20; --ao-goldbg: rgba(156,124,32,.1); --ao-page: #f4eee2;
+    --ao-bg2: #ffffff; --ao-sep: rgba(60,60,67,.14);
+    --ao-tx: #1c1c1e; --ao-tx2: rgba(60,60,67,.64); --ao-tx3: rgba(60,60,67,.3);
+    --ao-fill: rgba(118,118,128,.14); --ao-fill2: rgba(118,118,128,.08);
+    --ao-blue: #007aff; --ao-green: #248a3d; --ao-orange: #c76a00; --ao-yellow: #a37800; --ao-red: #d70015;
+}
+#admin-orders-list, #adminOrderPickModal #pick-actions, #ao-detail {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+
+/* — Filtr chiplari (segment) — */
+.ao-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 16px; margin: 0 -2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.ao-chips::-webkit-scrollbar { display: none; }
+.ao-chip {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
+    border: 0; border-radius: 999px; background: var(--ao-fill2); color: var(--ao-tx2);
+    font-family: inherit; font-size: 13.5px; font-weight: 500; letter-spacing: -.1px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color .3s var(--ao-ease), color .3s var(--ao-ease), transform .35s var(--ao-spring);
+}
+.ao-chip:active { transform: scale(.94); transition-duration: .08s; }
+.ao-chip.is-active { background: var(--ao-tx); color: var(--ao-bg2); font-weight: 600; }
+.ao-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: 0 0 7px; }
+.ao-cnt { font-size: 12px; font-weight: 600; opacity: .55; font-variant-numeric: tabular-nums; }
+.ao-cnt:empty { display: none; }
+
+/* — Karta — */
+.ao-card {
+    background: var(--ao-bg2); border-radius: 22px; padding: 16px 16px 14px; margin-bottom: 14px;
+    border: .5px solid var(--ao-sep); color: var(--ao-tx);
+    box-shadow: 0 1px 0 rgba(255,255,255,.035) inset, 0 12px 32px -18px rgba(0,0,0,.65);
+}
+html[data-theme="light"] .ao-card { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 10px 28px -16px rgba(60,40,0,.18); }
+.ao-anim .ao-card { animation: aoIn .55s var(--ao-ease) both; animation-delay: calc(min(var(--i), 8) * 45ms); }
+@keyframes aoIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+
+.ao-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ao-code { font-size: 17px; font-weight: 600; letter-spacing: -.2px; font-variant-numeric: tabular-nums; color: var(--ao-tx); }
+.ao-when { font-size: 12.5px; color: var(--ao-tx2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+/* Holat belgisi — yumshoq "tinted" kapsula */
+.ao-card, .ao-o, .ao-hero, .ao-st-kutilmoqda { --sc: var(--ao-yellow); }
+.ao-st-qabul { --sc: var(--ao-blue); } .ao-st-yolda { --sc: var(--ao-orange); }
+.ao-st-yetkazildi { --sc: var(--ao-green); } .ao-st-bekor_qilingan { --sc: var(--ao-red); }
+#adminOrdersModal .ao-card .status-badge, #adminOrderPickModal .ao-pick-status .status-badge, #adminOrderSheetModal .ao-hero .status-badge {
+    display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 5px 10px 5px 8px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.2;
+    background: rgba(128,128,128,.16) !important;
+    background: color-mix(in srgb, var(--sc) 15%, transparent) !important;
+    color: var(--sc) !important; box-shadow: none !important; border: 0 !important;
+}
+#adminOrdersModal .ao-card .status-badge svg, #adminOrderPickModal .ao-pick-status .status-badge svg, #adminOrderSheetModal .ao-hero .status-badge svg { width: 13px; height: 13px; }
+
+/* Mijoz — iOS "inset grouped" ro'yxat */
+.ao-group { margin-top: 14px; background: var(--ao-fill2); border-radius: 14px; overflow: hidden; }
+.ao-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px; color: var(--ao-tx); text-decoration: none; font-size: 15px; -webkit-tap-highlight-color: transparent; transition: background-color .2s; }
+.ao-row + .ao-row::before { content: ""; position: absolute; top: 0; left: 52px; right: 0; height: .5px; background: var(--ao-sep); }
+.ao-ic { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 8px; display: grid; place-items: center; background: var(--ic); color: #fff; }
+.ao-ic svg { width: 16px; height: 16px; }
+.ao-row-tx { flex: 1; min-width: 0; line-height: 1.35; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; overflow-wrap: anywhere; }
+.ao-name .ao-row-tx { font-weight: 500; }
+.ao-link .ao-row-tx { color: var(--ao-blue); font-variant-numeric: tabular-nums; }
+.ao-link:active { background: var(--ao-fill); }
+.ao-addr .ao-row-tx { font-size: 13.5px; color: var(--ao-tx2); }
+.ao-chev { color: var(--ao-tx3); font-size: 22px; line-height: 1; font-weight: 300; }
+
+/* Mahsulotlar */
+.ao-items { margin-top: 16px; }
+.ao-sec { font-size: 12px; font-weight: 600; color: var(--ao-tx2); text-transform: uppercase; letter-spacing: .5px; padding: 0 4px 4px; }
+.ao-item { display: flex; align-items: baseline; gap: 10px; padding: 10px 4px; font-size: 14.5px; color: var(--ao-tx); border-bottom: .5px solid var(--ao-sep); }
+.ao-item:last-child { border-bottom: 0; }
+.ao-item-nm { flex: 1; min-width: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.ao-opt { color: var(--ao-tx2); font-size: 12.5px; margin-left: 4px; }
+.ao-item-q { font-size: 13px; color: var(--ao-tx2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ao-item-p { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Yig'ish qatori (mavjud .pick-open-btn ustidan) */
+#adminOrdersModal .ao-card .pick-open-btn, #ao-detail .pick-open-btn {
+    width: 100%; margin: 12px 0 0; display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+    min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: var(--ao-fill2);
+    color: var(--ao-tx); font-family: inherit; font-size: 15px; font-weight: 500; text-align: left;
+    transition: background-color .2s, transform .35s var(--ao-spring);
+}
+#adminOrdersModal .ao-card .pick-open-btn:active, #ao-detail .pick-open-btn:active { transform: scale(.98); background: var(--ao-fill); transition-duration: .08s; }
+.ao-pick-tx { flex: 1; font-variant-numeric: tabular-nums; }
+.ao-pick.is-done .ao-pick-tx { color: var(--ao-green); font-weight: 600; }
+.ao-pick.is-part .ao-pick-tx { color: var(--ao-orange); font-weight: 600; }
+
+/* Jami */
+.ao-total { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 16px 4px 14px; }
+.ao-total > span { font-size: 14px; color: var(--ao-tx2); }
+.ao-total b { font-size: 22px; font-weight: 700; letter-spacing: -.5px; color: var(--ao-tx); font-variant-numeric: tabular-nums; }
+.ao-total small { font-size: 14px; font-weight: 500; color: var(--ao-tx2); margin-left: 3px; letter-spacing: 0; }
+
+/* Tugmalar */
+.ao-actions { display: flex; flex-direction: column; gap: 8px; }
+.ao-actions-sub { display: flex; gap: 8px; }
+.ao-actions > .ao-btn { flex: 0 0 auto; width: 100%; }
+.ao-btn {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 46px; padding: 0 14px;
+    border: 0; border-radius: 14px; font-family: inherit; font-size: 15px; font-weight: 600; letter-spacing: -.15px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; white-space: nowrap;
+    transition: transform .4s var(--ao-spring), filter .2s, background-color .25s, opacity .2s;
+}
+.ao-btn svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.ao-btn:active { transform: scale(.96); transition-duration: .08s; }
+.ao-primary { height: 50px; font-size: 16px; background: var(--c); color: #fff; box-shadow: 0 8px 20px -12px var(--c); }
+.ao-primary:active { filter: brightness(.92); }
+.ao-ghost { background: var(--ao-fill); color: var(--ao-tx); }
+.ao-danger { background: rgba(255,69,58,.12); color: var(--ao-red); }
+html[data-theme="light"] .ao-danger { background: rgba(215,0,21,.08); }
+.ao-chat.has-unread { color: var(--ao-blue); }
+.ao-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: #ff3b30; color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; animation: aoPop .45s var(--ao-spring) both; }
+@keyframes aoPop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (hover: hover) { .ao-btn:hover, .ao-chip:hover { filter: brightness(1.08); } #adminOrdersModal .ao-card .pick-open-btn:hover { background: var(--ao-fill); } }
+
+/* Bo'sh holat va yuklanish */
+.ao-empty { text-align: center; padding: 60px 20px; color: var(--ao-tx2); font-size: 14px; }
+.ao-empty-ic { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 20px; background: var(--ao-fill2); display: grid; place-items: center; color: var(--ao-tx2); }
+.ao-empty-ic svg { width: 30px; height: 30px; }
+.ao-empty b { display: block; font-size: 17px; font-weight: 600; color: var(--ao-tx); margin-bottom: 4px; }
+.ao-more { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 0 28px; color: var(--ao-tx2); font-size: 13px; }
+.ao-spin { width: 16px; height: 16px; box-sizing: border-box; border: 2px solid var(--ao-fill); border-top-color: var(--ao-tx2); border-radius: 50%; animation: aoSpin .8s linear infinite; }
+@keyframes aoSpin { to { transform: rotate(360deg); } }
+
+/* Yig'ish oynasidagi pastki tugmalar */
+#adminOrderPickModal #pick-actions .ao-btn { min-width: 120px; }
+
+html.lite .ao-card, html.lite .ao-badge, html.lite .ao-spin { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    .ao-card, .ao-badge { animation: none !important; }
+    .ao-btn, .ao-chip, #adminOrdersModal .ao-card .pick-open-btn { transition: none !important; }
+}
+
+/* ═══ 📋 RO'YXAT: har buyurtma — ixcham alohida qator ═══ */
+.ao-day { display: flex; align-items: baseline; justify-content: space-between; padding: 16px 6px 8px; font-size: 13px; font-weight: 600; color: var(--ao-tx2); letter-spacing: -.1px; }
+.ao-day:first-child { padding-top: 2px; }
+.ao-day em { font-style: normal; font-weight: 500; color: var(--ao-tx3); font-variant-numeric: tabular-nums; }
+.ao-o {
+    appearance: none; -webkit-appearance: none; width: 100%; display: flex; align-items: center; gap: 12px;
+    padding: 12px 10px 12px 12px; margin: 0 0 8px; border-radius: 18px; text-align: left; cursor: pointer;
+    background: var(--ao-bg2); border: .5px solid var(--ao-sep); color: var(--ao-tx); font-family: inherit;
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 10px 26px -20px rgba(0,0,0,.7);
+    -webkit-tap-highlight-color: transparent;
+    transition: transform .45s var(--ao-spring), background-color .2s, border-color .3s;
+}
+html[data-theme="light"] .ao-o { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 22px -18px rgba(60,40,0,.25); }
+.ao-o:active { transform: scale(.975); transition-duration: .1s; }
+.ao-o.ao-st-kutilmoqda { border-color: rgba(201,168,76,.38); box-shadow: 0 0 0 .5px rgba(201,168,76,.10), 0 12px 30px -20px rgba(201,168,76,.55); }
+.ao-anim .ao-o, .ao-anim .ao-day { animation: aoIn .5s var(--ao-ease) both; animation-delay: calc(min(var(--i, 0), 10) * 35ms); }
+@keyframes aoIn { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+
+.ao-av {
+    position: relative; width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 15px; font-weight: 600; letter-spacing: .4px; color: var(--ao-gold);
+    background: radial-gradient(circle at 30% 22%, rgba(240,208,96,.30), rgba(201,168,76,.08) 70%);
+    box-shadow: inset 0 0 0 .5px rgba(201,168,76,.5);
+}
+.ao-av::after { content: ""; position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--sc); box-shadow: 0 0 0 2.5px var(--ao-bg2); }
+.ao-av .ao-badge { position: absolute; top: -5px; right: -7px; box-shadow: 0 0 0 2px var(--ao-bg2); }
+.ao-o-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ao-o-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 16px; font-weight: 600; letter-spacing: -.25px; }
+.ao-o-name .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ao-o-name .cst-vip-slot { flex: 0 0 auto; }
+.ao-o-sub { font-size: 13px; color: var(--ao-tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.ao-o-sub b { font-weight: 600; color: var(--ao-gold); letter-spacing: .1px; }
+.ao-o-end { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.ao-pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; color: var(--sc); background: rgba(128,128,128,.16); background: color-mix(in srgb, var(--sc) 15%, transparent); }
+.ao-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ao-o-sum { font-size: 14px; font-weight: 600; letter-spacing: -.2px; font-variant-numeric: tabular-nums; }
+.ao-o-sum small { font-size: 11.5px; font-weight: 500; color: var(--ao-tx2); margin-left: 2px; }
+.ao-o .ao-chev { margin-left: 2px; }
+
+/* ═══ 🧾 BUYURTMA SAHIFASI (alohida oyna, iOS "push") ═══ */
+#adminOrderSheetModal .modal-header h2 { color: var(--ao-gold) !important; }
+#ao-detail { flex: 1 0 auto; display: flex; flex-direction: column; color: var(--ao-tx); }
+.ao-push { animation: aoPush .5s var(--ao-ease) both; }
+@keyframes aoPush { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+
+.ao-hero {
+    position: relative; overflow: hidden; padding: 18px 18px 20px; border-radius: 24px; border: .5px solid rgba(201,168,76,.32);
+    background: radial-gradient(130% 90% at 100% 0%, rgba(201,168,76,.20), transparent 58%), radial-gradient(90% 70% at 0% 100%, rgba(201,168,76,.07), transparent 60%), var(--ao-bg2);
+    box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 18px 40px -26px rgba(201,168,76,.55);
+}
+html[data-theme="light"] .ao-hero { box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 16px 36px -24px rgba(120,90,10,.35); }
+.ao-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ao-hero-code { font-size: 24px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.ao-hero-when { margin-top: 3px; font-size: 13px; color: var(--ao-tx2); font-variant-numeric: tabular-nums; }
+.ao-hero-sum { margin-top: 16px; display: flex; align-items: baseline; gap: 6px; }
+.ao-hero-sum b {
+    font-size: 36px; font-weight: 700; letter-spacing: -1.2px; line-height: 1.05; font-variant-numeric: tabular-nums;
+    color: var(--ao-gold); background: linear-gradient(135deg, #f6dc7e 0%, #d4af37 45%, #a07c1c 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+html[data-theme="light"] .ao-hero-sum b { background-image: linear-gradient(135deg, #b68f2e 0%, #8a6a14 60%, #6b500c 100%); }
+.ao-hero-sum small { font-size: 15px; font-weight: 500; color: var(--ao-tx2); }
+.ao-hero-lbl { font-size: 12px; color: var(--ao-tx2); margin-top: 2px; }
+
+.ao-steps { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 20px; }
+.ao-step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 500; color: var(--ao-tx3); text-align: center; }
+.ao-step::before { content: ""; position: absolute; top: 11px; right: 50%; width: 100%; height: 2px; border-radius: 2px; background: var(--ao-fill); }
+.ao-step:first-child::before { display: none; }
+.ao-step.done::before, .ao-step.cur::before { background: linear-gradient(90deg, var(--ao-gold2), var(--ao-gold)); }
+.ao-step i { position: relative; z-index: 1; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--ao-bg2); box-shadow: inset 0 0 0 2px var(--ao-fill); color: #1a1405; transition: background .3s, box-shadow .3s; }
+.ao-step i svg { width: 13px; height: 13px; }
+.ao-step.done i, .ao-step.cur i { background: linear-gradient(135deg, #f0d060, #c9a84c 55%, #96720a); box-shadow: none; }
+.ao-step.cur i { animation: aoGlow 2.2s ease-in-out infinite; }
+.ao-step.cur i::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #1a1405; }
+@keyframes aoGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(212,175,55,.45); } 50% { box-shadow: 0 0 0 7px rgba(212,175,55,0); } }
+.ao-step.done span { color: var(--ao-tx2); }
+.ao-step.cur span { color: var(--ao-tx); font-weight: 600; }
+.ao-cancelled { margin-top: 18px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; font-size: 14px; font-weight: 500; color: var(--ao-red); background: rgba(255,69,58,.10); }
+.ao-cancelled svg { width: 18px; height: 18px; flex: 0 0 18px; }
+
+.ao-dsec { display: flex; justify-content: space-between; margin: 24px 6px 7px; font-size: 12.5px; font-weight: 600; color: var(--ao-tx2); text-transform: uppercase; letter-spacing: .5px; }
+#ao-detail .ao-group { margin-top: 0; background: var(--ao-bg2); border: .5px solid var(--ao-sep); border-radius: 16px; }
+#ao-detail .ao-row { min-height: 48px; padding: 9px 14px; }
+#ao-detail .ao-row + .ao-row::before { left: 54px; }
+.ao-row-sub { display: block; font-size: 12.5px; color: var(--ao-tx2); margin-top: 1px; }
+
+.ao-li { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 14px; }
+.ao-li + .ao-li::before { content: ""; position: absolute; top: 0; left: 78px; right: 0; height: .5px; background: var(--ao-sep); }
+.ao-li-img { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 12px; object-fit: cover; background: var(--ao-fill2); display: grid; place-items: center; color: var(--ao-tx3); box-shadow: inset 0 0 0 .5px var(--ao-sep); }
+.ao-li-img svg { width: 22px; height: 22px; }
+.ao-li-mid { flex: 1; min-width: 0; }
+.ao-li-nm { font-size: 15px; font-weight: 500; line-height: 1.3; letter-spacing: -.15px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ao-li-opt { display: inline-block; margin-top: 5px; padding: 2px 7px; border-radius: 6px; font-size: 11.5px; font-weight: 600; color: var(--ao-gold); background: var(--ao-goldbg); }
+.ao-li-meta { margin-top: 4px; font-size: 12.5px; color: var(--ao-tx2); font-variant-numeric: tabular-nums; }
+.ao-li-sum { font-size: 15px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.ao-kv { position: relative; display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 13px 14px; font-size: 15px; }
+.ao-kv + .ao-kv::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: .5px; background: var(--ao-sep); }
+.ao-kv > span { color: var(--ao-tx2); flex: 0 0 auto; }
+.ao-kv > b { font-weight: 500; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ao-kv.is-green > b { color: var(--ao-green); }
+.ao-kv.is-total > span { color: var(--ao-tx); font-weight: 600; }
+.ao-kv.is-total > b { font-size: 18px; font-weight: 700; letter-spacing: -.3px; color: var(--ao-gold); }
+.ao-note { padding: 13px 14px; font-size: 14.5px; line-height: 1.45; color: var(--ao-tx); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ao-note + .ao-note { border-top: .5px solid var(--ao-sep); }
+.ao-note small { display: block; font-size: 12px; color: var(--ao-tx2); margin-bottom: 3px; }
+#ao-detail .pick-open-btn { margin-top: 0; background: var(--ao-bg2); border: .5px solid var(--ao-sep); }
+
+/* Panel ekranning ENG pastiga yopishadi: oynaning pastki ichki bo'shlig'i olib tashlanadi
+   (sticky aks holda o'sha bo'shliq tepasida to'xtab, ostida bo'sh joy qoldirardi).
+   iPhone xavfsiz zonasi panelning O'Z ichki bo'shlig'ida. */
+#adminOrderSheetModal { padding-bottom: 0 !important; }
+.ao-dock {
+    position: sticky; bottom: 0; z-index: 5; margin: auto -20px 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: rgba(18,18,18,.82); background: color-mix(in srgb, var(--ao-page) 80%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px);
+    border-top: .5px solid var(--ao-sep);
+}
+.ao-dock-sp { height: 96px; flex: 0 0 auto; } /* suzuvchi Chat tugmasi oxirgi qatorni to'smasin */
+.ao-dock.is-empty { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-top: 0; padding: 0; height: 0; pointer-events: none; }
+.ao-dock.is-empty .ao-chatfab { pointer-events: auto; }
+.ao-row-acts { flex-direction: row; }
+.ao-row-acts .ao-danger { flex: 0 0 auto; padding: 0 16px; height: 50px; }
+.ao-row-acts .ao-primary, .ao-row-acts .ao-done-note { flex: 1 1 auto; min-width: 0; }
+.ao-row-acts .ao-done-note { justify-content: flex-start; padding-left: 4px; }
+
+/* 💬 Chat — Shogird uslubidagi kichik suzuvchi tugma (o'ng burchakda, dock ustida) */
+.ao-chatfab {
+    position: absolute; right: 18px; bottom: calc(100% + 14px); z-index: 6;
+    display: flex; align-items: center; gap: 7px; height: 52px; padding: 0 15px 0 8px; box-sizing: border-box;
+    border: 1px solid rgba(216,182,76,.38); border-radius: 18px; cursor: pointer; overflow: visible;
+    background: linear-gradient(145deg, rgba(29,30,35,.98), rgba(10,11,14,.99)); color: #f4e7b8;
+    box-shadow: 0 14px 34px rgba(0,0,0,.48), 0 0 0 1px rgba(216,182,76,.06), inset 0 1px 0 rgba(255,255,255,.07);
+    font-family: inherit; -webkit-tap-highlight-color: transparent;
+    animation: aoFabIn .55s var(--ao-spring) .12s both;
+    transition: transform .45s var(--ao-spring), padding .35s var(--ao-ease), gap .35s var(--ao-ease), opacity .3s;
+}
+.ao-dock.is-empty .ao-chatfab { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+.ao-chatfab:active { transform: scale(.92); transition-duration: .1s; }
+.ao-chatfab:focus-visible { outline: 2px solid #f0d060; outline-offset: 3px; }
+.ao-chatfab-orbit {
+    position: absolute; left: 7px; top: 6px; width: 38px; height: 38px; box-sizing: border-box; border-radius: 13px;
+    border: 1px solid rgba(216,182,76,.18); border-top-color: rgba(244,218,117,.85);
+    background: radial-gradient(circle, rgba(216,182,76,.12), transparent 68%);
+}
+.ao-chatfab-ic { position: relative; z-index: 1; display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px; }
+.ao-chatfab-ic svg { width: 28px; height: 28px; overflow: visible; }
+.ao-chatfab-ic .b { fill: rgba(216,182,76,.10); stroke: #d4b44b; stroke-width: 1.5; }
+.ao-chatfab-ic .d { fill: #f1d66f; }
+.ao-chatfab.has-unread .ao-chatfab-ic .d { animation: aoType 1.3s ease-in-out infinite; }
+.ao-chatfab.has-unread .ao-chatfab-ic .d:nth-of-type(2) { animation-delay: .15s; }
+.ao-chatfab.has-unread .ao-chatfab-ic .d:nth-of-type(3) { animation-delay: .3s; }
+.ao-chatfab-lb {
+    color: #eee7d4; font: 800 11px/1 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: .3px; text-transform: uppercase;
+    max-width: 60px; overflow: hidden; white-space: nowrap; transition: max-width .35s var(--ao-ease), opacity .25s;
+}
+.ao-chatfab .ao-badge { position: absolute; top: -7px; right: -6px; box-shadow: 0 0 0 2px #0c0d10, 0 5px 12px rgba(0,0,0,.35); }
+.ao-chatfab.has-unread { border-color: rgba(240,208,96,.6); }
+.ao-chatfab.has-unread::after {
+    content: ""; position: absolute; inset: -1px; border-radius: 18px; pointer-events: none;
+    animation: aoFabRing 2.4s ease-out infinite;
+}
+/* Skroll paytida — faqat ikonka (yig'iladi), to'xtaganda qayta ochiladi */
+.ao-chatfab.is-mini { padding: 0 6px; gap: 0; }
+.ao-chatfab.is-mini .ao-chatfab-lb { max-width: 0; opacity: 0; }
+.ao-chatfab.is-mini .ao-chatfab-orbit { left: 6px; }
+@keyframes aoFabIn { from { opacity: 0; transform: translateY(16px) scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes aoFabRing { 0% { box-shadow: 0 0 0 0 rgba(240,208,96,.45); } 70%, 100% { box-shadow: 0 0 0 10px rgba(240,208,96,0); } }
+@keyframes aoType { 0%, 60%, 100% { transform: translateY(0); opacity: .75; } 30% { transform: translateY(-2px); opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) { .ao-chatfab-orbit { animation: a1Orbit 8s linear infinite; } }
+.ao-dock .ao-primary { background: var(--c); }
+.ao-dock .ao-primary.is-gold { --c: #c9a84c; color: #1a1405; background: linear-gradient(135deg, #f0d060 0%, #c9a84c 50%, #a8851f 100%); box-shadow: 0 10px 24px -14px rgba(212,175,55,.9); }
+.ao-done-note { display: flex; align-items: center; justify-content: center; gap: 7px; height: 46px; font-size: 14px; font-weight: 500; color: var(--ao-tx2); }
+.ao-done-note svg { width: 17px; height: 17px; color: var(--ao-green); }
+
+html.lite .ao-o, html.lite .ao-day, html.lite .ao-push, html.lite .ao-step.cur i, html.lite .ao-chatfab, html.lite .ao-chatfab *, html.lite .ao-chatfab::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .ao-chatfab, .ao-chatfab *, .ao-chatfab::after { animation: none !important; } .ao-chatfab, .ao-chatfab-lb { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { .ao-o, .ao-day, .ao-push, .ao-step.cur i { animation: none !important; } .ao-o { transition: none !important; } }

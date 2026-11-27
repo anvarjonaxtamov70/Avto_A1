@@ -1,0 +1,219 @@
+
+/* ═══════════════════════════════════════════════════════════
+   C) VAQT VA EGRILIK BIRLIKLARI
+   ═══════════════════════════════════════════════════════════ */
+:root {
+    --dur-instant: 0.12s;
+    --dur-fast:    0.18s;
+    --dur-base:    0.28s;
+    --dur-slow:    0.42s;
+    --dur-fly:     0.62s;
+    --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in:     cubic-bezier(0.4, 0, 1, 1);
+    --ease-spring: cubic-bezier(0.34, 1.45, 0.5, 1);
+}
+/* Harakatni kamaytirish rejimi — barcha yangi vaqtlar BIR JOYDA nolga tushadi */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --dur-instant: 0.001s;
+        --dur-fast:    0.001s;
+        --dur-base:    0.001s;
+        --dur-slow:    0.001s;
+        --dur-fly:     0.001s;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   A1) MODAL YOPILISHI
+   -----------------------------------------------------------
+   `transition` ishlatiladi (animation EMAS) — chunki `html.lite`
+   qoidasi faqat `animation-*` ni qisqartiradi, `transition` ga
+   tegmaydi. Ya'ni yopilish HAR telefonda silliq bo'ladi.
+   `!important` kerak: ochilish animatsiyasi `forwards` bilan
+   `transform` ni band qilib turadi.
+   ═══════════════════════════════════════════════════════════ */
+html body .modal-standard.m-closing,
+html body #productModal.m-closing {
+    transition: opacity var(--dur-fast) var(--ease-in),
+                transform var(--dur-fast) var(--ease-in) !important;
+    opacity: 0 !important;
+    transform: translate3d(0, 16px, 0) scale(0.985) !important;
+    pointer-events: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .modal-standard.m-closing,
+    html body #productModal.m-closing {
+        transition: none !important;
+        opacity: 0 !important;
+        transform: none !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B1) BO'LIM ALMASHISHI — `filter: blur()` OLIB TASHLANDI
+   -----------------------------------------------------------
+   `cinematicEnter` har bo'lim almashganda butun ekranni
+   `blur(5px)` dan `blur(0)` ga o'tkazardi. Blur — eng qimmat
+   CSS filtri: har kadrda butun sahifa qayta bo'yaladi.
+   Ko'rinish deyarli bir xil qoladi, narxi esa nolga tushadi.
+   ═══════════════════════════════════════════════════════════ */
+@keyframes mo26SectionIn {
+    0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.988); }
+    100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+html body #content-area > div {
+    animation-name: mo26SectionIn !important;
+    animation-duration: 0.34s !important;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+    animation-fill-mode: forwards !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    filter: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body #content-area > div { animation: none !important; opacity: 1 !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B2) SKELETON — `background-position` -> `opacity`
+   -----------------------------------------------------------
+   Ilgari faqat `html.lite` da arzon pulsga o'tkazilgan edi
+   (QATLAM 2026.14). Lekin QUVVATLI telefonlarda ham har kadrda
+   4-8 blokning gradienti qayta bo'yalardi — bu aynan sahifa
+   ENG BAND paytda (kontent yuklanayotganda) sodir bo'ladi.
+   Endi hamma qurilmada bir xil arzon puls.
+   ═══════════════════════════════════════════════════════════ */
+html body .sk-bone,
+html body .skeleton {
+    animation-name: emSoftPulse !important;
+    animation-duration: 1.3s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    background-position: 0 0 !important;
+}
+/* `left` bo'ylab yuguradigan oltin nur — pulsning ustiga kerak emas */
+html body .skeleton::after { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    html body .sk-bone,
+    html body .skeleton { animation: none !important; opacity: 0.75 !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B3) TUGMA "NUR"I — `left` -> `translate3d`
+   -----------------------------------------------------------
+   Element kengligi tugmaning 60% i, `left: -150%` (tugma
+   kengligining) => o'z kengligining -250% i. Tugash nuqtasi
+   200% (tugma) => 333% (o'z kengligi). Ko'rinish bir xil.
+   ═══════════════════════════════════════════════════════════ */
+@keyframes mo26Shine {
+    0%       { transform: translate3d(-250%, 0, 0) skewX(-25deg); }
+    35%      { transform: translate3d(333%, 0, 0) skewX(-25deg); }
+    100%     { transform: translate3d(333%, 0, 0) skewX(-25deg); }
+}
+html body .btn-checkout::after,
+html body .pm-sticky-btn::after,
+html body .btn-add-cart::after {
+    left: 0 !important;
+    animation-name: mo26Shine !important;
+    animation-duration: 5s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .btn-checkout::after,
+    html body .pm-sticky-btn::after,
+    html body .btn-add-cart::after { animation: none !important; opacity: 0 !important; }
+}
+
+/* Cashback kartasidagi nur: width 50%, left -60%..130% (karta kengligida)
+   => o'z kengligining -120%..260% i. */
+@keyframes mo26Sweep {
+    0%       { transform: translate3d(-120%, 0, 0) skewX(-18deg); }
+    35%      { transform: translate3d(260%, 0, 0) skewX(-18deg); }
+    100%     { transform: translate3d(260%, 0, 0) skewX(-18deg); }
+}
+html body .p2-cashback-card::after {
+    left: 0 !important;
+    animation-name: mo26Sweep !important;
+    animation-duration: 5.5s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .p2-cashback-card::after { animation: none !important; opacity: 0 !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B4) CHEKSIZ `box-shadow` PULSLARI -> transform/opacity
+   -----------------------------------------------------------
+   `box-shadow` animatsiyasi har kadrda soyani qaytadan chizadi.
+   Bu yerdagilar HAMMASI `infinite` edi — telefon hech qachon
+   tinmasdi. Ko'z uchun natija bir xil, narxi ~0.
+   ═══════════════════════════════════════════════════════════ */
+@keyframes mo26Breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes mo26Dim     { 0%, 100% { opacity: 1; }         50% { opacity: 0.78; } }
+@keyframes mo26Pop {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.38); }
+    100% { transform: scale(1); }
+}
+
+/* 🎯 SAVAT BELGISI — "pop" ishorasi TIKLANDI.
+   Ilgari `@keyframes badgePulse` IKKI joyda yozilgan edi: birinchisi
+   (transform bilan "pop") to'g'ri, ikkinchisi esa `box-shadow` halqasi.
+   CSS da bir xil nomdagi keyframes'ning OXIRGISI ustun keladi — ya'ni
+   savatga tovar qo'shilganda ko'rinishi kerak bo'lgan "pop" JIMGINA
+   o'lib ketgan va o'rniga 2 soniyalik CHEKSIZ soya halqasi qolgan edi. */
+html body .nav-badge.show { animation: none !important; }
+html body .nav-badge.pulse {
+    animation-name: mo26Pop !important;
+    animation-duration: 0.36s !important;
+    animation-timing-function: cubic-bezier(0.34, 1.45, 0.5, 1) !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+}
+html body .empty-state-pro .es-btn {
+    animation-name: mo26Breathe !important;
+    animation-duration: 2.4s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+}
+html body .tl-step.active .tl-dot {
+    animation-name: mo26Breathe !important;
+    animation-duration: 1.8s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+}
+html body .card-flash .cf-timer {
+    animation-name: mo26Dim !important;
+    animation-duration: 1.9s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .nav-badge.pulse,
+    html body .empty-state-pro .es-btn,
+    html body .tl-step.active .tl-dot,
+    html body .card-flash .cf-timer { animation: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   B5) SAVATGA UCHIB BORISH — bitta `transform`
+   -----------------------------------------------------------
+   Eski kod `left`, `top`, `width`, `height` ni BIR VAQTDA
+   animatsiya qilardi. Ya'ni eng ko'p bosiladigan tugmada har
+   kadrda layout qayta hisoblanardi. Endi faqat transform.
+   ═══════════════════════════════════════════════════════════ */
+html body .flying-img.mo-fly {
+    transition: transform var(--dur-fly) cubic-bezier(0.25, 1, 0.25, 1),
+                opacity var(--dur-fly) ease !important;
+    will-change: transform, opacity;
+}

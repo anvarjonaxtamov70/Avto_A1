@@ -1,0 +1,34 @@
+
+/* ═══ SILLIQLIK-12: oynalarni bittalab tekshirishda topilgan "sakrash"lar ═══ */
+/* 1) Welcome'dagi .wl-sub qoidasi (opacity:0 + 1.35s kechikish) "Saqlanganlar"
+      sarlavhasiga ham tushib, osti yozuv 2 soniyadan keyin "lip" etib chiqardi. */
+#wishlist-section .wl-sub { opacity: 1 !important; transform: none !important; animation: none !important; }
+/* 2) Orqaga tugmasi: avval 10% oq, xiralashtirishsiz — skrollda ostidagi
+      yozuv/ikonkalar orasidan ko'rinib, chalkash ko'rinardi. Endi haqiqiy shisha. */
+html body #back-btn.floating-btn {
+    background: rgba(30, 30, 33, .78) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+    border: .5px solid rgba(255, 255, 255, .14) !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35), inset 0 .5px 0 rgba(255, 255, 255, .18) !important;
+}
+html[data-theme="light"] body #back-btn.floating-btn {
+    background: rgba(255, 255, 255, .86) !important;
+    border-color: rgba(0, 0, 0, .08) !important;
+    box-shadow: 0 6px 18px rgba(70, 50, 10, .14), inset 0 .5px 0 rgba(255, 255, 255, .9) !important;
+}
+/* 3) Tepadagi "scroll edge": sahifa skroll qilinganda kontent tepada yumshoq
+      so'nadi — orqaga tugmasi yozuvlar ustida "osilib" turmaydi (iOS 26). */
+#a1-top-edge {
+    position: fixed; left: 0; right: 0; top: 0; height: calc(var(--safe-top, 0px) + 92px); z-index: 999; pointer-events: none;
+    background: linear-gradient(to top, rgba(var(--a3-page-rgb, 10,10,11), 0) 0%, rgba(var(--a3-page-rgb, 10,10,11), .82) 55%, rgba(var(--a3-page-rgb, 10,10,11), .96) 100%);
+    opacity: 0; transition: opacity .25s ease;
+}
+body.a1-scrolled #a1-top-edge { opacity: 1; }
+body.a1-srch #a1-top-edge, body.search-focused #a1-top-edge, body[style*="overflow: hidden"] #a1-top-edge { opacity: 0; }
+/* 4) Tovar oynasi: katta rasm kelguncha kartadagi (keshdagi) rasm turadi,
+      katta rasm tayyor bo'lganda ustidan yumshoq almashadi — qora bo'shliq yo'q. */
+html body #productModal.a7 .a7-slide > img.a1-ph {
+    position: absolute !important; inset: 0; z-index: 1; pointer-events: none; transition: opacity .28s ease;
+}
+html body #productModal.a7 .a7-slide > img.a1-ph-main { z-index: 2; opacity: 0; transition: opacity .28s ease; }
+html body #productModal.a7 .a7-slide > img.a1-ph-main.a1-in { opacity: 1; }

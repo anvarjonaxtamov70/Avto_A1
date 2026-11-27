@@ -1,0 +1,214 @@
+
+  /* ——— 1) KARTOCHKA RASMI — ATAYLAB TEGILMAYDI ———
+     ⚠️ BU YERGA HECH NARSA QO'SHILMASIN. Sabab tarixi:
+
+     Bir marta bu yerda `object-fit: contain` + `padding` + kuchsizroq
+     mask va `.img-wrap` ga `radial-gradient` fon qo'yilgan edi (maqsad:
+     ehtiyot qism chetlari qirqilmasin). Natija IKKI JIHATDAN YOMON edi:
+
+       1) RASM AJRALIB TURARDI. Fayldagi «karta parallaksi» har skroll
+          kadrida rasmga `scale(1.08) translate3d(...)` qo'llaydi va u
+          AYNAN `object-fit: cover` + `overflow:hidden` + radial-mask'ga
+          tayanadi — shular rasm qirralarini yashiradi. `contain` bilan
+          letterbox chegaralari ko'rinib qoladi va rasm kartadan
+          «uzilib» suzadi.
+
+       2) TELEFON QIZARDI. Gradient fon + har kadrda transform bo'ladigan
+          rasm + radial mask = kompozitor har kadrda uch qatlamni QAYTA
+          aralashtiradi. Ilgari fon `transparent` edi, ya'ni
+          aralashtirish uchun hech narsa yo'q edi. iPhone 17 Pro Max'da
+          ham sezilardi.
+
+     Ya'ni kartochka ko'rinishi bu faylda tejamkorlik bilan sozlangan
+     va u parallaks tizimi bilan BOG'LIQ. O'zgartirish kerak bo'lsa,
+     avval `_scanParallax` / `apply()` mantiqini o'qib chiqing. */
+
+  /* ——— 2) «ISHLAB CHIQARILGAN JOY» belgisi ———
+     Faqat TOVAR OYNASIDA (#pm-origin) ishlatiladi. Kartochkaga
+     ATAYLAB qo'shilmaydi — kartochka ko'rinishi o'zgarmasligi kerak. */
+  .card-origin {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9.5px; font-weight: 800; letter-spacing: .2px;
+    padding: 2px 7px; border-radius: 999px; margin: 0 0 6px;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .card-origin.o-original { color: #F0D060; background: rgba(212,175,55,0.13); border-color: rgba(212,175,55,0.35); }
+  .card-origin.o-rossiya  { color: #7FB4FF; background: rgba(58,141,255,0.13); border-color: rgba(58,141,255,0.32); }
+  .card-origin.o-xitoy    { color: #B9BCC4; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14); }
+  html[data-theme="light"] .card-origin.o-original { color: #7A5E12; background: rgba(212,175,55,0.16); }
+  html[data-theme="light"] .card-origin.o-rossiya  { color: #1B4F9C; background: rgba(58,141,255,0.12); }
+  html[data-theme="light"] .card-origin.o-xitoy    { color: #55585F; background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.12); }
+  /* Tovar oynasidagi kattaroq varianti */
+  #pm-origin { display: none; margin: 0 0 12px; }
+  #pm-origin .card-origin { font-size: 11.5px; padding: 4px 11px; }
+
+  /* ——— 3) KATALOG FILTR/SARALASH paneli ———
+     `-parts` gridi 2 ustunli, shuning uchun panel `span 2` oladi. */
+  .cfs-bar {
+    grid-column: span 2; display: flex; flex-direction: column; gap: 9px;
+    padding: 2px 0 10px; box-sizing: border-box;
+  }
+  .cfs-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .cfs-count { font-size: 12px; font-weight: 600; color: var(--text-muted); flex: 1; min-width: 70px; }
+  .cfs-count b { color: var(--text-main); font-weight: 800; }
+  .cfs-sort-wrap { position: relative; display: inline-flex; align-items: center; }
+  .cfs-sort-wrap svg { position: absolute; left: 9px; pointer-events: none; color: var(--luxury-gold); opacity: .9; }
+  .cfs-sort {
+    -webkit-appearance: none; appearance: none;
+    background: rgba(255,255,255,0.05); color: var(--text-main);
+    border: 1px solid var(--glass-border); border-radius: 12px;
+    padding: 8px 26px 8px 30px; font-size: 12.5px; font-weight: 700;
+    cursor: pointer; outline: none; max-width: 58vw;
+    font-family: inherit;
+  }
+  .cfs-sort-wrap::after {
+    content: ''; position: absolute; right: 10px; width: 6px; height: 6px;
+    border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted);
+    transform: rotate(45deg) translateY(-2px); pointer-events: none;
+  }
+  .cfs-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(255,255,255,0.05); color: var(--text-main);
+    border: 1px solid var(--glass-border); padding: 7px 13px;
+    border-radius: 999px; font-size: 12px; font-weight: 700;
+    cursor: pointer; white-space: nowrap; transition: .18s ease;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+  }
+  .cfs-chip:active { transform: scale(0.95); }
+  .cfs-chip.on {
+    background: linear-gradient(135deg, var(--luxury-gold-light), var(--luxury-gold));
+    border-color: transparent; color: #1c1306;
+  }
+  .cfs-reset {
+    background: none; border: none; cursor: pointer; font-family: inherit;
+    color: var(--luxury-gold); font-size: 12px; font-weight: 700;
+    padding: 6px 2px; margin-left: auto;
+  }
+  html[data-theme="light"] .cfs-sort { background: rgba(95,70,25,0.05); color: #211C12; border-color: rgba(120,95,40,0.16); }
+  html[data-theme="light"] .cfs-chip { background: #FAF4E8; color: #5C5238; border-color: rgba(150,120,55,0.18); }
+  html[data-theme="light"] .cfs-chip.on { color: #2A1F06; }
+
+  /* ——— 3b) BOSH SAHIFA SARLAVHASI + FILTR CHIP'LARI BIR QATORDA ———
+     «Ommabop tovarlar» yozuvi CHAPDA, «Aksiya» va «Sotuvda bor» chip'lari
+     uning QARSHISIDA (o'ngda) turadi.
+
+     ⚠️ NEGA WRAPPER KERAK: `.section-title` da oltin chiziq `::before`
+     pseudo-elementi bor va u `display:inline-block` + `vertical-align`
+     ga tayanadi. Sarlavhaning O'ZIGA `display:flex` bersak, chiziq flex
+     elementga aylanib balandligi buziladi. Shuning uchun sarlavhaga
+     TEGMAYMIZ — uni yangi flex qator ichiga o'raymiz.
+
+     Sarlavhada `width:100%`, `padding:0 20px` va `margin:...!important`
+     bor, shuning uchun qator ichida ularni bekor qilamiz (gutter endi
+     qatorning o'zida). */
+  .home-head-row {
+    display: flex; align-items: center; gap: 8px;
+    flex-wrap: wrap;                 /* juda tor ekranda chip'lar pastga tushadi */
+    padding: 0 20px; margin: 26px 0 14px;
+  }
+  .home-head-row .section-title {
+    width: auto !important; padding: 0 !important; margin: 0 !important;
+    flex: 0 1 auto; min-width: 0;
+  }
+  /* `margin-left:auto` — chip'lar qator o'ralganda ham O'NGDA qoladi
+     (`justify-content` o'ralgan qatorda ishlamaydi). */
+  .home-chips { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; margin-left: auto; }
+  /* Sarlavha yonida turgani uchun katalogdagidan bir oz ixchamroq */
+  .home-chips .cfs-chip { padding: 6px 11px; font-size: 11.5px; }
+
+  /* ——— 4) BOSH SAHIFADAGI «MENING MASHINAM» YORLIG'I ——— */
+  #mycar-shortcut {
+    display: none; margin: 14px 18px 2px; padding: 13px 15px;
+    border-radius: var(--r-md, 16px); cursor: pointer;
+    background: linear-gradient(135deg, rgba(212,175,55,0.14), rgba(212,175,55,0.05));
+    border: 1px solid rgba(212,175,55,0.3);
+    align-items: center; gap: 12px; transition: .2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #mycar-shortcut.show { display: flex; animation: mcsIn .42s cubic-bezier(.22,.61,.36,1), mcsGlow 2.8s ease-in-out .5s infinite; }
+  #mycar-shortcut:active { transform: scale(0.985); }
+  @keyframes mcsIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes mcsGlow { 0%, 100% { box-shadow: 0 0 0 rgba(212,175,55,0); border-color: rgba(212,175,55,0.3); } 50% { box-shadow: 0 0 18px rgba(212,175,55,0.22); border-color: rgba(212,175,55,0.55); } }
+  @keyframes mcsArrow { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+  #mycar-shortcut .mcs-go { animation: mcsArrow 1.6s ease-in-out infinite; }
+  html.lite #mycar-shortcut.show, .pf-weak #mycar-shortcut.show { animation: none !important; }
+  html.lite #mycar-shortcut .mcs-go { animation: none !important; }
+  @media (prefers-reduced-motion: reduce) { #mycar-shortcut.show, #mycar-shortcut .mcs-go { animation: none !important; } }
+  #mycar-shortcut .mcs-ic {
+    width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%;
+    background: rgba(212,175,55,0.16); display: flex;
+    align-items: center; justify-content: center;
+  }
+  #mycar-shortcut .mcs-ic svg { width: 21px; height: 21px; fill: var(--luxury-gold); }
+  #mycar-shortcut .mcs-tx { flex: 1; min-width: 0; text-align: center; }
+  #mycar-shortcut .mcs-tx b {
+    display: block; font-size: 14px; font-weight: 800; color: var(--text-main);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #mycar-shortcut .mcs-tx i {
+    font-style: normal; font-size: 11.5px; color: var(--text-muted);
+  }
+  #mycar-shortcut .mcs-go { color: var(--luxury-gold); font-size: 18px; font-weight: 800; }
+  html[data-theme="light"] #mycar-shortcut {
+    background: linear-gradient(135deg, #FFF9EC, #FDF3DF);
+    border-color: rgba(150,120,55,0.24);
+  }
+
+  /* ——— 5) RASMNI KATTALASHTIRISH (lightbox) ——— */
+  #pmz {
+    position: fixed; inset: 0; z-index: 5000; display: none;
+    background: rgba(0,0,0,0.96); touch-action: none; overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+  }
+  #pmz.open { display: block; }
+  #pmz-img {
+    position: absolute; top: 50%; left: 50%; max-width: 100%; max-height: 100%;
+    transform-origin: 0 0;
+    -webkit-user-drag: none; pointer-events: none;
+  }
+  /* `will-change` FAQAT oyna ochiq turganda. Doimiy qo'yilsa brauzer
+     GPU qatlamini hech qachon bo'shatmaydi (batareya va xotira isrofi). */
+  #pmz.open #pmz-img { will-change: transform; }
+  #pmz-close {
+    position: absolute; top: 14px; right: 14px; z-index: 3;
+    width: 42px; height: 42px; border-radius: 50%; border: none;
+    background: rgba(255,255,255,0.14); color: #fff; font-size: 24px;
+    line-height: 1; cursor: pointer;
+    /* backdrop-filter ATAYLAB yo'q: fon allaqachon to'q qora, blur
+       ko'rinmaydi, lekin har kadrda qimmat qatlam yaratardi. */
+  }
+  #pmz-hint {
+    position: absolute; bottom: 26px; left: 0; width: 100%; z-index: 3;
+    text-align: center; color: rgba(255,255,255,0.62); font-size: 12px;
+    font-weight: 600; pointer-events: none; transition: opacity .4s ease;
+  }
+  #pmz-count {
+    position: absolute; top: 20px; left: 0; width: 100%; z-index: 3;
+    text-align: center; color: rgba(255,255,255,0.8);
+    font-size: 13px; font-weight: 800; pointer-events: none;
+  }
+  /* Tovar oynasidagi rasm bosilishi mumkinligini bildiruvchi ishora */
+  .pm-slider img { cursor: zoom-in; }
+  /* ⚠️ `backdrop-filter` ATAYLAB YO'Q. Bu ishora tovar oynasida DOIM
+     ko'rinib turadi, ya'ni blur qatlami ham doim mavjud bo'lardi. Bu
+     faylda blur ataylab kamaytirilgan (25px -> 10px) — shu yo'ldan
+     chetga chiqmaymiz. To'q fon bir xil natija beradi, tekin. */
+  .pmz-tip {
+    position: absolute; bottom: 14px; right: 14px; z-index: 9;
+    display: flex; align-items: center; gap: 5px;
+    background: rgba(0,0,0,0.55); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 5px 10px; border-radius: 999px;
+    pointer-events: none;
+  }
+  .pmz-tip svg { width: 13px; height: 13px; fill: currentColor; }
+
+  /* Zaif telefon (`html.lite` / `__perfLite`) va harakatni kamaytirish
+     rejimida animatsiyalarni butunlay o'chiramiz — fayldagi mavjud
+     tejamkorlik siyosatiga moslashamiz. */
+  @media (prefers-reduced-motion: reduce) {
+    .cfs-chip, #mycar-shortcut { transition: none !important; }
+  }
+  html.lite .cfs-chip,
+  html.lite #mycar-shortcut { transition: none !important; }
+  html.lite .cfs-chip:active,
+  html.lite #mycar-shortcut:active { transform: none !important; }

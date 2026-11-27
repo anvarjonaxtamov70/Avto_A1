@@ -1,0 +1,165 @@
+
+#ordl {
+    position: fixed; inset: 0; z-index: 100001;
+    display: none; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 42%, rgba(28,24,10,.97), rgba(6,6,8,.985) 70%);
+    /* backdrop-filter ATAYLAB yo'q — u har kadrda qayta hisoblanadi va
+       sekin telefonlarda aynan qotishga olib keladi (loyihada allaqachon
+       boshqa overlay'lardan ham olib tashlangan). */
+}
+#ordl.show { display: flex; }
+html[data-theme="light"] #ordl {
+    background: radial-gradient(circle at 50% 42%, rgba(255,252,244,.97), rgba(244,238,226,.985) 70%);
+}
+
+.ordl-box {
+    display: flex; flex-direction: column; align-items: center; gap: 22px;
+    padding: 0 28px; text-align: center;
+}
+
+/* ——— Halqa (soatcha) ——— */
+.ordl-ring { position: relative; width: 92px; height: 92px; flex: none; }
+.ordl-ring i {                        /* statik asos halqa */
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid rgba(201,168,76,.15);
+}
+.ordl-ring b {                        /* aylanadigan tilla yoy */
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid transparent;
+    border-top-color: #F0D060;
+    border-right-color: rgba(201,168,76,.75);
+    filter: drop-shadow(0 0 7px rgba(201,168,76,.45));
+}
+.ordl-ring s {                        /* ichki teskari aylanadigan nozik yoy */
+    position: absolute; inset: 13px; border-radius: 50%;
+    border: 2px solid transparent;
+    border-bottom-color: rgba(240,208,96,.5);
+    text-decoration: none;
+}
+@keyframes ordlSpin  { to { transform: rotate(360deg); } }
+@keyframes ordlSpinR { to { transform: rotate(-360deg); } }
+
+/* 🔴 MUHIM: ID selektori bilan yozilgan — `html.lite body *::after` va
+   `body.anim-paused *` qoidalarini specificity bo'yicha YENGADI.
+   Har uch holat uchun alohida yozamiz, chunki `!important` ga qarshi
+   faqat yuqori specificity ishlaydi. */
+body #ordl .ordl-ring b,
+html.lite body #ordl .ordl-ring b,
+body.anim-paused #ordl .ordl-ring b {
+    animation: ordlSpin .95s linear infinite !important;
+    animation-duration: .95s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+body #ordl .ordl-ring s,
+html.lite body #ordl .ordl-ring s,
+body.anim-paused #ordl .ordl-ring s {
+    animation: ordlSpinR 1.5s linear infinite !important;
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+    animation-play-state: running !important;
+}
+
+/* ——— Holat matni ——— */
+.ordl-tx {
+    font-size: 15px; font-weight: 700; letter-spacing: .3px; line-height: 1.5;
+    color: var(--luxury-gold, #C9A84C);
+    max-width: 280px;
+    transition: opacity .25s ease, transform .25s ease;
+}
+html[data-theme="light"] .ordl-tx { color: #7A5E12; }
+.ordl-sub {
+    font-size: 12px; font-weight: 600; color: var(--text-muted, #8a8a8a);
+    margin-top: -12px;
+}
+
+/* ——— Pticha / xato belgisi ——— */
+.ordl-mark { position: absolute; inset: 0; display: none; }
+.ordl-mark svg { width: 92px; height: 92px; display: block; }
+.ordl-mark circle {
+    fill: none; stroke-width: 3.2; stroke-linecap: round;
+    stroke-dasharray: 151; stroke-dashoffset: 151;
+    transform: rotate(-90deg); transform-origin: 50% 50%;
+}
+.ordl-mark path {
+    fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 48; stroke-dashoffset: 48;
+}
+#ordl.is-ok  .ordl-mark circle { stroke: #30d158; }
+#ordl.is-ok  .ordl-mark path   { stroke: #30d158; }
+#ordl.is-err .ordl-mark circle { stroke: #ff453a; }
+#ordl.is-err .ordl-mark path   { stroke: #ff453a; }
+
+#ordl.is-load .ordl-ring i,
+#ordl.is-load .ordl-ring b,
+#ordl.is-load .ordl-ring s { display: block; }
+#ordl.is-ok .ordl-ring b,
+#ordl.is-ok .ordl-ring s,
+#ordl.is-err .ordl-ring b,
+#ordl.is-err .ordl-ring s { display: none; }
+#ordl.is-ok .ordl-ring i,
+#ordl.is-err .ordl-ring i { border-color: transparent; }
+#ordl.is-ok .ordl-mark,
+#ordl.is-err .ordl-mark { display: block; }
+
+@keyframes ordlRing { to { stroke-dashoffset: 0; } }
+@keyframes ordlDraw { to { stroke-dashoffset: 0; } }
+@keyframes ordlPop  { 0% { transform: scale(.55); opacity: 0; } 60% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
+
+/* Yana ID specificity bilan — lite/anim-paused ni yengish uchun */
+body #ordl.is-ok .ordl-mark circle,
+body #ordl.is-err .ordl-mark circle,
+html.lite body #ordl.is-ok .ordl-mark circle,
+html.lite body #ordl.is-err .ordl-mark circle {
+    animation: ordlRing .42s cubic-bezier(.2,.8,.25,1) forwards !important;
+    animation-duration: .42s !important;
+    animation-iteration-count: 1 !important;
+    animation-play-state: running !important;
+}
+body #ordl.is-ok .ordl-mark path,
+body #ordl.is-err .ordl-mark path,
+html.lite body #ordl.is-ok .ordl-mark path,
+html.lite body #ordl.is-err .ordl-mark path {
+    animation: ordlDraw .34s .3s ease forwards !important;
+    animation-duration: .34s !important;
+    animation-delay: .3s !important;
+    animation-iteration-count: 1 !important;
+    animation-play-state: running !important;
+}
+body #ordl.show .ordl-box,
+html.lite body #ordl.show .ordl-box {
+    animation: ordlPop .34s cubic-bezier(.2,.85,.25,1) both !important;
+    animation-duration: .34s !important;
+    animation-iteration-count: 1 !important;
+    animation-play-state: running !important;
+}
+
+/* ——— ♿ Harakatni kamaytirish — HURMAT QILAMIZ ———
+   Bu yerda animatsiyani ataylab o'chiramiz, lekin belgilar KO'RINADI
+   (stroke-dashoffset: 0), ya'ni qotgan ikonka emas — tayyor ko'rinish. */
+@media (prefers-reduced-motion: reduce) {
+    body #ordl .ordl-ring b,
+    html.lite body #ordl .ordl-ring b,
+    body.anim-paused #ordl .ordl-ring b,
+    body #ordl .ordl-ring s,
+    html.lite body #ordl .ordl-ring s,
+    body.anim-paused #ordl .ordl-ring s,
+    body #ordl.show .ordl-box,
+    html.lite body #ordl.show .ordl-box {
+        animation: none !important;
+    }
+    body #ordl .ordl-ring b { border-right-color: rgba(201,168,76,.75); }
+    body #ordl.is-ok .ordl-mark circle,
+    body #ordl.is-err .ordl-mark circle,
+    body #ordl.is-ok .ordl-mark path,
+    body #ordl.is-err .ordl-mark path,
+    html.lite body #ordl.is-ok .ordl-mark circle,
+    html.lite body #ordl.is-err .ordl-mark circle,
+    html.lite body #ordl.is-ok .ordl-mark path,
+    html.lite body #ordl.is-err .ordl-mark path {
+        animation: none !important;
+        stroke-dashoffset: 0 !important;
+    }
+}

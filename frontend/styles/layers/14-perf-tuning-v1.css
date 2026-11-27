@@ -1,0 +1,44 @@
+
+  /* ——— 1) AI tugma glow ———
+     ESLATMA: kodda allaqachon .ai-luxury-btn{animation:none} qilingan
+     (ishlab chiquvchi "tinch, CPU tejash" uchun). Shuning uchun bu yerda
+     QO'SHIMCHA glow animatsiyasi QO'SHMAYMIZ — aks holda jank qaytadi.
+     Faqat luxuryGlow keyframe boshqa joyda qolgan bo'lsa ham, u tugmaga
+     ta'sir qilmaydi. */
+
+  /* ——— 2) Skroll paytida og'ir effektlarni pauza qilish ———
+     body.is-scrolling vaqtida cheksiz animatsiyalar va grain to'xtaydi,
+     shunda barmoq ostida skroll 60fps qoladi. Skroll tugagach tiklanadi. */
+  body.is-scrolling #polish-grain,
+  body.is-scrolling .slider .slide img,
+  body.is-scrolling .es-btn,
+  body.is-scrolling .tl-step.active .tl-dot,
+  body.is-scrolling .neon-brand-card,
+  body.is-scrolling .story-ring.new{
+    animation-play-state: paused !important;
+  }
+  /* Skroll paytida karta::before gradientini vaqtincha o'chirib paintni kamaytiramiz */
+  body.is-scrolling .luxury-card::before{ opacity:0 !important; }
+
+  /* 🔧 FIX (jank): skroll DAVOMIDA barcha cheksiz animatsiyalarni pauza qilamiz
+     (shimmer, gearSpin, storyRingSpin, float, gold-shimmer va h.k.) — skroll
+     tugashi bilan (140ms) darhol tiklanadi, shuning uchun ko'zga ko'rinmaydi,
+     lekin har kadrdagi qayta-bo'yash (repaint) keskin kamayadi -> 60fps. */
+  body.is-scrolling .skeleton,
+  body.is-scrolling [class*="shimmer"],
+  body.is-scrolling .story-ring,
+  body.is-scrolling .nav-badge,
+  body.is-scrolling .slider-partner-badge{
+    animation-play-state: paused !important;
+  }
+  /* Fiksirlangan shisha panellardagi og'ir blurni skroll paytida yengillashtirish
+     (backdrop-filter har kadrda qayta hisoblanadi — mobil GPU uchun eng qimmati). */
+  body.is-scrolling .bottom-nav,
+  body.is-scrolling .header{
+    backdrop-filter: blur(7px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(7px) saturate(140%) !important;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    #polish-grain{ display:none; }
+  }
