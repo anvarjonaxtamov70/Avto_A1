@@ -104,6 +104,10 @@ async function reconcileUserOrderProjection(ctx, token, identity, quote, payload
         Number(current.payable) !== Number(canonicalOrder.payable)) {
       throw httpError(409, "user buyurtma proyeksiyasi mos emas");
     }
+    // A delayed commit reconciliation must not overwrite a newer admin status.
+    if (Number(current.statusUpdatedAt || 0) > Number(canonicalOrder.statusUpdatedAt || 0)) {
+      return { abort: true, result: current };
+    }
     if (String(current.status) === String(canonicalOrder.status) &&
         Number(current.statusUpdatedAt || 0) === Number(canonicalOrder.statusUpdatedAt || 0)) {
       return { abort: true, result: current };

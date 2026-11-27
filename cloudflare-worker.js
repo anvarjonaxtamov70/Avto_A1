@@ -923,7 +923,7 @@ async function assertNotBlocked(uid, env) {
       const token = await getAccessToken(env);
       blocked = !!(await rtdbGet(ctx.dbUrl, "blocked_users/" + key, token));
     } catch (_) {
-      return;
+      throw httpError(503, "blok holatini tekshirib bo'lmadi", { retryable: true });
     }
     if (blockedCache.size > 5000) blockedCache.clear();
     blockedCache.set(key, { v: blocked, exp: now + 30 * 1000 });
@@ -1922,6 +1922,10 @@ async function reconcileUserOrderProjection(ctx, token, identity, quote, payload
         Number(current.cashbackUsed) !== Number(canonicalOrder.cashbackUsed) ||
         Number(current.payable) !== Number(canonicalOrder.payable)) {
       throw httpError(409, "user buyurtma proyeksiyasi mos emas");
+    }
+    // A delayed commit reconciliation must not overwrite a newer admin status.
+    if (Number(current.statusUpdatedAt || 0) > Number(canonicalOrder.statusUpdatedAt || 0)) {
+      return { abort: true, result: current };
     }
     if (String(current.status) === String(canonicalOrder.status) &&
         Number(current.statusUpdatedAt || 0) === Number(canonicalOrder.statusUpdatedAt || 0)) {
