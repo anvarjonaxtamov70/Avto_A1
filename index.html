@@ -43661,37 +43661,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     var root = document.documentElement;
     if (!root.classList.contains('a1-app')) return;
 
-    /* 1) Barcha shisha (backdrop-filter) effektlarini o'chiramiz — CSSOM orqali,
-          !important va id'li qoidalar ham qamraladi. Keyin qo'shilgan uslublar
-          (JS kiritgan <style>) ham qayta tekshiriladi. */
-    var done = window.WeakSet ? new WeakSet() : null;
-    function walk(list) {
-        for (var i = 0; i < list.length; i++) {
-            var r = list[i];
-            if (r.type === 7) continue;                      // @keyframes
-            if (r.style && !(done && done.has(r))) {
-                if (done) done.add(r);
-                var st = r.style;
-                ['backdrop-filter', '-webkit-backdrop-filter'].forEach(function (p) {
-                    var v = st.getPropertyValue(p);
-                    if (v && v !== 'none') st.setProperty(p, 'none', st.getPropertyPriority(p));
-                });
-                if (st.getPropertyValue('--nav-blur')) st.setProperty('--nav-blur', '0px');
-                if (st.getPropertyValue('--header-blur')) st.setProperty('--header-blur', '0px');
-            }
-            if (r.cssRules) { try { walk(r.cssRules); } catch (e) {} }
-        }
-    }
-    function noGlass() {
-        var ss = document.styleSheets;
-        for (var i = 0; i < ss.length; i++) { try { walk(ss[i].cssRules || []); } catch (e) {} }
-    }
-    // Elementlarning o'zidagi (inline) blur ham
-    function noInlineGlass(el) {
-        try {
-            if (el.style && (el.style.backdropFilter || el.style.webkitBackdropFilter)) { el.style.backdropFilter = 'none'; el.style.webkitBackdropFilter = 'none'; }
-        } catch (e) {}
-    }
+    // Shisha effektlari saqlanadi; CSSOM o'zgartirilmaydi.
 
     /* 2) Rasmlar asosiy oqimni to'xtatmasdan (fon oqimida) dekodlansin */
     function fixImg(img) { try { if (img.decoding !== 'async') img.decoding = 'async'; } catch (e) {} }
@@ -43732,15 +43702,12 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         clearTimeout(resumeT);
         resumeT = setTimeout(releaseAnimations, 220);
     }, { passive: true, capture: true });
-    noGlass = function () {};   // shisha effektlari Telegram'dagidek saqlanadi
     scan(document.body);
     try {
         new MutationObserver(function (ms) {
             for (var i = 0; i < ms.length; i++) { var a = ms[i].addedNodes; for (var k = 0; k < a.length; k++) scan(a[k]); }
         }).observe(document.documentElement, { childList: true, subtree: true });
     } catch (e) {}
-    window.addEventListener('load', noGlass);
-    setTimeout(noGlass, 2500);
 })();
 </script>
 <style id="a1-install-hint">
