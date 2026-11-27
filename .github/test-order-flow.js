@@ -716,6 +716,26 @@ async function main() {
   const afterRollback = await runReserve();
   ok(!afterRollback.ok && product.stock === 5,'retry after rollback cannot reserve again');
 
+  {
+    const source = workerSource.slice(workerSource.indexOf('async function assertNotBlocked('),workerSource.indexOf('function decodeJwtPart('));
+    const check = new Function('getAdminIds','blockedCache','getDbContext','getAccessToken','rtdbGet','httpError',source+';return assertNotBlocked;')(
+      () => [], new Map(), () => ({dbUrl:'mock'}), async () => 'token', async () => {throw Error('offline');}, (status,message,details) => Object.assign(new Error(message),{status,...details})
+    );
+    let failedClosed = false;
+    try { await check('12345',{}); } catch(e) { failedClosed = e.status === 503 && e.retryable === true; }
+    ok(failedClosed,'block lookup failure denies access with retryable response');
+    const projectionSource = workerSource.slice(workerSource.indexOf('async function reconcileUserOrderProjection('),workerSource.indexOf('async function reconcileCommittedOrder('));
+    const current = {uid:'123',id:'1',payloadHash:'hash',total:100,cashbackUsed:0,payable:100,status:'yetkazildi',statusUpdatedAt:200};
+    let decision;
+    const reconcile = new Function('rtdbEtagMutate','cloneJson','httpError',projectionSource+';return reconcileUserOrderProjection;')(
+      async (url,key,token,mutate) => {decision=mutate(current);},clone,(status,message)=>Object.assign(new Error(message),{status})
+    );
+    await reconcile({dbUrl:'mock'},'token',{uid:'123'},{orderId:'1'},'hash',{...current,status:'kutilmoqda',statusUpdatedAt:100});
+    ok(decision.abort && decision.result.status === 'yetkazildi','stale commit cannot regress user order status');
+    await reconcile({dbUrl:'mock'},'token',{uid:'123'},{orderId:'1'},'hash',{...current,status:'bekor_qilingan',statusUpdatedAt:300});
+    ok(!decision.abort && decision.value.status === 'bekor_qilingan','newer canonical status reconciles');
+  }
+
   // ===== 10) Eskirgan initData =====
   console.log('▶ 10) eskirgan initData');
   const oldInit = await call('/order-status', { initData: initDataFor(ADMINS[0], 2 * 3600), uid: CUSTOMER, orderId: '1', status: 'qabul' });
