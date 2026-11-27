@@ -19807,14 +19807,6 @@ document.addEventListener('click', function (e) {
     }
     function toArray(v) { return Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.values(v) : []); }
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
-    function timeAgo(ts) {
-        var d = Date.now() - ts;
-        if (d < 60000) return 'hozir';
-        if (d < 3600000) return Math.floor(d / 60000) + ' daqiqa oldin';
-        if (d < DAY) return Math.floor(d / 3600000) + ' soat oldin';
-        if (d < DAY * 7) return Math.floor(d / DAY) + ' kun oldin';
-        return new Date(ts).toLocaleDateString('uz-UZ');
-    }
 
     /* ----------------------- Yangi (fresh) ma'lumot manbalari -----------------------
        Asosiy ilovadagi myOrders/productsDB/wishlist 'let' bilan e'lon qilingani uchun
@@ -20712,13 +20704,6 @@ document.addEventListener('click', function (e) {
             else el.textContent = isSom ? fmtShort(to) : to.toLocaleString('ru-RU').replace(/,/g, ' ');
         }
         requestAnimationFrame(step);
-    }
-    function animateFills(sel, attr) {
-        requestAnimationFrame(function () {
-            document.querySelectorAll(sel).forEach(function (el) {
-                requestAnimationFrame(function () { el.style.width = (el.getAttribute('data-' + attr) || 0) + '%'; });
-            });
-        });
     }
     function emptyHTML(ic, txt) { return '<div class="p2-empty"><span class="ic">' + ic + '</span>' + esc(txt) + '</div>'; }
 
@@ -25676,25 +25661,6 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 
     /* ---------------- 5.1 KPI + asboblar ---------------- */
 
-    function kpisHTML() {
-        var now = Date.now();
-        var total = CS.all.length;
-        var vip = CS.all.filter(function (c) { return c.isVip; }).length;
-        var active = CS.all.filter(function (c) { return c.last > 0 && (now - c.last) <= 30 * DAY; }).length;
-        var revenue = CS.all.reduce(function (s, c) { return s + c.spent; }, 0);
-        return '<div class="cst-kpis">' +
-            '<div class="cst-kpi" style="--kc:#0a84ff"><div class="cst-kpi-ic">\uD83D\uDC65</div>' +
-                '<div class="cst-kpi-n" id="cst-k-total">0</div><div class="cst-kpi-l">Jami mijoz</div></div>' +
-            '<div class="cst-kpi" style="--kc:#C9A84C"><div class="cst-kpi-ic">\uD83D\uDC51</div>' +
-                '<div class="cst-kpi-n" id="cst-k-vip">0</div><div class="cst-kpi-l">VIP daraja</div></div>' +
-            '<div class="cst-kpi" style="--kc:#30d158"><div class="cst-kpi-ic">\uD83D\uDD25</div>' +
-                '<div class="cst-kpi-n" id="cst-k-active">0</div><div class="cst-kpi-l">30 kunda faol</div></div>' +
-            '<div class="cst-kpi" style="--kc:#ff9f0a"><div class="cst-kpi-ic">\uD83D\uDCB0</div>' +
-                '<div class="cst-kpi-n" id="cst-k-rev">0</div><div class="cst-kpi-l">Jami tushum</div></div>' +
-            '</div>' +
-            '<span id="cst-kpi-data" data-total="' + total + '" data-vip="' + vip +
-                '" data-active="' + active + '" data-rev="' + revenue + '" style="display:none;"></span>';
-    }
 
     function toolsHTML() {
         var sortLabel = (SORTS.filter(function (s) { return s.id === CS.sort; })[0] || SORTS[0]).label;
@@ -25732,12 +25698,6 @@ html.lite .cst-card, html.lite .st2-card, html.lite .cst-kpi { box-shadow: none 
 
     /* ---------------- 5.2 Mijoz kartasi ---------------- */
 
-    function rankBadge(i) {
-        if (i === 0) return '\uD83E\uDD47';
-        if (i === 1) return '\uD83E\uDD48';
-        if (i === 2) return '\uD83E\uDD49';
-        return '#' + (i + 1);
-    }
 
     function customerCardHTML(c, idx) {
         var initial = E((c.name || '?').trim().charAt(0).toUpperCase() || '?');
