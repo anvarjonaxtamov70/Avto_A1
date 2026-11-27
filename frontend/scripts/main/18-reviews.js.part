@@ -1,0 +1,68 @@
+// ===================================================
+// 3. BAHOLASH VA IZOH TIZIMI (STAR RATING & REVIEWS)
+// ===================================================
+let currentReviewProductId = null; let selectedReviewStar = 0;
+
+window.loadProductReviews = (productId) => {
+    currentReviewProductId = productId; selectedReviewStar = 0;
+    document.querySelectorAll('#review-stars span').forEach(s => s.classList.remove('active'));
+    let reviewSection = document.getElementById('pm-review-section'); let reviewsList = document.getElementById('pm-reviews-list'); let addReview = document.getElementById('pm-add-review'); let loginMsg = document.getElementById('pm-review-login-msg'); let avgEl = document.getElementById('pm-avg-rating');
+    reviewsList.innerHTML = window._skel(3, 70); if (addReview) addReview.classList.add('hidden'); if (loginMsg) loginMsg.classList.add('hidden');
+
+    db.ref('reviews/' + productId).once('value', (snap) => {
+        let reviews = []; if (snap.exists()) { let data = snap.val(); reviews = Object.values(data).filter(r => r && r.rating); }
+        if (reviews.length > 0) {
+            let avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length;
+            // ⭐ Kartochkalardagi bilan bir xil 5 yulduzli ko'rinish (kattaroq o'lchamda)
+            avgEl.innerHTML = window._starsHTML
+                ? window._starsHTML(avg, reviews.length, 'big')
+                : ('★ ' + avg.toFixed(1) + ' (' + reviews.length + ' baho)');
+        } else { avgEl.innerHTML = ''; }
+        if (reviews.length === 0) {
+            // QADAM 7: chiroyli, jonli, taklifkor empty state — eski oddiy
+            // 'Hali izoh yo'q' yozuvi mijozga 'tovar zerikkan' hissini berardi
+            reviewsList.innerHTML = `
+                <div style="text-align:center; padding:24px 12px; background:rgba(255,255,255,0.02); border-radius:14px; border:1px dashed rgba(212,175,55,0.18);">
+                    <div style="font-size:42px; margin-bottom:10px; opacity:0.55; filter:drop-shadow(0 4px 10px rgba(212,175,55,0.25));">⭐</div>
+                    <div style="font-size:14px; color:var(--text-main); font-weight:700; margin-bottom:6px;">Yangi tovar — sharhlar hali yo'q</div>
+                    <div style="font-size:12px; color:var(--text-muted); line-height:1.55;">Xarid qilgandan so'ng birinchi bo'lib<br>fikringizni qoldiring 🌟</div>
+                </div>
+            `;
+        } else {
+            reviews.sort((a, b) => b.timestamp - a.timestamp);
+            reviewsList.innerHTML = reviews.map(r => `<div class="review-card"><div class="r-head"><span class="r-name">${escHtml(r.userName || 'Mijoz')}</span><span class="r-stars">${'★'.repeat(Math.max(0, Math.min(5, parseInt(r.rating) || 0)))}${'☆'.repeat(5 - Math.max(0, Math.min(5, parseInt(r.rating) || 0)))}</span></div>${r.text ? `<div class="r-text">${escHtml(r.text)}</div>` : ''}<div class="r-date">${escHtml(r.date || '')}</div></div>`).join('');
+        }
+        if (!currentUser) { loginMsg.classList.remove('hidden'); return; }
+        let alreadyReviewed = reviews.some(r => r.userId == currentUser);
+        if (alreadyReviewed) { loginMsg.innerText = '✅ Siz allaqachon baho qo\'ydingiz'; loginMsg.classList.remove('hidden'); return; }
+        let hasBought = myOrders.some(o => o.status === 'yetkazildi' && o.items && Object.keys(o.items).some(k => k.split('||')[0] == productId));
+        if (hasBought) { addReview.classList.remove('hidden'); } else { loginMsg.innerText = 'Izoh qoldirish uchun avval xarid qiling'; loginMsg.classList.remove('hidden'); }
+    });
+};
+
+window.setReviewStar = (val) => {
+    selectedReviewStar = val;
+    document.querySelectorAll('#review-stars span').forEach((s, i) => { if (i < val) s.classList.add('active'); else s.classList.remove('active'); });
+};
+
+window.submitReview = () => {
+    if (selectedReviewStar === 0) { showToast("Yulduz tanlang!", "warning"); return; }
+    if (!currentUser || !currentReviewProductId) return;
+    let text = document.getElementById('review-text').value.trim(); let userName = myProfile.name || 'Mijoz'; let now = new Date();
+    let reviewData = { userId: currentUser, userName: userName, rating: selectedReviewStar, text: text, date: now.toLocaleDateString('uz-UZ'), timestamp: now.getTime() };
+    db.ref('reviews/' + currentReviewProductId + '/' + currentUser).set(reviewData).then(() => {
+        showToast("Rahmat! Bahongiz saqlandi ✅"); loadProductReviews(currentReviewProductId); if(typeof loadProductRatings==='function') loadProductRatings();
+        if (document.getElementById('review-text')) document.getElementById('review-text').value = '';
+        selectedReviewStar = 0; document.querySelectorAll('#review-stars span').forEach(s => s.classList.remove('active'));
+    });
+};
+
+// =====================================
+// 🛡️ ESLATMA: avvalgi "anti-klon" himoyasi (F12 / o'ng tugma / Ctrl+U bloklash
+//   va body'da user-select:none) OLIB TASHLANDI. Sabablari:
+//     • client tomondagi bunday bloklash OSON chetlab o'tiladi — bu haqiqiy himoya emas;
+//     • mijozga buyurtma kodi / manzil / kartani nusxalashga to'sqinlik qilardi;
+//     • klaviatura/accessibility'ni buzardi.
+//   Haqiqiy himoya: Firebase Security Rules + Cloudflare Worker auth (initData HMAC).
+// =====================================
+

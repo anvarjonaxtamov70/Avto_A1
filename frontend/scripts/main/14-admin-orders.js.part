@@ -1,0 +1,321 @@
+// =====================================
+// 📦 ADMIN: BUYURTMALAR RO'YXATI (iOS USLUBIDAGI DIZAYN)
+//   Faqat ko'rinish yangilangan — handlerlar, holat oqimi, paginatsiya,
+//   VIP slot va yig'ish tugmasi avvalgidek.
+// =====================================
+window._AOI = {
+    user: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2.2c-3.6 0-8 1.8-8 4.6V21h16v-2.2c0-2.8-4.4-4.6-8-4.6z"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg>',
+    pin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
+    chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L3 21l1.5-5A8.5 8.5 0 1 1 21 12z"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+    truck: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4h13v12H1zM14 9h4l4 4v3h-8z"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>',
+    flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+    xmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>',
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg>'
+};
+
+window._AOI.chev = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+window._AOI.at = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3l-3.2 15c-.2 1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-5 9.2-8.3c.4-.4-.1-.6-.6-.2L6.2 13l-4.9-1.5c-1-.3-1.1-1 .2-1.5L20.6 2.8c.9-.3 1.6.2 1.3 1.5z"/></svg>';
+window._AOI.map = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 5.1L9 3 3 5v16l6-2 6 2 6-2V3l-6 2.1zM15 19l-6-2.1V5l6 2.1V19z"/></svg>';
+window._AOI.card = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>';
+window._AO_ST = { kutilmoqda: 'Kutilmoqda', qabul: 'Qabul', yolda: "Yo'lda", yetkazildi: 'Yetkazildi', bekor_qilingan: 'Bekor' };
+
+window._aoUnread = function (o) {
+    var n = 0;
+    if (o && o.messages) {
+        for (var i = o.messages.length - 1; i >= 0; i--) {
+            if (o.messages[i].sender === 'admin') break;
+            if (o.messages[i].sender === 'mijoz') n++;
+        }
+    }
+    return n;
+};
+window._aoInitials = function (name) {
+    var w = String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    var t = w.map(function (x) { return Array.from(x)[0] || ''; }).join('').toUpperCase();
+    return t || '?';
+};
+window._aoItemCount = function (o) {
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) return o.itemDetails.length;
+    return o && o.items ? Object.keys(o.items).length : 0;
+};
+
+window.renderAdminOrdersUI = (ordersArr) => {
+    let box = document.getElementById('admin-orders-render-box');
+    if(!box) return;
+    const I = window._AOI;
+
+    // Yangi ro'yxat (filtr / qayta ochish) bo'lsagina kirish animatsiyasi —
+    // paginatsiyada (pastga yuklash) qatorlar qayta "sakramaydi".
+    let isFresh = window.lastOrdersRef !== ordersArr;
+    if (isFresh) {
+        window.adminOrdersLimit = 20;
+        window.lastOrdersRef = ordersArr;
+    }
+    box.classList.toggle('ao-anim', isFresh);
+    try { window._aoUpdateCounts && window._aoUpdateCounts(); } catch (e) {}
+
+    if(ordersArr.length === 0) { 
+        box.innerHTML = '<div class="ao-empty"><div class="ao-empty-ic">' + I.box + '</div><b>Buyurtmalar topilmadi</b>Bu bo\'limda hozircha buyurtma yo\'q.</div>'; 
+        return; 
+    }
+    
+    let visibleOrders = ordersArr.slice(0, window.adminOrdersLimit);
+
+    // 📅 Kun bo'yicha guruhlash: "Bugun", "Kecha", sana
+    let _now = new Date();
+    let _today = _now.toLocaleDateString('uz-UZ');
+    let _yest = new Date(_now.getTime() - 864e5).toLocaleDateString('uz-UZ');
+    let dayCount = {};
+    ordersArr.forEach(o => { let k = o.date || ''; dayCount[k] = (dayCount[k] || 0) + 1; });
+    let lastDay = null;
+
+    let html = visibleOrders.map((o, idx) => {
+        let st = o.status || 'kutilmoqda';
+        let unread = window._aoUnread(o);
+        let rawName = o.customerName || o.uN || 'Ismsiz mijoz';
+        let n = window._aoItemCount(o);
+        let sub = [`<b>#${escHtml(o.code || o.id)}</b>`];
+        if (o.time) sub.push(escHtml(String(o.time).slice(0, 5)));
+        if (n) sub.push(n + ' ta');
+
+        let head = '';
+        let dk = o.date || '';
+        if (dk !== lastDay) {
+            lastDay = dk;
+            let lbl = dk === _today ? 'Bugun' : (dk === _yest ? 'Kecha' : (dk || 'Sanasiz'));
+            head = `<div class="ao-day" style="--i:${idx}"><span>${escHtml(lbl)}</span><em>${dayCount[dk] || ''}</em></div>`;
+        }
+
+        return head + `
+        <button type="button" class="ao-o ao-st-${escHtml(st)}" style="--i:${idx}" onclick="openAdminOrderDetail('${o.uI}', '${o.id}')">
+            <span class="ao-av">${escHtml(window._aoInitials(rawName))}${unread > 0 ? `<span class="ao-badge">${unread}</span>` : ''}</span>
+            <span class="ao-o-mid">
+                <span class="ao-o-name"><span class="t">${escHtml(rawName)}</span><!-- 👑 VIP daraja belgisi shu bo'sh joyga qo'yiladi (fayl oxiridagi qatlam to'ldiradi) --><span class="cst-vip-slot" data-order-uid="${o.uI || ''}"></span></span>
+                <span class="ao-o-sub">${sub.join(' \u00B7 ')}</span>
+            </span>
+            <span class="ao-o-end">
+                <span class="ao-pill">${window._AO_ST[st] || escHtml(st)}</span>
+                <span class="ao-o-sum">${(Number(o.total)||0).toLocaleString()}<small>so'm</small></span>
+            </span>
+            <span class="ao-chev">\u203A</span>
+        </button>`;
+    }).join(''); 
+        
+    if (window.adminOrdersLimit < ordersArr.length) {
+        html += `<div class="ao-more"><span class="ao-spin"></span>Yana yuklanmoqda\u2026</div>`;
+    }
+    
+    box.innerHTML = html;
+};
+
+// =====================================
+// 🧾 ADMIN: BITTA BUYURTMA SAHIFASI
+//   Ro'yxatdagi qator bosilganda ochiladi. Tugmalar o'sha eski funksiyalarni
+//   chaqiradi (changeOrderStatus / openAdminChat / openAdminOrderPick).
+//   Holat o'zgarishi — yig'ish oynasidagidek: avval ro'yxatga qaytamiz,
+//   keyin holat o'zgaradi (ro'yxat serverdan qayta o'qiladi).
+// =====================================
+window._aoDetailKey = null;
+window._aoFindOrder = function (uid, id) {
+    return (window.allFetchedOrders || []).find(function (x) { return String(x.uI) === String(uid) && String(x.id) === String(id); }) || null;
+};
+
+window.openAdminOrderDetail = function (uid, id) {
+    var o = window._aoFindOrder(uid, id);
+    if (!o) { if (typeof showToast === 'function') showToast('Buyurtma topilmadi', 'warning'); return; }
+    window._aoDetailKey = { uid: uid, id: id };
+    document.getElementById('adminOrdersModal').style.display = 'none';
+    var m = _reshowModal('adminOrderSheetModal');
+    if (m) m.scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+    activeModal = 'adminOrderSheetModal';
+    window.history.pushState({ modal: 'adminOrderSheetModal' }, "");
+    try { tg.BackButton.show(); } catch (e) {}
+    updateBtns();
+    window._aoRenderDetail(true);
+    try { if (window._hap) window._hap('light'); } catch (e) {}
+};
+
+// Chat / yig'ish oynasidan orqaga — sahifa ochiq bo'lgan bo'lsa unga qaytamiz.
+window._aoBackToDetail = function () {
+    var k = window._aoDetailKey;
+    if (!k || !window._aoFindOrder(k.uid, k.id)) return false;
+    activeModal = 'adminOrderSheetModal';
+    _reshowModal('adminOrderSheetModal');
+    document.body.style.overflow = 'hidden';
+    window._modalStack = [];
+    window._aoRenderDetail(false);
+    return true;
+};
+
+window._aoHideDetail = function () {
+    window._aoDetailKey = null;
+    var m = document.getElementById('adminOrderSheetModal');
+    if (!m) return;
+    try { if (window._modalCancelClose) window._modalCancelClose(m); } catch (e) {}
+    m.style.display = 'none';
+};
+
+// ⚡ Holat tugmasi: endi sahifadan CHIQMAYMIZ. Soatcha darhol chiqadi, holat
+//    o'zgargach sahifa joyida yangilanadi (yangi holat + keyingi tugma).
+//    Ilgari avval ro'yxatga qaytilar, 280 ms kutilar, keyin butun ro'yxat
+//    serverdan qayta yuklanardi — bosilgandan keyin bir necha soniya "hech
+//    narsa bo'lmayotgandek" tuyulardi.
+window._aoDetailStatus = function (uid, id, status) {
+    try { changeOrderStatus(uid, id, status); } catch (e) {}
+};
+
+window._aoLines = function (o) {
+    var pdb = window.productsDB || (typeof productsDB !== 'undefined' ? productsDB : []);
+    var out = [];
+    if (o && Array.isArray(o.itemDetails) && o.itemDetails.length) {
+        o.itemDetails.forEach(function (it) {
+            if (!it) return;
+            var p = pdb.find(function (x) { return x.id == it.id; });
+            var qty = Number(it.qty) || 0;
+            var unit = Number(it.unitPrice) || (p ? Number(p.price) || 0 : 0);
+            var line = (it.lineTotal != null) ? (Number(it.lineTotal) || 0) : unit * qty;
+            out.push({ name: it.name || (p && p.name) || '', opt: (it.size && it.size !== 'Universal') ? it.size : (it.carModel || ''), qty: qty, unit: unit, line: line, img: p ? (p.img || p.image || '') : '' });
+        });
+        return out;
+    }
+    for (var pid in (o && o.items ? o.items : {})) {
+        var parts = String(pid).split('||');
+        var p2 = pdb.find(function (x) { return x.id == parts[0]; });
+        if (!p2) continue;
+        var co = parts[1] ? parts[1].replace(/_dot_/g, '.') : '';
+        var q2 = Number(o.items[pid]) || 0;
+        out.push({ name: p2.name, opt: (co && co !== 'Universal') ? co : '', qty: q2, unit: Number(p2.price) || 0, line: (Number(p2.price) || 0) * q2, img: p2.img || p2.image || '' });
+    }
+    return out;
+};
+
+window._aoRenderDetail = function (animate) {
+    var k = window._aoDetailKey; if (!k) return;
+    var o = window._aoFindOrder(k.uid, k.id); if (!o) return;
+    var box = document.getElementById('ao-detail'); if (!box) return;
+    var I = window._AOI, st = o.status || 'kutilmoqda', uid = o.uI, id = o.id;
+    var fmt = function (n) { return (Number(n) || 0).toLocaleString(); };
+
+    // — Holat bosqichlari
+    var FLOW = ['kutilmoqda', 'qabul', 'yolda', 'yetkazildi'];
+    var LBL = ['Kutilmoqda', 'Qabul', "Yo'lda", 'Yetkazildi'];
+    var cur = FLOW.indexOf(st);
+    var steps = st === 'bekor_qilingan'
+        ? '<div class="ao-cancelled">' + I.xmark + 'Buyurtma bekor qilingan</div>'
+        : '<div class="ao-steps">' + FLOW.map(function (f, i) {
+            var c = (i < cur || (i === cur && st === 'yetkazildi')) ? 'done' : (i === cur ? 'cur' : '');
+            return '<div class="ao-step ' + c + '"><i>' + (c === 'done' ? I.check : '') + '</i><span>' + LBL[i] + '</span></div>';
+        }).join('') + '</div>';
+
+    var when = [o.date, o.time].filter(Boolean).map(escHtml).join(' \u00B7 ');
+    var hero = '<section class="ao-hero ao-st-' + escHtml(st) + '">' +
+        '<div class="ao-hero-top"><span class="ao-hero-code">#' + escHtml(o.code || o.id) + '</span>' + getStatusHTML(st) + '</div>' +
+        (when ? '<div class="ao-hero-when">' + when + '</div>' : '') +
+        '<div class="ao-hero-sum"><b>' + fmt(o.total) + '</b><small>so\'m</small></div>' +
+        steps + '</section>';
+
+    // — Mijoz
+    var rawName = o.customerName || o.uN || 'Ismsiz mijoz';
+    var phone = String(o.customerPhone || o.uP || '');
+    var user = String(o.customerUsername || (o.customer && o.customer.username) || '').replace(/^@+/, '');
+    var addr = o.customerAddress && o.customerAddress !== 'Kiritilmagan' ? o.customerAddress : '';
+    var mapLink = String(o.deliveryMapLink || (o.delivery && o.delivery.mapLink) || '');
+    var vip = '';
+    try {
+        var vs = document.querySelector('#admin-orders-render-box .cst-vip-slot[data-filled="1"][data-order-uid="' + String(uid).replace(/["\\]/g, '') + '"]');
+        if (vs) vip = vs.outerHTML;
+    } catch (e) {}
+    var cust = '<div class="ao-dsec"><span>Mijoz</span></div><div class="ao-group">' +
+        '<div class="ao-row ao-name"><span class="ao-ic" style="--ic:var(--ao-gray)">' + I.user + '</span><span class="ao-row-tx">' + escHtml(rawName) + vip + '</span></div>' +
+        (phone ? '<a class="ao-row ao-link" href="tel:' + escHtml(phone.replace(/\s+/g, '')) + '"><span class="ao-ic" style="--ic:#34c759">' + I.phone + '</span><span class="ao-row-tx">' + escHtml(phone) + '</span><span class="ao-chev">\u203A</span></a>' : '') +
+        (user && /^[A-Za-z0-9_]{3,64}$/.test(user) ? '<a class="ao-row ao-link" href="https://t.me/' + user + '" target="_blank" rel="noopener"><span class="ao-ic" style="--ic:#2aabee">' + I.at + '</span><span class="ao-row-tx">@' + escHtml(user) + '</span><span class="ao-chev">\u203A</span></a>' : '') +
+        (addr ? '<div class="ao-row ao-addr"><span class="ao-ic" style="--ic:#ff9500">' + I.pin + '</span><span class="ao-row-tx">' + escHtml(addr) + '</span></div>' : '') +
+        (/^https:\/\//i.test(mapLink) ? '<a class="ao-row ao-link" href="' + escHtml(mapLink) + '" target="_blank" rel="noopener"><span class="ao-ic" style="--ic:#5e5ce6">' + I.map + '</span><span class="ao-row-tx">Xaritada ko\'rish</span><span class="ao-chev">\u203A</span></a>' : '') +
+        '</div>';
+
+    // — Mahsulotlar
+    var lines = window._aoLines(o);
+    var thumb = (typeof window._thumb === 'function') ? window._thumb : function (u) { return u; };
+    var items = '<div class="ao-dsec"><span>Mahsulotlar</span><span>' + lines.length + ' ta</span></div><div class="ao-group">' +
+        (lines.length ? lines.map(function (l) {
+            var img = l.img
+                ? '<img class="ao-li-img" src="' + escHtml(thumb(l.img, 160)) + '" alt="" loading="lazy" decoding="async" onerror="window._imgFallback ? window._imgFallback(this) : (this.style.visibility=\'hidden\')">'
+                : '<span class="ao-li-img">' + I.box + '</span>';
+            return '<div class="ao-li">' + img + '<div class="ao-li-mid"><div class="ao-li-nm">' + escHtml(l.name) + '</div>' +
+                (l.opt ? '<span class="ao-li-opt">' + escHtml(l.opt) + '</span>' : '') +
+                '<div class="ao-li-meta">' + l.qty + ' \u00D7 ' + fmt(l.unit) + ' so\'m</div></div>' +
+                '<span class="ao-li-sum">' + fmt(l.line) + '</span></div>';
+        }).join('') : '<div class="ao-note" style="color:var(--ao-tx2)">Mahsulot ma\'lumoti yo\'q</div>') +
+        '</div>';
+
+    // — Yig'ish
+    var pickRaw = window._pickBadge ? window._pickBadge(o) : "\uD83D\uDCCB Mahsulotlarni yig'ish";
+    var pickCls = pickRaw.indexOf('\u2705') === 0 ? ' is-done' : (/\d+\/\d+/.test(pickRaw) ? ' is-part' : '');
+    var pick = '<div class="ao-dsec"><span>Ombor</span></div>' +
+        '<button type="button" class="pick-open-btn ao-pick' + pickCls + '" onclick="openAdminOrderPick(\'' + uid + '\', \'' + id + '\')"><span class="ao-ic" style="--ic:#5e5ce6">' + I.list + '</span><span class="ao-pick-tx">' + escHtml(pickRaw.replace(/^\S+\s+/, '')) + '</span><span class="ao-chev">\u203A</span></button>';
+
+    // — To'lov
+    var DLV = { courier: 'Kuryer', bts: 'BTS pochta', delivery: 'Yetkazib berish', pickup: 'Olib ketish' };
+    var dm = String(o.deliveryMethod || (o.delivery && o.delivery.method) || '');
+    var pm = String((o.payment && o.payment.method) || o.paymentMethod || '');
+    var cb = Number(o.cashbackUsed) || 0;
+    var payable = (o.payable != null) ? Number(o.payable) || 0 : (Number(o.total) || 0) - cb;
+    var pay = '<div class="ao-dsec"><span>To\'lov</span></div><div class="ao-group">' +
+        (pm ? '<div class="ao-kv"><span>Usul</span><b>' + escHtml(pm) + '</b></div>' : '') +
+        (dm ? '<div class="ao-kv"><span>Yetkazish</span><b>' + escHtml(DLV[dm] || dm) + '</b></div>' : '') +
+        '<div class="ao-kv"><span>Mahsulotlar</span><b>' + fmt(o.total) + ' so\'m</b></div>' +
+        (cb > 0 ? '<div class="ao-kv is-green"><span>Cashback</span><b>\u2212' + fmt(cb) + ' so\'m</b></div>' : '') +
+        '<div class="ao-kv is-total"><span>To\'lanadi</span><b>' + fmt(payable) + ' so\'m</b></div>' +
+        '</div>';
+
+    // — Izohlar
+    var dn = String((o.delivery && o.delivery.note) || '');
+    var pn = String((o.payment && o.payment.note) || '');
+    var notes = (dn || pn) ? '<div class="ao-dsec"><span>Izoh</span></div><div class="ao-group">' +
+        (dn ? '<div class="ao-note"><small>Yetkazish</small>' + escHtml(dn) + '</div>' : '') +
+        (pn ? '<div class="ao-note"><small>To\'lov</small>' + escHtml(pn) + '</div>' : '') + '</div>' : '';
+
+    // — Pastki tugmalar (oqim o'zgarmagan)
+    var unread = window._aoUnread(o);
+    var q = "'" + uid + "', '" + id + "'";
+    var primary = '';
+    if (st === 'kutilmoqda') primary = '<button type="button" class="ao-btn ao-primary is-gold" onclick="window._aoDetailStatus(' + q + ', \'qabul\')">' + I.check + 'Qabul qilish</button>';
+    else if (st === 'qabul') primary = '<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-orange)" onclick="window._aoDetailStatus(' + q + ', \'yolda\')">' + I.truck + 'Yo\'lga chiqarish</button>';
+    else if (st === 'yolda') primary = '<button type="button" class="ao-btn ao-primary" style="--c:var(--ao-green)" onclick="window._aoDetailStatus(' + q + ', \'yetkazildi\')">' + I.flag + 'Yetkazildi</button>';
+    else if (st === 'yetkazildi') primary = '<div class="ao-done-note">' + I.check + 'Buyurtma yetkazib berilgan</div>';
+    var cancel = '';
+    if (st !== 'bekor_qilingan' && st !== 'yetkazildi') cancel = '<button type="button" class="ao-btn ao-danger" onclick="window._aoDetailStatus(' + q + ', \'bekor_qilingan\')">' + I.xmark + 'Bekor</button>';
+    else if (st === 'yetkazildi') cancel = '<button type="button" class="ao-btn ao-danger" onclick="window._aoDetailStatus(' + q + ', \'bekor_qilingan\')">' + I.undo + 'Qaytarish</button>';
+    // 💬 Chat — Shogird kabi ekran burchagidagi kichik suzuvchi tugma (dock ustida).
+    var chat = '<button type="button" class="ao-chatfab' + (unread > 0 ? ' has-unread' : '') + '" aria-label="Mijoz bilan chat' + (unread > 0 ? ', ' + unread + ' ta yangi xabar' : '') + '" onclick="openAdminChat(' + q + ')">' +
+        '<span class="ao-chatfab-orbit" aria-hidden="true"></span>' +
+        '<span class="ao-chatfab-ic" aria-hidden="true"><svg viewBox="0 0 32 32"><path class="b" d="M7.5 6.5h17a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4h-7.2l-5.8 4v-4h-4a4 4 0 0 1-4-4v-9a4 4 0 0 1 4-4Z"/><circle class="d" cx="11.5" cy="15" r="1.6"/><circle class="d" cx="16" cy="15" r="1.6"/><circle class="d" cx="20.5" cy="15" r="1.6"/></svg></span>' +
+        '<span class="ao-chatfab-lb">Chat</span>' +
+        (unread > 0 ? '<span class="ao-badge">' + unread + '</span>' : '') + '</button>';
+    var hasBtns = !!(primary || cancel);
+    var dock = '<div class="ao-dock-sp"></div><div class="ao-dock' + (hasBtns ? '' : ' is-empty') + '">' + chat +
+        (hasBtns ? '<div class="ao-actions"><div class="ao-actions-sub ao-row-acts">' + cancel + primary + '</div></div>' : '') + '</div>';
+
+    box.innerHTML = '<div class="' + (animate ? 'ao-push' : '') + '">' + hero + cust + items + pick + pay + notes + '</div>' + dock;
+    window._aoBindFabScroll();
+};
+
+window._aoBindFabScroll = function () {
+    var m = document.getElementById('adminOrderSheetModal');
+    if (!m || m.__aoFab) return;
+    m.__aoFab = true;
+    var t = null;
+    m.addEventListener('scroll', function () {
+        var f = m.querySelector('.ao-chatfab');
+        if (!f) return;
+        if (!f.classList.contains('is-mini')) f.classList.add('is-mini');
+        clearTimeout(t);
+        t = setTimeout(function () { f.classList.remove('is-mini'); }, 650);
+    }, { passive: true });
+};
+    

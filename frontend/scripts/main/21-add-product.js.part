@@ -1,0 +1,99 @@
+// =====================================
+// 2. YANGI TOVAR QO'SHISH (ADD) FUNKSIYASI
+// =====================================
+window.saveNewProduct = function() {
+    let n = document.getElementById('add-name').value.trim();
+    let p = parsePrice(document.getElementById('add-price').value);
+    let codeEl = document.getElementById('add-code');
+    let pCode = codeEl ? codeEl.value.trim() : "";
+    let pUnit = document.getElementById('add-unit').value;
+    let pType = document.getElementById('admin-prod-type').value;
+    let img1 = document.getElementById('add-img-url').value;
+    let img2 = document.getElementById('add-img-url2') ? document.getElementById('add-img-url2').value : "";
+    let img3 = document.getElementById('add-img-url3') ? document.getElementById('add-img-url3').value : "";
+    let imagesArr = [img1, img2, img3].filter(u => u);
+    let descVal = document.getElementById('add-desc').value.trim() || "Tavsif kiritilmagan";
+
+    let sMods = Array.from(document.querySelectorAll('#addProductModal .model-chip.selected')).map(c => c.getAttribute('data-val'));
+
+    if (!n || !p || imagesArr.length === 0) { showToast("Ism, narx va kamida 1 rasm kerak!", "warning"); return; }
+
+    // 🏭 ISHLAB CHIQARILGAN JOY — endi TOVARGA SAQLANADI.
+    //    ⚠️ ILGARI: `selectOrigin` bilan tanlangan qiymat FAQAT AI tavsif
+    //    yozdirishga uzatilardi (`ai_admin_tasks.origin`) va tovar obyektiga
+    //    hech qachon yozilmasdi. Natijada avto-ehtiyot qism savdosidagi ENG
+    //    muhim tanlov (Original / Rossiya / Xitoy) mijozga ko'rinmasdi,
+    //    filtrlanmasdi va narx bilan solishtirilmasdi.
+    let _addOriginEl = document.querySelector('#add-origin-chips .origin-chip.selected');
+    let pOrigin = _addOriginEl ? (_addOriginEl.getAttribute('data-origin') || "") : "";
+
+    let newId = generateProductId();
+    // 🔎 Qidiruv so'zlari (qo'lda kiritilgan sinonimlar). Chegara qo'yamiz —
+    //    bu maydon qidiruv indeksiga tushadi, cheksiz uzun bo'lmasligi kerak.
+    var pAliases = '';
+    try {
+        var _alEl = document.getElementById('add-aliases');
+        pAliases = _alEl ? String(_alEl.value || '').trim().slice(0, 300) : '';
+    } catch (e) {}
+    let newProduct = { id: newId, name: n, desc: descVal, price: p, code: pCode, unit: pUnit, origin: pOrigin, aliases: pAliases, img: imagesArr[0], images: imagesArr, product_type: pType };
+
+    if (pType === 'oddiy') {
+        let st = parseInt(document.getElementById('add-stock').value) || 0;
+        if (sMods.length === 0) { showToast("Mashina rusumini tanlang!", "warning"); return; }
+        
+        newProduct.stock = st; 
+        newProduct.category = sMods[0]; 
+        newProduct.categories = sMods;
+    } else {
+        let brand = document.getElementById('admin-prod-brand').value;
+        let model = document.getElementById('admin-prod-model') ? document.getElementById('admin-prod-model').value : "";
+        
+        let sizes = [];
+        document.querySelectorAll('#admin-sizes-container .size-input-row').forEach(row => {
+            let sName = row.querySelector('.size-name').value.trim();
+            let sStock = parseInt(row.querySelector('.size-stock').value) || 0;
+            if (sName) sizes.push({ size: sName, stock: sStock });
+        });
+        if (sizes.length === 0) { showToast("Kamida 1 razmer kiriting!", "warning"); return; }
+        
+        let sCats = [];
+        if (brand === 'gaz') {
+            sCats = ['gazel-biznes','gazel-next','gazel-eski','volga-2401','volga-2410','volga-3110','volga-31105','volga-31029','sobol'];
+        } else {
+            if (!model) { showToast("Modelni tanlang!", "warning"); return; }
+            sCats.push(`${brand}-${model}`);
+        }
+        newProduct.brand = brand; newProduct.model = model; newProduct.sizes = sizes;
+        newProduct.stock = sizes.reduce((s, x) => s + x.stock, 0);
+        newProduct.category = sCats[0]; newProduct.categories = sCats;
+    }
+
+    // 🔥 FLASH SALE (ixtiyoriy): flash narx asl narxdan kichik + soat > 0 bo'lsa qo'llaymiz.
+    //    'p' = asl narx. To'ldirilmasa — oddiy tovar (flashsiz) qo'shiladi.
+    (function(){
+        var fpEl = document.getElementById('add-flash-price');
+        var fhEl = document.getElementById('add-flash-hours');
+        var fp = fpEl ? parsePrice(fpEl.value) : 0;
+        var fh = fhEl ? (parseFloat(String(fhEl.value).replace(',', '.')) || 0) : 0;
+        if (fp > 0 && fp < p && fh > 0) {
+            newProduct.oldPrice = p;
+            newProduct.price = fp;
+            newProduct.flashUntil = Date.now() + Math.round(fh * 3600000);
+        }
+    })();
+
+    productsDB.push(newProduct);
+    let newIdx = productsDB.length - 1;
+    window._formDirty = false;
+    saveProductAt(newIdx).then(() => {
+        showToast("✅ Tovar qo'shildi!", "success");
+        // Reload o'rniga xotirada yangilaymiz — tezroq va silliqroq
+        displayDB = _sortDisplayDB(productsDB.filter(x => !x.is_draft).slice().reverse());
+        renderProducts();
+        if (typeof filterAdminDrafts === 'function' && document.getElementById('adminDraftsModal') && document.getElementById('adminDraftsModal').style.display === 'flex') filterAdminDrafts();
+        resetAddForm();
+        closeModal();
+    }).catch(() => {
+        showToast("Saqlashda xato! Internetni tekshiring.", "warning");
+    });
+};

@@ -1,0 +1,292 @@
+// =====================================
+// ADMIN: MIJOZLAR RO'YXATI VA BUYURTMALAR (PAGINATSIYA BILAN)
+// =====================================
+
+let allCustomersData = [];
+window.adminCustomersLimit = 20;
+window.lastCustomersRef = null;
+
+window.openAdminCustomers = () => {
+    document.getElementById('adminModal').style.display = 'none';
+    let cM = document.getElementById('adminCustomersModal');
+    cM.style.display = 'flex';
+    activeModal = 'adminCustomersModal';
+    window.history.pushState({ modal: 'adminCustomersModal' }, "");
+    
+    let listBox = document.getElementById('admin-customers-list');
+    listBox.innerHTML = window._skel(6);
+    
+    window._getUsersSnap().then((s) => {
+        allCustomersData = [];
+        if(s.exists()) {
+            let us = s.val();
+            for(let uid in us) {
+                let p = us[uid].profile || {};
+                let ords = us[uid].orders || [];
+                
+                // Array yoki Object ekanligini tekshirib sanaymiz
+                let totalOrdersCount = Array.isArray(ords) ? ords.length : Object.keys(ords).length; 
+                
+                let totalSpent = 0;
+                if(Array.isArray(ords)) {
+                    totalSpent = ords.reduce((sum, o) => o.status === 'yetkazildi' ? sum + (o.total || 0) : sum, 0);
+                } else {
+                    totalSpent = Object.values(ords).reduce((sum, o) => o.status === 'yetkazildi' ? sum + (o.total || 0) : sum, 0);
+                }
+
+                allCustomersData.push({
+                    uid: uid,
+                    name: p.name || "Nomsiz mijoz",
+                    phone: p.phone || "Kiritilmagan",
+                    address: p.address || "Kiritilmagan",
+                    ordersCount: totalOrdersCount,
+                    totalSpent: totalSpent
+                });
+            }
+        }
+        allCustomersData.sort((a, b) => b.totalSpent - a.totalSpent);
+        renderCustomersList(allCustomersData);
+    });
+};
+
+window.renderCustomersList = (arr) => {
+    let listBox = document.getElementById('admin-customers-list');
+    
+    // Yangi ro'yxat kelsa limitni nollaymiz
+    if (window.lastCustomersRef !== arr) {
+        window.adminCustomersLimit = 20;
+        window.lastCustomersRef = arr;
+    }
+
+    if(arr.length === 0) {
+        listBox.innerHTML = '<p style="text-align:center; color: gray;">Mijozlar topilmadi.</p>';
+        return;
+    }
+    
+    // LIMIT QO'LLASH (Paginatsiya)
+    let visibleCustomers = arr.slice(0, window.adminCustomersLimit);
+    
+    let html = visibleCustomers.map(c => `
+        <div class="luxury-card" style="margin-bottom: 12px; padding: 15px; display: block; cursor: pointer; border: 1px solid transparent;"onclick="openCustomerSpecificOrders('${_jsAttr(c.uid)}', '${_jsAttr(c.name)}')" onmouseover="this.style.borderColor='var(--luxury-gold)'" onmouseout="this.style.borderColor='transparent'">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div>
+                    <h4 style="margin: 0 0 4px 0; font-size: 15px;">${escHtml(c.name)}</h4>
+                    <span style="font-size: 11px; color: var(--text-muted);">ID: <code>${escHtml(c.uid)}</code></span>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 14px; font-weight: bold; color: var(--luxury-gold);">${c.totalSpent.toLocaleString()} so'm</div>
+                    <span style="font-size: 10px; color: var(--accent-green); background: rgba(48,209,88,0.1); padding: 2px 6px; border-radius: 6px;">${c.ordersCount} ta xarid</span>
+                </div>
+            </div>
+            <div style="font-size: 13px; color: var(--text-main);">📞 ${c.phone}</div>
+            ${c.address && c.address !== "Kiritilmagan" ? `<div style="font-size: 11px; color: gray; margin-top: 4px;">📍 ${c.address}</div>` : ''}
+        </div>
+    `).join('');
+    
+    // Pastga tushganda chiqadigan "Yuklanmoqda" yozuvi
+    if (window.adminCustomersLimit < arr.length) {
+        html += `<div style="text-align:center; padding: 15px 0 30px; color: var(--luxury-gold); font-size: 12px; font-weight: bold; opacity: 0.7;">Pastga tushganda yana yuklanmoqda... ⏳</div>`;
+    }
+    
+    listBox.innerHTML = html;
+};
+
+window.searchCustomers = () => {
+    let q = document.getElementById('customer-search-input').value.toLowerCase().trim();
+    if(q.length === 0) {
+        renderCustomersList(allCustomersData);
+        return;
+    }
+    let filtered = allCustomersData.filter(c => 
+        c.name.toLowerCase().includes(q) || 
+        c.uid.toString().includes(q) ||
+        (c.phone && c.phone.includes(q))
+    );
+    renderCustomersList(filtered);
+};
+
+window.openCustomerSpecificOrders = (uid, customerName) => {
+    try { if (window._aoHideDetail) window._aoHideDetail(); } catch (e) {}
+    if(document.getElementById('adminCustomersModal')) document.getElementById('adminCustomersModal').style.display = 'none';
+    let aM = document.getElementById('adminOrdersModal');
+    aM.style.display = 'flex';
+    activeModal = 'adminOrdersModal';
+    window.history.pushState({ modal: 'adminOrdersModal' }, "");
+
+    let c = document.getElementById('admin-orders-list');
+    if(!c) return;
+    
+    // 🔐 XSS: `customerName` — MIJOZ o'zi kiritgan matn. Escape qilinmasa mijoz
+    //    ismiga skript yozib, ADMIN panelida (ya'ni barcha yozish huquqi bor
+    //    sessiyada) kod ishga tushirishi mumkin edi.
+    aM.querySelector('.modal-header h2').innerHTML = `📦 ${escHtml(customerName)} buyurtmalari`;
+
+    c.innerHTML = `
+        ${window._aoFilterBar()}
+        <div id="admin-orders-render-box">${window._skel(6)}</div>
+    `;
+
+    db.ref('users/' + uid).once('value', (s) => {
+        let aO = [];
+        if(s.exists()) {
+            let userData = s.val();
+            if(userData.orders) {
+                let ph = userData.profile ? userData.profile.phone : ""; 
+                let nm = userData.profile ? userData.profile.name : ""; 
+                let ordsArray = Array.isArray(userData.orders) ? userData.orders : Object.values(userData.orders);
+                ordsArray.forEach(o => { 
+                    if(o && o.id) aO.push({ uI: uid, uN: nm, uP: ph, ...o }); 
+                });
+            }
+        }
+        window._aoCanonStatus(aO).then(() => {
+            window._aoSortOrders(aO);
+            window.allFetchedOrders = aO;
+            window.lastOrdersRef = null;
+            renderAdminOrdersUI(aO);
+        });
+    });
+};
+
+window.adminOrdersLimit = 20;
+window.lastOrdersRef = null;
+
+
+
+window.filterAdminOrders = (status, btnElement) => {
+    if(!window.allFetchedOrders) return;
+
+    document.querySelectorAll('#adminOrdersModal .ao-chip').forEach(btn => {
+        btn.classList.remove('is-active');
+        btn.setAttribute('aria-selected', 'false');
+    });
+
+    if(btnElement) {
+        btnElement.classList.add('is-active');
+        btnElement.setAttribute('aria-selected', 'true');
+        try { btnElement.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+        try { if (window._hap) window._hap('selection'); } catch (e) {}
+    }
+
+    if(status === 'barchasi') {
+        renderAdminOrdersUI(window.allFetchedOrders);
+    } else {
+        let filtered = window.allFetchedOrders.filter(o => (o.status || 'kutilmoqda') === status);
+        renderAdminOrdersUI(filtered);
+    }
+};
+
+// =====================================
+// 🎯 SCROLL SEZGICHLARI (Yangi ma'lumotlarni pastdan ulash)
+// =====================================
+document.getElementById('adminOrdersModal').addEventListener('scroll', function() {
+    if (this.scrollTop + this.clientHeight >= this.scrollHeight - 80) {
+        if (window.lastOrdersRef && window.adminOrdersLimit < window.lastOrdersRef.length) {
+            window.adminOrdersLimit += 20;
+            renderAdminOrdersUI(window.lastOrdersRef);
+        }
+    }
+});
+
+document.getElementById('adminCustomersModal').addEventListener('scroll', function() {
+    if (this.scrollTop + this.clientHeight >= this.scrollHeight - 80) {
+        if (window.lastCustomersRef && window.adminCustomersLimit < window.lastCustomersRef.length) {
+            window.adminCustomersLimit += 20;
+            renderCustomersList(window.lastCustomersRef);
+        }
+    }
+});
+    // =====================================
+// MASHINA TANLASH VA SAVAT FUNKSIYALARI (TUZATILGAN)
+// =====================================
+
+window.selectCarModel = (btn) => {
+    document.querySelectorAll('.pm-car-btn').forEach(b => {
+        b.style.background = 'rgba(255,255,255,0.05)';
+        b.style.color = 'white';
+        b.style.borderColor = 'var(--glass-border)';
+        b.classList.remove('selected');
+    });
+    btn.style.background = 'rgba(212, 175, 55, 0.2)';
+    btn.style.color = 'var(--luxury-gold)';
+    btn.style.borderColor = 'var(--luxury-gold)';
+    btn.classList.add('selected');
+    window.currentSelectedCar = btn.getAttribute('data-car');
+};
+
+window.addToCartWithOptions = (finalId) => { 
+    cart[finalId] = (cart[finalId] || 0) + 1; 
+    saveLocalCart(); 
+    updateCartBadge(); 
+    if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium'); 
+    Haptics.success(); // ✅ Muvaffaqiyatli tebranish qo'shildi
+    showToast('Savatda!'); 
+};
+
+    // =====================================
+// RAZMERLI TOVARLAR UCHUN ADMIN MANTIQI
+// =====================================
+window.toggleProductTypeFields = () => {
+    let type = document.getElementById('admin-prod-type').value;
+    if(type === 'razmerli') {
+        document.getElementById('admin-oddiy-fields').style.display = 'none';
+        document.getElementById('admin-razmerli-fields').style.display = 'block';
+    } else {
+        document.getElementById('admin-oddiy-fields').style.display = 'block';
+        document.getElementById('admin-razmerli-fields').style.display = 'none';
+    }
+};
+
+window.updateBrandModels = () => {
+    let brand = document.getElementById('admin-prod-brand').value;
+    let box = document.getElementById('admin-brand-models-box');
+    let select = document.getElementById('admin-prod-model');
+    
+    select.innerHTML = ''; // Tozalash
+    
+    if(brand === 'gaz') {
+        box.style.display = 'none'; // GAZ uchun mashina kerak emas
+    } else if (brand === 'daewoo') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="nexia1">Nexia 1</option>
+            <option value="nexia2">Nexia 2</option>
+            <option value="matiz">Matiz</option>
+            <option value="tico">Tico</option>
+            <option value="damas">Damas</option>
+        `;
+    } else if (brand === 'chevy') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="cobalt">Cobalt</option>
+            <option value="gentra">Gentra</option>
+            <option value="lacetti">Lacetti</option>
+            <option value="spark">Spark</option>
+            <option value="nexia3">Nexia 3</option>
+        `;
+    } else if (brand === 'uaz') {
+        box.style.display = 'block';
+        select.innerHTML = `
+            <option value="patriot">Patriot</option>
+            <option value="hunter">Hunter</option>
+        `;
+    } else {
+        box.style.display = 'none';
+    }
+};
+
+window.addSizeField = () => {
+    let container = document.getElementById('admin-sizes-container');
+    let div = document.createElement('div');
+    div.style.display = 'flex';
+    div.style.gap = '8px';
+    div.style.marginBottom = '8px';
+    div.className = 'size-input-row';
+    div.innerHTML = `
+        <input type="text" placeholder="Razmer (masalan: 92.5)" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-name">
+        <input type="number" placeholder="Soni" style="flex:1; padding:10px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:8px;" class="size-stock">
+        <button type="button" onclick="this.parentElement.remove()" style="background:var(--accent-red); color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">X</button>
+    `;
+    container.appendChild(div);
+};
+

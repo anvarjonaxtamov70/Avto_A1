@@ -1,0 +1,48 @@
+// ===================================================
+// 💳 3. VIP CARD GOLOGRAMMA MOTOR (Device Orientation)
+// ===================================================
+function initVipCardGlow() {
+    const card = document.querySelector('.premium-bank-card');
+    if(!card) return;
+
+    document.addEventListener('mousemove', (e) => {
+        if(activeModal || searchActive) return;
+        let rect = card.getBoundingClientRect();
+        let x = (e.clientX - rect.left) / rect.width - 0.5;
+        let y = (e.clientY - rect.top) / rect.height - 0.5;
+        
+        card.style.transform = `rotateY(${x * 30}deg) rotateX(${-y * 30}deg)`;
+        card.style.setProperty('--reflect-pos', `${(x + 0.5) * 100}%`);
+    });
+
+    // Telefonni qimirlatganda (iPhone/Android Giroskop)
+    window.addEventListener('deviceorientation', (e) => {
+        let tiltX = e.gamma / 2; // -45 dan 45 gacha
+        let tiltY = e.beta / 2;
+        
+        card.style.transform = `rotateY(${tiltX}deg) rotateX(${-tiltY}deg)`;
+    });
+}
+
+// Storis bosilganda uni "ko'rilgan" qilib o'zgartiruvchi funksiya.
+// Endi: localStorage'ga timestamp saqlanadi -> mijoz qaytib kelganda
+// halqa kulrang (seen) bo'lib qoladi (admin yangi storis qo'shsa - yana 'new').
+// Agar storis yo'q (empty) yoki allaqachon ko'rilgan (seen) bo'lsa - tegmaydi.
+// 👁 Storis halqasi bosilganda chaqiriladi (HTML onclick'dan).
+//
+// ⚠️ ILGARI BU FUNKSIYA XATO ISHLARDI: u `_seenStories[cat] = Date.now()`
+//    yozib, BUTUN kategoriyani "ko'rilgan" deb belgilardi. Ya'ni mijoz
+//    halqani bosishi bilanoq — hatto birinchi storisni ham ko'rib
+//    bo'lmasdan yopib qo'ysa ham — o'sha bo'limdagi HAMMA storis
+//    "ko'rilgan" bo'lib qolardi va halqa kulrangga aylanardi.
+//
+// ENDI: har bir storis ALOHIDA, uni haqiqatda ko'rgandagina belgilanadi
+//    (playCurrentStory ichida). Bu funksiya faqat darhol vizual javob beradi
+//    (bosilganda aylanish to'xtaydi), hech narsani "ko'rilgan" qilmaydi.
+function markAsSeen(element) {
+    let ring = element.querySelector('.story-ring');
+    if (!ring) return;
+    if (ring.classList.contains('empty')) return;     // storis yo'q -> tegmaymiz
+    // Ataylab HECH NARSA saqlanmaydi — haqiqiy belgilash storisni ko'rganda bo'ladi.
+}
+

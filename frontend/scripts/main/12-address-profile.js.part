@@ -1,0 +1,305 @@
+// =====================================
+// 📍 MANZIL, ISM VA NUQTA MUAMMOLARINI HAL QILUVCHI YAKUNIY KOD
+// =====================================
+
+// 🔁 Buyurtma attemptId — SERVER idempotentligi uchun (Worker /order-commit).
+//    Bir XIL savat tarkibi qayta yuborilsa AYNI attemptId ishlatiladi (server
+//    bir xil natijani qaytaradi). Savat o'zgarsa — yangi tasodifiy id.
+function _randAttemptId() {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
+    var s = '';
+    for (var i = 0; i < 20; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+}
+window._orderAttemptId = function (sig) {
+    try {
+        var raw = localStorage.getItem('avto_order_attempt');
+        var obj = raw ? JSON.parse(raw) : null;
+        if (obj && obj.sig === sig && obj.id) return obj.id;
+        var id = _randAttemptId();
+        localStorage.setItem('avto_order_attempt', JSON.stringify({ sig: sig, id: id }));
+        return id;
+    } catch (e) { return _randAttemptId(); }
+};
+window._orderAttemptClear = function () {
+    try { localStorage.removeItem('avto_order_attempt'); } catch (e) {}
+};
+
+// ⚙️ SERVER-AUTHORITATIVE BUYURTMA — barcha pul/stok/cashback SERVERDA (Worker
+//    /order-commit). Mijoz brauzeri buyurtma/stok/cashback YOZMAYDI (yangi
+//    database.rules.json). Bu funksiya faqat so'rov yuboradi va natijani ko'rsatadi.
+window.confirmOrder = async (paymentMethod) => {
+    const loadingOverlay = document.getElementById('order-loading-overlay');
+    if (window._ordLoader) window._ordLoader.show();
+    else if(loadingOverlay) loadingOverlay.classList.add('active');
+
+    var _hideLoader = function (okFlag) {
+        try {
+            if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(okFlag);
+            else if (window._ordLoader) window._ordLoader.hide();
+        } catch (e) {}
+        if (loadingOverlay) loadingOverlay.classList.remove('active');
+    };
+
+    try {
+        let now = Date.now();
+        // Spamdan himoya (15s)
+        if (typeof lastOrderTime !== 'undefined' && now - lastOrderTime < 15000) {
+            if(typeof showToast === 'function') showToast("Kuting! Qayta xarid uchun 15 soniya kerak.", "warning");
+            if (window._ordLoader) window._ordLoader.hide();
+            if(loadingOverlay) loadingOverlay.classList.remove('active');
+            return { ok: false, reason: 'spam' };
+        }
+        window.lastOrderTime = now;
+
+        // 🔑 XAVFSIZ ULANISH — Worker /order-commit auth (initData yoki idToken) talab qiladi.
+        //    (Haqiqiy kredential `_workerPost` ichida olinadi va 401 da yangilanadi.)
+        try { if (window._ensureAuth) await window._ensureAuth(); } catch (e) {}
+        var _cred = null;
+        try { _cred = window._authCred ? await window._authCred() : null; } catch (e) { _cred = null; }
+        if (!_cred) {
+            _hideLoader(false);
+            try { showToast("Xavfsiz ulanish kerak", "warning"); } catch (e) {}
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'auth' };
+        }
+
+        // 🛒 Savatdan qatorlarni yig'amiz. Server narx/stok/summani O'ZI hisoblaydi;
+        //    estimatedTotal faqat cashback taxmini uchun (serverda cheklanadi).
+        var items = [];
+        var estimatedTotal = 0;
+        for (let safeId in cart) {
+            if (!cart[safeId]) continue;
+            let parts = String(safeId).split('||');
+            let baseId = parts[0];
+            let carOptRaw = parts[1] || "";
+            let carOpt = carOptRaw.replace(/_dot_/g, ".");
+            let qty = parseInt(cart[safeId]) || 0;
+            if (qty <= 0) continue;
+            let p = productsDB.find(x => x.id == baseId);
+            // Razmeri yo'q tovar -> "" (server buni "Universal" deb qabul qiladi).
+            var _size = (carOpt && carOpt !== "Universal") ? carOpt : "";
+            items.push({ id: String(baseId), size: _size, qty: qty });
+            if (p) estimatedTotal += (p.price || 0) * qty;
+        }
+        if (!items.length) {
+            _hideLoader(false);
+            try { showToast("Savat bo'sh", "warning"); } catch (e) {}
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'empty' };
+        }
+
+        // 🔁 Savat imzosiga bog'langan barqaror attemptId (bir xil savatni qayta
+        //    yuborish xavfsiz — server bir xil natija qaytaradi).
+        var _sig = items.map(function (it) { return it.id + ':' + it.size + ':' + it.qty; }).sort().join('|');
+        var _attemptId = window._orderAttemptId(_sig);
+
+        // 🎁 So'ralgan cashback — SERVER cheklaydi (pulga ishonmaymiz).
+        var cashbackRequested = 0;
+        try { if (window._cbGetApplied) cashbackRequested = window._cbGetApplied(estimatedTotal) || 0; } catch (e) { cashbackRequested = 0; }
+
+        // 📞 Mijoz ma'lumotlari (manzil bazadan tiklanadi, kerak bo'lsa)
+        if (currentUser && (!myProfile.address || myProfile.address === "Noma'lum")) {
+            try {
+                let snap = await db.ref('users/' + currentUser + '/profile').once('value');
+                if (snap.exists() && snap.val().address) myProfile.address = snap.val().address;
+            } catch (e) {}
+        }
+        var profName = myProfile.name || userName || "Ismsiz mijoz";
+        var profPhone = myProfile.phone || "";
+        var userTgLink = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.username)
+            ? tg.initDataUnsafe.user.username : "";
+        var custAddress = myProfile.address || (typeof botRegion !== 'undefined' ? botRegion : '') || "";
+
+        // 🚚 Yetkazish (courier / bts) — joriy kodning derivatsiyasi bilan bir xil
+        var _dlv = window.selectedDelivery || {};
+        var deliveryMethod = _dlv.method || 'delivery';
+        var deliveryAddress = custAddress;
+        var deliveryMapLink = _dlv.mapLink || '';
+        var deliveryNote = '';
+        if (_dlv.method === 'courier') {
+            deliveryAddress = _dlv.address || custAddress;
+        } else if (_dlv.method === 'bts') {
+            deliveryAddress = (_dlv.branch || "") + (_dlv.district ? (", " + _dlv.district) : "") + (_dlv.region ? (", " + _dlv.region) : "");
+            deliveryNote = [_dlv.branchAddress, _dlv.branchLandmark].filter(Boolean).join(' ');
+        }
+
+        var _body = {
+            attemptId: _attemptId,
+            items: items,
+            customer: { name: profName, phone: profPhone, address: custAddress, username: userTgLink },
+            delivery: { method: deliveryMethod, address: deliveryAddress, mapLink: deliveryMapLink, note: deliveryNote },
+            payment: { method: paymentMethod },
+            cashbackRequested: cashbackRequested,
+            // Xabarlar javobdan keyin ALOHIDA so'rovda (window._a1OrderDeliver).
+            notifyMode: 'split'
+        };
+
+        // 🛡 SERVERDA ATOMIK: stok band qilinadi, buyurtma yoziladi, cashback hisoblanadi.
+        //    Eskirgan initData (ilova 1 soatdan ko'p ochiq) — 401 bo'lsa idToken bilan
+        //    qayta uriladi (ayni attemptId => server dublikat yaratmaydi).
+        var resp, data;
+        try {
+            var _wp = await window._workerPost('/order-commit', _body);
+            resp = _wp.resp;
+            data = _wp.data;
+        } catch (e) {
+            _hideLoader(false);
+            try { showToast("Xatolik! Internetni tekshiring.", "warning"); } catch (e2) {}
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'error' };
+        }
+
+        // 🚫 STOK YETMASA (HTTP 409, error:"stock") — serverda hech narsa yozilmadi.
+        if (resp.status === 409 && data && data.error === 'stock') {
+            _hideLoader(false);
+            var _short = data.shortages || [];
+            var _shortMsg = _short.map(function (s) {
+                return '• ' + (s.name || s.id) + (s.size ? ' (' + s.size + ')' : '') +
+                       ' — omborda ' + (parseInt(s.available, 10) || 0) + ' ta';
+            }).join('\n');
+            try { showToast("Omborda yetarli emas!", "warning"); } catch (e) {}
+            try {
+                var _alertTxt = "Kechirasiz, bu tovarlar omborda yetarli emas:\n\n" + _shortMsg +
+                                "\n\nSavatdagi sonni kamaytirib, qayta urinib ko'ring.";
+                if (typeof tg !== 'undefined' && tg.showAlert) tg.showAlert(_alertTxt);
+                else alert(_alertTxt);
+            } catch (e) {}
+            // Bu buyurtma EMAS — 15 soniyalik kutish jazosi qo'llanmasin.
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'stock', shortages: _short };
+        }
+
+        // ❌ Boshqa xato (tarmoq/server) — serverning ANIQ sababini ko'rsatamiz.
+        if (!resp.ok || !data || !data.ok || !data.committed || !data.order) {
+            _hideLoader(false);
+            var _why = (data && data.error) ? String(data.error) : '';
+            var _txt = "Xatolik! Qayta urinib ko'ring.";
+            if (resp && resp.status === 401) _txt = "Ulanish eskirdi — ilovani yopib qayta oching.";
+            else if (data && data.retryable) _txt = "Server band — bir necha soniyadan keyin qayta bosing.";
+            else if (_why) _txt = "Buyurtma o'tmadi: " + _why;
+            try { showToast(_txt, "warning"); } catch (e) {}
+            window.lastOrderTime = 0;
+            return { ok: false, reason: 'error' };
+        }
+
+        // ✅ MUVAFFAQIYAT (committed:true). SERVER buyurtma/stok/cashback egasi:
+        //    mijoz brauzeri buyurtma YOZMAYDI, stok KAMAYTIRMAYDI, Phase2.spendCashback
+        //    CHAQIRMAYDI. on('value') listener buyurtmani serverdan o'zi tortadi.
+        var order = data.order;
+        // 📨 Adminlarga kartochka + mijozga tasdiq — DARHOL, alohida so'rovda.
+        if (data.deliver) { try { window._a1OrderDeliver(data.deliver); } catch (e) {} }
+        try { window._orderAttemptClear(); } catch (e) {}
+
+        // Savat va qo'llangan cashback tozalanadi
+        cart = {};
+        try { saveLocalCart(); } catch (e) {}
+        try { if (window._flushCart) window._flushCart(); } catch (e) {}
+        try { if (window._cbResetApplied) window._cbResetApplied(); } catch (e) {}
+        updateCartBadge();
+
+        // 🕒 OPTIMISTIK LOKAL KO'RSATISH — DB'ga YOZILMAYDI (buyurtma SERVER-OWNED).
+        //    on('value') listener biroздан haqiqiy yozuvni tortadi va myOrders'ni
+        //    to'liq almashtiradi. Buyurtmaga SERVER hisoblab yozgan ulush (cbRate)
+        //    saqlanadi — cashback aynan o'sha ulush bilan beriladi (rateForOrder).
+        try {
+            var cbRate = (order.cbRate != null) ? order.cbRate : (window._cashbackRate ? window._cashbackRate() : 0.008);
+            var _localOrder = {
+                id: order.id, code: order.code, date: order.date, time: order.time,
+                status: order.status || 'kutilmoqda', total: order.total,
+                cashbackUsed: order.cashbackUsed || 0, payable: order.payable,
+                cbRate: cbRate,
+                items: order.items, itemDetails: order.itemDetails,
+                customerName: order.customerName, customerPhone: order.customerPhone,
+                customerAddress: order.customerAddress, customerUsername: order.customerUsername,
+                deliveryMethod: order.deliveryMethod, deliveryMapLink: order.deliveryMapLink
+            };
+            if (Array.isArray(window.myOrders)) {
+                if (!window.myOrders.some(function (x) { return x && String(x.id) === String(order.id); })) {
+                    myOrders.unshift(_localOrder);
+                }
+            } else {
+                myOrders = [_localOrder];
+            }
+            window.myOrders = myOrders;
+        } catch (e) {}
+
+        // 📨 Telegram xabarlari.
+        //    YANGI Worker (data.notify === "server") adminlarga tugmali kartochkani va
+        //    mijozga tasdiqni O'ZI yuboradi — ishonchli, ilova yopilsa ham. Bu yerda
+        //    yuborsak dublikat bo'lardi.
+        //    ESKI Worker (maydon yo'q) — moslik uchun brauzer yuboradi (endi BARCHA
+        //    adminlarga; ilgari faqat ADMIN_IDS[0] olardi).
+        if (data.notify !== 'server') try {
+            var _cb = order.cashbackUsed || 0;
+            var _pay = (order.payable != null) ? order.payable : order.total;
+            var _lines = '';
+            (order.itemDetails || []).forEach(function (it) {
+                var _cOpt = (it.size && it.size !== 'Universal') ? it.size : (it.carModel || ''); var _co = _cOpt ? ' (' + escTg(_cOpt) + ')' : '';
+                _lines += "\n\u25AA\uFE0F " + escTg(it.name) + _co + " \u2014 " + (it.qty || 0) +
+                          " x " + (it.unitPrice || 0).toLocaleString() + " = " + (it.lineTotal || 0).toLocaleString() + " so'm";
+            });
+            var _adminText = "\uD83C\uDD95 <b>YANGI BUYURTMA: #" + escTg(order.code || '') + "</b>\n\n" +
+                "\uD83D\uDC64 <b>Ism:</b> " + escTg(order.customerName || profName) + "\n" +
+                "\uD83D\uDCDE <b>Telefon:</b> <code>" + escTg(order.customerPhone || profPhone) + "</code>\n" +
+                "\uD83D\uDCCD <b>Manzil:</b> " + escTg(order.customerAddress || deliveryAddress) + "\n" +
+                "\uD83C\uDD94 <b>ID:</b> <code>" + escTg(String(order.uid || currentUser || '')) + "</code>\n" +
+                "\uD83D\uDCB3 <b>To'lov turi:</b> " + escTg(paymentMethod) + "\n\n" +
+                "\uD83D\uDED2 <b>Mahsulotlar:</b>" + _lines +
+                "\n\n\uD83D\uDCB0 <b>Jami:</b> " + (order.total || 0).toLocaleString() + " so'm";
+            if (_cb > 0) {
+                _adminText += "\n\uD83C\uDF81 <b>Cashback ishlatildi:</b> \u2212" + _cb.toLocaleString() + " so'm";
+                _adminText += "\n\uD83D\uDCB5 <b>TO'LANADI:</b> " + _pay.toLocaleString() + " so'm";
+            }
+            try {
+                var _vipTag = (window.VIP && window.VIP.orderTag) ? window.VIP.orderTag() : '';
+                if (_vipTag) _adminText += "\n\n" + escTg(_vipTag);
+            } catch (e) {}
+            ADMIN_IDS.forEach(function (aid) {
+                try { tgProxySend({ chat_id: aid, text: _adminText, parse_mode: "HTML" }); } catch (e) {}
+            });
+            if (currentUser) {
+                // Matn Worker'dagi `created` bilan bir xil ma'noda: do'kon hali QABUL
+                // QILMAGAN (aks holda keyingi "qabul qilindi" xabari dublikatdek tuyuladi).
+                tgProxySend({ chat_id: currentUser, text: "\uD83E\uDDFE Buyurtmangiz do'konga yuborildi!\n\uD83C\uDD94 Kod: #" + (order.code || '') +
+                    (_cb > 0 ? "\n\uD83C\uDF81 Cashback: \u2212" + _cb.toLocaleString() + " so'm\n\uD83D\uDCB5 To'lanadi: " + _pay.toLocaleString() + " so'm" : '') +
+                    "\n\uD83D\uDCDE Bog'lanish: " + profPhone });
+            }
+        } catch (e) {}
+
+        // ✅ Animatsiya + konfetti + yopilish (mavjud xatti-harakat saqlanadi).
+        var _animDone = (window._ordLoader && window._ordLoader.finish)
+            ? window._ordLoader.finish(true)
+            : Promise.resolve();
+        if (loadingOverlay) loadingOverlay.classList.remove('active');
+        showToast("Qabul qilindi!");
+        shootConfetti();
+
+        var _closed = false;
+        var _doClose = function () {
+            if (_closed) return; _closed = true;
+            var _inTg = false; try { _inTg = !!(tg && tg.initData); } catch (e) {}
+            if (!_inTg) {
+                // Ilova / brauzer: yopiladigan narsa yo'q — toza bosh sahifaga qaytamiz.
+                // (Karta orqali o'tkazma olib tashlandi — chek uchun Telegram endi ochilmaydi.)
+                try { if (window.a1ResetToHome) window.a1ResetToHome(); } catch (e) {}
+                return;
+            }
+            try { tg.close(); } catch (e) {}
+        };
+        Promise.race([
+            Promise.resolve(_animDone),
+            new Promise(function (r) { setTimeout(r, 6000); })
+        ]).then(_doClose);
+
+        // ✅ Wrapper (pastda) faqat shu holatda konfetti + pticha ko'rsatadi.
+        return { ok: true, code: order.code };
+    } catch (err) {
+        if (window._ordLoader && window._ordLoader.finish) window._ordLoader.finish(false);
+        if (loadingOverlay) loadingOverlay.classList.remove('active');
+        showToast("Xatolik! Internetni tekshiring.", "warning");
+        window.lastOrderTime = 0;
+        return { ok: false, reason: 'error' };
+    }
+};
+

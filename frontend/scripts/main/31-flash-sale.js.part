@@ -1,0 +1,644 @@
+// =====================================================================
+// 🔥 FLASH SALE — yordamchilar, normalizer (muddat tugashi) va countdown ticker
+//   - _flashActive(p): flash hozir aktivmi.
+//   - _fmtFlash(ms): qolgan vaqtni "Dk HH:MM:SS" ko'rinishida.
+//   - applyFlashState(): muddati o'tgan flash'larni ASL narxga qaytaradi
+//     (xotirada; admin bo'lsa DB'ni ham tozalaydi). price flash davomida
+//     discounted; tugagach oldPrice (asl) tiklanadi -> cart/buyurtma to'g'ri.
+// =====================================================================
+window._flashActive = function(p){
+    return !!(p && p.flashUntil && p.flashUntil > Date.now()
+              && p.oldPrice && Number(p.oldPrice) > Number(p.price));
+};
+window._fmtFlash = function(ms){
+    if (ms <= 0) return '00:00:00';
+    var s = Math.floor(ms/1000), d = Math.floor(s/86400); s -= d*86400;
+    var h = Math.floor(s/3600); s -= h*3600;
+    var m = Math.floor(s/60); s -= m*60;
+    var z = function(n){ return (n<10?'0':'') + n; };
+    return (d>0 ? d + ' kun ' : '') + z(h)+':'+z(m)+':'+z(s);
+};
+window.applyFlashState = function(){
+    var now = Date.now(), changed = false;
+    var list = (typeof productsDB !== 'undefined' && productsDB) ? productsDB : (window.productsDB || []);
+    for (var i = 0; i < list.length; i++){
+        var p = list[i];
+        if (p && p.flashUntil && p.flashUntil <= now){
+            if (p.oldPrice && Number(p.oldPrice) > 0) p.price = Number(p.oldPrice);
+            delete p.oldPrice; delete p.flashUntil;
+            changed = true;
+            try { if (window.isAdmin && window.isAdmin() && window.saveProductAt) window.saveProductAt(i); } catch(e){}
+        }
+    }
+    return changed;
+};
+// 1 soniyalik ticker — FAQAT ekranda .flash-cd bo'lsa ish bajaradi (telefonni qizdirmaydi).
+(function flashTicker(){
+    function tick(){
+        var nodes = document.querySelectorAll('.flash-cd');
+        if (!nodes.length) return;
+        var now = Date.now(), expired = false;
+        nodes.forEach(function(el){
+            var until = parseInt(el.getAttribute('data-until'), 10) || 0;
+            var left = until - now;
+            if (left <= 0){ el.textContent = '00:00:00'; expired = true; }
+            else el.textContent = window._fmtFlash(left);
+        });
+        if (expired && window.applyFlashState && window.applyFlashState()){
+            try {
+                if (typeof _sortDisplayDB === 'function')
+                    displayDB = _sortDisplayDB(productsDB.filter(function(p){ return !p.is_draft; }).slice().reverse());
+                if (typeof renderProducts === 'function') renderProducts();
+            } catch(e){}
+        }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setInterval(tick, 1000); });
+    else setInterval(tick, 1000);
+})();
+
+window.generateProductId = () => {
+    // #14: bot bilan BIR XIL sxema — ketma-ket (max + 1). Bot ham max(id)+1
+    // ishlatadi; ilgari bu yerda Date.now() edi (nomuvofiq). Collision guard saqlanadi.
+    let id = productsDB.reduce((mx, p) => Math.max(mx, parseInt(p.id) || 0), 0) + 1;
+    while (productsDB.some(x => x.id === id)) id++;
+    return id;
+};
+
+// ---------- #7: butun massivni KO'R-KO'RONA qayta yozmaslik ----------
+// Eski kodda o'chirish amallari db.ref('products').set(productsDB) bilan BUTUN
+// massivni xotiradagi (eskirgan bo'lishi mumkin) nusxa bilan qayta yozardi —
+// ayni paytda bot/boshqa admin qo'shgan tovar YO'QOLISHI mumkin edi.
+// Bu yordamchi avval ENG SO'NGGI holatni o'qiydi, o'zgartirishni (mutator,
+// id bo'yicha ishlaydi) o'shanga qo'llab yozadi. Shunday qilib begona
+// o'zgarishlar saqlanadi.
+window._rewriteProductsSafely = function (mutator) {
+    return db.ref('products').once('value').then(function (snap) {
+        var fresh = [];
+        if (snap.exists()) snap.forEach(function (c) { if (c.val()) fresh.push(c.val()); });
+        var out = mutator(fresh);
+        if (!Array.isArray(out)) out = fresh;
+        productsDB = out;
+        window.productsDB = out;
+        return db.ref('products').set(out);
+    });
+};
+
+// ---------- 7) ADD FORMANI TOZALASH / OCHISH / KLON ----------
+window.resetAddForm = () => {
+    ['add-name','add-price','add-code','add-desc','add-aliases','add-img-url','add-img-url2','add-img-url3','add-flash-price','add-flash-hours'].forEach(id => { let el = document.getElementById(id); if (el) el.value = ''; });
+    let st = document.getElementById('add-stock'); if (st) st.value = 10;
+    let pt = document.getElementById('admin-prod-type'); if (pt) pt.value = 'oddiy';
+    if (typeof toggleProductTypeFields === 'function') toggleProductTypeFields();
+    let unit = document.getElementById('add-unit'); if (unit) unit.value = 'dona';
+    let brand = document.getElementById('admin-prod-brand'); if (brand) brand.value = '';
+    if (typeof updateBrandModels === 'function') updateBrandModels();
+    let sc = document.getElementById('admin-sizes-container');
+    if (sc) sc.innerHTML = `<div class="size-input-row" style="display:flex; gap:8px; margin-bottom:8px;"><input type="text" placeholder="Razmer (mas: 92.5)" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;" class="size-name"><input type="number" placeholder="Soni" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;" class="size-stock"><button type="button" onclick="this.parentElement.remove()" style="background:rgba(255,69,58,0.2); color:#ff453a; border:1px solid rgba(255,69,58,0.5); border-radius:12px; padding:0 15px; cursor:pointer; font-weight:bold; font-size:16px;">×</button></div>`;
+    document.querySelectorAll('#addProductModal .cat-chip').forEach(c => c.classList.remove('selected'));
+    let firstOrigin = document.querySelector('#add-origin-chips .origin-chip');
+    if (firstOrigin && typeof selectOrigin === 'function') selectOrigin(firstOrigin, 'add');
+    updateImgPreviews('add');
+    updateLivePreview('add');
+};
+window.openAddProduct = () => {
+    resetAddForm();
+    window._formDirty = false;
+    openModal('addProductModal');
+    updateLivePreview('add');
+};
+window.fillAddFormFromProduct = (p) => {
+    resetAddForm();
+    document.getElementById('add-name').value = (p.name || '') + ' (nusxa)';
+    document.getElementById('add-price').value = formatNumber(p.price);
+    let codeEl = document.getElementById('add-code'); if (codeEl) codeEl.value = p.code || '';
+    let alEl = document.getElementById('add-aliases'); if (alEl) alEl.value = p.aliases || '';
+    document.getElementById('add-desc').value = (p.desc && p.desc !== 'Tavsif kiritilmagan') ? p.desc : '';
+    let unit = document.getElementById('add-unit'); if (unit) unit.value = p.unit || 'dona';
+    let pType = p.product_type || 'oddiy';
+    document.getElementById('admin-prod-type').value = pType;
+    if (typeof toggleProductTypeFields === 'function') toggleProductTypeFields();
+    if (pType === 'oddiy') {
+        let st = document.getElementById('add-stock'); if (st) st.value = (p.stock !== undefined ? p.stock : 10);
+    } else {
+        let brandEl = document.getElementById('admin-prod-brand');
+        if (brandEl) { brandEl.value = p.brand || ''; updateBrandModels(); }
+        if (p.model) setTimeout(() => { let m = document.getElementById('admin-prod-model'); if (m) m.value = p.model; }, 60);
+        let sc = document.getElementById('admin-sizes-container');
+        if (sc && p.sizes && p.sizes.length) {
+            sc.innerHTML = p.sizes.map(s => `<div class="size-input-row" style="display:flex; gap:8px; margin-bottom:8px;"><input type="text" value="${s.size}" class="size-name" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;"><input type="number" value="${s.stock}" class="size-stock" style="flex:1; padding:12px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); border-radius:12px; outline:none;"><button type="button" onclick="this.parentElement.remove()" style="background:rgba(255,69,58,0.2); color:#ff453a; border:1px solid rgba(255,69,58,0.5); border-radius:12px; padding:0 15px; cursor:pointer; font-weight:bold; font-size:16px;">×</button></div>`).join('');
+        }
+    }
+    let imgs = (p.images && p.images.length) ? p.images.slice(0, 3) : (p.img ? [p.img] : []);
+    setImgUrls('add', imgs);
+    document.querySelectorAll('#addProductModal .cat-chip').forEach(c => c.classList.remove('selected'));
+    let cats = p.categories || (p.category ? [p.category] : []);
+    cats.forEach(c => { let mC = document.querySelector(`#addProductModal .model-chip[data-val="${c}"]`); if (mC) mC.classList.add('selected'); });
+    updateImgPreviews('add');
+    updateLivePreview('add');
+};
+window.cloneProductFromEdit = () => {
+    let id = parseInt(document.getElementById('edit-id').value);
+    let p = productsDB.find(x => x.id === id);
+    if (!p) { showToast("Tovar topilmadi", "warning"); return; }
+    let em = document.getElementById('editModal'); if (em) em.style.display = 'none';
+    let am = document.getElementById('addProductModal');
+    am.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    activeModal = 'addProductModal';
+    window.history.pushState({ modal: 'addProductModal' }, "");
+    if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show();
+    fillAddFormFromProduct(p);
+    window._formDirty = true;
+    showToast("📋 Nusxa olindi! O'zgartirib, saqlang.", "success");
+};
+
+// ---------- 8) SAQLANMAGAN O'ZGARISHLAR OGOHLANTIRISHI ----------
+window.tryCloseAddProduct = () => {
+    if (window._formDirty) {
+        let go = () => { window._formDirty = false; closeModal(); };
+        if (typeof tg !== 'undefined' && tg.showConfirm) { tg.showConfirm("Saqlanmagan ma'lumotlar bor. Chiqasizmi?", (ok) => { if (ok) go(); }); }
+        else if (confirm("Saqlanmagan ma'lumotlar bor. Chiqasizmi?")) go();
+    } else { closeModal(); }
+};
+if (typeof window.closeEditGoBack === 'function' && !window._origCloseEditGoBack) {
+    window._origCloseEditGoBack = window.closeEditGoBack;
+    window.closeEditGoBack = function() {
+        if (window._formDirty) {
+            let go = () => { window._formDirty = false; window._origCloseEditGoBack(); };
+            if (typeof tg !== 'undefined' && tg.showConfirm) { tg.showConfirm("Saqlanmagan o'zgarishlar bor. Chiqasizmi?", (ok) => { if (ok) go(); }); }
+            else if (confirm("Saqlanmagan o'zgarishlar bor. Chiqasizmi?")) go();
+            return;
+        }
+        window._origCloseEditGoBack();
+    };
+}
+
+// ---------- 9) OVOZLI KIRITISH ----------
+window.startVoice = (targetId) => {
+    let SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { showToast("Bu qurilmada ovozli kiritish ishlamaydi", "warning"); return; }
+    let el = document.getElementById(targetId);
+    if (!el) return;
+    let rec = new SR();
+    rec.lang = 'ru-RU';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    showToast("🎤 Gapiring...");
+    rec.onresult = (e) => {
+        let t = e.results[0][0].transcript;
+        el.value = el.value ? (el.value + ' ' + t) : t;
+        el.dispatchEvent(new Event('input'));
+        window._formDirty = true;
+        showToast("✅ Yozildi", "success");
+    };
+    rec.onerror = () => { showToast("Ovoz tushunilmadi, qaytaring", "warning"); };
+    try { rec.start(); } catch (e) {}
+};
+
+// ---------- 10) SHTRIX-KOD / QR SKANER ----------
+// BarcodeDetector ko'p qurilmalarda (iPhone, ba'zi Telegram brauzerlari) yo'q edi.
+// Endi universal "html5-qrcode" kutubxonasidan foydalanamiz (lazy-load):
+//   1) Kamera ishlasa — 1D shtrix-kod VA QR ni o'qiydi.
+//   2) Kamera bloklansa — Telegram'ning o'z (native) QR skaneriga o'tamiz.
+//   3) U ham bo'lmasa — kodni qo'lda kiritish taklif qilinadi.
+let _qrLibLoading = null;
+function ensureQrScanner() {
+    if (window.Html5Qrcode) return Promise.resolve();
+    if (_qrLibLoading) return _qrLibLoading;
+    _qrLibLoading = new Promise((resolve, reject) => {
+        const js = document.createElement('script');
+        js.src = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+        js.onload = () => resolve();
+        js.onerror = () => reject(new Error('yuklanmadi'));
+        document.head.appendChild(js);
+    });
+    return _qrLibLoading;
+}
+
+// Telegram native QR skaneri — onResult(text) chaqiradi (umumiy)
+window._telegramQrScan = (onResult) => {
+    if (typeof tg === 'undefined' || !tg.showScanQrPopup) {
+        showToast("Kamera ishlamadi. Iltimos, kodni qo'lda kiriting.", "warning");
+        return false;
+    }
+    let handler = (e) => {
+        let text = (e && e.data) ? String(e.data).trim() : '';
+        try { tg.closeScanQrPopup(); } catch (e2) {}
+        try { tg.offEvent('qrTextReceived', handler); } catch (e2) {}
+        if (text) {
+            if (typeof tg.HapticFeedback !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            onResult(text);
+        }
+    };
+    try {
+        tg.onEvent('qrTextReceived', handler);
+        tg.showScanQrPopup({ text: "Kod yoki QR ni ramkaga tuting" });
+        return true;
+    } catch (e) {
+        showToast("Skaner ochilmadi. Kodni qo'lda kiriting.", "warning");
+        return false;
+    }
+};
+
+// Fonarik (flashlight) — ba'zi telefonlarda track.applyConstraints orqali ishlaydi
+window._toggleTorch = async () => {
+    try {
+        if (!window._h5qr || !window._h5qr.applyVideoConstraints) return;
+        let st = window._h5qr.getRunningTrackSettings ? window._h5qr.getRunningTrackSettings() : {};
+        let next = !st.torch;
+        await window._h5qr.applyVideoConstraints({ advanced: [{ torch: next }] });
+        let btn = document.getElementById('scan-torch-btn');
+        if (btn) btn.style.background = next ? 'var(--luxury-gold)' : 'rgba(255,255,255,0.15)';
+    } catch (e) { showToast("Bu qurilmada fonarik yo'q", "warning"); }
+};
+
+// Skaner ichidan Telegram tezkor (ruxsat saqlanadi) skaneriga o'tish
+window._switchToTelegramScan = (onResult) => {
+    stopScan();
+    setTimeout(() => window._telegramQrScan(onResult), 100);
+};
+
+// Umumiy skaner: muvaffaqiyatda onResult(text) chaqiradi
+// ⚡ TEZLASHTIRILGAN: fps 10 -> 25, kattaroq qrbox, faqat kerakli formatlar,
+//    native BarcodeDetector (Chrome/Edge/Samsung) — bu deyarli darrov o'qiydi.
+// 🧭 NAVIGATSIYA: history.pushState bilan ulangan — BackButton overlay'ni yopadi.
+window._h5qr = null;
+window.runScanner = async (onResult) => {
+    try {
+        await ensureQrScanner();
+    } catch (e) {
+        window._telegramQrScan(onResult); // kutubxona yuklanmadi -> Telegram
+        return;
+    }
+    let ov = document.createElement('div');
+    ov.id = 'scanner-overlay';
+    ov.innerHTML = `
+        <button class="scan-close" onclick="stopScan()">×</button>
+        <div id="qr-reader" style="width:100%; max-width:380px; min-height:300px;"></div>
+        <div class="scan-hint">📷 Kod / QR ni ramkaga tuting</div>
+        <div class="scan-actions">
+            <button id="scan-torch-btn" class="scan-action-btn" onclick="_toggleTorch()" title="Fonarik">💡</button>
+            <button class="scan-action-btn" onclick="_switchToTelegramScan(window._scanCb)" title="Tezkor Telegram skaneri (faqat QR)">⚡ Tezkor</button>
+        </div>`;
+    document.body.appendChild(ov);
+    window._scanCb = onResult;
+
+    // 🧭 History'ga qo'shamiz: BackButton overlay'ni yopadi (asosiy ekranga emas)
+    window._scannerPrevActive = activeModal;
+    activeModal = '__scanner__';
+    window.history.pushState({ modal: '__scanner__' }, "");
+    if (typeof tg !== 'undefined' && tg.BackButton) tg.BackButton.show();
+
+    try {
+        // Faqat avto-ehtiyot qism qutilarida bo'ladigan formatlar — boshqasini tekshirmaydi
+        let formats = [];
+        if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+            formats = [
+                Html5QrcodeSupportedFormats.QR_CODE,
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.CODE_39,
+                Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.UPC_E,
+                Html5QrcodeSupportedFormats.ITF
+            ];
+        }
+        window._h5qr = new Html5Qrcode("qr-reader", { 
+            formatsToSupport: formats.length ? formats : undefined,
+            // ⚡ Eng katta tezlashtirish: native BarcodeDetector (Chrome/Edge/Samsung Internet)
+            //    Bu html5-qrcode'ning ZXing dekoderiga 5-10 baravar tezroq.
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            verbose: false
+        });
+        await window._h5qr.start(
+            { facingMode: "environment" },
+            { 
+                fps: 25,                                  // 10 -> 25 (sekundiga 25 kadr)
+                qrbox: (vw, vh) => {                      // dinamik: ekran kattaligiga moslashadi
+                    let edge = Math.floor(Math.min(vw, vh) * 0.8);
+                    return { width: edge, height: Math.floor(edge * 0.65) };
+                },
+                aspectRatio: 1.333,
+                disableFlip: false,
+                videoConstraints: { 
+                    facingMode: "environment", 
+                    width: { ideal: 1280 }, 
+                    height: { ideal: 720 } 
+                }
+            },
+            (decodedText) => {
+                if (typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                stopScan();
+                onResult(String(decodedText).trim());
+            },
+            () => {} // har kadrdagi "topilmadi" — e'tibordan chetda
+        );
+    } catch (err) {
+        stopScan();
+        window._telegramQrScan(onResult); // kamera ochilmadi -> Telegram skaneri
+    }
+};
+
+// 1) ADMIN: skanerlangan kodni "code" maydoniga yozadi
+window.scanBarcode = (prefix) => {
+    runScanner((text) => {
+        let inp = document.getElementById(`${prefix}-code`);
+        if (inp) { inp.value = text; inp.dispatchEvent(new Event('input')); }
+        window._formDirty = true;
+        showToast("✅ Kod: " + text, "success");
+    });
+};
+
+// 2) ADMIN: skanerlangan kod bo'yicha tovarni topib ochadi (faqat admin)
+window.scanToFindProduct = () => {
+    // Qo'shimcha xavfsizlik: faqat admin
+    let isAdmin = (typeof window.isAdmin === 'function') ? window.isAdmin() : (ADMIN_IDS.includes(window.currentUser) || ADMIN_IDS.includes(parseInt(window.currentUser)));
+    if (!isAdmin) { showToast("Bu funksiya faqat administrator uchun", "warning"); return; }
+
+    runScanner((raw) => {
+        let text = String(raw || '').trim();
+        if (!text) return;
+        let low = text.toLowerCase();
+        // a) aniq kod mosligi
+        let matches = productsDB.filter(p => !p.is_draft && p.code && p.code.toLowerCase() === low);
+        // b) qisman kod mosligi
+        if (matches.length === 0) matches = productsDB.filter(p => !p.is_draft && p.code && p.code.toLowerCase().includes(low));
+        // c) nom bo'yicha (kod topilmasa)
+        if (matches.length === 0) matches = productsDB.filter(p => !p.is_draft && p.name && p.name.toLowerCase().includes(low));
+
+        if (matches.length === 1) {
+            showToast("✅ Topildi: " + matches[0].name, "success");
+            openProduct(matches[0].id);
+        } else if (matches.length > 1) {
+            let si = document.getElementById('searchInput');
+            if (si) { si.value = text; searchProducts(); }
+            showToast("🔎 " + matches.length + " ta tovar topildi", "success");
+        } else {
+            let si = document.getElementById('searchInput');
+            if (si) { si.value = text; searchProducts(); }
+            showToast("❌ '" + text + "' bo'yicha tovar topilmadi", "warning");
+        }
+    });
+};
+window.stopScan = () => {
+    // Agar history'da skaner bor bo'lsa — back orqali yopamiz (popstate cleanup qiladi)
+    if (activeModal === '__scanner__') {
+        window.history.back();
+        return;
+    }
+    // Aks holda to'g'ridan-to'g'ri tozalaymiz
+    let cleanup = () => { let ov = document.getElementById('scanner-overlay'); if (ov) ov.remove(); };
+    if (window._h5qr) {
+        let r = window._h5qr;
+        window._h5qr = null;
+        try {
+            r.stop().then(() => { try { r.clear(); } catch (e) {} cleanup(); }).catch(() => cleanup());
+        } catch (e) { cleanup(); }
+    } else {
+        cleanup();
+    }
+};
+
+// ---------- 11) OMBOR: QIDIRUV / FILTR / OMMAVIY TAHRIR ----------
+window.invFilter = 'all';
+window._invSelected = {};
+window.setInvFilter = (el, f) => {
+    window.invFilter = f;
+    document.querySelectorAll('#inv-filter-chips .inv-fchip').forEach(c => c.classList.remove('selected'));
+    if (el) el.classList.add('selected');
+    renderAdminInventory();
+};
+window._invMatchesBrand = (p, f) => {
+    if (f === 'all') return true;
+    let cats = (p.categories || (p.category ? [p.category] : [])).join(' ').toLowerCase();
+    if (f === 'gaz') return cats.includes('gazel') || cats.includes('volga') || cats.includes('sobol');
+    if (f === 'chevy') return cats.includes('chevy');
+    if (f === 'daewoo') return cats.includes('daewoo');
+    if (f === 'uaz') return cats.includes('uaz');
+    return true;
+};
+window.invToggleSelect = (el, id) => {
+    let checked = el.checked;
+    if (checked) window._invSelected[id] = true; else delete window._invSelected[id];
+    // Tovar kartasi vizual holatini DARHOL yangilaymiz (qayta render qilmasdan)
+    let card = el.closest('.inventory-item');
+    if (card) card.classList.toggle('inv-selected', checked);
+    try { if (typeof _hap === 'function') _hap('selection'); } catch(e){}
+    invUpdateBulkBar();
+};
+window.invSelectedIds = () => Object.keys(window._invSelected).map(k => parseInt(k)).filter(id => productsDB.some(p => p.id === id));
+window.invClearSelection = () => { window._invSelected = {}; renderAdminInventory(); };
+/**
+ * 📋 OMBORDA HOZIR KO'RINAYOTGAN tovarlar ro'yxati (qidiruv + chip filtri).
+ *
+ * ⚠️ NEGA ALOHIDA FUNKSIYA: bu filtr ilgari faqat `renderAdminInventory`
+ * ichida edi va tashqaridan olib bo'lmasdi. «Hammasini belgilash» esa
+ * AYNI ro'yxatni bilishi shart — aks holda u ekranda ko'rinmayotgan
+ * tovarlarni ham belgilab qo'yardi va xo'jayin bilmasdan butun katalogga
+ * amal qo'llab yuborishi mumkin edi. Endi ikkalasi bitta manbadan oladi.
+ */
+window._invVisibleItems = () => {
+    let searchEl = document.getElementById('inv-search');
+    let q = (searchEl ? searchEl.value : '').toLowerCase().trim();
+    let f = window.invFilter || 'all';
+    const stockOf = (p) => (p.product_type === 'razmerli' && p.sizes)
+        ? p.sizes.reduce((a, x) => a + (x.stock || 0), 0)
+        : (p.stock !== undefined ? p.stock : 0);
+    return productsDB.filter(p => {
+        if (!p) return false;
+        if (f === 'low') { if (stockOf(p) > 3) return false; }
+        else if (!_invMatchesBrand(p, f)) return false;
+        if (q) {
+            let n = (p.name || '').toLowerCase();
+            let code = (p.code || '').toLowerCase();
+            if (!n.includes(q) && !code.includes(q)) return false;
+        }
+        return true;
+    });
+};
+/** ☑️ ALMASHTIRGICH (toggle): ko'rinayotgan tovarlarni belgilaydi, qayta
+ *  bosilganda BEKOR qiladi.
+ *
+ *  ⚠️ Ilgari faqat «belgilash» bor edi, bekor qilish yo'q edi — 76 ta
+ *  tovarni belgilab qo'ygandan keyin ularni yechish uchun har birini
+ *  qo'lda bosish kerak bo'lardi. Endi ayni tugma ikki tomonga ishlaydi. */
+window.invSelectAllVisible = () => {
+    let items = window._invVisibleItems();
+    if (!items.length) { showToast("Belgilash uchun tovar yo'q", "warning"); return; }
+    // Ko'rinayotganlarning HAMMASI belgilangan bo'lsa — bekor qilamiz.
+    let allOn = items.every(p => p && p.id != null && window._invSelected[p.id]);
+    if (allOn) {
+        items.forEach(p => { if (p && p.id != null) delete window._invSelected[p.id]; });
+        try { if (typeof _hap === 'function') _hap('light'); } catch (e) {}
+        showToast("Belgilash bekor qilindi", "success");
+    } else {
+        items.forEach(p => { if (p && p.id != null) window._invSelected[p.id] = true; });
+        try { if (typeof _hap === 'function') _hap('success'); } catch (e) {}
+        showToast(items.length + " ta tovar belgilandi", "success");
+    }
+    renderAdminInventory();
+};
+window.invUpdateBulkBar = () => {
+    let ids = invSelectedIds();
+    let bar = document.getElementById('inv-bulk-bar');
+    let cnt = document.getElementById('inv-bulk-count');
+    if (!bar) return;
+    if (ids.length > 0) { bar.style.display = 'block'; if (cnt) cnt.innerText = ids.length + " ta belgilandi"; }
+    else { bar.style.display = 'none'; }
+};
+window._afterBulk = () => {
+    window._invSelected = {};
+    displayDB = _sortDisplayDB(productsDB.filter(x => !x.is_draft).slice().reverse());
+    renderProducts();
+    renderAdminInventory();
+};
+window.invBulkSetPrice = () => {
+    let ids = invSelectedIds();
+    if (ids.length === 0) { showToast("Avval tovarlarni belgilang", "warning"); return; }
+    let newP = parsePrice(document.getElementById('inv-bulk-price').value);
+    if (!newP) { showToast("Yangi narx kiriting!", "warning"); return; }
+    let proms = [];
+    ids.forEach(id => { let idx = productsDB.findIndex(x => x.id === id); if (idx !== -1) { productsDB[idx].price = newP; proms.push(saveProductAt(idx)); } });
+    Promise.all(proms).then(() => { showToast(ids.length + " ta narx yangilandi!", "success"); _afterBulk(); }).catch(() => showToast("Saqlashda xato!", "warning"));
+};
+window.invBulkPercent = (sign) => {
+    let ids = invSelectedIds();
+    if (ids.length === 0) { showToast("Avval tovarlarni belgilang", "warning"); return; }
+    let pct = parseFloat(document.getElementById('inv-bulk-pct').value);
+    if (!pct || pct <= 0) { showToast("Foiz kiriting!", "warning"); return; }
+    let proms = [];
+    let skipped = 0;
+    ids.forEach(id => {
+        let idx = productsDB.findIndex(x => x.id === id);
+        if (idx === -1) return;
+        let p = productsDB[idx];
+        // 🏷 AKSIYADAGI tovarga tegmaymiz: uning `price`i vaqtincha tushirilgan,
+        //    unga foiz qo'shsak asl narx (`oldPrice`) bilan mos kelmay qoladi.
+        //    (Bot'dagi `bulk_adjust_price` ham xuddi shunday o'tkazib yuboradi.)
+        if (p.oldPrice && Number(p.oldPrice) > Number(p.price)) { skipped++; return; }
+        // 💰 Natija MINGGA yaxlitlanadi: 312 000 + 3% = 321 360 -> 321 000
+        let np = window._roundSom(Number(p.price) * (1 + sign * pct / 100));
+        if (np <= 0) { skipped++; return; }
+        p.price = np;
+        proms.push(saveProductAt(idx));
+    });
+    if (!proms.length) { showToast("O'zgartirish uchun mos tovar yo'q", "warning"); return; }
+    Promise.all(proms).then(() => {
+        let msg = proms.length + " ta narx " + (sign > 0 ? '+' : '−') + pct + "% o'zgartirildi";
+        if (skipped) msg += " (" + skipped + " ta o'tkazildi — aksiyada)";
+        showToast(msg, "success");
+        _afterBulk();
+    }).catch(() => showToast("Saqlashda xato!", "warning"));
+};
+window.invBulkDelete = () => {
+    let ids = invSelectedIds();
+    if (ids.length === 0) { showToast("Avval tovarlarni belgilang", "warning"); return; }
+    let doDel = () => {
+        window._rewriteProductsSafely(function (fresh) { return fresh.filter(p => !ids.includes(p.id)); })
+            .then(() => { showToast(ids.length + " ta tovar o'chirildi!", "success"); _afterBulk(); })
+            .catch(() => showToast("Saqlashda xato!", "warning"));
+    };
+    if (typeof tg !== 'undefined' && tg.showConfirm) { tg.showConfirm(ids.length + " ta tovarni o'chirasizmi?", (ok) => { if (ok) doDel(); }); }
+    else if (confirm(ids.length + " ta tovarni o'chirasizmi?")) doDel();
+};
+
+window.renderAdminInventory = () => {
+    let c = document.getElementById('admin-inventory-list');
+    if (!c) return;
+
+    // — Qoldiq hisoblagich (razmerli bo'lsa razmerlar yig'indisi) —
+    const _stockOf = (p) => (p.product_type === 'razmerli' && p.sizes)
+        ? p.sizes.reduce((a, x) => a + (x.stock || 0), 0)
+        : (p.stock !== undefined ? p.stock : 0);
+    const _rank = (s) => s <= 0 ? 0 : (s <= 3 ? 1 : 2); // tugagan -> kam -> yetarli
+
+    // #30: ombor xulosasi (qoralama bo'lmaganlar bo'yicha)
+    let _live = productsDB.filter(p => p && !p.is_draft);
+    let _lowCount = _live.filter(p => { let s = _stockOf(p); return s > 0 && s <= 3; }).length;
+    let _outCount = _live.filter(p => _stockOf(p) <= 0).length;
+
+    // Filtr mantiqi `_invVisibleItems()` da — «Hammasini belgilash» ham
+    // AYNI ro'yxatdan foydalanadi (ikki joyda ikki xil natija bo'lmasin).
+    let items = window._invVisibleItems();
+
+    items = items.slice().sort((a, b) => _rank(_stockOf(a)) - _rank(_stockOf(b)));
+
+    // Ko'rinayotgan tovar soni — «Hammasini belgilash» nimani qamrashini
+    // xo'jayin OLDINDAN bilishi uchun.
+    try {
+        let vc = document.getElementById('inv-visible-count');
+        if (vc) vc.innerText = items.length + " ta tovar ko'rinmoqda";
+        // Tugma matni holatga qarab o'zgaradi — bosishdan oldin nima
+        // bo'lishini bilib turadi.
+        let sb = document.getElementById('inv-selall-btn');
+        if (sb) {
+            let allOn = items.length > 0 && items.every(p => p && p.id != null && window._invSelected[p.id]);
+            sb.innerText = allOn ? "Belgilashni bekor qilish" : "Hammasini belgilash";
+        }
+    } catch (e) {}
+
+    // #30: yuqorida jami / kam qolgan / tugagan xulosasi
+    let summaryHtml = `<div class="inv2-summary">
+        <div class="inv2-stat"><b>${_live.length}</b><span>Jami tovar</span></div>
+        <div class="inv2-stat inv2-stat-low"><b>${_lowCount}</b><span>Kam qoldi</span></div>
+        <div class="inv2-stat inv2-stat-out"><b>${_outCount}</b><span>Tugagan</span></div>
+    </div>`;
+
+    if (items.length === 0) {
+        c.innerHTML = summaryHtml + '<p class="iv-empty">Tovar topilmadi</p>';
+        invUpdateBulkBar();
+        return;
+    }
+
+    c.innerHTML = summaryHtml + items.map(p => {
+        let checked = window._invSelected[p.id] ? 'checked' : '';
+        let selCls = window._invSelected[p.id] ? ' inv-selected' : '';
+        let checkbox = `<input type="checkbox" class="inv-check" ${checked} onchange="invToggleSelect(this, ${p.id})">`;
+        let codeHint = p.code ? `<span class="inv-code">${p.code}</span>` : '';
+        let tot = _stockOf(p);
+        let flag = tot <= 0 ? '<span class="inv-flag inv-flag-out">Tugagan</span>' : (tot <= 3 ? '<span class="inv-flag inv-flag-low">Kam qoldi</span>' : '');
+        let urg = tot <= 0 ? ' inv-urg-out' : (tot <= 3 ? ' inv-urg-low' : '');
+        if (p.product_type === 'razmerli' && p.sizes) {
+            let sizesHtml = p.sizes.map((s, idx) => `
+                <div class="inv-size-row">
+                    <span class="inv-size-name">${s.size}</span>
+                    <div class="inv-controls">
+                        <input type="number" id="inv-input-${p.id}-${idx}" class="inv-input" value="${s.stock}">
+                        <button class="inv-btn" onclick="fastSaveSizeStock(${p.id}, ${idx})">Saqlash</button>
+                    </div>
+                </div>`).join('');
+            return `
+            <div class="inventory-item${urg}${selCls}" style="flex-direction:column; align-items:stretch;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                    <div style="display:flex; align-items:center; flex:1; min-width:0;">${checkbox}<div class="inv-info"><h4>${p.name}${codeHint}</h4><p>${p.price.toLocaleString()} so'm ${flag}</p></div></div>
+                    <span class="inv-type-tag">Razmerli</span>
+                </div>
+                <div style="margin-top:10px; border-top:1px dashed var(--glass-border); padding-top:5px;">${sizesHtml}</div>
+            </div>`;
+        } else {
+            let st = p.stock !== undefined ? p.stock : 10;
+            let nameParts = (p.name || '').split('·');
+            let mainName = nameParts[0] ? nameParts[0].trim() : p.name;
+            let carHint = nameParts[1] ? `<span class="car-hint">· ${nameParts[1].trim()}</span>` : '';
+            return `
+            <div class="inventory-item${urg}${selCls}">
+                <div style="display:flex; align-items:center; flex:1; min-width:0;">${checkbox}<div class="inv-info"><h4>${mainName}${carHint}${codeHint}</h4><p>${p.price.toLocaleString()} so'm ${flag}</p></div></div>
+                <div class="inv-controls">
+                    <input type="number" id="inv-input-${p.id}" class="inv-input" value="${st}">
+                    <button class="inv-btn" onclick="fastSaveStock(${p.id})">Saqlash</button>
+                </div>
+            </div>`;
+        }
+    }).join('');
+    invUpdateBulkBar();
+};
+
+// ---------- 12) INIT: "o'zgarish bor" bayrog'ini kuzatish ----------
+(function initAdminEnhancements() {
+    ['addProductModal', 'editModal'].forEach(mid => {
+        let m = document.getElementById(mid);
+        if (m) m.addEventListener('input', () => { window._formDirty = true; });
+    });
+})();
+

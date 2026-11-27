@@ -1,0 +1,255 @@
+    // =====================================
+    // 🛡 XAVFSIZLIK YORDAMCHILARI
+    // =====================================
+    // 🔐 XSS himoyasi: foydalanuvchi matnini DOM (innerHTML) uchun xavfsizlashtirish.
+    //    Sharh va chat xabarlari shu orqali chiqarilishi SHART (aks holda saqlangan XSS).
+    function escHtml(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+    window.escHtml = escHtml;
+    // 🔐 Telegram parse_mode:"HTML" xabarlari uchun (& < > ). Mahsulot nomi/mijoz matni
+    //    HTML xabarga qo'shilishidan oldin shu orqali xavfsizlashtiriladi.
+    function escTg(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    window.escTg = escTg;
+    // 🔐 onclick="fn('...')" kabi INLINE atribut ichidagi JS satri uchun.
+    //    Ikki qatlam kerak: avval JS satri uchun (\ va '), keyin HTML atributi uchun.
+    //    Brauzer avval HTML entity'ni ochadi, keyin JS'ni o'qiydi — shuning uchun
+    //    tartib AYNAN shunday: escHtml(jsEscape(x)). Faqat .replace(/'/g,"\\'")
+    //    yetarli EMAS edi (mijoz ismidagi " yoki < atributdan chiqib ketardi).
+    function _jsAttr(s){
+        return escHtml(
+            String(s == null ? '' : s)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/\r?\n/g, '\\n')
+        );
+    }
+    window._jsAttr = _jsAttr;
+    // 📨 Telegram proxy'ga xabar yuborish — Worker auth tekshirishi uchun initData qo'shamiz.
+    //    (Ochiq proxy yopildi: endi faqat tekshirilgan foydalanuvchi/admin yubora oladi.)
+    // 🔑 SERVER-AUTHORITATIVE AUTH KREDENTIALI.
+    //    Telegram ichida — initData (Worker HMAC bilan tekshiradi).
+    //    Brauzer/APK — Firebase anonim foydalanuvchisining ID tokeni.
+    //    Worker /order-commit, /order-status, / (proxy) va boshqalar shu
+    //    kredentialni talab qiladi (yangi database.rules.json + Worker).
+    // ⏱ Telegram initData Worker'da faqat 1 soat qabul qilinadi
+    //    (TELEGRAM_INIT_MAX_AGE). Ilova uzoq ochiq tursa (masalan admin
+    //    kun bo'yi ochib qo'ysa) initData eskiradi va HAR buyurtma / holat
+    //    o'zgarishi "initData eskirgan" (401) bilan yiqilardi. Firebase
+    //    idToken esa SDK tomonidan avtomatik yangilanadi — eskirgan
+    //    initData o'rniga shuni yuboramiz.
+    window._initDataAgeSec = function () {
+        try {
+            if (typeof tg === 'undefined' || !tg.initData) return Infinity;
+            var ad = parseInt(new URLSearchParams(tg.initData).get('auth_date') || '0', 10);
+            if (!ad) return Infinity;
+            return Math.floor(Date.now() / 1000) - ad;
+        } catch (e) { return Infinity; }
+    };
+    window._authCred = async function (opts) {
+        var preferToken = !!(opts && opts.preferToken);
+        var hasInit = false;
+        try { hasInit = (typeof tg !== 'undefined' && !!tg.initData); } catch (e) {}
+        var fresh = hasInit && window._initDataAgeSec() < 50 * 60;
+        if (hasInit && fresh && !preferToken) return { initData: tg.initData };
+        try {
+            var u = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null;
+            if (u) return { idToken: await u.getIdToken(preferToken) };
+        } catch (e) {}
+        // Token yo'q — hech bo'lmasa initData (Worker aniq sababini aytadi).
+        if (hasInit) return { initData: tg.initData };
+        return null;
+    };
+    // 🛰 Worker'ga xavfsiz POST: kredential qo'shadi; 401 bo'lsa (eskirgan
+    //    initData / muddati o'tgan token) BIR MARTA yangi Firebase idToken
+    //    bilan qayta uradi. { resp, data } qaytaradi; tarmoq xatosida throw.
+    window._workerPost = async function (path, body) {
+        try { if (window._ensureAuth) await window._ensureAuth(); } catch (e) {}
+        var send = async function (cred) {
+            var b = Object.assign({}, body || {});
+            delete b.initData; delete b.idToken;
+            if (cred && cred.initData) b.initData = cred.initData;
+            else if (cred && cred.idToken) b.idToken = cred.idToken;
+            var resp = await fetch(TG_PROXY + path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(b)
+            });
+            var data = await resp.json().catch(function () { return null; });
+            return { resp: resp, data: data, cred: cred };
+        };
+        var cred = await window._authCred();
+        if (!cred) return { resp: { ok: false, status: 401 }, data: { ok: false, error: 'auth' }, cred: null };
+        var r = await send(cred);
+        if (r.resp.status === 401) {
+            var again = await window._authCred({ preferToken: true });
+            if (again && again.idToken) r = await send(again);
+        }
+        return r;
+    };
+    // 📨 Xabarlarni ALOHIDA so'rovda turtish (Worker notifyMode:"split").
+    //    Cloudflare bepul rejasida bitta so'rovga atigi 50 ta tashqi so'rov:
+    //    buyurtma yozish shu limitning katta qismini olgani uchun xabarlar
+    //    1.5-2.5 daqiqa kechikar yoki mijozga IKKI marta ketardi. Endi javob
+    //    kelishi bilan shu chaqiriladi va Worker xabarlarni yangi so'rovda
+    //    (to'liq limit bilan) yuboradi. `keepalive` — Telegram oynasi darhol
+    //    yopilsa ham so'rov yetib boradi. Yiqilsa bir marta qayta uradi;
+    //    baribir yetmasa bot watchdog ~1.5 daqiqada yuboradi (yo'qolmaydi).
+    window._a1OrderDeliver = function (outboxKey) {
+        if (!outboxKey || typeof outboxKey !== 'string') return Promise.resolve(false);
+        var post = function (cred) {
+            var b = { outboxKey: outboxKey };
+            if (cred && cred.initData) b.initData = cred.initData;
+            else if (cred && cred.idToken) b.idToken = cred.idToken;
+            else return Promise.resolve({ status: 401 });
+            return fetch(TG_PROXY + '/order-deliver', {
+                method: 'POST', keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(b)
+            }).then(function (r) { return { status: r.status }; }, function () { return { status: 0 }; });
+        };
+        var attempt = function (n, preferToken) {
+            return Promise.resolve(window._authCred ? window._authCred(preferToken ? { preferToken: true } : null) : null)
+                .catch(function () { return null; })
+                .then(post)
+                .then(function (r) {
+                    if (r.status >= 200 && r.status < 300) return true;
+                    if (n >= 1 || (r.status >= 400 && r.status < 500 && r.status !== 401 && r.status !== 429)) return false;
+                    return new Promise(function (res) { setTimeout(res, 2500); })
+                        .then(function () { return attempt(n + 1, r.status === 401); });
+                });
+        };
+        return attempt(0, false);
+    };
+    // 🔐 Auth kafolati: Worker chaqiruvi / DB yozuvidan OLDIN chaqiriladi.
+    //    Telegram — custom token (window._authReady kutiladi).
+    //    Brauzer/APK — anonim kirish (barqaror uid, LOCAL persistence).
+    //    Firebase user obyektini (yoki null) qaytaradi.
+    // ⏳ Firebase saqlangan sessiyani (LOCAL persistence) ASINXRON tiklaydi.
+    //    Sahifa ochilishi bilan `currentUser` hali null bo'ladi — shu paytda
+    //    signInAnonymously() chaqirilsa, telefon+parol bilan kirgan mijoz
+    //    yangi anonim hisobga almashib ketardi. Shuning uchun avval kutamiz.
+    window._authSettled = function () {
+        if (window.__authSettledP) return window.__authSettledP;
+        window.__authSettledP = new Promise(function (res) {
+            try {
+                var un = firebase.auth().onAuthStateChanged(function (u) { try { un(); } catch (e) {} res(u || null); });
+            } catch (e) { res(null); }
+            setTimeout(function () { res(null); }, 4000);
+        });
+        return window.__authSettledP;
+    };
+    window._ensureAuth = async function () {
+        try {
+            if (!(window.firebase && firebase.auth)) return null;
+            if (!firebase.auth().currentUser) { try { await window._authSettled(); } catch (e) {} }
+            var cur = firebase.auth().currentUser;
+            if (cur) return cur;
+            if (typeof tg !== 'undefined' && tg.initData) {
+                try { await window._authReady; } catch (e) {}
+                return firebase.auth().currentUser;
+            }
+            if (typeof firebase.auth().signInAnonymously === 'function') {
+                try { await firebase.auth().signInAnonymously(); } catch (e) {}
+            }
+            return firebase.auth().currentUser;
+        } catch (e) {
+            try { return (window.firebase && firebase.auth) ? firebase.auth().currentUser : null; } catch (e2) { return null; }
+        }
+    };
+    // 📨 Telegram proxy'ga xabar yuborish — Worker auth tekshirishi uchun kredential qo'shamiz.
+    //    (Ochiq proxy yopildi: endi faqat tekshirilgan foydalanuvchi/admin yubora oladi.
+    //     initData bo'lmasa anonim Firebase ID token yuboriladi.)
+    //    Async: avval kredential hal qilinadi, keyin fetch qaytariladi — mavjud
+    //    `await tgProxySend(...)` va `.then/.catch` chaqiruvchilar ishlayveradi.
+    async function tgProxySend(payload){
+        try {
+            var _cred = window._authCred ? await window._authCred() : null;
+            if (_cred && _cred.initData) payload.initData = _cred.initData;
+            else if (_cred && _cred.idToken) payload.idToken = _cred.idToken;
+            else if (typeof tg !== 'undefined' && tg.initData) payload.initData = tg.initData;
+        } catch(e){}
+        return fetch(TG_PROXY, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+    }
+    window.tgProxySend = tgProxySend;
+    // 📦 Stokni XAVFSIZ kamaytirish — ZAXIRA (fallback) yo'li.
+    //    ASOSIY yo'l endi serverda: Worker `/stock-commit` (izohni fayl oxiridagi
+    //    "QATLAM 2026.16" qatlamida o'qing). Bu funksiya faqat Worker yangilanmagan
+    //    yoki internet uzilgan holatda ishlaydi.
+    //
+    //    Bu yerda TUZATILGAN ikki jiddiy xato:
+    //      1) MANZIL INDEKS bo'yicha edi (`products/{idx}/stock`). Admin mahsulot
+    //         o'chirsa/qo'shsa indekslar suriladi va BOSHQA tovarning stoki
+    //         kamayardi. Endi manzil har safar mahsulot `id`si bo'yicha QAYTA
+    //         topiladi.
+    //      2) `fallback` — sahifa yuklanganda o'qilgan ESKI stok qiymati edi.
+    //         Transaction ichida `cur` bo'lmasa u qiymat qayta tiklanardi, ya'ni
+    //         boshqalar sotgan tovarlar "omborga qaytardi". Endi ishlatilmaydi.
+    //    changes: [{ id, size?, qty, idx?, sizeIdx?, name? }]
+    function _decrementStock(changes){
+        if (!Array.isArray(changes) || !changes.length) return Promise.resolve(false);
+        // Manzilni ANIQLASH uchun `products` tugunini bir marta yangi holatda o'qiymiz.
+        var fresh = null;
+        return db.ref('products').once('value')
+            .then(function(snap){ fresh = snap.val(); })
+            .catch(function(e){ _dwarn('[stock] products o\'qilmadi, indeksga qaytamiz:', e); })
+            .then(function(){
+                var jobs = changes.map(function(ch){
+                    try {
+                        var loc = _resolveStockPath(fresh, ch);
+                        if (!loc) return Promise.resolve(false);
+                        return db.ref(loc).transaction(function(cur){
+                            // `cur` yo'q bo'lsa — bu tugunni o'zimiz yaratmaymiz:
+                            // eski (yuklanish vaqtidagi) qiymatni tiklash sotilgan
+                            // tovarni "qaytarib" qo'yardi.
+                            if (typeof cur !== 'number') return cur;
+                            var nv = cur - (parseInt(ch.qty) || 0);
+                            return nv < 0 ? 0 : nv;
+                        }).then(function(res){
+                            return !!(res && res.committed);
+                        }).catch(function(e){
+                            _dwarn('[stock] transaction rad etildi:', loc, e);
+                            return false;
+                        });
+                    } catch(e){ _dwarn('[stock] update xato:', e); return Promise.resolve(false); }
+                });
+                return Promise.all(jobs).then(function(r){
+                    return r.some(function(x){ return x === true; });
+                });
+            });
+    }
+    // Mahsulot `id`si bo'yicha DB dagi haqiqiy yozish manzilini topadi.
+    // `fresh` o'qilmagan bo'lsa — oxirgi chora sifatida eski indeksga qaytadi.
+    function _resolveStockPath(fresh, ch){
+        var key = null, node = null;
+        if (fresh) {
+            var keys = Array.isArray(fresh)
+                ? fresh.map(function(_, i){ return String(i); })
+                : Object.keys(fresh);
+            for (var i = 0; i < keys.length; i++) {
+                var v = fresh[keys[i]];
+                if (v && String(v.id) === String(ch.id)) { key = keys[i]; node = v; break; }
+            }
+        }
+        if (key === null) {
+            if (ch.idx == null || ch.idx < 0) return null;
+            key = String(ch.idx);
+            return (ch.sizeIdx != null && ch.sizeIdx >= 0)
+                ? 'products/' + key + '/sizes/' + ch.sizeIdx + '/stock'
+                : 'products/' + key + '/stock';
+        }
+        var wantSize = (ch.size != null) ? String(ch.size) : '';
+        if (wantSize && wantSize !== 'Universal' && node && node.sizes) {
+            var sKeys = Array.isArray(node.sizes)
+                ? node.sizes.map(function(_, i){ return String(i); })
+                : Object.keys(node.sizes);
+            for (var j = 0; j < sKeys.length; j++) {
+                var s = node.sizes[sKeys[j]];
+                if (s && String(s.size) === wantSize) {
+                    return 'products/' + key + '/sizes/' + sKeys[j] + '/stock';
+                }
+            }
+        }
+        return 'products/' + key + '/stock';
+    }
+    window._decrementStock = _decrementStock;
+    window._resolveStockPath = _resolveStockPath;
+

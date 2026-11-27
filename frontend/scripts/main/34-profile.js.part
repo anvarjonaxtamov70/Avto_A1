@@ -1,0 +1,155 @@
+    // ============================================================
+// 🚗 SHAXSIY KABINET — YANGI FUNKSIYALAR
+// ============================================================
+
+// MENING MASHINAM — bu blok fayl OXIRIDAGI "QATLAM 2026.13" ga ko'chirildi.
+// ------------------------------------------------------------------
+// Nega ko'chirildi:
+//   1) mashinalar ro'yxati shu yerda QATTIQ yozilgan edi, endi u yagona
+//      manbada — `window.MY_CAR_BRANDS` (ikki joyda takrorlanmaydi);
+//   2) mashinani endi «Ma'lumot» oynasidan ham o'zgartirish mumkin,
+//      shuning uchun saqlash mantig'i bitta funksiyaga (`saveMyCar`) yig'ildi;
+//   3) eski matn "faqat shu mashinaga mos tovarlarni ko'rsatamiz" deb
+//      va'da berardi, lekin bunday FILTR KODDA UMUMAN YO'Q edi — yolg'on
+//      va'da olib tashlandi;
+//   4) eski `renderMyCar` nomni `split('-')` bilan ajratib bo'sh joy bilan
+//      qo'shardi — modelda chiziqcha bo'lsa nom buzilardi.
+// Funksiyalar (openMyCarModal / saveMyCarChoice / renderMyCar) o'sha
+// nomlar bilan qatlamda qayta belgilangan — tashqi chaqiruvlar buzilmaydi.
+
+// MANZILLAR — bir nechta manzil saqlash
+window.getAddresses = () => { try { return JSON.parse(localStorage.getItem('avto_addresses') || '[]'); } catch(e) { return []; } };
+window.saveAddresses = (arr) => { localStorage.setItem('avto_addresses', JSON.stringify(arr)); if(window.currentUser) db.ref('users/'+window.currentUser+'/addresses').set(arr); };
+// 📍 Manzil turi -> ikonka/rang/nom
+window._addrMeta = function (a) {
+    var t = (a && a.type) || 'other';
+    var I = {
+        home: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>',
+        work: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 0h-4V4h4v2z"/></svg>',
+        map: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 5.1L9 3 3 5v16l6-2 6 2 6-2V3l-6 2.1zM15 19l-6-2.1V5l6 2.1V19z"/></svg>',
+        other: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>'
+    };
+    var M = { home: ['Uy', '#34c759'], work: ['Ish', '#0a84ff'], map: ['Xaritada', '#5e5ce6'], other: ['Manzil', '#ff9500'] };
+    var m = M[t] || M.other;
+    return { icon: I[t] || I.other, name: m[0], color: m[1] };
+};
+window._addrCoordOnly = function (v) { return /^📍?\s*-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?\s*$/u.test(String(v || '').trim()); };
+
+window.renderAddresses = () => {
+    let addrs = getAddresses();
+    // Profil tugmasidagi son
+    let cnt = document.getElementById('pf-addr-count');
+    if (cnt) cnt.textContent = addrs.length ? String(addrs.length) : '';
+    // Oyna ichidagi ro'yxat
+    let el = document.getElementById('addr-sheet-list');
+    if (!el) return;
+    const safe = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    if (addrs.length === 0) {
+        el.innerHTML = '<div class="ad-empty"><div class="ad-empty-ic">' + window._addrMeta({ type: 'other' }).icon + '</div><b>Manzil qo\'shilmagan</b><span>Xaritadan nuqta belgilang yoki manzilni qo\'lda yozing — keyingi buyurtmada bir bosishda tanlaysiz.</span></div>';
+        return;
+    }
+    el.innerHTML = '<div class="ad-sec">Saqlangan \u00B7 ' + addrs.length + ' ta</div><div class="ad-group">' + addrs.map((a, i) => {
+        const meta = window._addrMeta(a);
+        const address = String(a.address || '').trim();
+        const sub = address && !window._addrCoordOnly(address) ? safe(address) : (a.mapLink ? 'Xaritada belgilangan nuqta' : safe(address));
+        const map = (a.mapLink && /^https:\/\//i.test(String(a.mapLink)))
+            ? '<a class="ad-act" href="' + safe(a.mapLink) + '" target="_blank" rel="noopener" aria-label="Xaritada ochish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg></a>' : '';
+        return '<div class="ad-row" style="--i:' + i + '">' +
+            '<span class="ad-ic" style="--ic:' + meta.color + '">' + meta.icon + '</span>' +
+            '<span class="ad-tx"><b>' + safe(a.label || meta.name) + '</b>' + (sub ? '<span>' + sub + '</span>' : '') + '</span>' +
+            map +
+            '<button type="button" class="ad-act ad-del" onclick="window._addrDelete(' + i + ')" aria-label="Manzilni o\'chirish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>' +
+        '</div>';
+    }).join('') + '</div>';
+};
+window.deleteAddress = (idx) => {
+    let arr = getAddresses(); arr.splice(idx, 1); saveAddresses(arr);
+    // Yetkazish oynasidagi tanlangan indeksni ham to'g'rilaymiz
+    if (window._dlvSelectedAddr === idx) window._dlvSelectedAddr = null;
+    else if (typeof window._dlvSelectedAddr === 'number' && window._dlvSelectedAddr > idx) window._dlvSelectedAddr--;
+    renderAddresses(); showToast("Manzil o'chirildi");
+};
+// Tasdiq bilan o'chirish (oyna ichidagi savat tugmasi)
+window._addrDelete = (idx) => {
+    let a = getAddresses()[idx];
+    if (!a) return;
+    let nm = a.label || window._addrMeta(a).name;
+    let go = () => { window.deleteAddress(idx); try { if (window._hap) window._hap('success'); } catch (e) {} };
+    if (window._a1Confirm) window._a1Confirm('"' + nm + '" manzilini o\'chirasizmi?').then(ok => { if (ok) go(); });
+    else if (confirm('"' + nm + '" manzilini o\'chirasizmi?')) go();
+};
+window.openAddressesSheet = () => {
+    renderAddresses();
+    openModal('addressesModal');
+    try { if (window._hap) window._hap('light'); } catch (e) {}
+};
+// Xaritadan belgilash: mavjud xarita tanlagichi (yetkazish oynasidagi bilan bir xil).
+window._addrFromMap = () => {
+    if (typeof window.openMapPicker === 'function') window.openMapPicker();
+    else addNewAddress();
+};
+window.addNewAddress = () => {
+    // Telegram lokatsiyasi
+    let useLocation = false;
+    if (typeof tg !== 'undefined' && tg.LocationManager) {
+        try { tg.LocationManager.init(); useLocation = true; } catch(e) {}
+    }
+    let m = document.getElementById('addAddressModal');
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'addAddressModal';
+        m.className = 'modal-standard';
+        var _M = window._addrMeta;
+        m.innerHTML = `<div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-pin"></use></svg>Yangi manzil</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div><div class="ad-wrap">
+            <div class="ad-seg" role="radiogroup" aria-label="Manzil turi">
+                <button type="button" class="addr-type-btn selected" data-t="home" onclick="selectAddrType(this)">${_M({type:'home'}).icon}Uy</button>
+                <button type="button" class="addr-type-btn" data-t="work" onclick="selectAddrType(this)">${_M({type:'work'}).icon}Ish</button>
+                <button type="button" class="addr-type-btn" data-t="other" onclick="selectAddrType(this)">${_M({type:'other'}).icon}Boshqa</button>
+            </div>
+            <div class="ad-sec">Ma'lumot</div>
+            <div class="ad-form">
+                <input type="text" id="addr-label" class="ad-in" placeholder="Nom (ixtiyoriy, masalan: Onamning uyi)" autocomplete="off">
+                <textarea id="addr-text" class="ad-in ad-ta" placeholder="To'liq manzil: shahar, ko'cha, uy, kvartira…"></textarea>
+            </div>
+            <button type="button" id="addr-loc-btn" class="ad-btn ad-ghost ad-loc" onclick="getLocationForAddress()"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>Joriy joylashuvni olish</button>
+            <button type="button" class="ad-btn ad-gold" onclick="saveNewAddress()">Saqlash</button>
+        </div>`;
+        document.body.appendChild(m);
+    }
+    if (typeof openModal === 'function') openModal('addAddressModal');
+    else { m.style.display='flex'; window.activeModal='addAddressModal'; }
+};
+window.selectAddrType = (btn) => {
+    document.querySelectorAll('.addr-type-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+};
+window.getLocationForAddress = () => {
+    if (typeof tg !== 'undefined' && tg.LocationManager && tg.LocationManager.isInited) {
+        tg.LocationManager.getLocation((loc) => {
+            if (loc && loc.latitude) {
+                let txt = document.getElementById('addr-text');
+                if (txt) txt.value = `📍 ${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}`;
+                showToast('📍 Lokatsiya olindi!', 'success');
+            } else { showToast('Lokatsiya olinmadi', 'warning'); }
+        });
+    } else {
+        showToast('Telegram lokatsiya ishlamaydi. Qo\'lda yozing.', 'warning');
+    }
+};
+window.saveNewAddress = () => {
+    let typeBtn = document.querySelector('.addr-type-btn.selected');
+    let type = typeBtn ? typeBtn.getAttribute('data-t') : 'other';
+    let label = (document.getElementById('addr-label') || {}).value || '';
+    let address = (document.getElementById('addr-text') || {}).value || '';
+    if (!address.trim()) { showToast('Manzil yozing!', 'warning'); return; }
+    let arr = getAddresses();
+    arr.push({ type, label: label.trim(), address: address.trim() });
+    saveAddresses(arr);
+    renderAddresses();
+    showToast('✅ Manzil saqlandi!', 'success');
+    closeModal();
+};
+
+// PROFIL INIT — sahifa ochilganda mashinani va manzillarni ko'rsatish
+// (Eski v3 showProfile wrapperi yuqoridagi birlashtirilgan wrapperga ko'chirildi)
+

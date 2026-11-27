@@ -1,0 +1,200 @@
+// ============================================================================
+// 🧠 AI OMMAVIY — TO'LIQ QAYTA YOZILDI
+// ----------------------------------------------------------------------------
+// ⚠️ ILGARI QANDAY XATOLAR BO'LGAN (hammasi shu yerda tuzatildi):
+//
+//  1. `.catch()` YO'Q edi. Firebase yozuvi rad etilsa (qoidalar, internet yo'q,
+//     auth tayyor emas) `.then()` hech qachon ishlamasdi -> forma yashirin,
+//     loader esa MANGU aylanib turardi. Oyna sahifa qayta yuklanmaguncha o'lik
+//     bo'lib qolardi va HECH QANDAY xabar chiqmasdi.
+//  2. SOXTA progress: loader qattiq `setTimeout(1500)` bilan yopilardi
+//     ("1.5 soniya neyron tarmoqni tomosha qiladi" deb izoh ham bor edi).
+//     Bot o'chiq bo'lsa ham "✅ tahlilga yuborildi" deb yozardi.
+//  3. NATIJA HECH QACHON O'QILMASDI. Bot `status`, `added`, `error` yozardi —
+//     lekin ilovada uni o'qiydigan kod umuman yo'q edi. "Matn bo'sh",
+//     "Hech qanday mahsulot ajratib bo'lmadi" kabi xatolar ko'rinmasdi.
+//  4. TIMEOUT yo'q: bot uxlab qolsa (Render) so'rov abadiy kutib turardi.
+//  5. ADMIN TEKSHIRUVI yo'q edi (server tomonda ham) — xavfsizlik teshigi.
+//  6. `currentUser` tekshirilmasdi -> `ai_bulk_requests/null` ga yozishga urinardi.
+//  7. `btn` parametri ishlatilmasdi -> tugma bloklanmasdi, ikki marta bosilsa
+//     ikki so'rov ketardi.
+//  8. Qiymatlar tekshirilmasdi: `parseFloat(...) || 12600` — 0 kiritilsa
+//     jimgina 12600 ga aylanardi; manfiy ustama manfiy narx berardi.
+//  9. Natijadagi qoralamalar ILOVADA KO'RINMASDI: `products` bir marta
+//     (`once`) o'qilardi, listener yo'q -> ilovani qayta ochmaguncha
+//     "Qoralamalar yo'q" deb turardi.
+// 10. Oyna holati tiklanmasdi: loader ochiq holatda yopib qayta ochsa,
+//     faqat loader ko'rinardi.
+// ============================================================================
+window._aiBulkBusy = false;
+
+window.sendAiBulk = (btn) => {
+    if (window._aiBulkBusy) { showToast("So'rov yuborilmoqda, kuting...", "warning"); return; }
+
+    // 🔐 1) Faqat admin
+    if (!(window.isAdmin && window.isAdmin())) {
+        showToast("Bu amal faqat admin uchun", "warning");
+        return;
+    }
+    // 2) Foydalanuvchi aniqmi (Firebase qoidalari uid bo'yicha ishlaydi)
+    var uid = window.currentUser;
+    if (!uid) { showToast("Foydalanuvchi aniqlanmadi. Ilovani qayta oching.", "warning"); return; }
+
+    var txtEl = document.getElementById('ai-bulk-text');
+    var text = txtEl ? txtEl.value.trim() : '';
+    if (!text) { showToast("Iltimos, oldin ro'yxatni yozing!", "warning"); return; }
+
+    // 3) Qiymatlarni HAQIQATAN tekshiramiz (jimgina almashtirmaymiz)
+    var rateEl = document.getElementById('ai-bulk-usd-rate');
+    var markEl = document.getElementById('ai-bulk-markup');
+    var usdRate = parseFloat(rateEl ? rateEl.value : '');
+    var markup = parseFloat(markEl ? markEl.value : '');
+    if (!isFinite(usdRate) || usdRate < 100 || usdRate > 1000000) {
+        showToast("USD kursi noto'g'ri (100 – 1 000 000)", "warning");
+        if (rateEl) rateEl.focus();
+        return;
+    }
+    if (!isFinite(markup) || markup < -90 || markup > 1000) {
+        showToast("Ustama noto'g'ri (-90% – 1000%)", "warning");
+        if (markEl) markEl.focus();
+        return;
+    }
+
+    var lineCount = text.split('\n').filter(function (l) { return l.trim(); }).length;
+    if (lineCount > 200) {
+        showToast("Ro'yxat 200 qatordan oshmasin (hozir " + lineCount + " ta)", "warning");
+        return;
+    }
+
+    window._aiBulkBusy = true;
+    if (btn) { btn.disabled = true; btn.dataset.old = btn.innerHTML; btn.innerHTML = 'Yuborilmoqda...'; }
+    window._aiBulkShowStage('sending', { lines: lineCount });
+
+    var reqRef = db.ref('ai_bulk_requests/' + uid);
+    var startedAt = Date.now();
+
+    reqRef.set({
+        raw_text: text,
+        status: "pending",
+        time: startedAt,
+        needs_processing: true,
+        usd_rate: usdRate,
+        markup_pct: markup
+    }).then(function () {
+        window._aiBulkShowStage('working', { lines: lineCount });
+        // 4) NATIJANI KUTAMIZ (jonli listener) — soxta setTimeout emas
+        window._aiBulkWatch(reqRef, startedAt, btn);
+    }).catch(function (err) {
+        // 5) Endi xato JIMGINA yo'qolmaydi
+        window._aiBulkBusy = false;
+        if (btn) { btn.disabled = false; if (btn.dataset.old) btn.innerHTML = btn.dataset.old; }
+        var msg = (err && err.message) ? err.message : 'Bazaga yozilmadi';
+        window._aiBulkShowStage('error', { error: msg });
+        showToast("❌ Yuborilmadi: " + msg, "warning");
+    });
+};
+
+/**
+ * So'rov natijasini kuzatadi: bot `status`ni 'done' yoki 'error' qiladi.
+ * Bot javob bermasa — 90 soniyadan keyin ogohlantiradi (ilgari abadiy kutardi).
+ */
+window._aiBulkWatch = function (reqRef, startedAt, btn) {
+    var done = false;
+    var TIMEOUT_MS = 90000;
+
+    var finish = function () {
+        if (done) return;
+        done = true;
+        try { reqRef.off('value', onVal); } catch (e) {}
+        if (timer) clearTimeout(timer);
+        window._aiBulkBusy = false;
+        if (btn) { btn.disabled = false; if (btn.dataset.old) btn.innerHTML = btn.dataset.old; }
+    };
+
+    var onVal = function (snap) {
+        var v = snap.val();
+        if (!v || done) return;
+        // Eski (oldingi) natijani o'qib yubormaslik uchun vaqtni tekshiramiz
+        if (v.time && v.time < startedAt) return;
+        if (v.status === 'done') {
+            finish();
+            var added = parseInt(v.added, 10) || 0;
+            window._aiBulkShowStage('done', { added: added });
+            if (added > 0) {
+                showToast("✅ " + added + " ta qoralama qo'shildi!", "success");
+                try { if (window._hap) window._hap('success'); } catch (e) {}
+                // 6) Qoralamalar DARHOL ko'rinsin — bazani qayta o'qiymiz
+                if (window._aiBulkReloadProducts) window._aiBulkReloadProducts();
+            } else {
+                showToast("Hech narsa qo'shilmadi", "warning");
+            }
+        } else if (v.status === 'error') {
+            finish();
+            window._aiBulkShowStage('error', { error: v.error || "Noma'lum xato" });
+            showToast("❌ " + (v.error || "Xatolik"), "warning");
+        }
+    };
+
+    reqRef.on('value', onVal);
+
+    var timer = setTimeout(function () {
+        if (done) return;
+        finish();
+        window._aiBulkShowStage('timeout', {});
+    }, TIMEOUT_MS);
+};
+
+/** Qoralamalar darhol ko'rinishi uchun `products`ni qayta o'qiydi. */
+window._aiBulkReloadProducts = function () {
+    try {
+        db.ref('products').once('value').then(function (snap) {
+            if (!snap.exists()) return;
+            var all = [];
+            snap.forEach(function (c) { if (c.val()) all.push(c.val()); });
+            productsDB = all;
+            window.productsDB = all;
+            if (typeof _sortDisplayDB === 'function') {
+                displayDB = _sortDisplayDB(productsDB.filter(function (p) { return !p.is_draft; }).slice().reverse());
+            }
+            if (typeof renderProducts === 'function') renderProducts();
+            // Qoralamalar oynasi ochiq bo'lsa — yangilaymiz
+            if (activeModal === 'adminDraftsModal' && typeof showDraftFolders === 'function') showDraftFolders();
+        }).catch(function () {});
+    } catch (e) {}
+};
+
+    // ==========================================
+// 🗑 BARCHA QORALAMALARNI TOZALASH
+// ==========================================
+window.deleteAllDrafts = () => {
+    // 1. O'chirishdan oldin so'rash (xato bosilib ketmasligi uchun)
+    if(typeof tg !== 'undefined' && tg.showConfirm) {
+        tg.showConfirm("Haqiqatan ham barcha qoralamalarni o'chirib tashlaysizmi? Bu amalni ortga qaytarib bo'lmaydi!", function(ok) {
+            if(ok) executeDeleteAllDrafts();
+        });
+    } else {
+        if(confirm("Haqiqatan ham barcha qoralamalarni o'chirib tashlaysizmi?")) executeDeleteAllDrafts();
+    }
+};
+
+window.executeDeleteAllDrafts = () => {
+    // 2. Bazadagi jami tovarlar sonini eslab qolamiz
+    let originalCount = productsDB.length;
+    let deletedCount = productsDB.filter(p => p.is_draft).length;
+
+    if (deletedCount === 0) {
+        showToast("O'chirish uchun qoralamalar yo'q!", "warning");
+        return;
+    }
+
+    // #7: eng so'nggi holatni o'qib, faqat qoralamalarni olib tashlab yozamiz
+    window._rewriteProductsSafely(function (fresh) {
+        return fresh.filter(p => !p.is_draft);
+    }).then(() => {
+        showToast(`✅ ${deletedCount} ta qoralama o'chirildi!`, "success");
+        filterAdminDrafts(); // Oynadagi ro'yxatni yangilab qo'yamiz (bo'm-bo'sh bo'lib qoladi)
+    }).catch(err => {
+        showToast("Xatolik yuz berdi!", "warning");
+    });
+};
+

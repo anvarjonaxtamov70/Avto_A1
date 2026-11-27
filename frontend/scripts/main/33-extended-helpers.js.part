@@ -1,0 +1,577 @@
+// ============================================================
+// 🚀 KENGAYTIRISH 2 — JS YORDAMCHILAR (24 ta yangilik)
+// ============================================================
+
+// 3.8 UNIVERSAL HAPTIC
+window._hap = (kind) => {
+    // tg.HapticFeedback yuqorida MARKAZIY sozlangan: Telegram ICHIDA native haptic,
+    // brauzer/APK'da esa navigator.vibrate. Shuning uchun shu yerda faqat yo'naltiramiz.
+    try {
+        if (typeof tg !== 'undefined' && tg.HapticFeedback) {
+            if (kind === 'success') tg.HapticFeedback.notificationOccurred('success');
+            else if (kind === 'warning') tg.HapticFeedback.notificationOccurred('warning');
+            else if (kind === 'error') tg.HapticFeedback.notificationOccurred('error');
+            else if (kind === 'selection') tg.HapticFeedback.selectionChanged();
+            else tg.HapticFeedback.impactOccurred(kind || 'light');
+            return;
+        }
+    } catch (e) {}
+    // Zaxira (tg.HapticFeedback umuman bo'lmagan kamdan-kam holat uchun)
+    try {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(kind === 'success' ? [10, 30, 10]
+                : (kind === 'warning' || kind === 'error') ? [18, 40, 18]
+                : kind === 'selection' ? 5 : 10);
+        }
+    } catch (e) {}
+};
+
+// 1.1 HEART BURST
+window._burstHeart = (btnEl) => {
+    if (!btnEl) return;
+    btnEl.classList.add('burst');
+    setTimeout(() => btnEl.classList.remove('burst'), 500);
+    for (let i = 0; i < 6; i++) {
+        const p = document.createElement('div');
+        p.className = 'heart-particle';
+        const angle = (Math.PI * 2 * i) / 6;
+        const dist = 28 + Math.random() * 12;
+        p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+        btnEl.appendChild(p);
+        setTimeout(() => p.remove(), 800);
+    }
+    _hap('light');
+};
+
+// 1.5 KONFETTI
+window._fireConfetti = (count) => {
+    count = count || 36;
+    const colors = ['#F0D060', '#C9A84C', '#fff', '#30d158', '#0a84ff'];
+    for (let i = 0; i < count; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = Math.random() * 100 + '%';
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.animationDelay = (Math.random() * 0.5) + 's';
+        piece.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+        document.body.appendChild(piece);
+        setTimeout(() => piece.remove(), 4500);
+    }
+};
+
+// 1.9 CART ICON SHAKE
+window._shakeCartIcon = () => {
+    const cart = document.getElementById('nav-cart');
+    if (!cart) return;
+    cart.classList.remove('shaking');
+    void cart.offsetWidth;
+    cart.classList.add('shaking');
+    setTimeout(() => cart.classList.remove('shaking'), 600);
+};
+
+// 2.1 ORDER STATUS TIMELINE (mijozga ko'rinadigan)
+window._renderOrderTimeline = (status) => {
+    const steps = [
+        { k: 'kutilmoqda', label: 'Yangi buyurtma' },
+        { k: 'qabul', label: 'Qabul qildik' },
+        { k: 'yolda', label: "Yo'lga chiqdi" },
+        { k: 'yetkazildi', label: 'Yetkazib berildi' }
+    ];
+    if (status === 'bekor_qilingan') {
+        return `<div class="order-timeline"><div class="tl-step"><div class="tl-dot" style="background:#ff453a;border-color:#ff453a;color:#fff;">✕</div><div class="tl-text" style="color:#ff453a;font-weight:800;">Buyurtma bekor qilingan</div></div></div>`;
+    }
+    let activeIdx = steps.findIndex(s => s.k === status);
+    if (activeIdx < 0) activeIdx = 0;
+    return '<div class="order-timeline">' + steps.map((s, i) => {
+        const cls = i < activeIdx ? 'done' : (i === activeIdx ? 'active' : '');
+        const sym = i < activeIdx ? '✓' : (i + 1);
+        return `<div class="tl-step ${cls}"><div class="tl-dot">${sym}</div><div class="tl-text">${s.label}</div></div>`;
+    }).join('') + '</div>';
+};
+
+// 2.3 PROFIL STATISTIKA
+window._renderProfileStats = () => {
+    const box = document.getElementById('pf-stats-box');
+    if (!box) return;
+    if (!window.currentUser) return;
+    // myOrders lokal let o'zgaruvchisi -> window'dan foydalanib bo'lmaydi.
+    // Firebase'dan qayta o'qiymiz (yengil, bir marta)
+    db.ref('users/' + window.currentUser + '/orders').once('value', (snap) => {
+        const orders = snap.val() || [];
+        const totalOrders = Array.isArray(orders) ? orders.length : Object.keys(orders).length;
+        const ordersArr = Array.isArray(orders) ? orders : Object.values(orders);
+        const totalSpent = ordersArr.filter(o => o && o.status === 'yetkazildi').reduce((s, o) => s + (o.total || 0), 0);
+        const wishCount = (document.querySelectorAll && document.querySelectorAll('.btn-wishlist.active') || []).length || 0;
+        const fmt = (n) => n >= 1000000 ? (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M' : (n >= 1000 ? Math.round(n/1000) + 'K' : n);
+        box.innerHTML = `
+            <div class="pf-stats">
+                <div class="pf-stat-card"><div class="pf-stat-num">${totalOrders}</div><div class="pf-stat-lbl">Buyurtma</div></div>
+                <div class="pf-stat-card"><div class="pf-stat-num">${fmt(totalSpent)}</div><div class="pf-stat-lbl">Sarflangan</div></div>
+                <div class="pf-stat-card"><div class="pf-stat-num">${wishCount}</div><div class="pf-stat-lbl">Saqlangan</div></div>
+            </div>`;
+    });
+};
+
+// 4.3 NOTIFY ME — tugagan tovar uchun
+window.notifyMeForProduct = (productId) => {
+    if (!window.currentUser) { showToast('Iltimos avval profil yarating', 'warning'); return; }
+    if (!productId) return;
+    db.ref(`notify_requests/${productId}/${window.currentUser}`)
+        .set({ time: Date.now(), userId: window.currentUser, name: (window.myProfile && window.myProfile.name) || '', phone: (window.myProfile && window.myProfile.phone) || '' })
+        .then(() => { showToast('🔔 Sotuvga kirsa, sizga xabar beramiz!', 'success'); _hap('success'); })
+        .catch(() => showToast('Xato! Internetni tekshiring', 'warning'));
+};
+
+// 4.6 COMPARE
+window.compareList = [];
+window.toggleCompare = (productId, e) => {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    let product = (window.productsDB || []).find(x => x.id == productId);
+    if (!product) { showToast("Tovar topilmadi. Sahifani yangilang.", "warning"); return; }
+    let pid = String(productId);
+    const idx = window.compareList.indexOf(pid);
+    if (idx >= 0) {
+        window.compareList.splice(idx, 1);
+        showToast("Taqqoslashdan chiqarildi", "warning");
+    } else {
+        if (window.compareList.length >= 2) window.compareList.shift();
+        window.compareList.push(pid);
+        _hap('light');
+        showToast(window.compareList.length === 1 ? "1/2 tanlandi — yana bitta bosing" : "Tayyor! Animatsiyali tarozi tugmasini bosing", "success");
+    }
+    updateCompareBar();
+    updateCompareBtnStates();
+};
+window.updateCompareBar = () => {
+    let bar = document.getElementById('compare-bar');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'compare-bar';
+        document.body.appendChild(bar);
+    }
+    if (window.compareList.length < 2) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
+    bar.classList.add('show');
+    bar.innerHTML = '<button type="button" class="cmp-fab" onclick="openCompareModal()" aria-label="Tanlangan 2 ta tovarni taqqoslash"><span class="cmp-fab-ring" aria-hidden="true"></span><svg class="cmp-scale" viewBox="0 0 48 48" aria-hidden="true"><path class="cmp-scale-stand" d="M22 13h4v24h8v4H14v-4h8V13Z"/><circle class="cmp-scale-crown" cx="24" cy="10" r="4"/><g class="cmp-scale-beam"><path d="M9 15h30"/><path d="M24 10v5"/><g class="cmp-scale-pan cmp-scale-pan-left"><path d="M12 15 7 27M12 15l5 12"/><path d="M5 27c.5 4 3.2 6 7 6s6.5-2 7-6H5Z"/></g><g class="cmp-scale-pan cmp-scale-pan-right"><path d="m36 15-5 12m5-12 5 12"/><path d="M29 27c.5 4 3.2 6 7 6s6.5-2 7-6H29Z"/></g></g></svg><span class="cmp-fab-badge">2</span><span class="cmp-fab-label">Taqqoslash</span></button>';
+};
+window.updateCompareBtnStates = () => {
+    document.querySelectorAll('.btn-compare, .btn-compare-card').forEach(btn => {
+        let oc = btn.getAttribute('onclick') || '';
+        let match = oc.match(/toggleCompare\((\d+)/);
+        if (match) {
+            let id = match[1];
+            if (window.compareList.includes(id)) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+    });
+};
+window.openCompareModal = () => {
+    if (window.compareList.length < 2) { showToast('2 ta tovar belgilang', 'warning'); return; }
+    let m = document.getElementById('compareModal');
+    if (!m) { m = document.createElement('div'); m.id = 'compareModal'; m.className = 'modal-standard'; document.body.appendChild(m); }
+    const products = window.compareList.map(pid => (window.productsDB || []).find(x => x.id == pid)).filter(Boolean);
+    if (products.length < 2) { showToast("Sahifani yangilang va qaytadan belgilang.", "warning"); window.compareList=[]; updateCompareBar(); return; }
+    const [a, b] = products;
+    const priceDiff = Math.abs(a.price - b.price);
+    const cheaperIdx = a.price <= b.price ? 0 : 1;
+    const pctDiff = Math.round((priceDiff / Math.max(a.price, b.price)) * 100);
+    const diffLabel = priceDiff > 0 ? (pctDiff + '% arzonroq (' + priceDiff.toLocaleString() + " so'm farq)") : "Narxlari teng";
+    const stockA = a.stock !== undefined ? a.stock : ((a.sizes||[]).reduce((s,x)=>s+(x.stock||0),0));
+    const stockB = b.stock !== undefined ? b.stock : ((b.sizes||[]).reduce((s,x)=>s+(x.stock||0),0));
+    const carNames = window.CAR_NAMES || {};
+    const getCars = (p) => (p.categories || [p.category]).map(c => carNames[c] || c).filter(Boolean).join(', ') || 'Universal';
+    const rows = [
+        ['Narx', a.price.toLocaleString()+" so'm", b.price.toLocaleString()+" so'm", cheaperIdx===0, cheaperIdx===1],
+        ['Kod', a.code||'—', b.code||'—', false, false],
+        ['Birlik', a.unit==='komplekt'?'Komplekt':'Dona', b.unit==='komplekt'?'Komplekt':'Dona', false, false],
+        ['Ombor', stockA>0?stockA+' ta':'Tugagan', stockB>0?stockB+' ta':'Tugagan', stockA>stockB, stockB>stockA],
+        ['Mashina', getCars(a), getCars(b), false, false],
+        ['Turi', a.product_type==='razmerli'?'Razmerli':'Oddiy', b.product_type==='razmerli'?'Razmerli':'Oddiy', false, false]
+    ];
+    const rowsHtml = rows.map(r => '<div style="display:grid;grid-template-columns:90px 1fr 1fr;gap:6px;padding:10px 12px;border-top:1px solid rgba(255,255,255,0.05);">' +
+        '<div style="font-size:11px;color:var(--text-muted);font-weight:700;">' + r[0] + '</div>' +
+        '<div style="font-size:12px;font-weight:700;color:' + (r[3]?'#30d158':'#fff') + ';">' + r[1] + '</div>' +
+        '<div style="font-size:12px;font-weight:700;color:' + (r[4]?'#30d158':'#fff') + ';">' + r[2] + '</div></div>').join('');
+    m.innerHTML = '<div class="modal-header" style="position:sticky;top:0;z-index:10;background:rgba(10,10,12,0.95);backdrop-filter:blur(10px);"><h2 style="color:var(--luxury-gold);margin:0;font-size:18px;"><svg class="uic" aria-hidden="true"><use href="#i-compare"></use></svg>Taqqoslash</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">×</button></div>' +
+        '<div style="padding:16px;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
+        '<div style="text-align:center;"><img src="'+(a.img||window._brandPlaceholder('A1'))+'" onerror="this.src=window._brandPlaceholder(\'A1\')" style="width:100%;aspect-ratio:1/1;object-fit:contain;background:#fff;border-radius:14px;padding:8px;box-sizing:border-box;"><h4 style="font-size:13px;color:#fff;margin:8px 0 4px;line-height:1.3;">'+a.name.split('·')[0].trim()+'</h4><div style="color:var(--luxury-gold);font-weight:800;font-size:16px;">'+a.price.toLocaleString()+' so\'m</div></div>' +
+        '<div style="text-align:center;"><img src="'+(b.img||window._brandPlaceholder('A1'))+'" onerror="this.src=window._brandPlaceholder(\'A1\')" style="width:100%;aspect-ratio:1/1;object-fit:contain;background:#fff;border-radius:14px;padding:8px;box-sizing:border-box;"><h4 style="font-size:13px;color:#fff;margin:8px 0 4px;line-height:1.3;">'+b.name.split('·')[0].trim()+'</h4><div style="color:var(--luxury-gold);font-weight:800;font-size:16px;">'+b.price.toLocaleString()+' so\'m</div></div></div>' +
+        (priceDiff > 0 ? '<div style="background:rgba(48,209,88,0.1);border:1px solid rgba(48,209,88,0.3);border-radius:12px;padding:10px 14px;margin-bottom:14px;text-align:center;"><span style="color:#30d158;font-weight:800;font-size:13px;">✅ '+products[cheaperIdx].name.split('·')[0].trim()+' — '+diffLabel+'</span></div>' : '') +
+        '<div style="border-radius:14px;overflow:hidden;border:1px solid var(--glass-border);margin-bottom:16px;">' +
+        '<div style="display:grid;grid-template-columns:90px 1fr 1fr;gap:6px;padding:10px 12px;background:rgba(255,255,255,0.03);"><div style="font-size:10px;color:var(--text-muted);font-weight:800;text-transform:uppercase;">Xususiyat</div><div style="font-size:10px;color:var(--luxury-gold);font-weight:800;">1-tovar</div><div style="font-size:10px;color:var(--luxury-gold);font-weight:800;">2-tovar</div></div>' + rowsHtml + '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><button onclick="closeModal();setTimeout(()=>openProduct('+a.id+'),150)" style="padding:13px;background:var(--gold-gradient);color:#000;border:none;border-radius:12px;font-weight:800;font-size:12px;cursor:pointer;">🛒 Ochish</button><button onclick="closeModal();setTimeout(()=>openProduct('+b.id+'),150)" style="padding:13px;background:var(--gold-gradient);color:#000;border:none;border-radius:12px;font-weight:800;font-size:12px;cursor:pointer;">🛒 Ochish</button></div></div>';
+    if (typeof openModal === 'function') openModal('compareModal');
+    else { m.style.display='flex'; window.activeModal='compareModal'; }
+};
+
+// 5.1 XABAR YUBORISH (admin) — hammaga, tanlangan bir nechta yoki bitta mijozga.
+//     Yetkazish o'zgarmadi: har bir xabar `tgProxySend` -> Worker -> Telegram.
+// Faqat HAQIQIY Telegram chat_id (sof raqamli). Soxta ID (apk_*, tg_url_*) — skip.
+window._isTelegramId = function (uid) { return /^\d+$/.test(String(uid)); };
+(function () {
+    var BC = { mode: 'all', sel: {}, users: [], q: '', busy: false, fake: 0, loaded: false };
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var hap = function (k) { try { if (window._hap) window._hap(k); } catch (e) {} };
+    var DBX = function () { try { if (typeof db !== 'undefined' && db) return db; } catch (e) {} return (window.firebase && firebase.database) ? firebase.database() : null; };
+
+    function ensureModal() {
+        var m = $('broadcastModal');
+        if (m) return m;
+        m = document.createElement('div');
+        m.id = 'broadcastModal';
+        m.className = 'modal-standard';
+        m.innerHTML =
+            '<div class="modal-header"><h2><svg class="uic" aria-hidden="true"><use href="#i-megaphone"></use></svg>Xabar yuborish</h2><button class="close-btn" aria-label="Yopish" onclick="closeModal()">\u00D7</button></div>' +
+            '<div class="bcx">' +
+                '<div class="bcx-seg" id="bcx-seg"><button type="button" data-m="all" class="on">Hammaga</button><button type="button" data-m="pick">Tanlanganlarga</button></div>' +
+                '<p class="bcx-sec">Xabar</p>' +
+                '<div class="bcx-grp"><textarea id="bc-text" rows="5" maxlength="3500" placeholder="Assalomu alaykum! Yangi chegirmalarimiz bilan tanishing..."></textarea></div>' +
+                '<p class="bcx-hint">Faqat Telegram mijozlariga boradi, bloklanganlar o\u2018tkazib yuboriladi. HTML ishlatish mumkin: &lt;b&gt;qalin&lt;/b&gt;</p>' +
+                '<div id="bcx-pick" hidden>' +
+                    '<p class="bcx-sec"><span>Qabul qiluvchilar</span><button type="button" class="bcx-link" id="bcx-clear">Tozalash</button></p>' +
+                    '<label class="bcx-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.2" y2="16.2"/></svg><input type="text" id="bcx-q" placeholder="Ism yoki telefon" autocomplete="off"></label>' +
+                    '<div class="bcx-grp bcx-list" id="bcx-list"><div class="bcx-empty">Yuklanmoqda...</div></div>' +
+                '</div>' +
+                '<div class="bcx-stats" id="bcx-stats" hidden>' +
+                    '<div><b id="bc-count">0</b><span>Jami</span></div>' +
+                    '<div><b id="bc-sent">0</b><span>Yuborildi</span></div>' +
+                    '<div><b id="bc-failed">0</b><span>Xato</span></div>' +
+                    '<div><b id="bc-skipped">0</b><span>O\u2018tkazildi</span></div>' +
+                '</div>' +
+                '<p class="bcx-wait" id="bcx-wait" hidden></p>' +
+            '</div>' +
+            '<div class="bcx-foot"><button type="button" id="bc-send-btn" onclick="sendBroadcast()">Yuborish</button></div>';
+        document.body.appendChild(m);
+        $('bcx-seg').onclick = function (e) {
+            var b = e.target.closest ? e.target.closest('button[data-m]') : null;
+            if (!b || BC.busy) return;
+            setMode(b.getAttribute('data-m'));
+            hap('selection');
+        };
+        $('bcx-q').oninput = function () { BC.q = this.value || ''; renderPick(); };
+        $('bcx-clear').onclick = function () { if (BC.busy) return; BC.sel = {}; renderPick(); paint(); };
+        $('bcx-list').onclick = function (e) {
+            var r = e.target.closest ? e.target.closest('.bcx-row') : null;
+            if (!r || BC.busy || r.classList.contains('is-blk')) return;
+            var id = r.getAttribute('data-uid');
+            if (BC.sel[id]) delete BC.sel[id]; else BC.sel[id] = true;
+            r.classList.toggle('on', !!BC.sel[id]);
+            hap('selection');
+            paint();
+        };
+        return m;
+    }
+
+    function setMode(md) {
+        BC.mode = md === 'pick' ? 'pick' : 'all';
+        var seg = $('bcx-seg');
+        if (seg) Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.classList.toggle('on', x.getAttribute('data-m') === BC.mode); });
+        var pk = $('bcx-pick'); if (pk) pk.hidden = BC.mode !== 'pick';
+        if (BC.mode === 'pick') renderPick();
+        paint();
+    }
+
+    function recipients() {
+        if (BC.mode === 'all') return BC.users.filter(function (u) { return !u.blocked; }).map(function (u) { return u.uid; });
+        return Object.keys(BC.sel).filter(function (id) { return BC.sel[id] && window._isTelegramId(id) && !(window._blockedMap || {})[id]; });
+    }
+
+    function paint() {
+        var btn = $('bc-send-btn');
+        if (!btn || BC.busy) return;
+        var n = recipients().length;
+        btn.disabled = !BC.loaded || n === 0;
+        btn.textContent = !BC.loaded ? 'Yuklanmoqda...' : (n === 0 ? 'Qabul qiluvchini tanlang' : (n + ' kishiga yuborish'));
+    }
+
+    function renderPick() {
+        var box = $('bcx-list');
+        if (!box || BC.mode !== 'pick') return;
+        if (!BC.loaded) { box.innerHTML = '<div class="bcx-empty">Yuklanmoqda...</div>'; return; }
+        var q = BC.q.toLowerCase().trim();
+        var list = BC.users.filter(function (u) {
+            return !q || u.name.toLowerCase().indexOf(q) !== -1 || (u.phone || '').toLowerCase().indexOf(q) !== -1 || u.uid.indexOf(q) !== -1;
+        });
+        // Tanlanganlar tepada turadi — kimga ketishini darhol ko'rish uchun
+        list.sort(function (a, b) { return (BC.sel[b.uid] ? 1 : 0) - (BC.sel[a.uid] ? 1 : 0); });
+        var more = list.length > 150 ? list.length - 150 : 0;
+        list = list.slice(0, 150);
+        box.innerHTML = list.length ? list.map(function (u) {
+            return '<div class="bcx-row' + (BC.sel[u.uid] ? ' on' : '') + (u.blocked ? ' is-blk' : '') + '" role="button" tabindex="0" data-uid="' + esc(u.uid) + '">' +
+                '<span class="bcx-chk" aria-hidden="true"></span>' +
+                '<span class="bcx-mid"><b>' + esc(u.name) + '</b><span>' + esc(u.phone || 'Telefon yo\u2018q') + '</span></span>' +
+                (u.blocked ? '<span class="bcx-blk">Bloklangan</span>' : '') +
+            '</div>';
+        }).join('') + (more ? '<div class="bcx-empty">Yana ' + more + ' ta \u2014 qidiruvdan foydalaning</div>' : '')
+            : '<div class="bcx-empty">Mijoz topilmadi</div>';
+    }
+
+    function loadUsers() {
+        var d = DBX();
+        if (!d) return Promise.reject(new Error('Baza ulanmagan'));
+        var snapP = window._getUsersSnap ? window._getUsersSnap() : d.ref('users').once('value');
+        var blkP = d.ref('blocked_users').once('value').then(function (x) { return x.val() || {}; }, function () { return {}; });
+        return Promise.all([snapP, blkP]).then(function (r) {
+            var us = (r[0] && r[0].val && r[0].val()) || {};
+            var bm = r[1] || {};
+            window._blockedMap = bm;
+            var all = Object.keys(us);
+            BC.fake = all.filter(function (u) { return !window._isTelegramId(u); }).length;
+            BC.users = all.filter(window._isTelegramId).map(function (uid) {
+                var p = (us[uid] && us[uid].profile) || {};
+                return { uid: String(uid), name: String(p.name || p.firstName || 'Nomsiz mijoz'), phone: String(p.phone || ''), blocked: !!bm[uid] };
+            }).sort(function (a, b) { return a.name.localeCompare(b.name, 'uz'); });
+            BC.loaded = true;
+        });
+    }
+
+    /** ids — ixtiyoriy: oldindan tanlangan mijozlar (masalan mijoz kartasidan). */
+    window.openBroadcastModal = function (ids) {
+        ensureModal();
+        if (!BC.busy) {
+            if (Array.isArray(ids) && ids.length) {
+                BC.sel = {};
+                ids.forEach(function (id) { BC.sel[String(id)] = true; });
+                setMode('pick');
+            } else {
+                setMode(BC.mode);
+            }
+        }
+        if (typeof openModal === 'function') openModal('broadcastModal');
+        else { var m = $('broadcastModal'); m.style.display = 'flex'; window.activeModal = 'broadcastModal'; }
+        paint();
+        loadUsers().then(function () { renderPick(); paint(); }).catch(function (e) {
+            try { showToast('Mijozlar yuklanmadi: ' + (e.message || e), 'warning'); } catch (x) {}
+        });
+    };
+
+    window.sendBroadcast = function () {
+        if (BC.busy) return;
+        var txtEl = $('bc-text');
+        var text = (txtEl ? txtEl.value : '').trim();
+        if (text.length < 2) { showToast('Xabar matnini yozing', 'warning'); return; }
+        var ids = recipients();
+        if (!ids.length) { showToast('Qabul qiluvchini tanlang', 'warning'); return; }
+        var q = BC.mode === 'all' ? ('Xabar hamma (' + ids.length + ' kishi)ga yuborilsinmi?') : (ids.length + ' kishiga yuborilsinmi?');
+        if (typeof tg !== 'undefined' && tg.showConfirm) {
+            tg.showConfirm(q, function (ok) { if (ok) window._doBroadcast(text, ids); });
+        } else if (confirm(q)) window._doBroadcast(text, ids);
+    };
+
+    window._doBroadcast = async function (text, ids) {
+        if (BC.busy) return;
+        if (!Array.isArray(ids)) {   // eski chaqiruv: hammaga
+            if (!BC.loaded) { try { await loadUsers(); } catch (e) {} }
+            BC.mode = 'all';
+            ids = recipients();
+        }
+        BC.busy = true;
+        var btn = $('bc-send-btn');
+        var stats = $('bcx-stats'), wait = $('bcx-wait');
+        var setN = function (id, v) { var el = $(id); if (el) el.textContent = v; };
+        var sent = 0, failed = 0;
+        var skipped = BC.mode === 'all' ? (BC.fake + BC.users.filter(function (u) { return u.blocked; }).length) : 0;
+        if (stats) stats.hidden = false;
+        setN('bc-count', ids.length); setN('bc-sent', 0); setN('bc-failed', 0); setN('bc-skipped', skipped);
+        if (btn) { btn.disabled = true; btn.textContent = 'Yuborilmoqda... 0/' + ids.length; }
+        try {
+            for (var i = 0; i < ids.length; i++) {
+                var uid = ids[i], ok = false;
+                for (var attempt = 0; attempt < 6 && !ok; attempt++) {
+                    try {
+                        var res = await window.tgProxySend({ chat_id: uid, text: text, parse_mode: 'HTML' });
+                        var j = null;
+                        try { j = await res.json(); } catch (e) {}
+                        if (j && j.ok) { ok = true; break; }
+                        // Limit: Worker (retryAfter) yoki Telegram (retry_after / telegramStatus 429)
+                        var waitS = 0;
+                        if (res.status === 429 || (j && (j.error_code === 429 || j.telegramStatus === 429))) {
+                            waitS = (j && (j.retryAfter || (j.parameters && j.parameters.retry_after)))
+                                || parseInt(res.headers.get('Retry-After') || '0', 10) || 5;
+                        }
+                        if (waitS > 0) {
+                            waitS = Math.min(90, waitS);
+                            if (wait) { wait.hidden = false; wait.textContent = 'Telegram limiti: ' + waitS + ' soniya kutilmoqda. Oynani yopmang.'; }
+                            await sleep(waitS * 1000 + 300);
+                            if (wait) wait.hidden = true;
+                            continue;
+                        }
+                        break; // boshqa xato (mas. mijoz botni bloklagan) — qayta urinmaymiz
+                    } catch (e) {
+                        if (attempt === 0) { await sleep(1500); continue; }
+                        break;
+                    }
+                }
+                if (ok) sent++; else failed++;
+                setN('bc-sent', sent); setN('bc-failed', failed);
+                if (btn) btn.textContent = 'Yuborilmoqda... ' + (i + 1) + '/' + ids.length;
+                await sleep(60);
+            }
+            try { showToast('\u2705 Yuborildi: ' + sent + ' | Xato: ' + failed, 'success'); } catch (e) {}
+            try { var d = DBX(); if (d) d.ref('broadcasts').push({ text: text, sent: sent, failed: failed, skipped: skipped, mode: BC.mode, count: ids.length, time: Date.now() }); } catch (e) {}
+            var te = $('bc-text'); if (te && failed === 0) te.value = '';
+        } catch (e) {
+            try { showToast('Xato: ' + (e.message || e), 'warning'); } catch (x) {}
+        } finally {
+            BC.busy = false;
+            if (wait) wait.hidden = true;
+            paint();
+        }
+    };
+})();
+
+// 1.6 PULL-TO-REFRESH — OLIB TASHLANDI (foydalanuvchi so'roviga ko'ra: pastga
+//      tortib yangilash kerak emas. Ma'lumot baribir real-time yangilanadi.)
+
+// 2.8 SWIPE-TO-DELETE (cart row)
+(function swipeInit(){
+    let startX = 0, startY = 0, deltaX = 0, target = null, isHorizontal = null;
+    const threshold = 50;
+    document.addEventListener('touchstart', (e) => {
+        const row = e.target.closest('.cart-row');
+        if (!row) {
+            // Boshqa joyga bossa, ochiq swipe rowni yopamiz
+            document.querySelectorAll('.cart-row.show-delete').forEach(r => r.classList.remove('show-delete'));
+            return;
+        }
+        document.querySelectorAll('.cart-row.show-delete').forEach(r => { if (r !== row) r.classList.remove('show-delete'); });
+        target = row;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        deltaX = 0;
+        isHorizontal = null;
+    }, {passive: true});
+    document.addEventListener('touchmove', (e) => {
+        if (!target) return;
+        const dx = e.touches[0].clientX - startX;
+        const dy = e.touches[0].clientY - startY;
+        if (isHorizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+            isHorizontal = Math.abs(dx) > Math.abs(dy);
+        }
+        if (isHorizontal) {
+            deltaX = Math.min(0, dx);
+            const wrap = target.querySelector('.cart-content-wrap');
+            if (wrap) {
+                wrap.style.transition = 'none';
+                wrap.style.transform = `translateX(${Math.max(deltaX, -100)}px)`;
+            }
+        }
+    }, {passive: true});
+    document.addEventListener('touchend', () => {
+        if (!target) return;
+        const wrap = target.querySelector('.cart-content-wrap');
+        if (wrap) wrap.style.transition = '';
+        if (isHorizontal && deltaX < -threshold) {
+            target.classList.add('show-delete');
+            if (wrap) wrap.style.transform = '';
+        } else {
+            target.classList.remove('show-delete');
+            if (wrap) wrap.style.transform = '';
+        }
+        target = null; deltaX = 0; isHorizontal = null;
+    }, {passive: true});
+})();
+
+/* 🃏 Kartani surib savatga / sevimlilarga qo'shish OLIB TASHLANDI —
+   skroll paytida tasodifan tovar savatga tushib qolardi. */
+
+// 1.3 BOTTOM NAV PULSE — har bir nav-item bosilganda
+document.addEventListener('click', (e) => {
+    const tab = e.target.closest('.nav-item');
+    if (!tab) return;
+    tab.classList.remove('tab-pulse');
+    void tab.offsetWidth;
+    tab.classList.add('tab-pulse');
+    setTimeout(() => tab.classList.remove('tab-pulse'), 400);
+});
+
+// 1.1 + Wishlist toggle wrap
+if (typeof window.toggleWishlist === 'function' && !window._origToggleWishlist) {
+    window._origToggleWishlist = window.toggleWishlist;
+    window.toggleWishlist = function(e, id) {
+        const before = (window.wishlist || []).includes(id);
+        const r = window._origToggleWishlist.apply(this, arguments);
+        const after = (window.wishlist || []).includes(id);
+        if (!before && after && e && e.target) {
+            const btn = e.target.closest('.btn-wishlist');
+            if (btn) _burstHeart(btn);
+        }
+        return r;
+    };
+}
+
+// 1.9 Cart shake — addToCart wrap
+if (typeof window.addToCart === 'function' && !window._origAddToCart_v2) {
+    window._origAddToCart_v2 = window.addToCart;
+    window.addToCart = function() {
+        const r = window._origAddToCart_v2.apply(this, arguments);
+        try { _shakeCartIcon(); } catch (e) {}
+        return r;
+    };
+}
+if (typeof window.addToCartWithOptions === 'function' && !window._origAddToCartWithOptions_v2) {
+    window._origAddToCartWithOptions_v2 = window.addToCartWithOptions;
+    window.addToCartWithOptions = function() {
+        const r = window._origAddToCartWithOptions_v2.apply(this, arguments);
+        try { _shakeCartIcon(); } catch (e) {}
+        return r;
+    };
+}
+
+// 1.5 Konfetti — confirmOrder muvaffaqiyatda
+// CSS SUCCESS CHECK (Lottie O'RNIGA) — buyurtma muvaffaqiyatda chiziladigan belgi.
+window._showSuccessCheck = function(){
+    try {
+        var rm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        var ov = document.createElement('div');
+        ov.className = 'css-check-overlay';
+        ov.innerHTML = '<div class="css-check-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div>';
+        document.body.appendChild(ov);
+        setTimeout(function(){ try { ov.remove(); } catch(e){} }, rm ? 700 : 1100);
+    } catch(e){}
+};
+if (typeof window.confirmOrder === 'function' && !window._origConfirmOrder_v2) {
+    window._origConfirmOrder_v2 = window.confirmOrder;
+    window.confirmOrder = async function() {
+        const r = await window._origConfirmOrder_v2.apply(this, arguments);
+        // ⚠️ TUZATILDI: ilgari bu yerda pticha + konfetti SHARTSIZ ko'rsatilardi.
+        //    Ya'ni internet uzilganda, 15 soniya spam himoyasi ishlaganda yoki
+        //    omborda tovar yetmaganda ham mijoz yashil "muvaffaqiyat" belgisini
+        //    ko'rardi va buyurtma o'tgan deb o'ylardi. Endi faqat HAQIQIY
+        //    muvaffaqiyatda ({ok:true}) tabriklanadi.
+        try {
+            if (r && r.ok === true) { _showSuccessCheck(); _fireConfetti(40); _hap('success'); }
+        } catch (e) {}
+        return r;
+    };
+}
+
+// 2.3 + showProfile wrap (statistikani qo'shish)
+// Profil ochilganda qo'shimcha bo'limlarni render qilish.
+// (Avval v2 + v3 ikkita alohida wrapper edi — bitta wrapperga birlashtirildi,
+//  _renderProfileStats() endi ikki marta emas, bir marta chaqiriladi.)
+if (typeof window.showProfile === 'function' && !window._origShowProfileExt) {
+    window._origShowProfileExt = window.showProfile;
+    window.showProfile = function() {
+        const r = window._origShowProfileExt.apply(this, arguments);
+        setTimeout(() => {
+            try { renderMyCar(); } catch(e) {}
+            try { renderAddresses(); } catch(e) {}
+            try { _renderProfileStats(); } catch(e) {}
+        }, 50);
+        return r;
+    };
+}
+
+// updateProfileUI yoki renderMyOrders chaqirilganda statni yangilash
+if (typeof window.updateProfileUI === 'function' && !window._origUpdProfUI) {
+    window._origUpdProfUI = window.updateProfileUI;
+    window.updateProfileUI = function() {
+        const r = window._origUpdProfUI.apply(this, arguments);
+        try { _renderProfileStats(); } catch (e) {}
+        return r;
+    };
+}
+    

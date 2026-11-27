@@ -1,0 +1,359 @@
+
+window.currentUser = null;
+    // 🔇 #16: PRODUCTION'da konsol toza bo'lsin. Diagnostika kerak bo'lsa
+    //   localStorage.avto_debug = '1' qo'ying (yoki window.AVTO_DEBUG = true) —
+    //   shunda _dlog/_dwarn yana ishlaydi. Xatolar yo'qolmaydi, faqat yashiriladi.
+    window.AVTO_DEBUG = (function () { try { return localStorage.getItem('avto_debug') === '1'; } catch (e) { return false; } })();
+    window._dlog = function () { if (window.AVTO_DEBUG) { try { console['log'].apply(console, arguments); } catch (e) {} } };
+    window._dwarn = function () { if (window.AVTO_DEBUG) { try { console['warn'].apply(console, arguments); } catch (e) {} } };
+    // 🏷 BUILD VERSIYA — telefon qaysi kodni yuklayotganini bilish uchun (kesh diagnostikasi)
+    window.AVTO_BUILD = 'v2026.05.30-7';
+    try { _dlog('%c[Avto A1] BUILD ' + window.AVTO_BUILD + ' — ' + new Date().toISOString(), 'color:#C9A84C;font-weight:bold;'); } catch(e){}
+    // 🛡 Telegram WebApp himoyali yuklash — brauzerda yoki Telegram yuklanmasa ham xato bermaydi
+    // 📱 ANDROID ILOVA (APK) — Capacitor qobig'i User-Agent oxiriga «AvtoA1App» qo'shadi.
+    //    Ilovada Telegram yo'q: telegram-web-app.js baribir window.Telegram.WebApp
+    //    yaratadi, lekin uning showConfirm/showAlert'i Telegram tashqarisida XATO
+    //    otadi, openTelegramLink esa butun ilovani t.me sahifasiga olib ketadi.
+    //    Shuning uchun ilovada Telegram obyekti ishlatilmaydi — pastdagi to'liq
+    //    «stub» ishlaydi (tasdiq/ogohlantirish — native oyna, havolalar — tashqi ilova).
+    window.A1_APP = (function () {
+        try {
+            if (/\bAvtoA1App\b/.test(navigator.userAgent || '')) return true;
+            if (window.A1_PWA) return true;   // iPhone/iPad/Android «Bosh ekranga qo'shilgan» ilova
+            return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        } catch (e) { return false; }
+    })();
+    if (window.A1_APP) { try { document.documentElement.classList.add('a1-app'); } catch (e) {} }
+    // Ilovada tashqi havola (t.me, tel:, Instagram, xarita) — tizim ochadi
+    // (Telegram ilovasi, qo'ng'iroq, brauzer). Capacitor o'z domenidan tashqari
+    // har qanday manzilni avtomatik tashqi ilovaga uzatadi.
+    window.a1OpenExternal = function (url) {
+        if (!url) return;
+        window.location.href = url;   // Capacitor tutib oladi -> Intent.ACTION_VIEW
+    };
+    window._a1IsExternal = function (href) {
+        try {
+            if (/^(tel|tg|mailto|sms|geo|intent|whatsapp|market):/i.test(href)) return true;
+            var u = new URL(href, location.href);
+            return /^https?:$/.test(u.protocol) && u.host !== location.host;
+        } catch (e) { return false; }
+    };
+    if (window.A1_APP && !window.A1_PWA) {
+        // target="_blank" havolalar va window.open — ilova ichida emas, tashqi ilovada ochiladi
+        document.addEventListener('click', function (e) {
+            var a = e.target && e.target.closest && e.target.closest('a[href]');
+            if (!a || e.defaultPrevented) return;
+            var href = a.getAttribute('href') || '';
+            if (!href || href.charAt(0) === '#' || /^javascript:/i.test(href) || a.hasAttribute('download')) return;
+            if (window._a1IsExternal(href)) { e.preventDefault(); window.a1OpenExternal(a.href || href); }
+        }, true);
+        var _wopen = window.open;
+        window.open = function (url) {
+            if (url && window._a1IsExternal(String(url))) { window.a1OpenExternal(String(url)); return null; }
+            return _wopen.apply(window, arguments);
+        };
+    }
+    let tg;
+    try {
+        tg = (!window.A1_APP && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+    } catch(e) { tg = null; }
+    if (!tg) {
+        // Brauzerda yoki Telegram script bloklangan bo'lsa — bo'sh "stub" yaratamiz
+        // Shunda keyingi kod tg.xxx() chaqirsa ham, hech qaysi narsa portlamaydi
+        tg = {
+            initDataUnsafe: {},
+            expand: function(){}, ready: function(){},
+            isVersionAtLeast: function(){ return false; },
+            // 📳 Brauzer/APK (Telegram tashqarisida) — navigator.vibrate ZAXIRASI.
+            // Shunda mavjud BARCHA tg.HapticFeedback.* chaqiruvlari (savat, buyurtma,
+            // like va h.k.) Telegram tashqarisida ham tebranish beradi — call-site'larni
+            // o'zgartirmasdan. Telegram ICHIDA bu stub umuman ishlatilmaydi (native haptic).
+            // ⚡ Telefonni qizdirmaydi: bir martalik, juda qisqa (5–20ms) impuls.
+            HapticFeedback: {
+                notificationOccurred: function(type){ try { if (typeof navigator!=='undefined' && navigator.vibrate) navigator.vibrate(type === 'success' ? [10,30,10] : [18,40,18]); } catch(e){} },
+                impactOccurred: function(style){ try { if (typeof navigator!=='undefined' && navigator.vibrate) navigator.vibrate(style === 'heavy' ? 20 : style === 'medium' ? 15 : style === 'soft' ? 8 : 10); } catch(e){} },
+                selectionChanged: function(){ try { if (typeof navigator!=='undefined' && navigator.vibrate) navigator.vibrate(5); } catch(e){} }
+            },
+            BackButton: { show: function(){}, hide: function(){}, onClick: function(){}, offClick: function(){}, isVisible: false },
+            MainButton: { show: function(){}, hide: function(){}, onClick: function(){}, offClick: function(){}, setText: function(){} },
+            close: function(){}, sendData: function(){},
+            // Telegram API'ning qolgan qismi — chaqirilsa ham xato bermaydi.
+            // (Ilgari yo'q edi: masalan `tg.onEvent('backButtonClicked', …)` himoyasiz
+            //  chaqiriladi va stub rejimida butun skript blokini to'xtatib qo'yardi.)
+            initData: '',
+            onEvent: function(){}, offEvent: function(){},
+            setHeaderColor: function(){}, setBackgroundColor: function(){}, setBottomBarColor: function(){},
+            enableClosingConfirmation: function(){}, disableClosingConfirmation: function(){},
+            enableVerticalSwipes: function(){}, disableVerticalSwipes: function(){}, enableSwipeBack: function(){},
+            requestFullscreen: function(){}, exitFullscreen: function(){}, isFullscreen: false,
+            safeAreaInset: null, contentSafeAreaInset: null,
+            // Tasdiq / ogohlantirish — native (Android) oyna
+            showConfirm: function(msg, cb){ var ok = false; try { ok = window.confirm(String(msg || '')); } catch(e){} if (typeof cb === 'function') setTimeout(function(){ cb(ok); }, 0); },
+            showAlert: function(msg, cb){ try { window.alert(String(msg || '')); } catch(e){} if (typeof cb === 'function') setTimeout(cb, 0); },
+            showPopup: function(p, cb){
+                p = p || {}; var bs = p.buttons || [{ id: 'ok', type: 'ok' }];
+                var text = (p.title ? p.title + '\n\n' : '') + (p.message || '');
+                var main = bs.filter(function(b){ return b.type !== 'cancel' && b.type !== 'close'; })[0] || bs[0];
+                var cancel = bs.filter(function(b){ return b.type === 'cancel' || b.type === 'close'; })[0];
+                var id = main && main.id;
+                try { if (bs.length > 1) { if (!window.confirm(text)) id = cancel ? cancel.id : ''; } else window.alert(text); } catch(e){}
+                if (typeof cb === 'function') setTimeout(function(){ cb(id); }, 0);
+            },
+            openLink: function(url){ window.a1OpenExternal(url); },
+            openTelegramLink: function(url){ window.a1OpenExternal(url); },
+            colorScheme: 'dark', themeParams: {},
+            platform: 'browser', version: '0.0'
+        };
+        _dwarn('[TG] WebApp mavjud emas — brauzer rejimida ishlamoqda (stub yoqildi)');
+    }
+    try { tg.expand && tg.expand(); } catch(e) { _dwarn('[TG] expand xato:', e.message); }
+    try { tg.ready && tg.ready(); } catch(e) {}
+
+    // 🔴 KRITIK TUZATISH — `window.tg` ni OCHIQ qilamiz.
+    // ------------------------------------------------------------------
+    // Yuqorida `let tg` ishlatilgan. Top-level `let`/`const` global LEKSIK
+    // muhitga tushadi, ammo `window` OBYEKTIGA TUSHMAYDI. Ya'ni `window.tg`
+    // hamisha `undefined` edi.
+    //
+    // Fayl bo'ylab 13 joyda `if (window.tg && tg.xxx)` shaklidagi qo'riqchi
+    // ishlatilgan — ularning HAMMASI doim `false` bo'lib, Telegram
+    // funksiyalari HECH QACHON ishlamagan. Buzilganlari:
+    //   • storisga video yuklash — `initData` doim bo'sh -> "faqat Telegram
+    //     ichida ishlaydi" degan ogohlantirish chiqib, yuklash boshlanmasdi
+    //     (foydalanuvchi "video tanlayapman, o'sha joyda qotib qolyapti" deb
+    //      aytgan holat AYNAN shu edi);
+    //   • Telegram header/fon rangi mavzuga moslashmasdi;
+    //   • BackButton ko'rinmasdi;
+    //   • native showAlert / showConfirm o'rniga oddiy toast chiqardi;
+    //   • openLink / openTelegramLink ishlamasdi.
+    //
+    // Bitta qator — hammasi tiklanadi. Brauzer rejimida `tg` "stub" bo'ladi,
+    // unda `initData`/`showAlert` yo'q, shuning uchun o'sha qo'riqchilar
+    // avvalgidek xavfsiz zaxira yo'lga tushadi (xatti-harakat o'zgarmaydi).
+    window.tg = tg;
+    // Ilovada `window.Telegram.WebApp` ga to'g'ridan-to'g'ri murojaat qiluvchi
+    // joylar ham shu xavfsiz stub'ni ko'rsin.
+    if (window.A1_APP) { try { window.Telegram = { WebApp: tg }; } catch (e) {} }
+
+    // 📳 HAPTIC ZAXIRASI (navigator.vibrate) — XAVFSIZ va MARKAZIY.
+    //    Muammo: telegram-web-app.js BRAUZERDA ham window.Telegram.WebApp yaratadi,
+    //    lekin uning HapticFeedback'i Telegram TASHQARISIDA NO-OP (tebranmaydi).
+    //    Yechim: agar HAQIQATAN Telegram ichida bo'lmasak (initData bo'sh va platform
+    //    'unknown'/'browser'), tg.HapticFeedback'ni navigator.vibrate bilan almashtiramiz.
+    //    Natija: savat / buyurtma / like / menyu — BARCHA mavjud haptic chaqiruvlari
+    //    brauzer va APK'da ham tebranadi. Telegram ICHIDA esa native haptic SAQLANADI.
+    //    ⚡ Telefonni qizdirmaydi: bir martalik, juda qisqa (5–20ms) impuls.
+    try {
+        var _realTelegram = !!(tg && (tg.initData ||
+            (tg.platform && tg.platform !== 'unknown' && tg.platform !== 'browser')));
+        if (!_realTelegram && typeof navigator !== 'undefined' && navigator.vibrate) {
+            tg.HapticFeedback = {
+                notificationOccurred: function(type){ try { navigator.vibrate(type === 'success' ? [10,30,10] : [18,40,18]); } catch(e){} },
+                impactOccurred: function(style){ try { navigator.vibrate(style === 'heavy' ? 20 : style === 'medium' ? 15 : style === 'soft' ? 8 : 10); } catch(e){} },
+                selectionChanged: function(){ try { navigator.vibrate(5); } catch(e){} }
+            };
+        }
+    } catch(e){}
+    // iOS dagi 300ms kechikishni o'chiramiz
+// Endi tugmalar darhol javob beradi
+document.addEventListener('touchstart', function() {}, {passive: true});
+
+// iOS da scroll qilganda sahifa "sakrab" ketishini to'xtatamiz
+document.addEventListener('touchmove', function(e) {
+    // Oyna (modal) ochiq bo'lsa, FAQAT orqa fonni muzlatamiz.
+    // ⚠️ MUHIM: ilgari bu kod oyna ochiq bo'lganda BARCHA barmoq harakatini
+    // (modal ichidagi va slayderdagi skrollni ham) to'xtatib qo'yardi.
+    // Endi barmoq skroll bo'ladigan element (oyna, slayder, chat...) ustida
+    // bo'lsa — skrollga TO'LIQ ruxsat beramiz, faqat orqa fonni qotiramiz.
+    if (document.body.style.overflow === 'hidden') {
+        var t = e.target;
+        var scrollable = (t && t.closest) ? t.closest(
+            '#productModal, .modal-standard, .pm-slider, .pm-info-section, ' +
+            '#ai-chat-box, #story-content, .chat-messages, .pm-similar-wrapper, ' +
+            '#admin-orders-list, #admin-customers-list, #admin-drafts-list, ' +
+            '#admin-inventory-list, #admin-stats-content, #od-chat-messages, ' +
+            '#admin-chat-messages, #pm-reviews-list, #pm-size-options, #pm-car-options, ' +
+            // 🆕 Stories boshqaruvi / composer / mijoz tafsiloti — ichki skrollga ruxsat
+            '#admin-stories-list, #story-composer-body, #customer-detail-body, ' +
+            '#cst-list, .st2-rings, .cst-segs, ' +
+            // 🆕 AI ommaviy: kontent va holat paneli ham ichki skroller
+            //    (bularsiz barmoq harakati bloklanib, skroll "sakrardi")
+            '#ai-bulk-content, #ai-neural-loader'
+        ) : null;
+        // Faqat skroll bo'ladigan joy TOPILMASA (ya'ni orqa fon) to'xtatamiz
+        if (!scrollable) {
+            e.preventDefault();
+        }
+    }
+}, {passive: false});
+
+// ====================================================================
+// 🛑 REZINA (RUBBER-BAND / OVERSCROLL) EFFEKTINI BLOKLASH
+// --------------------------------------------------------------------
+// Telegram Mini App'da hujjatni eng tepa yoki eng pastdan ortiqcha
+// tortganda "ko'rinmas oyna ochilgandek" cho'zilib qaytadi. Quyidagi
+// mantiq FAQAT hujjat chekkasida (eng tepa/eng past) ortiqcha
+// touchmove'ni bloklaydi. Asosiy window.scrollY skroll mantig'iga,
+// ichki skrollga (oyna, slayder, chat) va gorizontal slayderlarga
+// umuman tegmaydi. CSS overscroll-behavior:none yetmagan iOS WebView
+// (Telegram) holatlari uchun qo'shimcha sug'urta.
+// ====================================================================
+(function blockDocumentRubberBand() {
+    var startY = 0, startX = 0, scroller = null;
+
+    // Barmoq ostidan eng yaqin VERTIKAL skroll bo'ladigan ajdodni topamiz.
+    // (overflow-y auto/scroll VA scrollHeight > clientHeight bo'lsa — haqiqiy skroller)
+    function findScroller(node) {
+        while (node && node.nodeType === 1 && node !== document.body && node !== document.documentElement) {
+            var oy = '';
+            try { oy = getComputedStyle(node).overflowY; } catch (e) {}
+            if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight + 1) {
+                return node;
+            }
+            node = node.parentNode;
+        }
+        return null;
+    }
+
+    document.addEventListener('touchstart', function(e) {
+        if (e.touches && e.touches.length === 1) {
+            startY = e.touches[0].clientY;
+            startX = e.touches[0].clientX;
+            // Skroller'ni BIR MARTA (touchstart) aniqlaymiz — touchmove'da tez ishlaydi
+            scroller = findScroller(e.target);
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+        // Ikki barmoq (zoom/pinch) — aralashmaymiz
+        if (!e.touches || e.touches.length !== 1) return;
+        // Oyna ochiq bo'lsa — yuqoridagi handler (orqa fonni muzlatish) hal qiladi
+        if (document.body.style.overflow === 'hidden') return;
+
+        var dY = e.touches[0].clientY - startY;
+        var dX = e.touches[0].clientX - startX;
+        // Gorizontal imo (banner slider, storis lentasi) — vertikal rezinaga
+        // aralashmaymiz, slayder erkin suriladi.
+        if (Math.abs(dX) > Math.abs(dY)) return;
+
+        if (scroller) {
+            // Ichki skroller: faqat O'Z chekkasida (rezina) bloklaymiz —
+            // ichki skroll erkin ishlaydi, lekin chekkada cho'zilmaydi.
+            var atTopS = scroller.scrollTop <= 0;
+            var atBotS = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+            if ((atTopS && dY > 0) || (atBotS && dY < 0)) e.preventDefault();
+            return;
+        }
+
+        // Skroller topilmadi -> hujjat (window) skroli. Eng tepada pastga yoki
+        // eng pastda tepaga tortish = rezina effekti -> bloklaymiz.
+        var st = window.scrollY || document.documentElement.scrollTop || 0;
+        var atTop = st <= 0;
+        var atBottom = (window.innerHeight + st) >= (document.documentElement.scrollHeight - 1);
+        if ((atTop && dY > 0) || (atBottom && dY < 0)) e.preventDefault();
+    }, { passive: false });
+})();
+    // ==========================================
+    // 🍏 IOS NATIVE (HAQIQIY ILOVA) SOZLAMALARI
+    // ==========================================
+    
+    // 1. iPhone'da chapdan o'ngga surib orqaga qaytishni yoqish
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && tg.enableSwipeBack) {
+            tg.enableSwipeBack();
+        }
+    } catch(e) { _dwarn('[TG] enableSwipeBack qo\'llab-quvvatlanmaydi:', e.message); }
+
+    // 2. Tepadagi soat/batareya qismini (Status Bar) qora fon bilan bir xil qilish
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1') && tg.setHeaderColor) {
+            tg.setHeaderColor('#000000'); // Yoki sizning fonga mos to'q qora
+        }
+    } catch(e) { _dwarn('[TG] setHeaderColor qo\'llab-quvvatlanmaydi:', e.message); }
+    
+    // 3. Pastki qism (Home Indicator) fonini moslash
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1') && tg.setBackgroundColor) {
+            tg.setBackgroundColor('#000000');
+        }
+    } catch(e) { _dwarn('[TG] setBackgroundColor qo\'llab-quvvatlanmaydi:', e.message); }
+    
+    // 4. Ekranni to'liq egallash (faqat Telegram 8.0+ uchun)
+    var _tgFullscreen = false;
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('8.0') && tg.requestFullscreen) {
+            tg.requestFullscreen();
+            _tgFullscreen = true;
+        }
+    } catch(e) { _dwarn('[TG] requestFullscreen qo\'llab-quvvatlanmaydi:', e.message); }
+
+    // ====================================================================
+    // 🔝 TELEGRAM XAVFSIZ ZONA — header Telegram tugmalari OSTIDA boshlansin
+    // --------------------------------------------------------------------
+    // To'liq ekran (fullscreen) rejimida Telegram'ning o'z tugmalari (✕ yopish,
+    // ⋮ menyu) kontent USTIDA suzadi. Bizning header tugmalarimiz (mavzu/qo'ng'iroq)
+    // ular ostida qolib ketmasligi uchun --safe-top o'zgaruvchisini Telegram bergan
+    // HAQIQIY insetlar bilan yangilaymiz:
+    //     --safe-top = safeAreaInset.top (notch) + contentSafeAreaInset.top (TG UI)
+    // CSS dagi barcha 'calc(... + var(--safe-top))' joylari (header padding,
+    // .p2-hdr-btn tugmalari, modal paddinglari) avtomatik to'g'ri pastga suriladi.
+    // Insetlar fullscreen O'TISHIDAN KEYIN (event orqali) keladi — shuning uchun
+    // event listenerlar + bir nechta kechiktirilgan urinish qo'shamiz.
+    // ====================================================================
+    function applyTgSafeTop() {
+        try {
+            var sa  = tg.safeAreaInset || null;          // qurilma (notch/status bar)
+            var csa = tg.contentSafeAreaInset || null;   // Telegram UI (tugmalar paneli)
+            var saTop  = (sa  && typeof sa.top  === 'number') ? sa.top  : 0;
+            var csaTop = (csa && typeof csa.top === 'number') ? csa.top : 0;
+            var total = saTop + csaTop;
+            // Fullscreen yoqilgan, ammo inset hali kelmagan (eski SDK yoki o'tish
+            // lahzasi) — tugmalar ustma-ust tushmasligi uchun zaxira qiymat.
+            var isFs = (typeof tg.isFullscreen === 'boolean') ? tg.isFullscreen : _tgFullscreen;
+            if (total < 1 && isFs) total = 56;
+            if (total > 0) {
+                document.documentElement.style.setProperty('--safe-top', total + 'px');
+            }
+        } catch(e) { _dwarn('[TG] safe-top hisoblash xato:', e.message); }
+    }
+    try {
+        if (tg.onEvent) {
+            tg.onEvent('safeAreaChanged', applyTgSafeTop);
+            tg.onEvent('contentSafeAreaChanged', applyTgSafeTop);
+            tg.onEvent('fullscreenChanged', applyTgSafeTop);
+        }
+    } catch(e) {}
+    applyTgSafeTop();                 // darhol
+    setTimeout(applyTgSafeTop, 120);  // fullscreen o'tishidan keyin
+    setTimeout(applyTgSafeTop, 500);  // sekinroq qurilmalar uchun zaxira
+
+    // 🛑 1. Tepadan pastga tortganda yopilib ketishini TO'LIQ BLOKLASH
+    try {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && tg.disableVerticalSwipes) {
+            tg.disableVerticalSwipes();
+        }
+    } catch(e) { _dwarn('[TG] disableVerticalSwipes qo\'llab-quvvatlanmaydi:', e.message); }
+
+    // 🛡 2. QO'SHIMCHA HIMOYA (Ixtiyoriy): 
+    // Agar mijoz "x" ni adashib bosib yuborsa, darrov yopilmaydi, 
+    // "Haqiqatan ham chiqmoqchimisiz?" deb so'raydi. Bu savatdagi tovarlar yo'qolmasligi uchun juda foydali.
+    if (tg.enableClosingConfirmation) {
+        tg.enableClosingConfirmation(); 
+    }
+
+    const ADMIN_IDS = [5105291033, 483425630, 5302078];
+    const ADMIN_ID = ADMIN_IDS[0];
+    // 🔒 Token endi koddan olib tashlandi! Xabarlar maxfiy proxy (Cloudflare Worker) orqali yuboriladi.
+    const TG_PROXY = "https://avtoa1bot.anvaraxtamov70.workers.dev";
+    // Fayl oxiridagi qatlamlar (`/stock-commit`) ham shu manzildan foydalanadi.
+    window.TG_PROXY = TG_PROXY;
+    const IMGBB_API_KEY = "956de2d2a33ae1bcc56d5ada6fd8788d";
+    const firebaseConfig = {
+        apiKey: "AIzaSyCqK0E5hNpSHl6h-V-3WeVteWZnt7gXyOM",
+        authDomain: "avtoa1shop.firebaseapp.com",
+        databaseURL: "https://avtoa1shop-default-rtdb.firebaseio.com/",
+        projectId: "avtoa1shop"
+    };
+    if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+    const db = firebase.database();
+

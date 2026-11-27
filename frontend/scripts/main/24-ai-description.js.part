@@ -1,0 +1,70 @@
+// ==========================================
+// ✍️ ADMIN UCHUN AI TAVSIF YARATUVCHI
+// ==========================================
+// Davlatni tanlash tugmalari uchun (Dizayn o'zgarishi)
+window.selectOrigin = (el, type) => {
+    document.querySelectorAll(`#${type}-origin-chips .origin-chip`).forEach(c => {
+        c.style.background = 'rgba(255,255,255,0.05)';
+        c.style.color = 'white';
+        c.style.borderColor = 'var(--glass-border)';
+        c.classList.remove('selected');
+    });
+    el.style.background = 'rgba(212, 175, 55, 0.15)';
+    el.style.color = 'var(--luxury-gold)';
+    el.style.borderColor = 'var(--luxury-gold)';
+    el.classList.add('selected');
+};
+
+// Asosiy AI Generator (Rasm ko'radigan qilingan)
+window.generateAiDescription = (type) => {
+    let nameInput = document.getElementById(`${type}-name`).value.trim();
+    if(!nameInput) {
+        showToast("Avval tepaga tovar nomini yozing!", "warning");
+        return;
+    }
+    
+    // 📸 1. RASM YUKLANGANINI TEKSHIRAMIZ
+    let imgUrl = document.getElementById(`${type}-img-url`).value;
+    if(!imgUrl) {
+        showToast("Avval rasmni yuklang! Shogird rasmni ko'rib aniq yozadi.", "warning");
+        return;
+    }
+    
+    // Tanlangan davlatni aniqlash
+    let originChip = document.querySelector(`#${type}-origin-chips .origin-chip.selected`);
+    let origin = originChip ? originChip.getAttribute('data-origin') : "Noma'lum";
+    
+    let descBox = document.getElementById(`${type}-desc`);
+    let originalText = descBox.value;
+    descBox.value = "👀 AI rasmni diqqat bilan o'rganmoqda... Kuting...";
+    
+    // Firebase orqali Pythonga vazifa beramiz (Rasm URL si bilan)
+    let taskId = Date.now().toString();
+    db.ref('ai_admin_tasks/' + taskId).set({
+        action: "generate_desc",
+        product_name: nameInput,
+        origin: origin, 
+        image_url: imgUrl, // YANGLIK: Rasm silkasi Pythonga ketdi
+        needs_processing: true
+    }); 
+    
+    // Python javobini kutamiz
+    let ref = db.ref('ai_admin_tasks/' + taskId);
+    ref.on('value', snap => {
+        let data = snap.val();
+        if(data && data.result) {
+            descBox.value = data.result; 
+            ref.off('value'); 
+            db.ref('ai_admin_tasks/' + taskId).remove();
+            if(typeof tg !== 'undefined' && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            showToast("✨ Shogird rasmni ko'rib yozib berdi!", "success");
+        } else if (data && data.error) {
+            descBox.value = originalText;
+            ref.off('value');
+            showToast("Xatolik yuz berdi", "warning");
+        }
+    });
+};
+
+
+// 🚀 AI OMMAVIY QO'SHISH MOTOR

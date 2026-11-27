@@ -1,0 +1,130 @@
+// =====================================
+    // CHAT: BUYURTMA TAFSILOTI VA YOZISHMA
+    // =====================================
+    let currentOpenOrderId = null; // Hozir qaysi buyurtma ochiqligini bilish uchun
+
+    window.openOrderDetails = (id) => { 
+        let o = myOrders.find(x => x.id === id); 
+        if(!o) return; 
+        
+        currentOpenOrderId = id; // ID ni saqlab qo'yamiz
+        
+        document.getElementById('od-code').innerText = "Buyurtma: #" + (o.code || o.id); 
+        document.getElementById('od-date').innerText = o.date + " " + o.time; 
+        document.getElementById('od-status').innerHTML = getStatusHTML(o.status || 'kutilmoqda'); 
+        
+        let iH = ''; 
+        for(let fullId in o.items) { 
+                    let [baseId, carOpt] = fullId.split('||');
+                    let p = productsDB.find(x => x.id == baseId); 
+                    if(p) {
+                        let carOptHTML = carOpt && carOpt !== "Universal" ? `<span class="od-car-opt">[${escHtml(carOpt)}]</span>` : '';
+                        let imgSrc = p.img || p.image || '';
+                        let imgTag = imgSrc 
+                            ? `<img class="od-item-img" src="${imgSrc}" alt="${escHtml(p.name)}" onerror="this.style.display='none'">` 
+                            : `<div class="od-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-muted);">📦</div>`;
+                        iH += `<div class="od-item">
+                            ${imgTag}
+                            <div class="od-item-info">
+                                <div class="od-item-name">${escHtml(p.name)} ${carOptHTML}</div>
+                                <div class="od-item-meta">
+                                    <span class="od-item-qty">×${o.items[fullId]}</span>
+                                    <span class="od-item-price">${(p.price * o.items[fullId]).toLocaleString()} so'm</span>
+                                </div>
+                            </div>
+                        </div>`; 
+                    }
+                }
+        document.getElementById('od-items').innerHTML = iH; 
+        document.getElementById('od-total').innerText = "Jami: " + o.total.toLocaleString() + " so'm"; 
+        
+        // Chat xabarlarini ekranga chiqarish
+        renderChatMessages();
+        
+        openModal('orderDetailModal'); 
+    }
+
+        // 💬 PREMIUM CHAT: Xabarlarni chizish funksiyasi
+    // 💬 PREMIUM CHAT: xabarlar endi ALOHIDA `order_chats/{uid}/{orderId}` tugunida
+    //    (buyurtma yozuvi SERVER-OWNED bo'lgani uchun). Egasi faqat 'mijoz' nomidan
+    //    yozadi; jonli listener orqali yangilanadi. Eski order.messages faqat
+    //    O'QISH uchun zaxira (order_chats bo'sh bo'lsa).
+    window.renderChatMessages = () => {
+        let box = document.getElementById('od-chat-messages');
+        if(!box) return;
+        box.className = "chat-messages";
+
+        let o = myOrders.find(x => x.id == currentOpenOrderId);
+        var uid = window.currentUser;
+        var oid = currentOpenOrderId;
+        var legacy = (o && Array.isArray(o.messages)) ? o.messages : [];
+
+        function paint(msgs) {
+            if (!msgs || !msgs.length) {
+                box.innerHTML = `<div style="text-align:center; color:gray; font-size:12px; margin: 20px 0;">Hali xabarlar yo'q. Savolingiz bo'lsa yozing...</div>`;
+                return;
+            }
+            let chatHtml = '';
+            msgs.forEach(function (msg) {
+                let isMe = msg.sender === 'mijoz' || msg.sender === 'user';
+                chatHtml += `
+            <div style="display: flex; flex-direction: column; width: 100%; margin-bottom: 8px;">
+                <div class="chat-bubble ${isMe ? 'chat-user' : 'chat-admin'}">
+                    ${escHtml(msg.text)}
+                    <span class="chat-time">${escHtml(msg.time || '')}</span>
+                </div>
+            </div>
+            `;
+            });
+            box.innerHTML = chatHtml;
+            setTimeout(() => { box.scrollTop = box.scrollHeight; }, 50);
+        }
+
+        // Avvalgi listenerni uzamiz (xotira oqishiga qarshi)
+        if (window._custChatRef) { try { window._custChatRef.off('value'); } catch (e) {} window._custChatRef = null; }
+
+        if (uid && oid != null && typeof db !== 'undefined' && db.ref) {
+            try {
+                window._custChatRef = db.ref('order_chats/' + uid + '/' + oid);
+                window._custChatRef.on('value', function (snap) {
+                    var val = snap.val();
+                    var msgs = [];
+                    if (val && typeof val === 'object') {
+                        msgs = Object.keys(val).sort().map(function (k) { return val[k]; }).filter(Boolean);
+                    }
+                    if (!msgs.length && legacy.length) msgs = legacy;   // eski buyurtmalar uchun zaxira
+                    paint(msgs);
+                }, function () { paint(legacy); });
+            } catch (e) { paint(legacy); }
+        } else {
+            paint(legacy);
+        }
+    };
+
+    // 💬 PREMIUM CHAT: Xabar jo'natish tugmasi — order_chats ga push (sender:'mijoz')
+    window.sendOrderMessage = () => {
+        let input = document.getElementById('od-chat-input');
+        if(!input) return;
+
+        let text = input.value.trim();
+        if(!text) return;
+        if (!window.currentUser || currentOpenOrderId == null) return;
+
+        let now = new Date();
+        let timeString = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+
+        var _send = function () {
+            try {
+                db.ref('order_chats/' + window.currentUser + '/' + currentOpenOrderId)
+                  .push({ sender: 'mijoz', text: text, time: timeString })
+                  .catch(function () { try { showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning"); } catch (e) {} });
+                input.value = '';   // jonli listener o'zi qayta chizadi
+            } catch (e) {
+                try { showToast("Xabar saqlanmadi — qayta urinib ko'ring", "warning"); } catch (e2) {}
+            }
+        };
+        // Yozishdan oldin auth kafolatlanadi (qoidalar auth.uid === $uid ni talab qiladi)
+        if (window._ensureAuth) { window._ensureAuth().then(_send, _send); }
+        else _send();
+    };
+

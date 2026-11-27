@@ -1,0 +1,233 @@
+    // =====================================================================
+    // #5 / #6 — MARKAZIY 'orders' TUGUNI + ADMIN O'QISH KESHI
+    // =====================================================================
+    // Ilgari web app buyurtmani FAQAT users/{uid}/orders ga yozardi, bot esa
+    // markaziy 'orders' tugunini o'qirdi (hech qachon yozilmagani uchun — o'lik
+    // kod). Endi har buyurtma markaziy 'orders' ga HAM yoziladi (izolyatsiya
+    // qilingan — asosiy buyurtma oqimiga ta'sir qilmaydi). notified_admin=true:
+    // web allaqachon adminga to'g'ridan-to'g'ri xabar berdi, shuning uchun bot
+    // ikki marta yubormaydi (lekin boshqa manba yozsa — bot uni xabar qiladi).
+    window._centralOrderKey = function (uid, o) {
+        return String(uid || 'anon') + '_' + String((o && (o.code || o.id)) || Date.now());
+    };
+    // 🔒 NEUTRALIZED: markaziy `orders` tuguni endi SERVER-OWNED (Worker /order-commit
+    //    uni o'zi yozadi). Yangi database.rules.json mijozga bu tugunni yozishga ruxsat
+    //    bermaydi — shuning uchun bu funksiya endi HECH NARSA YOZMAYDI (permission-denied
+    //    siklining oldini oladi). Signatura saqlanadi (boshqa chaqiruvlar buzilmasin).
+    window._mirrorOrderToCentral = function (order, extra) {
+        // no-op — server owns central orders
+    };
+
+    // 🧾 Buyurtma tarkibini chiroyli matn qilib beradi (mijozga ketadigan xabarlar uchun).
+    // itemsMap: { "baseId||carOpt": qty }. Nom/narx productsDB dan olinadi; tovar
+    // o'chirilgan bo'lsa ham buyurtma yiqilmaydi (qatorsiz o'tib ketadi).
+    window._orderItemsSummary = function (itemsMap) {
+        var lines = "";
+        var total = 0;
+        try {
+            var pdb = window.productsDB || [];
+            for (var fullId in (itemsMap || {})) {
+                var parts = String(fullId).split('||');
+                var baseId = parts[0];
+                var carOpt = parts[1];
+                var qty = itemsMap[fullId] || 0;
+                var p = pdb.find(function (x) { return x.id == baseId; });
+                var price = p ? (p.price || 0) : 0;
+                var sum = price * qty;
+                total += sum;
+                if (!p) continue; // nomi noma'lum tovarni qatorga qo'shmaymiz
+                var nm = p.name;
+                if (carOpt && carOpt !== "Universal" && carOpt !== "undefined") nm += ' (' + carOpt + ')';
+                lines += "\n\u25AA\uFE0F " + nm + " \u2014 " + qty + " x " + price.toLocaleString() + " = " + sum.toLocaleString() + " so'm";
+            }
+        } catch (e) {}
+        return { lines: lines, total: total };
+    };
+
+    // #6: admin panelda stats/orders/customers ketma-ket ochilganda butun users
+    // daraxtini qayta-qayta yuklamaslik uchun qisqa muddatli umumiy kesh.
+    // Yozuvlardan keyin (holat o'zgartirish) _invalidateUsersCache() chaqiriladi.
+    window._usersSnapCache = null;
+    window._USERS_CACHE_TTL = 20000; // 20s — navigatsiya "burst"ini dedupe qiladi
+    window._getUsersSnap = function () {
+        var c = window._usersSnapCache;
+        if (c && (Date.now() - c.at) < window._USERS_CACHE_TTL) return Promise.resolve(c.snap);
+        return db.ref('users').once('value').then(function (snap) {
+            window._usersSnapCache = { at: Date.now(), snap: snap };
+            return snap;
+        });
+    };
+    window._invalidateUsersCache = function () { window._usersSnapCache = null; };
+    function getStatusHTML(s) { if(s === 'qabul') return '<span class="status-badge st-qabul">' + icon('check') + ' Qabul qildik</span>'; if(s === 'yolda') return '<span class="status-badge st-yolda">' + icon('truck') + ' Yo\'lga chiqdi</span>'; if(s === 'yetkazildi') return '<span class="status-badge st-yetkazildi">' + icon('flag') + ' Yetkazib berildi</span>'; if(s === 'bekor_qilingan') return '<span class="status-badge" style="background:var(--accent-red); color:white;">' + icon('cancel') + ' Bekor qilingan</span>'; return '<span class="status-badge st-kutilmoqda">' + icon('clock') + ' Kutilmoqda</span>'; }
+    function updateProfileUI() { let dN = myProfile.name || "Mijoz"; var _und = document.getElementById('user-name-display'); if (_und) _und.innerText = dN; document.getElementById('pf-name').innerText = dN; document.getElementById('pf-avatar').innerText = dN.charAt(0).toUpperCase(); document.getElementById('pf-id').innerText = "ID: " + (window.currentUser || "Noma'lum"); document.getElementById('user-edit-name').value = dN; document.getElementById('user-edit-phone').value = myProfile.phone || ""; if(document.getElementById('user-edit-address')) document.getElementById('user-edit-address').value = myProfile.address || ""; _updateVipStatus(); }
+
+    // ⭐ VIP HOLATI — endi to'liq mantiq `window.VIP` modulida (fayl oxiridagi qatlam).
+    // Bu funksiya faqat "ko'prik": buyurtma tarixi o'zgarganda VIP modulini xabardor qiladi.
+    //
+    // ⚠️ ESKI XATO (tuzatildi): ilgari bu yerda `.profile-header` klassi izlanardi,
+    //    lekin profil ekrani inline stil bilan yozilgan — bu klass HECH QAYERDA yo'q.
+    //    Natijada `querySelector` doim `null` qaytarib, VIP yorlig'i HECH QACHON
+    //    ko'rinmasdi. Endi VIP moduli o'z konteynerini (#vip-card-box) o'zi yasaydi.
+    function _updateVipStatus() {
+        try {
+            // Yangi tizim: daraja (bronze/kumush/oltin/platina) + imtiyozlar + progress
+            if (window.VIP && window.VIP.refresh) { window.VIP.refresh(myOrders); return; }
+            // Zaxira (qatlam hali yuklanmagan bo'lsa): eski klassni ham qo'llab-quvvatlaymiz
+            const header = document.querySelector('.profile-header');
+            if (!header || !Array.isArray(myOrders)) return;
+            const delivered = myOrders.filter(o => o && o.status === 'yetkazildi');
+            const totalSpent = delivered.reduce((s, o) => s + (parseInt(o.total) || 0), 0);
+            header.classList.toggle('is-vip', delivered.length >= 5 || totalSpent >= 1000000);
+        } catch (e) { /* xato bo'lsa indamasdan o'tib ketamiz - boshqa funksiyalar buzilmasin */ }
+    }
+
+    // ⚠️ ILGARI: har bir "+"/"-" bosilganda Firebase'ga darhol yozilardi.
+    //    Mijoz sonni 5 marta o'zgartirsa — 5 ta tarmoq yozuvi. Bu (a) trafik
+    //    va batareyani yeydi, (b) to'qnashuv oynasini kengaytiradi.
+    //    Endi localStorage DARHOL yoziladi (ilova tez javob beradi), Firebase'ga
+    //    esa 400ms jimlikdan keyin BIR MARTA yoziladi. Ilova yopilishi mumkin
+    //    bo'lgan payt (buyurtma berish) uchun `_flushCart()` bor.
+    var _cartFlushTimer = null;
+    function _flushCart() {
+        if (_cartFlushTimer) { clearTimeout(_cartFlushTimer); _cartFlushTimer = null; }
+        if (!currentUser) return Promise.resolve();
+        try { return db.ref('users/' + currentUser + '/cart').set(cart); }
+        catch (e) { return Promise.resolve(); }
+    }
+    window._flushCart = _flushCart;
+    function saveLocalCart() {
+        try { localStorage.setItem('avto_cart', JSON.stringify(cart)); } catch (e) {}
+        if (!currentUser) return;
+        if (_cartFlushTimer) clearTimeout(_cartFlushTimer);
+        _cartFlushTimer = setTimeout(function () { _cartFlushTimer = null; _flushCart(); }, 400);
+    }
+    function saveLocalWishlist() { if (currentUser) db.ref('users/' + currentUser + '/wishlist').set(wishlist); }
+
+    // ❤️ SAQLANGANLAR (WISHLIST) YANGLANGAN FUNKSIYASI
+function toggleWishlist(e, id) {
+    if(e) e.stopPropagation();
+    
+    let idx = wishlist.indexOf(id);
+    let btn = e ? e.currentTarget : null; // Bosilgan yurakchani o'zini ushlab olamiz
+
+    if(idx === -1) { 
+        wishlist.push(id); 
+        showToast("Saqlandi!", "success"); 
+        if(btn) { btn.classList.add('active'); if(typeof _burstHeart==='function') _burstHeart(btn); }
+        if(typeof _hap==='function') _hap('light');
+    } else { 
+        wishlist.splice(idx, 1); 
+        showToast("O'chirildi", "warning"); 
+        if(btn) btn.classList.remove('active');
+        if(typeof _hap==='function') _hap('selection');
+    }
+    
+    saveLocalWishlist();
+    
+    // 🛑 DASTURNI QOTIRADIGAN "renderProducts()" NI O'CHIRIB TASHLADIK
+    
+    // Agar mijoz aynan "Saqlanganlar" bo'limi ichida turib o'chirsa, o'shanda ro'yxatni yangilaymiz
+    if (historyStack[historyStack.length - 1] === 'wishlist-section') {
+        renderWishlist(); 
+    }
+}
+
+    function showWishlist() {
+        if(activeModal) closeModal();
+        updateNav('nav-wishlist');
+        showSection('wishlist-section');
+        renderWishlist();
+    }
+
+    function renderWishlist() {
+        let c = document.getElementById('wishlist-items-container');
+        if(wishlist.length === 0) {
+            c.innerHTML = `<div style="grid-column: span 2;">` + window._emptyState({
+                icon: '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>',
+                title: "Saqlanganlar bo'sh",
+                desc: "Yoqqan tovarlarni yurakcha (❤) tugmasi orqali saqlang — keyin shu yerda topasiz.",
+                btnText: "Katalogga o'tish",
+                btnAction: "showCatalog()"
+            }) + `</div>`;
+            return;
+        }
+        let items = wishlist.map(id => productsDB.find(x => x.id === id)).filter(x => x);
+        c.innerHTML = items.map(x => cardHTML(x)).join('');
+    }
+    // 🔒 SERVER-OWNED: buyurtmalar (users/{uid}/orders) endi FAQAT server (Worker)
+    //    tomonidan yoziladi. Yangi database.rules.json mijozga bu tugunni yozishga
+    //    ruxsat bermaydi — shuning uchun bu funksiya endi REMOTE'ga YOZMAYDI
+    //    (aks holda permission-denied siklini keltirib chiqarardi). Faqat lokal
+    //    massiv/localStorage yangilanadi (ko'rsatuv uchun). on('value') listener
+    //    serverdan haqiqiy holatni o'zi tortadi.
+    function saveLocalOrders() {
+        try {
+            window.myOrders = Array.isArray(myOrders) ? myOrders : [];
+            localStorage.setItem('avto_orders_cache', JSON.stringify(window.myOrders));
+        } catch (e) {}
+        return Promise.resolve(null);
+    }
+    function saveProfile() {
+        let nN = document.getElementById('user-edit-name').value.trim();
+        let nP = document.getElementById('user-edit-phone').value.trim();
+        let nA = document.getElementById('user-edit-address') ? document.getElementById('user-edit-address').value.trim() : "";
+        // 🚗 Mashina ham SHU OYNADAN o'zgartiriladi (ilgari alohida oynada edi)
+        let carEl = document.getElementById('user-edit-car');
+        let nC = carEl ? String(carEl.value || '').trim() : null;
+
+        if(!nN || !nP) { showToast("Ism va raqamni kiritish shart!", "warning"); return; }
+        // 📞 Raqam to'liqligini tekshiramiz (ilgari har qanday matn qabul qilinardi)
+        var _pd = nP.replace(/\D/g, '');
+        if (_pd.length < 9) {
+            showToast("Telefon raqamni to'liq kiriting (masalan: +998 90 123 45 67)", "warning");
+            try { var _pf = document.getElementById('user-edit-phone').closest('.pe-f'); if (_pf) _pf.classList.add('is-bad'); } catch(e) {}
+            return;
+        }
+        if (_pd.length === 9) _pd = '998' + _pd;
+        if (_pd.indexOf('998') === 0 && _pd.length === 12) nP = '+' + _pd.slice(0,3) + ' ' + _pd.slice(3,5) + ' ' + _pd.slice(5,8) + ' ' + _pd.slice(8,10) + ' ' + _pd.slice(10);
+
+        myProfile.name = nN; myProfile.phone = nP; myProfile.address = nA;
+        updateProfileUI();
+
+        // 🚗 Mashinani saqlaymiz (localStorage + Firebase), keyin kartochkani yangilaymiz
+        if (nC !== null) {
+            try {
+                localStorage.setItem('avto_my_car', nC);
+                if (currentUser) db.ref('users/' + currentUser + '/my_car').set(nC);
+                if (typeof window.renderMyCar === 'function') window.renderMyCar();
+            } catch(e) {}
+        }
+
+        if (currentUser) {
+            // ⚠️ ILGARI `.set(myProfile)` ishlatilardi — bu BUTUN `profile` tugunini
+            //    xotiradagi obyekt bilan qayta yozardi. `myProfile` boshlang'ich
+            //    holatda faqat {name, phone, address} bo'lgani uchun (7448-qator),
+            //    agar Firebase listeneri hali javob bermagan bo'lsa, saqlash
+            //    `uid`, `username`, `firstName`, `lastName`, `lang`, `vip` kabi
+            //    maydonlarni O'CHIRIB yuborardi (ular 7554-qatorda yozilgan).
+            //    Endi `.update()` — faqat uchta maydonni yangilaydi, qolganiga tegmaydi.
+            db.ref('users/' + currentUser + '/profile').update({ name: nN, phone: nP, address: nA })
+                .then(() => { showToast("Saqlandi!"); closeModal(); })
+                .catch(() => { showToast("Saqlanmadi — internetni tekshiring", "warning"); });
+        } else { showToast("Saqlandi!"); closeModal(); }
+    }
+    // 🪟 DYNAMIC ISLAND (XABARNOMA) FUNKSIYASI
+function showToast(m, t = 'success') { 
+    const c = document.getElementById('toast-container'); 
+    const el = document.createElement('div'); 
+    el.className = 'toast'; 
+    // Muvaffaqiyatli bo'lsa yashil nur, xato bo'lsa sariq/qizil nur taratadi
+    let glowColor = t === 'success' ? 'rgba(48,209,88,0.2)' : 'rgba(212,175,55,0.2)';
+    el.style.boxShadow = `0 15px 35px rgba(0,0,0,0.5), 0 0 20px ${glowColor}`;
+    
+    // Ikonkalar ham Dynamic Island uslubida
+    let icon = t === 'success' ? '<span style="color:#30d158; filter:drop-shadow(0 0 4px rgba(48,209,88,.55));"><svg class="uic" style="width:16px;height:16px;vertical-align:-3px"><use href="#i-check"></use></svg></span>' : '<span style="color:var(--luxury-gold);"><svg class="uic" style="width:16px;height:16px;vertical-align:-3px"><use href="#i-alert"></use></svg></span>';
+    
+    el.innerHTML = `${icon} <span style="margin-top: 1px;">${m}</span>`; 
+    c.appendChild(el); 
+    
+    // Animatsiya o'zini yig'ib ketgach, elementni tozalaymiz
+    setTimeout(() => el.remove(), 3000); 
+}
+    const initialProducts = [ { id: 1, name: "Porshen To'plami", car: "Gazel Biznes", brand: "Rossiya", desc: "100% original", price: 1060000, stock: 10, img: "https://i.postimg.cc/zDhCzyyB/gazel.jpg", category: "gazel-biznes-motor", badge: "hot" } ];
+
