@@ -1,0 +1,254 @@
+# =====================================================================
+# KO'P TILLILIK (o'zbek / rus)
+#   - Mijozga ko'rinadigan barcha matnlar shu yerda turadi.
+#   - Foydalanuvchi tili profilga (users/<id>/profile/lang) saqlanadi.
+#   - t(lang, key, **kwargs) — tanlangan tildagi matnni qaytaradi.
+#   - Eslatma: adminga boradigan bildirishnomalar o'zbekcha qoladi.
+# =====================================================================
+DEFAULT_LANG = "uz"
+SUPPORTED_LANGS = ("uz", "ru")
+
+# Menyu tugmalari (handlerlarda set bilan solishtiriladi — eski o'zbekcha
+# matnlar ham ishlashda davom etadi, ya'ni mavjud klaviaturalar buzilmaydi).
+BTN = {
+    "uz": {"shop": "Do'konga marhamat", "contact": "Biz bilan bog'lanish", "lang": "🌐 Til / Язык",
+           "register": "📱 Tez buyurtma uchun ro'yxatdan o'tish"},
+    "ru": {"shop": "В магазин", "contact": "Связаться с нами", "lang": "🌐 Til / Язык",
+           "register": "📱 Регистрация для быстрого заказа"},
+}
+SHOP_BUTTONS = {BTN["uz"]["shop"], BTN["ru"]["shop"]}
+CONTACT_BUTTONS = {BTN["uz"]["contact"], BTN["ru"]["contact"]}
+LANG_BUTTONS = {BTN["uz"]["lang"], BTN["ru"]["lang"]}
+REGISTER_BUTTONS = {BTN["uz"]["register"], BTN["ru"]["register"]}
+
+TEXTS = {
+    "uz": {
+        "welcome_new": "Assalomu alaykum, Avto_A1 do'koniga xush kelibsiz!",
+        "choose_lang": "🌐 <b>Til / Язык</b>\n\nMuloqot tilini tanlang / Выберите язык:",
+        "lang_set": "Til o'zgartirildi: O'zbekcha",
+        "lang_already": "Bu til allaqachon tanlangan ✓",
+        "menu": "Asosiy menyu",
+        "welcome_browse": ("Marhamat, <b>{shop}</b> tugmasini bosib do'konni bemalol ko'ring. 🛍\n\n"
+                           "Ro'yxatdan o'tishingiz <b>shart emas</b> — buyurtma berishda telefon "
+                           "raqamingizni bir marta so'raymiz, xolos.\n\n"
+                           "<i>Istasangiz, pastdagi tugma orqali oldindan ro'yxatdan o'tib, keyingi "
+                           "buyurtmalarni tezroq berishingiz mumkin.</i>"),
+        "register_intro": "<b>Ismingizni kiriting:</b>",
+        "ask_name": "<b>Ismingizni kiriting:</b>",
+        "ask_phone": "<b>Telefon raqamingizni yuboring:</b>",
+        "phone_invalid": ("Raqam noto'g'ri ko'rinishda kiritildi.\n\n"
+                          "Pastdagi <b>Raqamni yuborish</b> tugmasini bosing yoki "
+                          "raqamni <code>+998 90 123 45 67</code> ko'rinishida yozing."),
+        "ask_region": "<b>Viloyatingizni tanlang:</b>",
+        "register_success": ("<b>Ro'yxatdan muvaffaqiyatli o'tdingiz!</b>\n\n"
+                             "Pastdagi <b>{shop}</b> tugmasini bosing."),
+        "welcome_back": ("Assalomu alaykum yana bir bor, <b>{name}</b>!\n\n"
+                         "Pastdagi <b>{shop}</b> tugmasini bosing."),
+        "shop_prompt": "Buyurtma berish uchun do'konni oching:",
+        "shop_btn_inline": "Barcha zapchastlar",
+        "contact_info": ("<b>{shop} bilan bog'lanish</b>\n\n"
+                         "👤 Admin: {admin}\n"
+                         "📞 Telefon: {phone}\n"
+                         "💬 Telegram: {tg}\n"
+                         "📍 Manzil: {address}\n"
+                         "🕒 Ish vaqti: {hours}"),
+        "contact_map_btn": "📍 Xaritada ko'rish",
+        "photo_thanks": "Rasm uchun rahmat!\n\nZapchastlarni ko'rish uchun do'konni oching.",
+        "photo_analyzing": "Rasmni ko'rib chiqyapman... 🔎",
+        "photo_found_intro": "Bizda shunga mos keladigan(lar):",
+        "photo_vision_failed": ("Rasmni oldim! Bu qaysi mashinaning qaysi qismi ekanini ayting — "
+                                "darrov topib beraman. 🔧"),
+        "ai_busy": "Uzr, hozir biroz bandman 🙏 Bir-ikki daqiqadan so'ng qayta yozsangiz, albatta yordam beraman.",
+        "phone_send": "Raqamni yuborish",
+        "order_qabul": "✅ #{code} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!{detail}\n\n🙏 Tez orada keyingi bosqich haqida xabar beramiz.",
+        "order_yolda": "🚚 #{code} raqamli buyurtmangiz yo'lga chiqdi!{detail}\n\n📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.",
+        "order_yetkazildi": "🏁 #{code} raqamli buyurtmangiz yetkazib berildi.{detail}\n\n🙏 Xaridingiz uchun rahmat! Yana kutamiz.",
+        "order_bekor_qilingan": "❌ #{code} raqamli buyurtmangiz bekor qilindi.\n\nSavollaringiz bo'lsa biz bilan bog'laning: +998 88 289 30 30",
+        "unexpected_error": ("Uzr, kutilmagan xatolik yuz berdi 🙏\n\n"
+                             "Iltimos, birozdan so'ng qayta urinib ko'ring yoki /start bosing. "
+                             "Muammo davom etsa, biz bilan bog'laning."),
+        "error_toast": "Xatolik yuz berdi, qayta urinib ko'ring",
+
+        # ---- Buyruqlar va yordam ----
+        "help": ("🤖 <b>Avto_A1 yordam</b>\n\n"
+                 "Men avto-ehtiyot qismlar do'konining yordamchisiman. Menga shunchaki "
+                 "<b>yozing</b> — qanday zapchast kerakligini ayting, topib beraman.\n\n"
+                 "📷 <b>Rasm yuborsangiz</b> — qismni rasmdan aniqlab, bazadan o'xshashini topaman.\n"
+                 "🛍 <b>{shop}</b> tugmasi — to'liq katalog, savat va buyurtma.\n\n"
+                 "<b>Buyruqlar:</b>\n"
+                 "/start — boshidan boshlash\n"
+                 "/help — shu yordam\n"
+                 "/til — muloqot tilini almashtirish\n"
+                 "/bekor — boshlangan amalni bekor qilish\n\n"
+                 "📞 Savolingiz bo'lsa: {phone}"),
+        "help_admin": ("\n\n👑 <b>Admin buyruqlari:</b>\n"
+                       "/storis — storis hashteglari ro'yxati\n"
+                       "/hisobot — savdo va ombor hisoboti\n"
+                       "Excel/CSV fayl yuboring — katalogga ommaviy import."),
+        "cancel_done": "✅ Bekor qilindi. Asosiy menyuga qaytdik.",
+        "cancel_nothing": "Bekor qiladigan amal yo'q. Marhamat, savolingizni yozing 🙂",
+        "state_busy": ("Hozir sizdan ma'lumot kutilmoqda 🙂\n\n"
+                       "Iltimos, so'ralgan ma'lumotni yuboring yoki bekor qilish uchun "
+                       "/bekor bosing."),
+        "unknown_command": ("Bunday buyruq yo'q 🤔\n\n"
+                            "Mavjud buyruqlar: /start, /help, /til, /bekor\n\n"
+                            "Yoki shunchaki savolingizni <b>yozib</b> yuboring — javob beraman."),
+        "lang_pick_again": ("Iltimos, yuqoridagi tugmalardan tilni tanlang 👆\n\n"
+                            "Til / Язык"),
+        "rate_limited": ("Birpas sekinlashtiraylik 🙏 Bir daqiqada juda ko'p so'rov keldi.\n\n"
+                         "Bir necha soniyadan so'ng qayta yozsangiz, albatta javob beraman."),
+
+        # ---- Bot ILGARI JIM QOLGAN holatlar ----
+        "voice_reply": ("Ovozli xabarni tushuna olmadim 🙏\n\n"
+                        "Qanday zapchast kerakligini <b>yozib</b> yuboring yoki "
+                        "qismning <b>rasmini</b> tashlang — darrov topib beraman."),
+        "sticker_reply": ("😊 Rahmat! Zapchast kerak bo'lsa nomini yozing yoki rasmini yuboring — "
+                          "bazadan topib beraman."),
+        "location_reply": ("📍 Lokatsiya uchun rahmat!\n\n"
+                           "Bizning manzil: <b>{address}</b>\n🕒 Ish vaqti: {hours}\n\n"
+                           "Yetkazib berish manzilini buyurtma berishda do'kon oynasida "
+                           "ko'rsatasiz."),
+        "contact_reply": ("📞 Raqamingiz uchun rahmat: <code>{phone}</code>\n\n"
+                          "Endi buyurtma berish yanada tez bo'ladi. Marhamat, do'konni oching."),
+        "media_reply": ("Faylni oldim 👍 Lekin video/audio bo'yicha zapchastni aniqlay olmayman.\n\n"
+                        "Iltimos, qismning <b>rasmini</b> yuboring yoki nomini <b>yozing</b>."),
+        "document_reply": ("Faylni oldim 👍 Lekin men hujjatlarni o'qiy olmayman.\n\n"
+                           "Kerakli zapchast nomini <b>yozib</b> yuboring yoki rasmini tashlang."),
+        "fallback_reply": ("Xabaringizni oldim, lekin bu turdagi xabarni tushunolmadim 🙏\n\n"
+                           "Zapchast nomini <b>yozing</b> yoki <b>rasmini</b> yuboring — "
+                           "darrov topib beraman. Katalog uchun /start bosing."),
+        "edited_reply": ("Xabaringizni tahrirlaganingizni ko'rdim 👀\n\n"
+                         "Tahrirlangan matnni to'liq o'qiy olmayman — iltimos, savolingizni "
+                         "<b>yangi xabar</b> qilib yuboring, darrov javob beraman."),
+    },
+    "ru": {
+        "welcome_new": "Здравствуйте! Добро пожаловать в магазин Avto_A1!",
+        "choose_lang": "🌐 <b>Til / Язык</b>\n\nMuloqot tilini tanlang / Выберите язык:",
+        "lang_set": "Язык изменён: Русский",
+        "lang_already": "Этот язык уже выбран ✓",
+        "menu": "Главное меню",
+        "welcome_browse": ("Нажмите кнопку <b>{shop}</b> и спокойно смотрите магазин. 🛍\n\n"
+                           "Регистрация <b>не обязательна</b> — мы лишь один раз спросим ваш номер "
+                           "телефона при оформлении заказа.\n\n"
+                           "<i>При желании можно зарегистрироваться заранее по кнопке ниже, чтобы "
+                           "следующие заказы оформлялись быстрее.</i>"),
+        "register_intro": "<b>Введите ваше имя:</b>",
+        "ask_name": "<b>Введите ваше имя:</b>",
+        "ask_phone": "<b>Отправьте ваш номер телефона:</b>",
+        "phone_invalid": ("Номер введён неверно.\n\n"
+                          "Нажмите кнопку <b>Отправить номер</b> ниже или "
+                          "введите номер в формате <code>+998 90 123 45 67</code>."),
+        "ask_region": "<b>Выберите ваш регион:</b>",
+        "register_success": ("<b>Вы успешно зарегистрировались!</b>\n\n"
+                             "Нажмите кнопку <b>{shop}</b> ниже."),
+        "welcome_back": ("С возвращением, <b>{name}</b>!\n\n"
+                         "Нажмите кнопку <b>{shop}</b> ниже."),
+        "shop_prompt": "Откройте магазин, чтобы оформить заказ:",
+        "shop_btn_inline": "Все запчасти",
+        "contact_info": ("<b>Связь с {shop}</b>\n\n"
+                         "👤 Админ: {admin}\n"
+                         "📞 Телефон: {phone}\n"
+                         "💬 Telegram: {tg}\n"
+                         "📍 Адрес: {address}\n"
+                         "🕒 Время работы: {hours}"),
+        "contact_map_btn": "📍 Открыть на карте",
+        "photo_thanks": "Спасибо за фото!\n\nОткройте магазин, чтобы посмотреть запчасти.",
+        "photo_analyzing": "Смотрю фото... 🔎",
+        "photo_found_intro": "У нас есть подходящее:",
+        "photo_vision_failed": ("Получил фото! Подскажите, от какой машины эта деталь — "
+                                "сразу найду для вас. 🔧"),
+        "ai_busy": "Извините, сейчас немного занят 🙏 Напишите через пару минут — обязательно помогу.",
+        "phone_send": "Отправить номер",
+        "order_qabul": "✅ Ваш заказ #{code} принят и готовится!{detail}\n\n🙏 Скоро сообщим о следующем этапе.",
+        "order_yolda": "🚚 Ваш заказ #{code} в пути!{detail}\n\n📦 Скоро доставим по адресу, держите телефон под рукой.",
+        "order_yetkazildi": "🏁 Ваш заказ #{code} доставлен.{detail}\n\n🙏 Спасибо за покупку! Ждём вас снова.",
+        "order_bekor_qilingan": "❌ Ваш заказ #{code} отменён.\n\nПо вопросам свяжитесь с нами: +998 88 289 30 30",
+        "unexpected_error": ("Извините, произошла неожиданная ошибка 🙏\n\n"
+                             "Пожалуйста, попробуйте ещё раз через минуту или нажмите /start. "
+                             "Если проблема повторяется — свяжитесь с нами."),
+        "error_toast": "Произошла ошибка, попробуйте снова",
+
+        # ---- Команды и помощь ----
+        "help": ("🤖 <b>Помощь Avto_A1</b>\n\n"
+                 "Я помощник магазина автозапчастей. Просто <b>напишите</b> мне, "
+                 "какая деталь нужна — найду.\n\n"
+                 "📷 <b>Пришлите фото</b> — определю деталь по фото и подберу похожее из базы.\n"
+                 "🛍 Кнопка <b>{shop}</b> — полный каталог, корзина и заказ.\n\n"
+                 "<b>Команды:</b>\n"
+                 "/start — начать заново\n"
+                 "/help — эта справка\n"
+                 "/til — сменить язык\n"
+                 "/bekor — отменить начатое действие\n\n"
+                 "📞 Вопросы: {phone}"),
+        "help_admin": ("\n\n👑 <b>Команды администратора:</b>\n"
+                       "/storis — список хештегов сторис\n"
+                       "/hisobot — отчёт по продажам и складу\n"
+                       "Пришлите файл Excel/CSV — массовый импорт в каталог."),
+        "cancel_done": "✅ Отменено. Вернулись в главное меню.",
+        "cancel_nothing": "Нечего отменять. Напишите ваш вопрос 🙂",
+        "state_busy": ("Сейчас я жду от вас данные 🙂\n\n"
+                       "Отправьте запрошенную информацию или нажмите /bekor для отмены."),
+        "unknown_command": ("Такой команды нет 🤔\n\n"
+                            "Доступные команды: /start, /help, /til, /bekor\n\n"
+                            "Или просто <b>напишите</b> ваш вопрос — я отвечу."),
+        "lang_pick_again": ("Пожалуйста, выберите язык кнопками выше 👆\n\n"
+                            "Til / Язык"),
+        "rate_limited": ("Давайте немного медленнее 🙏 За минуту пришло слишком много запросов.\n\n"
+                         "Напишите через несколько секунд — обязательно отвечу."),
+
+        # ---- Ситуации, где бот РАНЬШЕ МОЛЧАЛ ----
+        "voice_reply": ("Не удалось разобрать голосовое сообщение 🙏\n\n"
+                        "<b>Напишите</b>, какая деталь нужна, или пришлите её <b>фото</b> — "
+                        "сразу найду."),
+        "sticker_reply": ("😊 Спасибо! Если нужна запчасть — напишите название или пришлите фото, "
+                          "найду в базе."),
+        "location_reply": ("📍 Спасибо за локацию!\n\n"
+                           "Наш адрес: <b>{address}</b>\n🕒 Время работы: {hours}\n\n"
+                           "Адрес доставки укажете при оформлении заказа в магазине."),
+        "contact_reply": ("📞 Спасибо за номер: <code>{phone}</code>\n\n"
+                          "Теперь заказ оформится быстрее. Открывайте магазин."),
+        "media_reply": ("Файл получил 👍 Но по видео/аудио деталь определить не смогу.\n\n"
+                        "Пришлите <b>фото</b> детали или <b>напишите</b> её название."),
+        "document_reply": ("Файл получил 👍 Но документы я читать не умею.\n\n"
+                          "<b>Напишите</b> название нужной запчасти или пришлите фото."),
+        "fallback_reply": ("Сообщение получил, но такой тип сообщения я не понял 🙏\n\n"
+                           "<b>Напишите</b> название запчасти или пришлите <b>фото</b> — "
+                           "сразу найду. Для каталога нажмите /start."),
+        "edited_reply": ("Вижу, что вы отредактировали сообщение 👀\n\n"
+                         "Отредактированный текст я прочитать не могу — пожалуйста, отправьте "
+                         "вопрос <b>новым сообщением</b>, сразу отвечу."),
+    },
+}
+
+
+def t(lang, key, **kwargs):
+    """Tanlangan tildagi matnni qaytaradi (kalit topilmasa o'zbekchaga qaytadi)."""
+    lang = lang if lang in TEXTS else DEFAULT_LANG
+    template = TEXTS[lang].get(key) or TEXTS[DEFAULT_LANG].get(key, key)
+    if kwargs:
+        try:
+            return template.format(**kwargs)
+        except Exception:
+            return template
+    return template
+
+
+def shop_label(lang):
+    """Til bo'yicha 'do'kon' tugmasi yozuvi (matn ichida havola qilish uchun)."""
+    return BTN.get(lang, BTN[DEFAULT_LANG])["shop"]
+
+
+async def get_user_lang(user_id):
+    """Foydalanuvchi tilini keshdan, bo'lmasa Firebase profilidan oladi.
+    Topilmasa DEFAULT_LANG ('uz'). Hot-path'da ortiqcha so'rov bo'lmasligi uchun
+    avval xotira keshiga (users_db) qaraydi."""
+    cached = users_db.get(user_id)
+    if cached and cached.get("lang"):
+        return cached["lang"]
+    prof = await firebase_get(f"users/{user_id}/profile")
+    if prof:
+        users_db[user_id] = prof
+        return prof.get("lang", DEFAULT_LANG)
+    return DEFAULT_LANG
+
+

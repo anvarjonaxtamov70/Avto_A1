@@ -1,0 +1,584 @@
+# =====================================================================
+# EXCEL / CSV IMPORT (+ boshqa fayllar)
+# ---------------------------------------------------------------------
+# OQIM (xo'jayin/admin):
+#   1) Fayl yuboriladi -> yuklab olinadi -> OLDINDAN KO'RIB chiqiladi:
+#      nechta tovar, qaysi ustunlar topildi, namuna qator.
+#   2) «Narxlar qaysi valyutada?» -> [💵 Dollar] [🇺🇿 So'm] tugmalari.
+#   3) Dollar bo'lsa — kurs so'raladi ("12 800", "12800 so'm" ham bo'ladi).
+#   4) Ustama foizi — tugmalar [0% 10% 15% 20% 25% 30%] yoki yozib.
+#   5) Tovarlar QORALAMA sifatida qo'shiladi (mijozga ko'rinmaydi).
+#
+# ⚠ ILGARI nima buzuq edi:
+#   • egasi `ADMIN_IDS` da bo'lmasa — «hujjatlarni o'qiy olmayman» javobi;
+#   • `.xls` o'qilmasdi (xlrd yo'q edi), fayl nomi bo'lmasa — xato;
+#   • faqat dollar narx; «Mahsulot»/«Narx (so'm)»/«Soni» kabi ustunlar
+#     tanilmasdi; artikul ustuni «mashina» deb olinardi;
+#   • kurs/foizda "12 800 so'm" yoki "15%" yozilsa — rad etilardi;
+#   • PDF/Word/rasm-fayl yuborilsa — shunchaki «faqat Excel» deyilardi.
+# =====================================================================
+TG_FILE_LIMIT = 20 * 1024 * 1024          # Bot API get_file chegarasi
+_EXCEL_EXT = (".xlsx", ".xlsm", ".xls", ".csv")
+_IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".bmp", ".gif")
+_TEXT_EXT = (".txt",)
+
+_COL_NAME = ("наименование", "наимен", "название", "товар", "name", "tovar", "nomi", "nom",
+             "mahsulot", "maxsulot", "detal", "zapchast", "product", "item", "описание")
+_COL_PRICE = ("цена", "стоимость", "price", "narx", "narhi", "cost", "сум", "so'm", "som",
+              "usd", "$", "dollar")
+_COL_STOCK = ("кол-во", "колич", "остат", "qoldiq", "soni", "miqdor", "dona", "qty",
+              "quantity", "stock", "count", "шт")
+_COL_CODE = ("артикул", "artikul", "kod", "код", "code", "oem", "sku", "part")
+_COL_CAR = ("машина", "авто", "марка", "модель", "mashina", "avto", "model", "car", "rusum")
+
+
+def _parse_num(raw):
+    """«1 250 000», «12,5», «$12.50», «45 000 so'm», «1.250,50» -> float yoki None."""
+    s = str(raw if raw is not None else "").strip().lower()
+    if not s or s in ("nan", "none", "-"):
+        return None
+    s = re.sub(r"[^\d.,\-]", "", s.replace("\u00a0", "").replace(" ", ""))
+    if not s or not re.search(r"\d", s):
+        return None
+    if "," in s and "." in s:
+        # Oxirgi ajratkich — o'nlik; qolgani minglik
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif "," in s:
+        head, _, tail = s.rpartition(",")
+        s = (head.replace(",", "") + tail) if (len(tail) == 3 and head) else s.replace(",", ".")
+    elif s.count(".") > 1:
+        s = s.replace(".", "")
+    try:
+        v = float(s)
+    except ValueError:
+        return None
+    return v if math.isfinite(v) else None
+
+
+def _pick_col(cols, keys, exclude=()):
+    for c in cols:
+        cl = str(c).lower().strip()
+        if c in exclude or not cl or cl == "nan":
+            continue
+        if any(k in cl for k in keys):
+            return c
+    return None
+
+
+def _read_table(file_path):
+    """Faylni o'qib, sarlavha qatori topilgan jadvalni qaytaradi (pandas DataFrame)."""
+    import pandas as pd
+    low = file_path.lower()
+    frames = []
+    if low.endswith(".csv"):
+        for sep in (",", ";", "\t"):
+            for enc in ("utf-8-sig", "cp1251"):
+                try:
+                    df = pd.read_csv(file_path, header=None, sep=sep, encoding=enc, dtype=str)
+                    if df.shape[1] >= 2:
+                        frames.append(df)
+                        break
+                except Exception:
+                    continue
+            if frames:
+                break
+    else:
+        try:
+            sheets = pd.read_excel(file_path, header=None, sheet_name=None, dtype=str)
+            frames = [df for df in sheets.values() if df is not None and not df.empty]
+        except Exception:
+            # Ba'zan .xls aslida CSV/HTML bo'ladi — CSV sifatida ham urinib ko'ramiz
+            for sep in (",", ";", "\t"):
+                try:
+                    df = pd.read_csv(file_path, header=None, sep=sep, dtype=str, encoding="cp1251")
+                    if df.shape[1] >= 2:
+                        frames.append(df)
+                        break
+                except Exception:
+                    continue
+    if not frames:
+        raise ValueError("faylni o'qib bo'lmadi (format buzuq yoki bo'sh)")
+
+    best = None
+    for df in frames:
+        for i in range(min(20, len(df))):
+            row = [str(x).lower() for x in df.iloc[i].values]
+            line = " ".join(row)
+            if any(k in line for k in _COL_NAME) and any(k in line for k in _COL_PRICE):
+                body = df.iloc[i + 1:].reset_index(drop=True)
+                body.columns = [str(c).strip() for c in df.iloc[i].values]
+                if best is None or len(body) > len(best):
+                    best = body
+                break
+    if best is None:
+        df = frames[0]
+        cols = " · ".join(str(x) for x in df.iloc[0].values[:8]) if len(df) else ""
+        raise LookupError(cols)
+    return best
+
+
+def analyze_import_file(file_path):
+    """Oldindan ko'rish: ustunlar, tovarlar soni, valyuta taxmini, namuna."""
+    try:
+        df = _read_table(file_path)
+    except LookupError as e:
+        return {"success": False, "error_type": "columns", "columns": str(e)}
+    except Exception as e:
+        return {"success": False, "error_type": "exception", "error": str(e)}
+    cols = list(df.columns)
+    name_col = _pick_col(cols, _COL_NAME)
+    price_col = _pick_col(cols, _COL_PRICE, exclude=(name_col,))
+    if not name_col or not price_col:
+        return {"success": False, "error_type": "columns", "columns": " · ".join(cols[:10])}
+    stock_col = _pick_col(cols, _COL_STOCK, exclude=(name_col, price_col))
+    code_col = _pick_col(cols, _COL_CODE, exclude=(name_col, price_col, stock_col))
+    car_col = _pick_col(cols, _COL_CAR, exclude=(name_col, price_col, stock_col, code_col))
+
+    prices, sample = [], None
+    for _, row in df.iterrows():
+        nm = str(row[name_col]).strip()
+        pv = _parse_num(row[price_col])
+        if not nm or nm.lower() == "nan" or not pv or pv <= 0:
+            continue
+        prices.append(pv)
+        if sample is None:
+            sample = (nm, pv)
+    if not prices:
+        return {"success": False, "error_type": "empty", "columns": " · ".join(cols[:10])}
+
+    ph = str(price_col).lower()
+    if any(k in ph for k in ("$", "usd", "dollar", "доллар")):
+        guess = "usd"
+    elif any(k in ph for k in ("сум", "so'm", "som", "uzs", "сўм")):
+        guess = "uzs"
+    else:
+        med = sorted(prices)[len(prices) // 2]
+        guess = "uzs" if med >= 1000 else "usd"
+    return {
+        "success": True, "count": len(prices), "guess": guess,
+        "cols": {"name": name_col, "price": price_col, "stock": stock_col,
+                 "code": code_col, "car": car_col},
+        "sample": sample,
+    }
+
+
+def parse_excel_file(file_path, usd_rate, markup_pct, next_id, partiya_nomi, currency="usd"):
+    """Faylni QORALAMA tovarlarga aylantiradi.
+
+    currency="usd": narx = dollar * kurs * (1 + ustama); "uzs": narx = so'm * (1 + ustama).
+    Yakuniy narx 1000 so'mga yuqoriga yaxlitlanadi (do'kon narxlari shunday).
+    """
+    try:
+        df = _read_table(file_path)
+    except LookupError as e:
+        return {"success": False, "error_type": "columns", "columns": str(e)}
+    except Exception as e:
+        return {"success": False, "error_type": "exception", "error": str(e)}
+    try:
+        cols = list(df.columns)
+        name_col = _pick_col(cols, _COL_NAME)
+        price_col = _pick_col(cols, _COL_PRICE, exclude=(name_col,))
+        if not name_col or not price_col:
+            return {"success": False, "error_type": "columns", "columns": " · ".join(cols[:10])}
+        stock_col = _pick_col(cols, _COL_STOCK, exclude=(name_col, price_col))
+        code_col = _pick_col(cols, _COL_CODE, exclude=(name_col, price_col, stock_col))
+        car_col = _pick_col(cols, _COL_CAR, exclude=(name_col, price_col, stock_col, code_col))
+
+        factor = (usd_rate if currency == "usd" else 1.0) * (1 + markup_pct / 100)
+        new_products, skipped = [], 0
+        for _, row in df.iterrows():
+            name = str(row[name_col]).strip()
+            if not name or name.lower() == "nan":
+                continue
+            price_in = _parse_num(row[price_col])
+            if not price_in or price_in <= 0:
+                skipped += 1
+                continue
+            final_price = int(math.ceil((price_in * factor) / 1000) * 1000)
+            stock = 10
+            if stock_col is not None:
+                sv = _parse_num(row[stock_col])
+                if sv is not None and sv >= 0:
+                    stock = int(sv)
+            car_model = str(row[car_col]).strip() if car_col is not None else ""
+            if not car_model or car_model.lower() == "nan":
+                car_model = "Ko'rsatilmagan"
+            code = str(row[code_col]).strip() if code_col is not None else ""
+            if code.lower() == "nan":
+                code = ""
+            item = {
+                "id": next_id, "name": name[:160], "price": final_price, "unit": "dona",
+                "desc": f"Mashina: {car_model}", "category": "umumiy", "categories": ["umumiy"],
+                "brand": "Umumiy", "model": "Umumiy", "img": "", "images": [],
+                "product_type": "oddiy", "stock": stock, "is_draft": True,
+                "batch_id": partiya_nomi, "has_conflict": False,
+            }
+            if code:
+                item["code"] = code[:60]
+            new_products.append(item)
+            next_id += 1
+        return {"success": True, "new_products": new_products, "skipped": skipped}
+    except Exception as e:
+        return {"success": False, "error_type": "exception", "error": str(e)}
+
+
+def import_template_bytes():
+    """Xo'jayinga yuboriladigan NAMUNA Excel (openpyxl)."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tovarlar"
+    ws.append(["Nomi", "Narxi", "Soni", "Mashina", "Artikul"])
+    for c in ws[1]:
+        c.font = Font(bold=True)
+        c.fill = PatternFill("solid", fgColor="F2C94C")
+    ws.append(["Kolodka oldi", 12.5, 8, "Cobalt", "96549788"])
+    ws.append(["Svecha NGK", 3.2, 40, "Gentra", "BKR6E"])
+    ws.append(["Amortizator orqa", 27, 4, "Nexia 3", ""])
+    for col, w in zip("ABCDE", (34, 12, 10, 18, 16)):
+        ws.column_dimensions[col].width = w
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+async def send_import_template(chat_id, caption=None):
+    from aiogram.types import BufferedInputFile
+    data = await asyncio.to_thread(import_template_bytes)
+    await bot.send_document(
+        chat_id, BufferedInputFile(data, filename="AvtoA1_namuna.xlsx"),
+        caption=caption or (
+            "📥 <b>Namuna fayl</b>\n\n"
+            "Ustunlar: <b>Nomi</b>, <b>Narxi</b> (shart), <b>Soni</b>, <b>Mashina</b>, "
+            "<b>Artikul</b> (ixtiyoriy).\n"
+            "Narx dollarda ham, so'mda ham bo'lishi mumkin — yuborganingizdan keyin "
+            "so'rayman. Ruscha sarlavhalar (Наименование, Цена, Кол-во) ham tushuniladi."),
+        parse_mode="HTML",
+    )
+
+
+def _import_cur_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💵 Dollar ($)", callback_data="imp:cur:usd"),
+         InlineKeyboardButton(text="🇺🇿 So'm", callback_data="imp:cur:uzs")],
+        [InlineKeyboardButton(text="✖️ Bekor qilish", callback_data="imp:cancel")],
+    ])
+
+
+def _import_markup_kb():
+    row = [InlineKeyboardButton(text=f"{p}%", callback_data=f"imp:mk:{p}") for p in (0, 10, 15)]
+    row2 = [InlineKeyboardButton(text=f"{p}%", callback_data=f"imp:mk:{p}") for p in (20, 25, 30)]
+    return InlineKeyboardMarkup(inline_keyboard=[row, row2, [
+        InlineKeyboardButton(text="✖️ Bekor qilish", callback_data="imp:cancel")]])
+
+
+async def _import_cleanup(state):
+    data = await state.get_data()
+    fp = data.get("file_path")
+    try:
+        if fp and os.path.exists(fp):
+            os.remove(fp)
+    except Exception as e:
+        logging.warning(f"Vaqtinchalik faylni o'chirishda xato: {e}")
+    await state.clear()
+
+
+def _fname_of(document):
+    name = (getattr(document, "file_name", None) or "").strip()
+    if not name:
+        mt = str(getattr(document, "mime_type", "") or "")
+        ext = {"text/csv": ".csv", "application/vnd.ms-excel": ".xls",
+               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+               "application/pdf": ".pdf", "text/plain": ".txt"}.get(mt, "")
+        name = "fayl" + ext
+    return name
+
+
+# ⚠ `~F.animation`: Telegram GIF (animation) xabarida `document` maydoni ham
+#    to'ldiriladi. Bu filtr bo'lmasa GIF shu importer'ga tushib ketardi.
+@dp.message(F.document, ~F.animation)
+async def handle_document_import(message: types.Message, state: FSMContext, bot: Bot):
+    uid = message.from_user.id
+    document = message.document
+    file_name = _fname_of(document)
+    low = file_name.lower()
+
+    if not _is_admin(uid):
+        # Mijoz fayl yuborsa — yo'l ko'rsatamiz (ilgari jim qolardi).
+        lang = await get_user_lang(uid)
+        await message.reply(t(lang, "document_reply"), parse_mode="HTML")
+        return
+
+    size = int(getattr(document, "file_size", 0) or 0)
+    if size > TG_FILE_LIMIT:
+        await message.answer(
+            f"Xo'jayin, fayl juda katta ({size / 1048576:.1f} MB). Telegram botlarga "
+            "20 MB gacha fayl beradi. Faylni bo'lib yoki Excel'da ortiqcha "
+            "varaqlarni o'chirib qayta yuboring.")
+        return
+
+    if low.endswith(_IMAGE_EXT):
+        await message.answer(
+            "Xo'jayin, bu rasm fayl ko'rinishida keldi. Tahlil qilishim uchun uni "
+            "oddiy <b>rasm</b> sifatida yuboring (📎 → Galereya). Storis uchun izohga "
+            "#kategoriya yozing.", parse_mode="HTML")
+        return
+
+    if low.endswith(_TEXT_EXT) and _is_owner(uid):
+        # Matnli fayl (ro'yxat, eslatma) — o'qib AI ga topshiramiz.
+        try:
+            buf = await bot.download(document.file_id)
+            raw = buf.read() if hasattr(buf, "read") else bytes(buf or b"")
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                text = raw.decode("cp1251", errors="replace")
+            text = text.strip()[:6000]
+            if not text:
+                await message.answer("Xo'jayin, fayl bo'sh ekan.")
+                return
+            note = (message.caption or "Shu fayl mazmunini ko'rib chiqing.").strip()
+            await handle_ai_chat(message, state,
+                                 text_override=f"{note}\n\n[«{file_name}» fayl matni]\n{text}")
+        except Exception as e:
+            logging.error(f"TXT faylni o'qishda xato: {e}")
+            await message.answer("Xo'jayin, faylni o'qib bo'lmadi. Qayta yuborib ko'ring.")
+        return
+
+    if not low.endswith(_EXCEL_EXT):
+        ext = (os.path.splitext(low)[1] or "").upper().lstrip(".") or "bu"
+        await message.answer(
+            f"Xo'jayin, {ext} faylni hozircha o'qiy olmayman. Narxlar ro'yxatini "
+            "<b>Excel (.xlsx, .xls)</b> yoki <b>CSV</b> ko'rinishida yuboring — "
+            "namuna faylni pastda yubordim.", parse_mode="HTML")
+        try:
+            await send_import_template(message.chat.id)
+        except Exception as e:
+            logging.warning(f"Namuna fayl yuborilmadi: {e}")
+        return
+
+    await state.clear()
+    msg = await message.answer("📥 Fayl qabul qilindi, o'qiyapman…")
+    file_path = None
+    try:
+        file = await bot.get_file(document.file_id)
+        safe_name = re.sub(r"[^\w._-]", "", low) or "fayl.xlsx"
+        file_path = os.path.join(DOWNLOADS_DIR, f"{document.file_id[:40]}_{safe_name}")
+        await bot.download_file(file.file_path, file_path)
+        info = await asyncio.to_thread(analyze_import_file, file_path)
+    except Exception as e:
+        logging.error(f"Fayl yuklashda xato: {e}")
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+        await msg.edit_text("Xo'jayin, faylni yuklab bo'lmadi. Internet yoki fayl "
+                            f"buzilgan bo'lishi mumkin — qayta yuboring.\n\n<i>{html.escape(str(e))[:200]}</i>",
+                            parse_mode="HTML")
+        return
+
+    if not info.get("success"):
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+        et = info.get("error_type")
+        if et in ("columns", "empty"):
+            found = html.escape(str(info.get("columns") or "—"))[:400]
+            why = ("«Nomi» va «Narxi» ustunlari topilmadi" if et == "columns"
+                   else "narxi to'g'ri yozilgan tovar topilmadi")
+            await msg.edit_text(
+                f"Xo'jayin, {why}.\n\nFayldagi sarlavhalar: <i>{found}</i>\n\n"
+                "Birinchi qatorda ustun nomlari bo'lsin: <b>Nomi</b>, <b>Narxi</b> "
+                "(ixtiyoriy: Soni, Mashina, Artikul). Namuna faylni yubordim.",
+                parse_mode="HTML")
+            try:
+                await send_import_template(message.chat.id)
+            except Exception as e:
+                logging.warning(f"Namuna fayl yuborilmadi: {e}")
+        else:
+            await msg.edit_text("Xo'jayin, faylni o'qib bo'lmadi: "
+                                f"<i>{html.escape(str(info.get('error') or ''))[:200]}</i>",
+                                parse_mode="HTML")
+        return
+
+    c = info["cols"]
+    def _col(v):
+        return f"«{html.escape(str(v))[:40]}»" if v is not None else "—"
+    sample = info.get("sample")
+    sample_txt = (f"\nNamuna: <i>{html.escape(sample[0])[:60]}</i> — {sample[1]:g}" if sample else "")
+    guess = "dollar" if info["guess"] == "usd" else "so'm"
+    await state.update_data(file_path=file_path, file_name=file_name, guess=info["guess"])
+    await state.set_state(ImportState.currency)
+    await msg.edit_text(
+        f"📄 <b>{html.escape(file_name)[:60]}</b>\n"
+        f"✅ <b>{info['count']} ta tovar</b> topildi\n\n"
+        f"• Nomi: {_col(c['name'])}\n• Narxi: {_col(c['price'])}\n"
+        f"• Soni: {_col(c['stock']) if c['stock'] is not None else '— (har biriga 10 dona)'}\n"
+        f"• Mashina: {_col(c['car'])}\n• Artikul: {_col(c['code'])}"
+        f"{sample_txt}\n\n"
+        f"<b>Narxlar qaysi valyutada?</b> <i>(menimcha — {guess})</i>",
+        parse_mode="HTML", reply_markup=_import_cur_kb())
+
+
+@dp.callback_query(F.data.startswith("imp:"))
+async def import_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Import tugmalari: valyuta, ustama foizi, bekor qilish."""
+    if not _is_admin(callback.from_user.id):
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    cur_state = await state.get_state()
+    if not cur_state or not str(cur_state).startswith("ImportState"):
+        await callback.answer("Bu import eskirgan — faylni qayta yuboring.", show_alert=True)
+        return
+    if parts[1] == "cancel":
+        await _import_cleanup(state)
+        await callback.answer("Bekor qilindi")
+        try:
+            await callback.message.edit_text("Import bekor qilindi, xo'jayin.")
+        except Exception:
+            pass
+        return
+    if parts[1] == "cur" and len(parts) > 2:
+        cur = "usd" if parts[2] == "usd" else "uzs"
+        await state.update_data(currency=cur)
+        await callback.answer()
+        if cur == "usd":
+            await state.set_state(ImportState.rate)
+            await callback.message.edit_text(
+                "💵 Narxlar dollarda.\n\n<b>Bugungi dollar kursini</b> yozing\n"
+                "<i>(masalan: 12800 yoki 12 800 so'm)</i>", parse_mode="HTML")
+        else:
+            await state.update_data(usd_rate=1)
+            await state.set_state(ImportState.markup)
+            await callback.message.edit_text(
+                "🇺🇿 Narxlar so'mda.\n\n<b>Ustama foizini</b> tanlang yoki yozing:",
+                parse_mode="HTML", reply_markup=_import_markup_kb())
+        return
+    if parts[1] == "mk" and len(parts) > 2 and str(cur_state).endswith("markup"):
+        await callback.answer()
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        await _run_import(callback.message, state, float(_parse_num(parts[2]) or 0))
+        return
+    await callback.answer()
+
+
+@dp.message(ImportState.currency, not_a_command)
+async def process_currency_text(message: types.Message, state: FSMContext):
+    """Valyutani tugma o'rniga yozib yuborsa ham tushunamiz."""
+    txt = (message.text or "").lower()
+    if any(k in txt for k in ("$", "dollar", "доллар", "usd")):
+        await state.update_data(currency="usd")
+        await state.set_state(ImportState.rate)
+        await message.answer("Bugungi <b>dollar kursini</b> yozing <i>(masalan: 12800)</i>", parse_mode="HTML")
+    elif any(k in txt for k in ("so'm", "som", "сум", "uzs", "sum")):
+        await state.update_data(currency="uzs", usd_rate=1)
+        await state.set_state(ImportState.markup)
+        await message.answer("<b>Ustama foizini</b> tanlang yoki yozing:", parse_mode="HTML",
+                             reply_markup=_import_markup_kb())
+    else:
+        await message.answer("Xo'jayin, tugmani bosing: dollar yoki so'm?", reply_markup=_import_cur_kb())
+
+
+@dp.message(ImportState.rate, not_a_command)
+async def process_rate(message: types.Message, state: FSMContext):
+    usd_rate = _parse_num(message.text)
+    if not usd_rate or not (1000 <= usd_rate <= 100000):
+        await message.answer("Kursni son bilan yozing, xo'jayin (masalan: 12800)")
+        return
+    await state.update_data(usd_rate=usd_rate)
+    await message.answer(
+        f"Kurs: <b>{usd_rate:,.0f}</b> so'm\n\n<b>Ustama foizini</b> tanlang yoki yozing:".replace(",", " "),
+        parse_mode="HTML", reply_markup=_import_markup_kb(),
+    )
+    await state.set_state(ImportState.markup)
+
+
+@dp.message(ImportState.markup, not_a_command)
+async def process_markup_pandas(message: types.Message, state: FSMContext, bot: Bot):
+    markup_pct = _parse_num((message.text or "").replace("%", ""))
+    if markup_pct is None or not (0 <= markup_pct <= 500):
+        await message.answer("Foizni son bilan yozing, xo'jayin (masalan: 15)",
+                             reply_markup=_import_markup_kb())
+        return
+    await _run_import(message, state, markup_pct)
+
+
+async def _run_import(message, state, markup_pct):
+    """Yakuniy bosqich: faylni o'qib, tovarlarni QORALAMA sifatida qo'shadi."""
+    user_data = await state.get_data()
+    file_path = user_data.get("file_path")
+    currency = user_data.get("currency") or "usd"
+    usd_rate = float(user_data.get("usd_rate") or (12600 if currency == "usd" else 1))
+    if not file_path or not os.path.exists(file_path):
+        await state.clear()
+        await message.answer("Xo'jayin, fayl topilmadi (bot qayta ishga tushgan bo'lishi mumkin). "
+                             "Faylni qayta yuboring.")
+        return
+    msg = await message.answer("⏳ Tovarlar qo'shilmoqda…")
+    try:
+        partiya_nomi = f"Partiya_{time.strftime('%d_%m_%Y_%H_%M')}"
+        # products'ni o'qish -> ID hisoblash -> yozishni LOCK ostida bajaramiz.
+        # Aks holda AI bulk import bilan ayni vaqtda ishlaganda bir xil ID
+        # berilishi yoki yozuvlar bir-birini o'chirib yuborishi mumkin (#15).
+        async with products_lock:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(fb_url("products")) as resp:
+                    raw_products = await resp.json()
+                    next_id, next_index = product_offsets(raw_products)
+
+            result = await asyncio.to_thread(
+                parse_excel_file, file_path, usd_rate, markup_pct, next_id, partiya_nomi, currency
+            )
+
+            if not result["success"]:
+                if result.get("error_type") == "columns":
+                    await msg.edit_text(f"«Nomi» yoki «Narxi» ustuni topilmadi.\n\nUstunlar: {result['columns']}")
+                else:
+                    await msg.edit_text(f"Xatolik: {result['error']}")
+                return
+
+            new_products = result["new_products"]
+            if new_products:
+                # Butun massivni qayta yozmaymiz — har bir yangi mahsulot bo'sh
+                # slotga ETag (if-match) bilan ATOMIK qo'shiladi (#3).
+                async with aiohttp.ClientSession() as session:
+                    ok = await firebase_append_products(session, new_products, next_index)
+                if not ok:
+                    await msg.edit_text("Mahsulotlar bazaga yozilmadi (Firebase xatosi). Qayta urinib ko'ring.")
+                    return
+
+        if not new_products:
+            await msg.edit_text("Xo'jayin, qo'shiladigan tovar topilmadi (narxlar bo'sh yoki noto'g'ri).")
+            return
+        prices = [p["price"] for p in new_products]
+        fmt = lambda v: f"{v:,}".replace(",", " ")
+        cur_txt = (f"kurs {fmt(int(usd_rate))} so'm, " if currency == "usd" else "so'mda, ")
+        skipped = result.get("skipped") or 0
+        await msg.edit_text(
+            f"✅ <b>{len(new_products)} ta tovar</b> qoralamaga qo'shildi\n\n"
+            f"• Partiya: <code>{partiya_nomi}</code>\n"
+            f"• Hisob: {cur_txt}ustama {markup_pct:g}%\n"
+            f"• Narxlar: {fmt(min(prices))} — {fmt(max(prices))} so'm\n"
+            + (f"• Narxi yo'q qatorlar o'tkazib yuborildi: {skipped} ta\n" if skipped else "")
+            + "\nMijozlar hali ko'rmaydi. Mini App → Admin → <b>Qoralamalar</b> bo'limida "
+              "rasm qo'shib, tasdiqlang.",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        await msg.edit_text(f"Xatolik: {e}")
+    finally:
+        await _import_cleanup(state)
+
+

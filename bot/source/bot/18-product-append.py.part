@@ -1,0 +1,81 @@
+# =====================================================================
+# PRODUCTS GA QO'SHISH (xavfsiz APPEND — butun massivni qayta yozmaydi)
+#   - Eski kod butun `products` massivini PUT qilardi. Agar admin ayni
+#     paytda Mini App'dan biror mahsulotni tahrirlasa/o'chirsa, bot eski
+#     nusxani yozib, admin o'zgarishini O'CHIRIB yuborardi (#race).
+#   - Endi faqat YANGI indekslar PATCH qilinadi — mavjud mahsulotlarga
+#     (boshqa indekslarga) tegilmaydi, shu sababli admin o'zgarishlari
+#     ustidan yozilmaydi.
+# =====================================================================
+def product_offsets(raw):
+    """RTDB'dan o'qilgan `products` (dict/list/None) dan (keyingi_id, keyingi_indeks)."""
+    if isinstance(raw, list):
+        items = [p for p in raw if isinstance(p, dict)]
+        next_index = len(raw)
+    elif isinstance(raw, dict):
+        items = [v for v in raw.values() if isinstance(v, dict)]
+        nums = [int(k) for k in raw.keys() if str(k).isdigit()]
+        next_index = (max(nums) + 1) if nums else len(raw)
+    else:
+        items, next_index = [], 0
+    next_id = max([p.get("id", 0) for p in items], default=0) + 1
+    return next_id, next_index
+
+
+async def _slot_etag_and_value(session, idx):
+    """products/<idx> slotining ETag va joriy qiymatini qaytaradi."""
+    async with session.get(fb_url(f"products/{idx}"),
+                           headers={"X-Firebase-ETag": "true"}) as r:
+        etag = r.headers.get("ETag")
+        value = await r.json()
+    return etag, value
+
+
+async def firebase_append_products(session, new_products, start_index, max_probe=64):
+    """Yangi mahsulotlarni massivga XAVFSIZ (atomik) append qiladi.
+
+    Har bir mahsulot uchun bo'sh slot topiladi va u ETag (if-match) bilan
+    ATOMIK egallanadi. Agar admin/boshqa manba ayni paytda o'sha slotni egallasa
+    (slot bo'sh emas yoki 412 Precondition Failed), keyingi slotga o'tiladi.
+    Shu sababli mavjud mahsulotlar HECH QACHON ustidan yozilmaydi (#3).
+
+    Hammasi yozilsa True, qattiq xatoda False.
+    """
+    if not new_products:
+        return True
+    idx = start_index
+    for p in new_products:
+        placed = False
+        probes = 0
+        while probes < max_probe:
+            probes += 1
+            try:
+                etag, value = await _slot_etag_and_value(session, idx)
+            except Exception as e:
+                logging.error(f"products[{idx}] ETag o'qish xatosi: {e}")
+                return False
+            if value is not None:
+                idx += 1  # slot band — ustidan YOZMAYMIZ, keyingisiga o'tamiz
+                continue
+            headers = {"if-match": etag} if etag else {}
+            try:
+                async with session.put(fb_url(f"products/{idx}"), json=p,
+                                       headers=headers, timeout=30) as pr:
+                    if pr.status == 200:
+                        placed = True
+                        idx += 1
+                        break
+                    if pr.status == 412:  # poyga: slotni boshqasi egalladi
+                        idx += 1
+                        continue
+                    logging.error(f"products[{idx}] yozilmadi (status={pr.status})")
+                    return False
+            except Exception as e:
+                logging.error(f"products[{idx}] PUT xatosi: {e}")
+                return False
+        if not placed:
+            logging.error("products append: bo'sh slot topilmadi (max_probe tugadi)")
+            return False
+    return True
+
+

@@ -1,0 +1,74 @@
+# =====================================================================
+#  GROQ MODELLARI
+#
+#  DIQQAT — AI 2026-yil avgustda ISHLAMAY QOLGANINING SABABI SHU YERDA:
+#  Groq bepul/developer tarifida ikkala eski modelni O'CHIRIB TASHLADI:
+#
+#    llama-3.3-70b-versatile ................ 2026-08-16 da o'chdi
+#      -> o'rniga: openai/gpt-oss-120b
+#    meta-llama/llama-4-scout-17b-16e-instruct  2026-07-17 da o'chdi
+#      -> o'rniga: qwen/qwen3.6-27b (rasmni tushunadi)
+#
+#  Model o'chgach Groq 404/400 qaytaradi, `groq_chat` esa 3 marta urinib
+#  `None` qaytaradi — foydalanuvchi uchun bu "AI umuman javob bermayapti"
+#  bo'lib ko'rinadi. Model nomini almashtirishning o'zi kifoya.
+#
+#  MUHIM: bu qiymatlar Render panelidagi GROQ_TEXT_MODEL / GROQ_VISION_MODEL
+#  o'zgaruvchilari bilan USTIDAN YOZILADI. Render'da eski nom turgan bo'lsa,
+#  shu faylni tuzatish YETARLI EMAS — panelda ham yangilash yoki o'sha
+#  o'zgaruvchilarni butunlay o'chirib tashlash kerak.
+# =====================================================================
+GROQ_TEXT_MODEL = os.getenv("GROQ_TEXT_MODEL", "openai/gpt-oss-120b")
+GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.6-27b")
+
+# Asosiy model o'chib qolsa yoki xato bersa — shu zaxira modellar sinaladi.
+# Shu ro'yxat bo'lmasa, Groq keyingi marta model o'chirganda AI yana jimgina
+# o'lib qolardi va sababi loglarda ko'rinmasdi.
+GROQ_TEXT_FALLBACKS = ["openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
+GROQ_VISION_FALLBACKS = ["openai/gpt-oss-120b"]
+
+# Firebase service-account JSON (401 xatosini hal qiladi)
+SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, os.getenv("SERVICE_ACCOUNT_FILE", "serviceAccount.json"))
+
+
+def _materialize_service_account():
+    """Bulutli server (Render/Railway/Docker) uchun: serviceAccount.json faylini
+    environment variable'dan tiklaydi.
+
+    Bulutda maxfiy faylni `scp` bilan ko'chirib bo'lmaydi — buning o'rniga JSON
+    matni `SERVICE_ACCOUNT_JSON` env'iga qo'yiladi (xohlasangiz base64 holda).
+    Agar fayl allaqachon mavjud bo'lsa (mas. lokal kompyuter), unga TEGILMAYDI.
+    """
+    if os.path.exists(SERVICE_ACCOUNT_FILE):
+        return
+    raw = os.getenv("SERVICE_ACCOUNT_JSON", "").strip()
+    if not raw:
+        return
+    # Qiymat to'g'ridan-to'g'ri JSON ({...}) yoki base64 bo'lishi mumkin.
+    if not raw.startswith("{"):
+        try:
+            raw = base64.b64decode(raw).decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError) as e:
+            logging.error(f"SERVICE_ACCOUNT_JSON base64 dekod xatosi: {e}")
+            return
+    try:
+        json.loads(raw)  # to'g'ri JSON ekanini tekshiramiz (aks holda yozmaymiz)
+    except json.JSONDecodeError as e:
+        logging.error(f"SERVICE_ACCOUNT_JSON yaroqsiz JSON: {e}")
+        return
+    try:
+        with open(SERVICE_ACCOUNT_FILE, "w", encoding="utf-8") as f:
+            f.write(raw)
+        logging.info("serviceAccount.json env'dan tiklandi.")
+    except OSError as e:
+        logging.error(f"serviceAccount.json yozishda xato: {e}")
+
+
+_materialize_service_account()
+
+if not API_TOKEN:
+    raise SystemExit("BOT_TOKEN .env faylda topilmadi. .env.example dan .env yarating.")
+
+groq_client = AsyncGroq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
+

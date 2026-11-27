@@ -1,0 +1,116 @@
+# =====================================================================
+# GROQ — markaziy yordamchi (retry + xato boshqaruvi)
+# =====================================================================
+def _model_is_gone(error: Exception) -> bool:
+    """Xato «bunday model yo'q» degani (o'chirilgan/nomi noto'g'ri) — shundaymi?
+
+    Bunday holatda qayta urinishning MA'NOSI YO'Q: model qaytib kelmaydi.
+    Darhol zaxira modelga o'tish kerak.
+    """
+    text = str(error).lower()
+    return any(
+        marker in text
+        for marker in (
+            "model_not_found",
+            "does not exist",
+            "not found",
+            "decommissioned",
+            "deprecated",
+            "has been shut down",
+        )
+    )
+
+
+async def groq_raw(messages, model=None, temperature=0.5, max_retries=3,
+                   tools=None, tool_choice=None):
+    """Groq chat — TO'LIQ javob xabarini (message obyektini) qaytaradi.
+
+    Nega kerak: tool calling'da javob matni emas, `message.tool_calls`
+    ro'yxati kerak bo'ladi. `groq_chat()` esa faqat matn qaytaradi va
+    tool_calls'ni yo'qotadi. Shuning uchun qayta urinish / zaxira model
+    mantiqi SHU YERDA yashaydi, `groq_chat` esa ustidan yupqa qobiq
+    bo'lib qoladi — mantiq ikki joyda takrorlanmaydi.
+
+    Model o'chirilgan bo'lsa (Groq vaqti-vaqti bilan eski modellarni
+    o'chiradi) — zaxira modellarga o'tadi va buni loglarga ANIQ yozadi.
+    Muvaffaqiyatsizda None.
+    """
+    if groq_client is None:
+        logging.error("GROQ_API_KEY berilmagan — AI o'chirilgan.")
+        return None
+
+    primary = model or GROQ_TEXT_MODEL
+    fallbacks = (
+        GROQ_VISION_FALLBACKS if primary == GROQ_VISION_MODEL else GROQ_TEXT_FALLBACKS
+    )
+    # Takrorlanmasin
+    candidates = [primary] + [m for m in fallbacks if m != primary]
+
+    # Ixtiyoriy parametrlarni FAQAT berilganda uzatamiz — shunda tool
+    # ishlatmaydigan (mavjud) chaqiruvlarning so'rovi ayni avvalgidek
+    # qoladi va hech qanday xatti-harakat o'zgarmaydi.
+    extra = {}
+    if tools:
+        extra["tools"] = tools
+        extra["tool_choice"] = tool_choice or "auto"
+
+    for candidate in candidates:
+        delay = 1.5
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = await groq_client.chat.completions.create(
+                    messages=messages,
+                    model=candidate,
+                    temperature=temperature,
+                    **extra,
+                )
+                if candidate != primary:
+                    logging.warning(
+                        "Groq: «%s» ishlamadi, zaxira model «%s» ishlatildi. "
+                        "GROQ_TEXT_MODEL/GROQ_VISION_MODEL ni yangilang.",
+                        primary,
+                        candidate,
+                    )
+                return resp.choices[0].message
+            except Exception as e:
+                if tool_choice == "required" and not _model_is_gone(e):
+                    # "required" ni model qo'llamasa — qayta urinish behuda;
+                    # agent darhol "auto" bilan qayta so'raydi.
+                    logging.warning("Groq «%s» tool_choice=required xato: %s", candidate, e)
+                    return None
+                if _model_is_gone(e):
+                    logging.error(
+                        "Groq modeli «%s» MAVJUD EMAS (o'chirilgan yoki nomi xato): %s "
+                        "— zaxira modelga o'tilyapti.",
+                        candidate,
+                        e,
+                    )
+                    break  # qayta urinish behuda, keyingi modelga o'tamiz
+                logging.warning(
+                    "Groq «%s» urinish %s/%s xato: %s", candidate, attempt, max_retries, e
+                )
+                if attempt < max_retries:
+                    await asyncio.sleep(delay)
+                    delay *= 2
+
+    logging.error(
+        "Groq: hech bir model javob bermadi (sinalgan: %s). "
+        "Modellar o'chirilgan bo'lishi mumkin — console.groq.com/docs/deprecations",
+        candidates,
+    )
+    return None
+
+
+async def groq_chat(messages, model=None, temperature=0.5, max_retries=3):
+    """Groq chat — javob MATNINI qaytaradi (mavjud chaqiruvlar uchun).
+
+    Xatti-harakati avvalgidek: muvaffaqiyatda tozalangan matn, aks holda
+    None. Butun retry/fallback mantiqi `groq_raw` da.
+    """
+    msg = await groq_raw(messages, model=model, temperature=temperature,
+                         max_retries=max_retries)
+    if msg is None:
+        return None
+    return (msg.content or "").strip()
+
+

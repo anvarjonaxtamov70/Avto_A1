@@ -1,0 +1,83 @@
+# =====================================================================
+#  BOG'LIQLIKLAR (dependency injection)
+#  bot.py ishga tushganda bir marta to'ldiradi. Shu yondashuv
+#  `bulk_import_fixed.py` dagi naqsh bilan bir xil va aylanma import
+#  muammosini butunlay yo'q qiladi (ai_agent -> bot importi YO'Q).
+# =====================================================================
+class AgentDeps:
+    """Agent ishlashi uchun kerak bo'lgan tashqi funksiyalar."""
+
+    def __init__(self, firebase_get, firebase_patch, groq_raw, is_owner,
+                 firebase_get_etag=None, firebase_put=None,
+                 firebase_delete=None, firebase_query=None, order_status=None):
+        self.firebase_get = firebase_get      # async (path) -> dict|list|None
+        self.firebase_patch = firebase_patch  # async (path, data) -> bool
+        self.groq_raw = groq_raw              # async (messages, tools=..., ...) -> message|None
+        self.is_owner = is_owner              # (user_id) -> bool
+        # ——— Yozish uchun (2-qism). Berilmasa — yozish vositalari
+        #     o'zini o'chiradi va aniq xato qaytaradi (jimgina buzilmaydi).
+        self.firebase_get_etag = firebase_get_etag  # async (path) -> (etag, value)
+        self.firebase_put = firebase_put            # async (path, data, etag) -> (ok, status)
+        self.firebase_delete = firebase_delete      # async (path) -> bool
+        self.firebase_query = firebase_query        # async (path, params) -> dict|None
+        # async (uid, order_id, status, expected_from, actor) -> (ok, xato_matni)
+        # Buyurtma holatini Worker orqali o'zgartiradi (stok qaytarish, cashback,
+        # mijoz va adminlarga xabar — hammasi o'sha yerda). Berilmasa buyurtma
+        # holatini o'zgartirish O'CHADI (bazani ikkiga bo'lib yubormaslik uchun).
+        self.order_status = order_status
+
+    def can_write(self):
+        """Yozish uchun kerakli hamma narsa berilganmi."""
+        return bool(self.firebase_get_etag and self.firebase_put)
+
+
+_deps = None
+
+
+def init(firebase_get, firebase_patch, groq_raw, is_owner,
+         firebase_get_etag=None, firebase_put=None,
+         firebase_delete=None, firebase_query=None, order_status=None):
+    """bot.py `main()` ichidan bir marta chaqiriladi."""
+    global _deps
+    _load_config()   # .env allaqachon yuklangan — endi sozlamalarni o'qish xavfsiz
+    _deps = AgentDeps(firebase_get, firebase_patch, groq_raw, is_owner,
+                      firebase_get_etag=firebase_get_etag,
+                      firebase_put=firebase_put,
+                      firebase_delete=firebase_delete,
+                      firebase_query=firebase_query,
+                      order_status=order_status)
+    logging.info(
+        "AI agent: %s | vositalar: %d o'qish + %d yozish | aylanish: %d | "
+        "yozish %s",
+        "YOQILGAN" if AGENT_ENABLED else "O'CHIRILGAN",
+        sum(1 for s in TOOLS.values() if not s.mutating),
+        sum(1 for s in TOOLS.values() if s.mutating),
+        MAX_TOOL_ROUNDS,
+        "TAYYOR" if _deps.can_write() else "O'CHIRILGAN (yordamchilar berilmagan)",
+    )
+    return _deps
+
+
+class AgentResult:
+    """Agent navbatining natijasi.
+
+    Sinf (tuple emas) — chunki 2-qismda `pending` qo'shildi va keyinchalik
+    ham qo'shilishi mumkin. Tuple bo'lsa har qo'shimchada barcha
+    chaqiruvchilarni tuzatish kerak bo'lardi.
+    """
+
+    def __init__(self, text=None, calls=None, pending=None):
+        self.text = text            # AI javobi (str) yoki None (xato)
+        self.calls = calls or []    # [(vosita, argumentlar, xato_bormi)]
+        self.pending = pending or []  # tasdiq kutayotgan amallar
+
+    def __iter__(self):
+        """Eski `text, calls = ...` shakli ham ishlashi uchun."""
+        return iter((self.text, self.calls))
+
+
+def is_enabled():
+    """Agent ishlatishga tayyormi (yoqilgan va bog'liqliklar berilgan)."""
+    return bool(AGENT_ENABLED and _deps is not None)
+
+

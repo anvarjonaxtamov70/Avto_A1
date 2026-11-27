@@ -1,0 +1,83 @@
+# =====================================================================
+# FIREBASE ADMIN TOKEN (service-account) — yozish 401 bermasligi uchun
+# =====================================================================
+_fb_creds = None
+_fb_token_logged_missing = False
+
+
+def _refresh_creds_blocking():
+    """BLOKLAYDIGAN: service-account'ni yuklaydi/yangilaydi va tokenni qaytaradi.
+    Sinxron tarmoq so'rovi bo'lgani uchun FAQAT asyncio.to_thread ichida chaqirilsin."""
+    global _fb_creds, _fb_token_logged_missing
+    if not os.path.exists(SERVICE_ACCOUNT_FILE):
+        if not _fb_token_logged_missing:
+            logging.warning("serviceAccount.json topilmadi — Firebase yozuvlari 401 berishi mumkin.")
+            _fb_token_logged_missing = True
+        return None
+    if _fb_creds is None:
+        _fb_creds = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE,
+            scopes=[
+                "https://www.googleapis.com/auth/firebase.database",
+                "https://www.googleapis.com/auth/userinfo.email",
+            ],
+        )
+    if not _fb_creds.valid:
+        _fb_creds.refresh(google.auth.transport.requests.Request())
+    return _fb_creds.token
+
+
+async def refresh_firebase_token():
+    """Tokenni event loop'ni BLOKLAMASDAN (alohida thread'da) yangilaydi."""
+    try:
+        return await asyncio.to_thread(_refresh_creds_blocking)
+    except Exception as e:
+        logging.error(f"Firebase token yangilashda xato: {e}")
+        return None
+
+
+async def firebase_token_refresher():
+    """Tokenni fonda muntazam yangilab turadi.
+
+    Token ~1 soat amal qiladi; muddati tugashidan ancha oldin (har 30 daqiqada)
+    yangilaymiz. Shu sababli hot-path'dagi get_firebase_token() hech qachon
+    bloklaydigan refresh() ni chaqirmaydi — bot "muzlab" qolmaydi.
+    """
+    while True:
+        token = await refresh_firebase_token()
+        await asyncio.sleep(30 * 60 if token else 60)  # xato bo'lsa tezroq qayta urin
+
+
+def get_firebase_token():
+    """Keshlangan admin tokenni qaytaradi (BLOKLAMAYDI).
+
+    Tokenni fon vazifasi (firebase_token_refresher) yangilab turadi va main()
+    pollerlardan oldin birinchi tokenni oladi, shuning uchun bu yerda tarmoq
+    so'rovi yo'q — event loop bloklanmaydi. serviceAccount.json bo'lmasa None.
+    """
+    if _fb_creds is not None and getattr(_fb_creds, "token", None):
+        return _fb_creds.token
+    return None
+
+
+def fb_url(path, params=None):
+    """Token (va ixtiyoriy query-param'lar) bilan to'liq RTDB URL yasaydi.
+
+    params — RTDB so'rovi uchun (masalan orderBy/limitToLast). Bu butun tugunni
+    o'qish o'rniga faqat kerakli qismini olishga imkon beradi (#scalability).
+    """
+    token = get_firebase_token()
+    url = f"{FIREBASE_URL}/{path}.json"
+    query = {}
+    if token:
+        query["access_token"] = token
+    if params:
+        query.update(params)
+    if query:
+        url += "?" + urllib.parse.urlencode(query)
+    return url
+
+
+# (fb_items yuqorida `fb_utils` dan import qilinadi — bitta manba.)
+
+

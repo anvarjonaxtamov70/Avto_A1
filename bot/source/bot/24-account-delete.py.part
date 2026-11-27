@@ -1,0 +1,62 @@
+# =====================================================================
+# 🗑 HISOBNI O'CHIRISH (Google Play talabi) — /delete yoki /hisobni_ochirish
+#   Ikki bosqichli: tasdiq tugmasi. Worker mijozning O'Z ID'si bilan
+#   imzolangan so'rovni qabul qiladi (boshqa odamnikini o'chirib bo'lmaydi).
+#   ⚠️ `unknown_command` (F.text.startswith("/")) dan OLDIN turishi shart.
+# =====================================================================
+DELETE_ACCOUNT_TEXT = (
+    "🗑 <b>Hisobni o'chirish</b>\n\n"
+    "O'chadi: profil, raqam, manzillar, savat, sevimlilar, <b>keshbek</b>, "
+    "storis javoblari, sharhlar va AI suhbatlari.\n"
+    "Saqlanadi: buyurtmalar tarixi (hisob-kitob va kafolat uchun) — ismingiz, "
+    "raqamingiz va manzilingizsiz.\n\n"
+    "<b>Bu amalni qaytarib bo'lmaydi.</b> O'chiraymi?"
+)
+
+
+@dp.message(Command("delete", "hisobni_ochirish", "deleteaccount"))
+async def delete_account_command(message: types.Message, state: FSMContext):
+    await state.clear()
+    if message.from_user.id in ADMIN_IDS:
+        await message.answer("Admin hisobini bu yerdan o'chirib bo'lmaydi.")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🗑 Ha, butunlay o'chirish", callback_data="acdel:yes"),
+        InlineKeyboardButton(text="Bekor qilish", callback_data="acdel:no"),
+    ]])
+    await message.answer(DELETE_ACCOUNT_TEXT, parse_mode="HTML", reply_markup=kb)
+
+
+@dp.callback_query(F.data.in_({"acdel:yes", "acdel:no"}))
+async def delete_account_callback(call: types.CallbackQuery):
+    if call.data == "acdel:no":
+        try:
+            await call.message.edit_text("Bekor qilindi — hisobingiz joyida.")
+        except Exception:
+            pass
+        await call.answer()
+        return
+    await call.answer("O'chirilmoqda…")
+    ok, code, data = await account_ops.worker_account_delete(WORKER_URL, API_TOKEN, call.from_user.id)
+    if not ok:
+        logging.warning("Hisob o'chirilmadi (%s): %s %s", call.from_user.id, code, data)
+    else:
+        # Xotiradagi profil va AI suhbat tarixi ham o'chadi
+        users_db.pop(call.from_user.id, None)
+        ai_sessions.pop(call.from_user.id, None)
+    try:
+        await call.message.edit_text(account_ops.account_delete_result_text(ok, code, data), parse_mode="HTML")
+    except Exception:
+        pass
+
+
+async def maybe_phone_link_start(message):
+    """`/start phone` — ilovadagi «Raqamni Telegram'da ulashing» tugmasi."""
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or parts[1].strip() != "phone":
+        return False
+    lang = await get_user_lang(message.from_user.id)
+    await message.answer(PHONE_LINK_TEXT, parse_mode="HTML", reply_markup=phone_kb(lang))
+    return True
+
+

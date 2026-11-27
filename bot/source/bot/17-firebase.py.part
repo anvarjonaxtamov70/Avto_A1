@@ -1,0 +1,267 @@
+# =====================================================================
+# FIREBASE YORDAMCHILARI (token bilan)
+# =====================================================================
+async def firebase_patch(path, data):
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.patch(fb_url(path), json=data, timeout=10) as r:
+                return r.status == 200
+        except Exception as e:
+            logging.error(f"Firebase PATCH xatosi ({path}): {e}")
+        return False
+
+
+async def firebase_get(path):
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(fb_url(path), timeout=10) as r:
+                if r.status == 200:
+                    return await r.json()
+        except Exception as e:
+            logging.error(f"Firebase GET xatosi ({path}): {e}")
+        return None
+
+
+# =====================================================================
+# SHARTLI (ATOMIK) YOZISH YORDAMCHILARI
+#   AI agenti tovar narxi/qoldig'ini o'zgartirganda mini app'dagi
+#   admin tahriri USTIDAN YOZIB KETMASLIGI kerak. Yechim — optimistik
+#   qulflash (optimistic locking): o'qishda ETag olinadi, yozishda
+#   `if-match` bilan qaytariladi. Oradan boshqa kimsa yozib qo'ysa
+#   Firebase 412 (Precondition Failed) beradi va biz qayta o'qib,
+#   qayta urinamiz. Ya'ni ma'lumot JIMGINA yo'qolmaydi.
+#
+#   Shu naqsh allaqachon `firebase_append_products` da ishlatilgan —
+#   endi u umumiy yordamchilarga chiqarildi.
+# =====================================================================
+async def firebase_get_etag(path):
+    """(etag, qiymat) juftligini qaytaradi. Xatoda (None, None)."""
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(fb_url(path),
+                                   headers={"X-Firebase-ETag": "true"},
+                                   timeout=10) as r:
+                if r.status == 200:
+                    return r.headers.get("ETag"), await r.json()
+                logging.warning(f"Firebase GET(etag) {path}: status={r.status}")
+        except Exception as e:
+            logging.error(f"Firebase GET(etag) xatosi ({path}): {e}")
+        return None, None
+
+
+async def firebase_put(path, data, etag=None):
+    """PUT (to'liq almashtirish). `(muvaffaqiyatmi, status_kodi)` qaytaradi.
+
+    `etag` berilsa — SHARTLI yozish: qiymat o'zgargan bo'lsa 412 keladi
+    va yozilmaydi. Chaqiruvchi qayta o'qib qayta urinishi kerak.
+    """
+    headers = {"if-match": etag} if etag else {}
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.put(fb_url(path), json=data,
+                                   headers=headers, timeout=15) as r:
+                if r.status != 200:
+                    # 412 — kutilgan (poyga) holat, xato emas: shovqin qilmaymiz.
+                    if r.status != 412:
+                        logging.warning(f"Firebase PUT {path}: status={r.status}")
+                return r.status == 200, r.status
+        except Exception as e:
+            logging.error(f"Firebase PUT xatosi ({path}): {e}")
+            return False, 0
+
+
+async def firebase_delete(path):
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.delete(fb_url(path), timeout=10) as r:
+                return r.status == 200
+        except Exception as e:
+            logging.error(f"Firebase DELETE xatosi ({path}): {e}")
+            return False
+
+
+async def firebase_create_if_null(path, data, matches=None):
+    """RTDB tugunini ETag bilan faqat `null` bo'lsa yaratadi.
+
+    `(created, value)` qaytaradi. Tarmoq javobi yo'qolsa yozuvni qayta o'qiydi;
+    mavjud yozuvni hech qachon ustidan yozmaydi.
+    """
+    for _ in range(8):
+        etag, current = await firebase_get_etag(path)
+        if etag is None:
+            return None, None
+        if current is not None:
+            if matches and not matches(current):
+                logging.error("Firebase mavjud yozuvi mos emas: %s", path)
+                return None, current
+            return False, current
+        ok, status = await firebase_put(path, data, etag=etag)
+        if ok:
+            return True, data
+        if status == 412:
+            continue
+        # PUT javobi noaniq bo'lishi mumkin: qayta yuborishdan oldin o'qiymiz.
+        after = await firebase_get(path)
+        if after is not None and (not matches or matches(after)):
+            return False, after
+        return None, None
+    logging.warning("Firebase parallel yaratish limiti tugadi: %s", path)
+    return None, None
+
+
+def _new_customer_text(registration):
+    lines = [
+        "🆕 <b>Yangi mijoz ro'yxatdan o'tdi</b>",
+        "",
+        f"Ism: <b>{esc(registration.get('name') or 'Mijoz')}</b>",
+    ]
+    if registration.get("username"):
+        lines.append(f"Username: @{esc(registration['username'])}")
+    if registration.get("phone"):
+        lines.append(f"Telefon: <code>{esc(registration['phone'])}</code>")
+    lines.append("Manba: Telegram")
+    lines.append(f"UID: <code>{esc(registration['uid'])}</code>")
+    return "\n".join(lines)
+
+
+async def register_new_customer_once(tg_user, profile=None):
+    """Bot va Worker bilan umumiy deterministic yangi-mijoz hodisasi.
+
+    Marker, Mini App admin eventi va Telegram send-claim alohida yaratiladi.
+    Har qayta chaqiruv yetishmayotgan proyeksiyani tiklaydi, lekin mavjud
+    Telegram claim bo'lsa xabarni qayta yubormaydi.
+    """
+    profile = profile or {}
+    uid = str(tg_user.id)
+    username = str(tg_user.username or "").lstrip("@")
+    first_name = str(tg_user.first_name or "").strip()
+    last_name = str(tg_user.last_name or "").strip()
+    name = str(profile.get("name") or " ".join(x for x in (first_name, last_name) if x) or "Mijoz").strip()[:100]
+    proposed = {
+        "uid": uid,
+        "source": "telegram",
+        "registeredAt": int(time.time() * 1000),
+        "name": name,
+        "firstName": first_name[:80],
+        "lastName": last_name[:80],
+        "username": username[:64],
+        "phone": str(profile.get("phone") or "").strip()[:40],
+        "notify": True,
+    }
+    marker_path = f"customer_registrations/{uid}"
+    created, registration = await firebase_create_if_null(
+        marker_path,
+        proposed,
+        matches=lambda value: isinstance(value, dict) and str(value.get("uid")) == uid,
+    )
+    if created is None or not isinstance(registration, dict):
+        logging.error("Yangi mijoz markerini yaratib bo'lmadi: %s", uid)
+        return False
+    if registration.get("notify") is False:
+        # Rolloutdan oldin mavjud bo'lgan mijoz uchun Worker jim marker yaratgan.
+        # Uni keyin bot qayta «yangi» deb e'lon qilmaydi.
+        return True
+    # Language-only browse holatidan qolgan pending marker normal registrationga
+    # ta'sir qilmaydi; tozalash best-effort.
+    await firebase_delete(f"customer_registration_pending/{uid}")
+
+    event_id = f"new_customer_{uid}"
+    event = {
+        "id": event_id,
+        "type": "new_customer",
+        "uid": uid,
+        "source": registration.get("source") or "telegram",
+        "title": "Yangi mijoz ro'yxatdan o'tdi",
+        "text": f"{registration.get('name') or 'Mijoz'}" +
+                (f" (@{registration.get('username')})" if registration.get("username") else "") +
+                " — Telegram",
+        "createdAt": int(registration.get("registeredAt") or time.time() * 1000),
+    }
+    event_created, _ = await firebase_create_if_null(
+        f"admin_notifications/{event_id}",
+        event,
+        matches=lambda value: isinstance(value, dict) and value.get("id") == event_id and
+        str(value.get("uid")) == uid and value.get("type") == "new_customer",
+    )
+    if event_created is None:
+        logging.error("Yangi mijoz admin eventini yaratib bo'lmadi: %s", uid)
+        return False
+
+    if not ADMIN_ALERT_CHAT_ID:
+        logging.error("ADMIN_ALERT_CHAT_ID sozlanmagan")
+        return False
+    claim_path = f"notification_outbox/{event_id}"
+    claim = {
+        "type": "new_customer",
+        "uid": uid,
+        "destination": str(ADMIN_ALERT_CHAT_ID),
+        "state": "sending",
+        "claimedAt": int(time.time() * 1000),
+    }
+    claim_created, existing_claim = await firebase_create_if_null(
+        claim_path,
+        claim,
+        matches=lambda value: isinstance(value, dict) and value.get("type") == "new_customer" and
+        str(value.get("uid")) == uid,
+    )
+    if claim_created is None:
+        logging.error("Yangi mijoz Telegram claimini yaratib bo'lmadi: %s", uid)
+        return False
+    if not claim_created:
+        return True
+
+    state = "ambiguous"
+    error = None
+    message_id = None
+    try:
+        sent = await bot.send_message(
+            chat_id=ADMIN_ALERT_CHAT_ID,
+            text=_new_customer_text(registration),
+            parse_mode="HTML",
+        )
+        state = "sent"
+        message_id = sent.message_id
+    except Exception as exc:
+        # Bot API so'rovni qabul qilgan-qilmaganini aniq bilmaymiz. Dublikatni
+        # oldini olish uchun claimni saqlaymiz va avtomatik retry qilmaymiz.
+        error = str(exc)[:300]
+        logging.warning("Yangi mijoz xabari noaniq/xato (%s): %s", uid, exc)
+    await firebase_patch(claim_path, {
+        "state": state,
+        "finishedAt": int(time.time() * 1000),
+        "messageId": message_id,
+        "error": error,
+    })
+    return state == "sent"
+
+
+async def firebase_query(path, params):
+    """Tugunni RTDB so'rovi bilan o'qiydi (orderBy / limitToLast va h.k.).
+
+    Audit jurnalidan OXIRGI yozuvlarni olish uchun kerak — butun jurnalni
+    o'qish vaqt o'tib juda qimmatga tushadi.
+    """
+    _status, data, _err = await firebase_query_status(path, params)
+    return data
+
+
+async def firebase_query_status(path, params):
+    """firebase_query bilan bir xil, lekin (status, data, xato_matni) qaytaradi.
+
+    Bo'sh natija (200 + `null`, masalan tugun hali yaratilmagan) bilan haqiqiy
+    xatoni (400 "Index not defined", 401 "Permission denied", tarmoq) ajratish
+    uchun kerak. status=None — tarmoq/timeout xatosi.
+    """
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(fb_url(path, params=params), timeout=10) as r:
+                if r.status == 200:
+                    return 200, await r.json(), ""
+                body = (await r.text())[:300]
+                logging.warning(f"Firebase QUERY {path}: status={r.status} {body}")
+                return r.status, None, body
+        except Exception as e:
+            logging.error(f"Firebase QUERY xatosi ({path}): {e}")
+            return None, None, str(e)
+
+

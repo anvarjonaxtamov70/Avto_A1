@@ -1,0 +1,44 @@
+# =====================================================================
+#  ai_agent.py — XO'JAYIN AI AGENTI (1-qism: O'QISH vositalari)
+# =====================================================================
+#  MUAMMO (bu modul yechayotgan):
+#    Ilgari xo'jayin biznes savoli bersa, `_collect_owner_analytics()`
+#    BUTUN `products` + BUTUN `users` tugunini o'qib, ~3-4 KB matnli
+#    xulosani system promptga tiqardi. Bu uch jihatdan yomon edi:
+#      1) Savol "Gazel porsheni qancha qoldi?" bo'lsa ham butun baza
+#         o'qilardi — sekin va Firebase kvotasini yeydi.
+#      2) AI faqat O'SHA tayyor xulosadagi raqamlarni ko'rardi. Xulosada
+#         yo'q narsani (masalan aniq bir tovar narxi) so'rasa — TO'QIB
+#         yozish xavfi bor edi.
+#      3) AI hech qanday AMAL bajara olmasdi.
+#
+#  YECHIM: tool calling (function calling). AI endi kerakli ma'lumotni
+#  O'ZI so'rab oladi — aniq, maqsadli so'rov bilan. Har bir "vosita"
+#  (tool) — oddiy Python funksiyasi. AI Firebase'ga HECH QACHON
+#  to'g'ridan tegmaydi; u faqat shu funksiyalarni chaqirishni SO'RAYDI,
+#  bajarishni esa KOD hal qiladi.
+#
+#  XAVFSIZLIK ASOSI (bu 2-qismda yozish vositalari qo'shilganda hayotiy):
+#    • Ruxsat KODDA tekshiriladi (`owner_only`), promptda EMAS. Prompt —
+#      ko'rsatma, kafolat emas; uni mijoz matni bilan aldash mumkin.
+#    • Bu modulda YOZISH vositasi UMUMAN YO'Q. Barcha vositalar faqat
+#      o'qiydi. Yozish (narx/qoldiq/status) keyingi PR'da, MAJBURIY
+#      tasdiq tugmasi bilan qo'shiladi.
+#    • Model o'ylab topgan vosita nomi yoki buzuq argument — xato dict
+#      qaytaradi, dastur yiqilmaydi.
+#
+#  MODEL: `openai/gpt-oss-120b` (bot.py dagi joriy GROQ_TEXT_MODEL) tool
+#  calling'ni qo'llab-quvvatlaydi — model almashtirish SHART EMAS.
+# =====================================================================
+
+import asyncio
+import json
+import logging
+import os
+import random
+import time
+
+from fb_utils import (fb_items, fmt_som, is_generic, norm, order_items_pairs,
+                      order_paid, order_ts, price_of, product_label, safe_int,
+                      sizes_of, stock_of, tokenize)
+

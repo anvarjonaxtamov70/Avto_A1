@@ -1,0 +1,74 @@
+# =====================================================================
+# CHEKLANGAN, TTL bilan ESKIRADIGAN KESH (xotira oqishini oldini oladi)
+#   - Eski kodda ai_sessions/users_db oddiy dict edi va HECH QACHON
+#     tozalanmasdi => bot uzoq ishlasa xotira to'lib ketardi.
+#   - Endi: o'lcham chegarasi (LRU) + faolsizlik bo'yicha TTL eviction.
+# =====================================================================
+class BoundedTTLCache:
+    """dict kabi ishlatiladi (in / [] / []=), lekin o'lchami va yoshi cheklangan."""
+
+    def __init__(self, max_size=1000, ttl_seconds=3600):
+        self._store = OrderedDict()  # key -> [value, last_access_ts]
+        self._max = max_size
+        self._ttl = ttl_seconds
+
+    def _expired(self, ts):
+        return (time.time() - ts) > self._ttl
+
+    def _prune(self):
+        now = time.time()
+        for k in [k for k, (_, ts) in list(self._store.items()) if (now - ts) > self._ttl]:
+            self._store.pop(k, None)
+        while len(self._store) > self._max:
+            self._store.popitem(last=False)  # eng eski (LRU)
+
+    def __contains__(self, key):
+        item = self._store.get(key)
+        if item is None:
+            return False
+        if self._expired(item[1]):
+            self._store.pop(key, None)
+            return False
+        return True
+
+    def __getitem__(self, key):
+        item = self._store[key]
+        if self._expired(item[1]):
+            self._store.pop(key, None)
+            raise KeyError(key)
+        item[1] = time.time()
+        self._store.move_to_end(key)
+        return item[0]
+
+    def __setitem__(self, key, value):
+        self._store[key] = [value, time.time()]
+        self._store.move_to_end(key)
+        self._prune()
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def pop(self, key, default=None):
+        item = self._store.pop(key, None)
+        return default if item is None else item[0]
+
+
+# AI suhbat tarixi: 2 soat faolsiz bo'lsa yoki 2000 tadan oshsa tozalanadi
+ai_sessions = BoundedTTLCache(max_size=2000, ttl_seconds=2 * 3600)
+# Profil keshi: kerak bo'lsa Firebase'dan qayta o'qiladi, shuning uchun evict xavfsiz
+users_db = BoundedTTLCache(max_size=5000, ttl_seconds=6 * 3600)
+# products tugunini o'qib-yozishni serializatsiya qiladi (ID poyga holatini oldini oladi).
+# To'g'ri event loop'ga bog'lanishi uchun main() ichida ishga tushiriladi.
+products_lock = None
+
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(storage=MemoryStorage())
+logging.basicConfig(level=logging.INFO)
+
+DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
+os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+

@@ -1,0 +1,57 @@
+# =====================================================================
+#  VOSITANI BAJARISH
+# =====================================================================
+async def execute_tool(ctx, name, raw_arguments):
+    """Bitta vositani xavfsiz bajaradi. HAR QANDAY holatda dict qaytaradi.
+
+    Model ba'zan yo'q vosita nomini yoki buzuq JSON argumentni qaytaradi —
+    bunda dastur yiqilmasligi, balki AI ga tushunarli xato qaytishi kerak,
+    shunda u o'zini tuzatib qayta uradi.
+    """
+    spec = TOOLS.get(name)
+    if spec is None:
+        return _err(f"'{name}' degan vosita yo'q. Mavjudlari: {', '.join(sorted(TOOLS))}")
+
+    # 🔒 RUXSAT — KODDA. Promptga tayanmaymiz.
+    if spec.owner_only and not ctx.deps.is_owner(ctx.user_id):
+        logging.warning("Agent: ruxsatsiz vosita urinishi uid=%s tool=%s", ctx.user_id, name)
+        return _err("bu ma'lumot faqat do'kon egasi uchun")
+
+    # Argumentlarni parse qilish
+    args = {}
+    if raw_arguments:
+        try:
+            parsed = json.loads(raw_arguments) if isinstance(raw_arguments, str) else raw_arguments
+            if isinstance(parsed, dict):
+                args = parsed
+        except (json.JSONDecodeError, TypeError) as e:
+            return _err(f"argumentlar JSON emas: {e}")
+
+    # Sxemada e'lon qilinmagan argumentlarni TASHLAB ketamiz — aks holda
+    # model o'ylab topgan qo'shimcha kalit TypeError berardi.
+    allowed = set((spec.parameters or {}).get("properties", {}).keys())
+    clean = {k: v for k, v in args.items() if k in allowed}
+
+    try:
+        result = await spec.handler(ctx, **clean)
+    except TypeError as e:
+        return _err(f"argumentlar mos kelmadi: {e}")
+    except Exception as e:
+        logging.error("Vosita '%s' xatosi: %s", name, e)
+        return _err(f"vosita ichki xatosi: {e}")
+
+    ctx.calls.append((name, clean, not (isinstance(result, dict) and result.get("ok"))))
+    return result if isinstance(result, dict) else {"ok": True, "natija": result}
+
+
+def _tool_result_text(result):
+    """Vosita natijasini AI ga uzatiladigan matnga aylantiradi (cheklangan)."""
+    try:
+        txt = json.dumps(result, ensure_ascii=False)
+    except (TypeError, ValueError):
+        txt = str(result)
+    if len(txt) > TOOL_RESULT_LIMIT:
+        txt = txt[:TOOL_RESULT_LIMIT] + '... (natija uzun, qisqartirildi)"}'
+    return txt
+
+

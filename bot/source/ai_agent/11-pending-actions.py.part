@@ -1,0 +1,137 @@
+# =====================================================================
+#  TASDIQ KUTAYOTGAN AMALLAR (pending_actions)
+#
+#  Firebase'da saqlanadi, xotirada EMAS: bot Render'da har deployda
+#  qayta ishga tushadi va bepul tarifda uxlab qolishi mumkin. Xotirada
+#  saqlansa, xo'jayin tugmani bosganda «amal topilmadi» chiqardi.
+# =====================================================================
+_TOKEN_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+
+def _pending_token():
+    """Qisqa token. `callback_data` 64 baytdan oshmasligi kerak —
+    `aia:<12 belgi>:1` = 18 bayt, ya'ni bemalol sig'adi."""
+    return "".join(random.choice(_TOKEN_CHARS) for _ in range(12))
+
+
+async def store_pending(deps, user_id, tool, args, plan, warning="", extra=None):
+    """Tasdiq yozuvini Firebase'ga saqlaydi. `(token, yozuv)` yoki (None, None).
+
+    `create_pending` (vosita ichidan) va `undo_last` (buyruq ichidan) —
+    ikkisi ham shu funksiyani ishlatadi, shunda yozuv shakli bir xil
+    bo'ladi va tasdiq/bajarish yo'li ikkiga ajralmaydi.
+    """
+    token = _pending_token()
+    now = int(time.time() * 1000)
+    rec = {
+        "tool": str(tool),
+        "args": args or {},
+        "plan": plan,
+        "warning": str(warning or ""),
+        "uid": safe_int(user_id, 0) or 0,
+        "created": now,
+        "expires": now + PENDING_TTL_SEC * 1000,
+        "status": "pending",
+    }
+    if extra:
+        rec.update(extra)
+    ok = await deps.firebase_patch(f"pending_actions/{token}", rec)
+    return (token, rec) if ok else (None, None)
+
+
+async def create_pending(ctx, tool, args, plan, warning=""):
+    """Amalni tasdiq navbatiga qo'yadi. AI ga «tasdiq kutilmoqda» qaytaradi."""
+    if not plan:
+        return _err("o'zgartirish uchun hech narsa topilmadi")
+    if not WRITE_ENABLED:
+        return _err("yozish vaqtincha o'chirilgan (AI_AGENT_WRITE_ENABLED=0)")
+    if not ctx.deps.can_write():
+        return _err("yozish yordamchilari sozlanmagan — administratorga aytilsin")
+    if len(ctx.pending) >= MAX_PENDING_PER_TURN:
+        return _err(f"bitta savolda eng ko'p {MAX_PENDING_PER_TURN} ta o'zgartirish "
+                    "taklif qilish mumkin — qolganini keyingi xabarda so'ra")
+
+    token, rec = await store_pending(ctx.deps, ctx.user_id, tool, args, plan, warning)
+    if token is None:
+        return _err("tasdiq yozuvi saqlanmadi — qayta urinib ko'ring")
+
+    ctx.pending.append({"token": token, "record": rec})
+    return {
+        "ok": True,
+        "status": "TASDIQ_KUTILMOQDA",
+        "ozgarish": _plan_plain(plan),
+        "ogohlantirish": warning or "",
+        "izoh": ("Amal HALI BAJARILMADI. Xo'jayinga tasdiq tugmasi alohida "
+                 "yuboriladi. Sen javobda faqat nima qilinishini QISQA ayt va "
+                 "«tasdiqlang» deb qo'sh. «Bajardim», «o'zgartirdim» deb "
+                 "YOZMA — bu yolg'on bo'ladi."),
+    }
+
+
+async def claim_pending(deps, token, user_id):
+    """Amalni ATOMIK «egallaydi» (ikki marta bajarilishining oldini oladi).
+
+    Qaytaradi: (yozuv, xato_matni). Yozuv None bo'lsa — bajarilmaydi.
+
+    Nega ETag: xo'jayin tugmani ikki marta tez bossa (yoki Telegram
+    callback'ni qayta yuborsa) amal IKKI MARTA bajarilardi — narx ikki
+    marta oshardi. `if-match` bilan faqat BIRINCHI urinish o'tadi.
+    """
+    if not deps.can_write():
+        return None, "yozish yordamchilari sozlanmagan"
+    path = f"pending_actions/{token}"
+    etag, rec = await deps.firebase_get_etag(path)
+    if not isinstance(rec, dict):
+        return None, "Bu amal topilmadi — muddati o'tgan bo'lishi mumkin."
+    if (safe_int(rec.get("uid"), 0) or 0) != (safe_int(user_id, 0) or 0):
+        logging.warning("pending: begona uid urinishi token=%s uid=%s", token, user_id)
+        return None, "Bu amal sizga tegishli emas."
+    if rec.get("status") != "pending":
+        return None, "Bu amal allaqachon bajarilgan yoki bekor qilingan."
+    if int(time.time() * 1000) > (safe_int(rec.get("expires"), 0) or 0):
+        await deps.firebase_delete(path)
+        return None, (f"Tasdiq muddati ({PENDING_TTL_SEC // 60} daqiqa) o'tdi. "
+                      "Iltimos, qaytadan so'rang.")
+
+    claimed = dict(rec)
+    claimed["status"] = "processing"
+    ok, _status = await deps.firebase_put(path, claimed, etag=etag)
+    if not ok:
+        return None, "Bu amal ayni paytda bajarilyapti — bir oz kuting."
+    return rec, ""
+
+
+async def drop_pending(deps, token):
+    """Yozuvni o'chiradi (bajarilgach yoki bekor qilingach)."""
+    if deps.firebase_delete:
+        await deps.firebase_delete(f"pending_actions/{token}")
+
+
+async def pending_janitor(deps, every_sec=600):
+    """Muddati o'tgan tasdiqlarni tozalab turadi (fon vazifasi).
+
+    Bo'lmasa `pending_actions` tuguni tasdiqlanmagan amallar bilan
+    asta-sekin to'lib borardi.
+    """
+    while True:
+        try:
+            await asyncio.sleep(every_sec)
+            raw = await deps.firebase_get("pending_actions")
+            now = int(time.time() * 1000)
+            removed = 0
+            for token, rec in fb_items(raw):
+                if not isinstance(rec, dict):
+                    continue
+                # `processing` holatida qotib qolganlar ham tozalanadi
+                # (bot yozish o'rtasida qayta ishga tushgan bo'lsa).
+                if now > (safe_int(rec.get("expires"), 0) or 0) + 60_000:
+                    await deps.firebase_delete(f"pending_actions/{token}")
+                    removed += 1
+            if removed:
+                logging.info("pending_janitor: %d ta eskirgan tasdiq o'chirildi", removed)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logging.warning("pending_janitor xatosi: %s", e)
+
+

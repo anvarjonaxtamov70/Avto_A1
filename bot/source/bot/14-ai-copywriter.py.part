@@ -1,0 +1,64 @@
+# =====================================================================
+# AI KOPIRAYTER (rasmni ko'rib tavsif yozadi)
+# =====================================================================
+async def process_ai_admin_tasks(bot: Bot):
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(fb_url("ai_admin_tasks")) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data:
+                            for task_id, task_data in fb_items(data):
+                                if not isinstance(task_data, dict):
+                                    continue
+                                if not (task_data.get("needs_processing") and task_data.get("action") == "generate_desc"):
+                                    continue
+
+                                prod_name = task_data.get("product_name", "Zapchast")
+                                image_url = task_data.get("image_url", "")
+                                logging.info(f"AI tavsif yozmoqda: {prod_name}")
+
+                                await session.patch(fb_url(f"ai_admin_tasks/{task_id}"),
+                                                    json={"needs_processing": False})
+
+                                prompt = (
+                                    "Sen Avto_A1 avto-zapchastlar do'konining professional kopirayterisan.\n"
+                                    "VAZIFA: shu zapchast uchun qisqa, jozibali reklama ta'rifini yoz.\n\n"
+                                    "QOIDALAR:\n"
+                                    "- Foydasini 2-3 gapda tushuntir, gaplarni chiroyli ulab ket.\n"
+                                    "- Marketing ohangi bo'lsin, lekin 'marketing' so'zini ishlatma.\n"
+                                    "- Narx, mashina rusumi yoki texnik xususiyatni o'zingdan to'qima.\n"
+                                    "- Oxiriga emoji qo'sh (masalan asbob, mashina, belgi).\n\n"
+                                    f"Zapchast nomi: {prod_name}\n\n"
+                                    "Faqat ta'rifning o'zini qaytar."
+                                )
+
+                                if image_url:
+                                    messages = [{
+                                        "role": "user",
+                                        "content": [
+                                            {"type": "text", "text": prompt},
+                                            {"type": "image_url", "image_url": {"url": image_url}},
+                                        ],
+                                    }]
+                                    model = GROQ_VISION_MODEL
+                                else:
+                                    messages = [{"role": "user", "content": prompt}]
+                                    model = GROQ_TEXT_MODEL
+
+                                result_text = await groq_chat(messages, model=model, temperature=0.5)
+                                if result_text:
+                                    await session.patch(fb_url(f"ai_admin_tasks/{task_id}"),
+                                                        json={"result": result_text})
+                                    logging.info("Tavsif tayyor.")
+                                else:
+                                    await session.patch(fb_url(f"ai_admin_tasks/{task_id}"),
+                                                        json={"error": "AI javob bermadi."})
+
+            except Exception as e:
+                logging.error(f"AI Admin Task xatosi: {e}")
+
+            await asyncio.sleep(2)
+
+

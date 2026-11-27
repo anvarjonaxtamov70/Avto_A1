@@ -1,0 +1,33 @@
+# =====================================================================
+# SO'ROV CHEKLOVI (rate limit)
+#   Ilgari hech qanday cheklov yo'q edi: bitta odam (yoki skript) ketma-ket
+#   yuzlab xabar yuborib, AI (Groq) limitini va Firebase kvotasini tugatib
+#   qo'yishi mumkin edi — natijada BARCHA mijozlar uchun bot "band" bo'lib
+#   qolardi. Endi har foydalanuvchi uchun oyna ichida chegara bor.
+#   Adminlarga cheklov qo'llanmaydi.
+# =====================================================================
+RL_AI_MAX = int(os.getenv("RL_AI_MAX", "12"))        # matnli savol / oyna
+RL_AI_WINDOW = int(os.getenv("RL_AI_WINDOW", "60"))  # oyna (soniya)
+RL_PHOTO_MAX = int(os.getenv("RL_PHOTO_MAX", "5"))   # rasm tahlili qimmatroq
+RL_PHOTO_WINDOW = int(os.getenv("RL_PHOTO_WINDOW", "60"))
+
+_rl_buckets = BoundedTTLCache(max_size=5000, ttl_seconds=900)
+
+
+def _rate_limited(user_id, bucket="ai", limit=None, window=None):
+    """True qaytarsa — foydalanuvchi chegaradan oshdi, so'rovni bajarmaymiz."""
+    if user_id in ADMIN_IDS:
+        return False
+    limit = RL_AI_MAX if limit is None else limit
+    window = RL_AI_WINDOW if window is None else window
+    key = f"{bucket}:{user_id}"
+    now = time.monotonic()
+    hits = [ts for ts in (_rl_buckets.get(key) or []) if (now - ts) < window]
+    if len(hits) >= limit:
+        _rl_buckets[key] = hits
+        return True
+    hits.append(now)
+    _rl_buckets[key] = hits
+    return False
+
+

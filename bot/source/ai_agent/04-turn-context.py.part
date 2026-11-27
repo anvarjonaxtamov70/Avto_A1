@@ -1,0 +1,42 @@
+# =====================================================================
+#  NAVBAT KONTEKSTI (per-turn cache)
+#  Bitta savol ichida AI 3-4 marta vosita chaqirishi mumkin va ularning
+#  ko'pi AYNI `products` tugunini talab qiladi. Keshsiz har chaqiruv
+#  yangi tarmoq so'rovi bo'lardi — sekin va kvota isrofi.
+#  Kesh FAQAT bitta navbat (bitta savol) davomida yashaydi, shuning
+#  uchun ma'lumot eskirib qolmaydi.
+# =====================================================================
+class TurnContext:
+    def __init__(self, deps, user_id):
+        self.deps = deps
+        self.user_id = user_id
+        self._cache = {}
+        self.calls = []          # [(vosita_nomi, argumentlar, xato_bormi)]
+        self.pending = []        # tasdiq kutayotgan amallar (2-qism)
+
+    async def node(self, path):
+        """RTDB tugunini keshlab o'qiydi (bitta navbatda bir marta)."""
+        if path not in self._cache:
+            self._cache[path] = await self.deps.firebase_get(path)
+        return self._cache[path]
+
+    async def products(self):
+        """Katalog: faqat lug'at bo'lgan yozuvlar, RTDB indeksi bilan birga.
+
+        Indeks (`_idx`) 2-qismdagi YOZISH vositalari uchun zarur —
+        `products/{idx}` manzilini bilmasak tahrirlab bo'lmaydi.
+        """
+        raw = await self.node("products")
+        out = []
+        for key, p in fb_items(raw):
+            if isinstance(p, dict):
+                item = dict(p)
+                item["_idx"] = safe_int(key, None)
+                out.append(item)
+        return out
+
+    async def users(self):
+        raw = await self.node("users")
+        return [(uid, u) for uid, u in fb_items(raw) if isinstance(u, dict)]
+
+

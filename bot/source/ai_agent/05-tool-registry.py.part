@@ -1,0 +1,54 @@
+# =====================================================================
+#  VOSITA REYESTRI
+# =====================================================================
+class ToolSpec:
+    def __init__(self, name, description, parameters, handler,
+                 mutating=False, owner_only=True):
+        self.name = name
+        self.description = description
+        self.parameters = parameters
+        self.handler = handler
+        self.mutating = mutating      # yozadimi? (2-qismda ishlatiladi)
+        self.owner_only = owner_only  # faqat xo'jayinga
+
+
+TOOLS = {}
+
+
+def tool(name, description, parameters, mutating=False, owner_only=True):
+    """Vositani reyestrga qo'shadigan dekorator."""
+    def wrap(fn):
+        TOOLS[name] = ToolSpec(name, description, parameters, fn,
+                               mutating=mutating, owner_only=owner_only)
+        return fn
+    return wrap
+
+
+def groq_tool_specs(include_mutating=False):
+    """Reyestrni Groq/OpenAI formatidagi `tools` ro'yxatiga aylantiradi."""
+    out = []
+    for spec in TOOLS.values():
+        if spec.mutating and not include_mutating:
+            continue
+        out.append({
+            "type": "function",
+            "function": {
+                "name": spec.name,
+                "description": spec.description,
+                "parameters": spec.parameters,
+            },
+        })
+    return out
+
+
+# ——— Qayta ishlatiladigan JSON Schema bo'laklari ———
+_NO_ARGS = {"type": "object", "properties": {}}
+
+
+def _err(message, **extra):
+    """Vositadan qaytadigan standart xato javobi."""
+    out = {"ok": False, "error": str(message)}
+    out.update(extra)
+    return out
+
+

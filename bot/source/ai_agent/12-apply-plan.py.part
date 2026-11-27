@@ -1,0 +1,181 @@
+# =====================================================================
+#  REJANI BAJARISH
+# =====================================================================
+async def apply_plan(deps, plan, notifier=None, verify=True, actor=None):
+    """Rejani bajaradi. `(muvaffaqiyatli_soni, xatolar, natijalar)` qaytaradi.
+
+    verify=True bo'lsa — yozishdan OLDIN joriy qiymat rejadagi `old` bilan
+    solishtiriladi. Mos kelmasa YOZILMAYDI. Sabab: tasdiq kartochkasi
+    ko'rsatilishi va tugma bosilishi orasida daqiqalar o'tadi; oradan
+    kimsa narxni o'zgartirgan bo'lsa, xo'jayin KO'RMAGAN natijaga
+    kelishi mumkin edi.
+
+    notifier — async (uid, status, code, order) — mijozga xabar yuborish.
+    """
+    done, errors, results = 0, [], []
+
+    for item in plan or []:
+        kind = item.get("kind")
+        label = item.get("label") or ""
+        try:
+            if kind == "product":
+                ok, err = await _apply_product(deps, item, verify)
+            elif kind == "product_size":
+                ok, err = await _apply_product_size(deps, item, verify)
+            elif kind == "order_status":
+                ok, err = await _apply_order_status(deps, item, verify, notifier, actor)
+            else:
+                ok, err = False, f"noma'lum reja turi: {kind}"
+        except Exception as e:
+            logging.error("apply_plan xatosi (%s): %s", kind, e)
+            ok, err = False, str(e)
+
+        results.append({"label": label, "ok": ok, "error": err})
+        if ok:
+            done += 1
+        else:
+            errors.append(f"{label}: {err}" if label else err)
+
+    return done, errors, results
+
+
+def _same_value(a, b):
+    """Ikki qiymat AMALDA bir xilmi.
+
+    ⚠️ NEGA shunchaki `str(a) != str(b)` YARAMAYDI:
+       Firebase JSON'da son `1000000` ham, `1000000.0` ham bo'lishi mumkin
+       (mini app `parseInt` bilan yozadi, import esa hisob-kitobdan keyin
+       float berishi mumkin). Matn sifatida solishtirsak «1000000.0» va
+       «1000000» FARQLI chiqadi va tasdiqlangan o'zgarish
+       «qiymat o'zgargan» degan yolg'on xato bilan RAD ETILARDI —
+       xo'jayin tugmani bosardi, lekin narx o'zgarmasdi.
+    """
+    if isinstance(a, bool) or isinstance(b, bool):
+        return bool(a) == bool(b)
+    fa, fb_ = _to_float(a, None), _to_float(b, None)
+    if fa is not None and fb_ is not None:
+        return abs(fa - fb_) < 1e-9
+    return str(a) == str(b)
+
+
+def _mismatch(current, expected, field):
+    """Joriy qiymat kutilganidan farq qiladimi (DEL = maydon yo'q)."""
+    has = field in current
+    if expected == DEL:
+        return has
+    if not has:
+        return True
+    return not _same_value(current.get(field), expected)
+
+
+async def _apply_product(deps, item, verify):
+    pid = item.get("id")
+    changes = item.get("set") or {}
+    old = item.get("old") or {}
+
+    def mutate(cur):
+        if verify:
+            for field, expected in old.items():
+                if _mismatch(cur, expected, field):
+                    raise ValueError(
+                        f"«{field}» qiymati o'zgargan (kutilgan: {expected}, "
+                        f"hozir: {cur.get(field, 'yo`q')}). Yozilmadi — qaytadan so'rang.")
+        return _apply_set(cur, changes)
+
+    ok, err, _prev = await atomic_update_by_id(deps, "products", pid, mutate)
+    return ok, err
+
+
+async def _apply_product_size(deps, item, verify):
+    pid = item.get("id")
+    size_name = str(item.get("size") or "")
+    new_stock = safe_int(item.get("set"), 0) or 0
+    old_stock = safe_int(item.get("old"), None)
+
+    def mutate(cur):
+        sizes = cur.get("sizes")
+        pairs = fb_items(sizes)
+        target_key = None
+        for key, s in pairs:
+            if isinstance(s, dict) and str(s.get("size") or "").strip() == size_name:
+                target_key = key
+                if verify and old_stock is not None:
+                    have = safe_int(s.get("stock"), 0) or 0
+                    if have != old_stock:
+                        raise ValueError(
+                            f"razmer «{size_name}» qoldig'i o'zgargan "
+                            f"(kutilgan {old_stock}, hozir {have}). Yozilmadi.")
+                break
+        if target_key is None:
+            raise ValueError(f"«{size_name}» razmeri topilmadi")
+
+        # Razmerlar dict yoki list bo'lishi mumkin — shaklini saqlab yozamiz.
+        if isinstance(sizes, dict):
+            sizes[target_key]["stock"] = new_stock
+        else:
+            sizes[int(target_key)]["stock"] = new_stock
+
+        # 🔗 Denormallashgan `stock` maydonini QAYTA HISOBLAYMIZ.
+        #    Mini App aynan shunday qiladi (`sizes.reduce`). Yangilamasak,
+        #    katalogda tovar "bor/yo'q" belgisi yolg'on ko'rsatardi.
+        cur["stock"] = sum(safe_int(s.get("stock"), 0) or 0
+                           for _, s in fb_items(sizes) if isinstance(s, dict))
+        return cur
+
+    ok, err, _prev = await atomic_update_by_id(deps, "products", pid, mutate)
+    return ok, err
+
+
+async def _apply_order_status(deps, item, verify, notifier, actor=None):
+    """Buyurtma holatini Worker /order-status orqali o'zgartiradi.
+
+    ⚠️ ILGARI (xato): agent `users/{uid}/orders` ga o'zi yozardi, keyin
+       markaziy yozuvni `orders/{uid}_{KOD}` ga yamardi. Haqiqiy kalit esa
+       `orders/{uid}_{ID}` — natijada bazada faqat `{status}` dan iborat
+       SOXTA yozuv paydo bo'lar, asl buyurtma eski holatda qolar, Mini
+       App'dagi keyingi tugma 409 berar, bekor qilinganda tovar omborga
+       QAYTMAS, cashback hisoblanmasdi.
+    ENDI: bitta yo'l — Worker. U holat mashinasini tekshiradi, ombor va
+       cashbackni to'g'rilaydi, mijozga va adminlarga xabar yuboradi
+       (shuning uchun `notifier` bu yerda chaqirilmaydi — dublikat bo'lardi).
+    """
+    if deps.order_status is None:
+        return False, "buyurtma holatini o'zgartirish ulanmagan (Worker)"
+    uid = str(item.get("uid") or "")
+    order_id = item.get("order_id")
+    new_status = str(item.get("set") or "")
+    old_status = item.get("old")
+    if not uid or order_id in (None, ""):
+        return False, "buyurtma manzili noto'g'ri"
+    expected = str(old_status) if (verify and old_status is not None) else ""
+    ok, err = await deps.order_status(uid, str(order_id), new_status, expected, actor)
+    return bool(ok), ("" if ok else (err or "Worker rad etdi"))
+
+
+def build_undo_plan(plan):
+    """Rejani teskarisiga aylantiradi (`set` <-> `old`).
+
+    Buyurtma holati QAYTARILMAYDI: holat mashinasi orqaga o'tishni
+    taqiqlaydi (yetkazildi -> kutilmoqda cashback va ombor hisobini
+    buzardi), mijozga esa xabar allaqachon ketgan. Xato bo'lsa — buyurtmani
+    bekor qilish (u ham tasdiq bilan) to'g'ri yo'l.
+    """
+    out = []
+    for item in plan or []:
+        kind = item.get("kind")
+        rev = dict(item)
+        if kind == "product":
+            rev["set"] = dict(item.get("old") or {})
+            rev["old"] = dict(item.get("set") or {})
+        elif kind == "product_size":
+            rev["set"] = item.get("old")
+            rev["old"] = item.get("set")
+        else:
+            continue
+        # Qaytarishda `old` tekshiruvi ham teskari bo'ladi va aynan shu
+        # bizga kerak: agar oradan kimsa qiymatni yana o'zgartirgan bo'lsa,
+        # qaytarish BAJARILMAYDI (jimgina ustidan yozib ketmaydi).
+        out.append(rev)
+    return out
+
+
