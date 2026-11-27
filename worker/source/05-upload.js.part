@@ -1,0 +1,150 @@
+// ===================== /upload uchun umumiy yordamchilar =====================
+
+// Telegram javobidan (sendVideo/sendPhoto natijasi) mijozga kerakli
+// maydonlarni ajratib oladi. Stream rejimi ham, legacy rejimi ham shu
+// funksiyani ishlatadi — javob SHAKLI bir xil bo'lishi uchun.
+function buildUploadResult(tg, isVideo, origin, size) {
+  const r = tg.result;
+  let fileId = "";
+  let thumbId = "";
+  let duration = 0;
+  let width = 0;
+  let height = 0;
+
+  if (isVideo && r.video) {
+    fileId = r.video.file_id;
+    duration = r.video.duration || 0;
+    width = r.video.width || 0;
+    height = r.video.height || 0;
+    const th = r.video.thumbnail || r.video.thumb;
+    if (th) thumbId = th.file_id;
+  } else if (r.photo && r.photo.length) {
+    const best = r.photo[r.photo.length - 1];
+    fileId = best.file_id;
+    width = best.width || 0;
+    height = best.height || 0;
+  } else if (r.document) {
+    // Telegram ba'zan videoni "document" deb qabul qiladi (masalan .mov)
+    fileId = r.document.file_id;
+    const th = r.document.thumbnail || r.document.thumb;
+    if (th) thumbId = th.file_id;
+  } else if (r.animation) {
+    fileId = r.animation.file_id;
+    duration = r.animation.duration || 0;
+    const th = r.animation.thumbnail || r.animation.thumb;
+    if (th) thumbId = th.file_id;
+  }
+
+  if (!fileId) return null;
+
+  const mediaUrl = (id) => `${origin}/media?id=${encodeURIComponent(id)}`;
+  return {
+    ok: true,
+    file_id: fileId,
+    url: mediaUrl(fileId),
+    thumb_id: thumbId || null,
+    thumb_url: thumbId ? mediaUrl(thumbId) : null,
+    type: isVideo ? "video" : "image",
+    duration,
+    width,
+    height,
+    size: size || 0,
+  };
+}
+
+/* ===========================================================================
+ * /upload — STREAM REJIMI (asosiy yo'l)
+ * ---------------------------------------------------------------------------
+ * ⚠️ NEGA KERAK BO'LDI (video yuklash "qotib qolardi"):
+ *    Legacy yo'lda Worker `await request.formData()` chaqirardi — bu 20 MB
+ *    multipart'ni BUTUNLAY xotiraga o'qib, parse qilib, so'ng Telegram uchun
+ *    YANGI FormData yasab qayta serializatsiya qilardi. Cloudflare Worker'da
+ *    bepul rejada CPU vaqti QATTIQ cheklangan (~10ms). 20 MB parse + qayta
+ *    yasash bu chegaradan oshib ketadi -> Worker "resource limits" bilan
+ *    o'ldiriladi. Mijozda esa hech qanday aniq xato ko'rinmasdi: progress
+ *    95% da turib qolardi va 3 daqiqa timeout kutilardi. Aynan shu
+ *    "video tanlayapman va o'sha joyda qotib qolyapti" holati.
+ *
+ * ENDI: body'ga UMUMAN tegmaymiz — uni to'g'ridan-to'g'ri Telegram'ga
+ *    STREAM qilamiz (bayt-baytga o'zgarmasdan o'tadi).
+ *      • auth  -> `X-Init-Data` HEADER'idan (body o'qilmaydi)
+ *      • chat_id / caption / supports_streaming -> Telegram URL'ining
+ *        query qismida (ya'ni MIJOZ chat_id ni boshqara olmaydi — spam yo'q)
+ *      • multipart'ni Telegram o'zi parse qiladi
+ *    CPU deyarli nolga tushadi, yuklash esa tezlashadi: baytlar mijozdan
+ *    kelishi bilan darhol Telegram'ga ketadi (avval to'liq kutilardi).
+ * =========================================================================== */
+async function handleUploadStream(request, env, initData, idToken) {
+  try {
+    if (!env.BOT_TOKEN) return json({ ok: false, error: "BOT_TOKEN sozlanmagan" }, 500);
+
+    // Telegram ichida — initData; ilova/saytdagi admin — Firebase idToken
+    // (Telegram orqali kirgan admin hisobining uid'i = Telegram ID).
+    let uid;
+    if (initData) {
+      const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
+      if (!verified.ok) return json({ ok: false, error: verified.error }, 401);
+      uid = requireSafeUid(verified.user.id, 401);
+    } else {
+      let claims;
+      try {
+        claims = await verifyFirebaseIdToken(idToken, env);
+      } catch (err) {
+        return json({ ok: false, error: String((err && err.message) || "token noto'g'ri") }, Number(err && err.status) || 401);
+      }
+      uid = requireSafeUid(claims.sub, 401);
+    }
+    if (getAdminIds(env).indexOf(uid) === -1) {
+      return json({ ok: false, error: "ruxsat yoq" }, 403);
+    }
+
+    const url = new URL(request.url);
+    const isVideo = url.searchParams.get("kind") !== "photo";
+
+    // Body multipart bo'lishi shart (Telegram faqat multipart qabul qiladi)
+    const ctype = request.headers.get("Content-Type") || "";
+    if (ctype.toLowerCase().indexOf("multipart/form-data") !== 0) {
+      return json({ ok: false, error: "multipart kerak" }, 400);
+    }
+
+    // Hajmni Content-Length bo'yicha tekshiramiz (body o'qilmaydi).
+    // +64KB — multipart sarlavhalari uchun zapas.
+    const MAX = 20 * 1024 * 1024;
+    const clen = parseInt(request.headers.get("Content-Length") || "0", 10) || 0;
+    if (clen > MAX + 65536) {
+      return json({ ok: false, error: "juda katta", size: clen, max: MAX }, 413);
+    }
+
+    const chatId = env.MEDIA_CHAT_ID || uid;
+    const method = isVideo ? "sendVideo" : "sendPhoto";
+
+    // Barcha parametrlar QUERY'da — shuning uchun body'ni ochish kerak emas
+    // va mijoz chat_id ni o'zgartira olmaydi.
+    const qs = new URLSearchParams();
+    qs.set("chat_id", String(chatId));
+    qs.set("disable_notification", "true");
+    qs.set("caption", isVideo ? "🎬 Mini app: storis videosi" : "🖼 Mini app: storis rasmi");
+    if (isVideo) qs.set("supports_streaming", "true");
+
+    const tgRes = await fetch(
+      `https://api.telegram.org/bot${env.BOT_TOKEN}/${method}?${qs.toString()}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": ctype },   // boundary AYNAN saqlanadi
+        body: request.body,                   // 🚀 stream — nusxa olinmaydi
+      }
+    );
+
+    const tg = await tgRes.json();
+    if (!tg || !tg.ok || !tg.result) {
+      return json({ ok: false, error: (tg && tg.description) || "Telegram rad etdi" }, 502);
+    }
+
+    const out = buildUploadResult(tg, isVideo, url.origin, clen);
+    if (!out) return json({ ok: false, error: "file_id qaytmadi" }, 502);
+    return json(out);
+  } catch (_) {
+    return json({ ok: false, error: "upload xatosi" }, 500);
+  }
+}
+

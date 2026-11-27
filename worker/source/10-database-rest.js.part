@@ -1,0 +1,127 @@
+// ===================== RTDB REST yordamchilari =====================
+// RTDB ketma-ket raqamli kalitlarni MASSIV, "teshikli" bo'lsa OBYEKT qilib
+// qaytaradi. Ikki shaklni bitta {key, val} ro'yxatiga keltiramiz — shunda
+// yozish manzili (`products/<key>/stock`) har ikki holatda ham to'g'ri bo'ladi.
+function toEntries(raw) {
+  const out = [];
+  if (!raw) return out;
+  if (Array.isArray(raw)) {
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] && typeof raw[i] === "object") out.push({ key: String(i), val: raw[i] });
+    }
+    return out;
+  }
+  if (typeof raw === "object") {
+    for (const k of Object.keys(raw)) {
+      if (raw[k] && typeof raw[k] === "object") out.push({ key: k, val: raw[k] });
+    }
+  }
+  return out;
+}
+
+function rtdbUrl(dbUrl, path) {
+  const cleanPath = String(path || "").replace(/^\/+|\/+$/g, "");
+  return dbUrl.replace(/\/$/, "") + "/" + (cleanPath ? cleanPath : "") + ".json";
+}
+
+async function rtdbRequest(dbUrl, path, token, options) {
+  const opts = options || {};
+  const headers = new Headers(opts.headers || {});
+  headers.set("Authorization", "Bearer " + token);
+  if (opts.body != null && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  try {
+    return await fetch(rtdbUrl(dbUrl, path), { ...opts, headers });
+  } catch (_) {
+    const method = String(opts.method || "GET").toUpperCase();
+    const ambiguous = method !== "GET" && method !== "HEAD";
+    throw httpError(503, ambiguous ? "RTDB yozuvi noaniq" : "RTDB tarmoq xatosi", {
+      retryable: true,
+      ambiguous,
+    });
+  }
+}
+
+async function rtdbGet(dbUrl, path, token) {
+  const response = await rtdbRequest(dbUrl, path, token, { method: "GET" });
+  if (!response.ok) throw httpError(502, "RTDB o'qish xatosi", { dbStatus: response.status });
+  return await response.json();
+}
+
+async function rtdbGetEtag(dbUrl, path, token) {
+  const response = await rtdbRequest(dbUrl, path, token, {
+    method: "GET",
+    headers: { "X-Firebase-ETag": "true" },
+  });
+  if (!response.ok) throw httpError(502, "RTDB ETag o'qish xatosi", { dbStatus: response.status });
+  const etag = response.headers.get("ETag");
+  if (!etag) throw httpError(502, "RTDB ETag qaytarmadi");
+  return { value: await response.json(), etag };
+}
+
+async function rtdbPut(dbUrl, path, val, token, etag) {
+  const headers = {};
+  if (etag) headers["If-Match"] = etag;
+  return await rtdbRequest(dbUrl, path, token, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(val),
+  });
+}
+
+async function rtdbPatch(dbUrl, path, val, token) {
+  const response = await rtdbRequest(dbUrl, path, token, {
+    method: "PATCH",
+    body: JSON.stringify(val),
+  });
+  if (!response.ok) throw httpError(502, "RTDB yozish xatosi", { dbStatus: response.status });
+  return response;
+}
+
+async function rtdbPost(dbUrl, path, val, token) {
+  const response = await rtdbRequest(dbUrl, path, token, {
+    method: "POST",
+    body: JSON.stringify(val),
+  });
+  if (!response.ok) throw httpError(502, "RTDB yozish xatosi", { dbStatus: response.status });
+  return response;
+}
+
+async function rtdbCreateIfNull(dbUrl, path, val, token, matches) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const current = await rtdbGetEtag(dbUrl, path, token);
+    if (current.value != null) {
+      if (matches && !matches(current.value)) throw httpError(409, "mavjud yozuv mos emas");
+      return { created: false, value: current.value };
+    }
+    let response;
+    try {
+      response = await rtdbPut(dbUrl, path, val, token, current.etag);
+    } catch (err) {
+      const after = await rtdbGet(dbUrl, path, token);
+      if (after != null && (!matches || matches(after))) return { created: false, value: after };
+      throw err;
+    }
+    if (response.status === 412) continue;
+    if (!response.ok) throw httpError(502, "RTDB shartli yaratish xatosi", { dbStatus: response.status });
+    return { created: true, value: val };
+  }
+  throw httpError(409, "parallel o'zgarish, qayta urinib ko'ring");
+}
+
+async function rtdbEtagMutate(dbUrl, path, token, mutate, maxRetries) {
+  const tries = maxRetries || 8;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    const current = await rtdbGetEtag(dbUrl, path, token);
+    const decision = await mutate(current.value);
+    if (decision && decision.abort) return { committed: false, value: current.value, result: decision.result };
+    const nextValue = decision && Object.prototype.hasOwnProperty.call(decision, "value")
+      ? decision.value
+      : decision;
+    const response = await rtdbPut(dbUrl, path, nextValue, token, current.etag);
+    if (response.status === 412) continue;
+    if (!response.ok) throw httpError(502, "RTDB shartli yozish xatosi", { dbStatus: response.status });
+    return { committed: true, value: nextValue, result: decision && decision.result };
+  }
+  throw httpError(409, "parallel o'zgarish, qayta urinib ko'ring");
+}
+

@@ -1,0 +1,53 @@
+// ===================== Google OAuth access token =====================
+// Service account JWT -> OAuth2 access_token (firebase.database scope).
+// Bu token bilan RTDB REST API'ga ADMIN huquqi bilan yoziladi.
+async function getAccessToken(env) {
+  if (googleTokenCache.token && Date.now() < googleTokenCache.expiresAt) {
+    return googleTokenCache.token;
+  }
+  const clientEmail = env.FIREBASE_CLIENT_EMAIL;
+  const privateKeyPem = env.FIREBASE_PRIVATE_KEY;
+  if (!clientEmail || !privateKeyPem) {
+    throw new Error("FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY sozlanmagan");
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const claims = {
+    iss: clientEmail,
+    scope:
+      "https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  };
+
+  const enc = new TextEncoder();
+  const headerB64 = base64url(enc.encode(JSON.stringify(header)));
+  const claimsB64 = base64url(enc.encode(JSON.stringify(claims)));
+  const signingInput = `${headerB64}.${claimsB64}`;
+
+  const key = await importPrivateKey(privateKeyPem);
+  const sig = await crypto.subtle.sign(
+    { name: "RSASSA-PKCS1-v1_5" },
+    key,
+    enc.encode(signingInput)
+  );
+  const jwt = `${signingInput}.${base64url(new Uint8Array(sig))}`;
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body:
+      "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=" +
+      encodeURIComponent(jwt),
+  });
+  const j = await res.json();
+  if (!res.ok || !j || !j.access_token) {
+    throw new Error("access_token olinmadi: " + JSON.stringify(j));
+  }
+  const ttl = Math.max(60, parseInt(j.expires_in || "3600", 10) - 60);
+  googleTokenCache.token = String(j.access_token);
+  googleTokenCache.expiresAt = Date.now() + ttl * 1000;
+  return googleTokenCache.token;
+}
+

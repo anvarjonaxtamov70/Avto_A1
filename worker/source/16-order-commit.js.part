@@ -1,0 +1,290 @@
+function canonicalMatchesAttempt(order, uid, quote, payloadHash) {
+  return !!order && String(order.uid) === uid && String(order.id) === String(quote.orderId) && order.payloadHash === payloadHash;
+}
+
+async function buildCanonicalOrder(identity, intent, quote, payloadHash, cashbackUsed) {
+  const orderItems = {};
+  for (const item of quote.items) {
+    // Bir tovar ikki xil mashina uchun olinsa qatorlar ustma-ust tushmasin.
+    const encodedKey = "l_" + (await sha256Hex(item.id + "\u0000" + item.size +
+      (item.carModel ? "\u0000" + item.carModel : ""))).slice(0, 40);
+    orderItems[encodedKey] = (orderItems[encodedKey] || 0) + item.qty;
+  }
+  return {
+    id: quote.orderId,
+    code: quote.code,
+    uid: identity.uid,
+    status: "kutilmoqda",
+    createdAt: quote.createdAt,
+    date: new Date(quote.createdAt).toLocaleDateString("uz-UZ"),
+    time: new Date(quote.createdAt).toLocaleTimeString("uz-UZ"),
+    items: orderItems,
+    itemDetails: quote.items,
+    total: quote.total,
+    cashbackUsed,
+    payable: quote.total - cashbackUsed,
+    cbRate: quote.cbRate,
+    customerName: quote.customer.name,
+    customerPhone: quote.customer.phone,
+    customerAddress: quote.delivery.address || quote.customer.address,
+    customerUsername: quote.customer.username,
+    customer: quote.customer,
+    delivery: quote.delivery,
+    payment: quote.payment,
+    deliveryMethod: quote.delivery.method,
+    deliveryMapLink: quote.delivery.mapLink,
+    attemptId: intent.attemptId,
+    payloadHash,
+  };
+}
+
+async function claimOrderAttempt(ctx, token, attemptPath, uid, attemptId, payloadHash, quote, owner) {
+  const now = Date.now();
+  const claim = await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
+    if (current) {
+      if (current.payloadHash !== payloadHash) throw httpError(409, "attemptId boshqa payload bilan ishlatilgan");
+      if (current.state === "committed" || current.state === "rejected") {
+        return { abort: true, result: current };
+      }
+      if (current.state !== "processing") throw httpError(409, "attempt holati noto'g'ri");
+      if (Number(current.leaseUntil) > now) {
+        return { abort: true, result: { ...current, busy: true } };
+      }
+      const value = {
+        ...current,
+        owner,
+        ownerGeneration: Math.max(0, Number(current.ownerGeneration) || 0) + 1,
+        leaseUntil: now + ATTEMPT_LEASE_MS,
+        updatedAt: now,
+      };
+      return { value, result: value };
+    }
+    const value = {
+      state: "processing",
+      uid,
+      attemptId,
+      payloadHash,
+      quote,
+      owner,
+      ownerGeneration: 1,
+      leaseUntil: now + ATTEMPT_LEASE_MS,
+      createdAt: now,
+    };
+    return { value, result: value };
+  });
+  return claim.result || claim.value;
+}
+
+async function finalizeOrderAttempt(ctx, token, attemptPath, uid, attemptId, payloadHash, canonicalOrder) {
+  const resultBody = { ok: true, committed: true, attemptId, order: canonicalOrder };
+  await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
+    if (!current || current.payloadHash !== payloadHash) throw httpError(409, "attempt yakuni mos emas");
+    if (current.state === "committed") return { abort: true, result: current };
+    if (current.state === "rejected") throw httpError(409, "rad etilgan attempt yakunlanmaydi");
+    const value = {
+      state: "committed",
+      uid,
+      attemptId,
+      payloadHash,
+      orderKey: uid + "_" + canonicalOrder.id,
+      result: resultBody,
+      committedAt: Date.now(),
+    };
+    return { value, result: value };
+  });
+  return resultBody;
+}
+
+async function reconcileUserOrderProjection(ctx, token, identity, quote, payloadHash, canonicalOrder) {
+  await rtdbEtagMutate(ctx.dbUrl, "users/" + identity.uid + "/orders/" + quote.orderId, token, (current) => {
+    if (current == null) return { value: canonicalOrder, result: canonicalOrder };
+    if (!current || current.payloadHash !== payloadHash || String(current.uid) !== identity.uid ||
+        String(current.id) !== String(quote.orderId) || Number(current.total) !== Number(canonicalOrder.total) ||
+        Number(current.cashbackUsed) !== Number(canonicalOrder.cashbackUsed) ||
+        Number(current.payable) !== Number(canonicalOrder.payable)) {
+      throw httpError(409, "user buyurtma proyeksiyasi mos emas");
+    }
+    if (String(current.status) === String(canonicalOrder.status) &&
+        Number(current.statusUpdatedAt || 0) === Number(canonicalOrder.statusUpdatedAt || 0)) {
+      return { abort: true, result: current };
+    }
+    const next = cloneJson(current);
+    next.status = canonicalOrder.status;
+    if (canonicalOrder.statusUpdatedAt != null) next.statusUpdatedAt = canonicalOrder.statusUpdatedAt;
+    return { value: next, result: next };
+  });
+}
+
+async function reconcileCommittedOrder(ctx, token, identity, intent, payloadHash, quote, canonicalOrder, attemptPath) {
+  if (!canonicalMatchesAttempt(canonicalOrder, identity.uid, quote, payloadHash)) {
+    throw httpError(409, "canonical buyurtma boshqa payloadga tegishli");
+  }
+  const orderKey = quote.orderKey;
+  // ⚡ Quyidagi yozuvlar bir-biriga bog'liq emas (har biri O'Z yo'lida ETag
+  //    bilan) — PARALLEL. Ilgari ketma-ket edi: har biri javobni ~0.3 s
+  //    kechiktirardi. Hammasi tugagach `finalizeOrderAttempt` (oxirgi qadam):
+  //    biror yozuv yiqilsa attempt yakunlanmaydi va ayni so'rov qayta uradi.
+  await Promise.all([
+    reconcileUserOrderProjection(ctx, token, identity, quote, payloadHash, canonicalOrder),
+    rtdbCreateIfNull(
+      ctx.dbUrl,
+      "order_state/" + orderKey,
+      { current: String(canonicalOrder.status || "kutilmoqda"), pending: null, version: 0, updatedAt: Date.now() },
+      token,
+      (value) => {
+        if (!value || !ORDER_STATUSES.includes(String(value.current)) || !Number.isFinite(Number(value.version))) return false;
+        if (String(value.current) === String(canonicalOrder.status)) return true;
+        return !!value.pending && value.pending.target === canonicalOrder.status &&
+          value.pending.from === value.current && Number.isFinite(Number(value.pending.transitionVersion));
+      }
+    ),
+    rtdbCreateIfNull(
+      ctx.dbUrl,
+      "notification_outbox/" + orderKey,
+      {
+        type: "order_created", uid: identity.uid, orderKey, orderId: quote.orderId,
+        createdAt: Date.now(), delivered: false,
+        // Bot watchdog FAQAT `retryAt` bor hodisalarni ko'radi (indekslangan).
+        // Worker darhol yuboradi; ulgurmasa 90 s dan keyin bot qayta uradi.
+        retryAt: Date.now() + ORDER_RETRY_FIRST_MS,
+      },
+      token,
+      (value) => !!value && value.type === "order_created" && value.uid === identity.uid &&
+        value.orderKey === orderKey && String(value.orderId) === String(quote.orderId)
+    ),
+    // Cashback ishlatilmagan bo'lsa hisob o'zgarmagan — proyeksiyani qayta
+    // yozish shart emas (4 ta subrequest tejaladi).
+    Number(canonicalOrder.cashbackUsed) > 0
+      ? ensureLoyaltyAccount(ctx, token, identity.uid)
+        .then((account) => writeLoyaltyProjection(ctx, token, identity.uid, account))
+      : null,
+    // Band qilish belgilari (`_orderReservations`) endi xabar bilan birga FONDA
+    // tozalanadi (deliverOrderOutbox) — buyurtma javobini kechiktirmaydi va
+    // byudjetni yemaydi. Bot sozlanmagan bo'lsa fon yo'q — shu yerda.
+    ctx.env && ctx.env.BOT_TOKEN ? null : cleanReservationMarkers(ctx, token, quote),
+  ]);
+  return await finalizeOrderAttempt(
+    ctx, token, attemptPath, identity.uid, intent.attemptId, payloadHash, canonicalOrder
+  );
+}
+
+async function handleOrderCommit(request, env, execCtx) {
+  let claimed = false;
+  try {
+    const body = await readJsonBody(request);
+    // notifyMode:"split" — yangi ilova: xabarlarni shu javobdan keyin O'ZI
+    // /order-deliver orqali alohida so'rovda turtadi (to'liq subrequest
+    // byudjeti bilan). Maydon yo'q — eski ilova: xabar shu so'rovda ketadi.
+    const notifyMode = body.notifyMode === "split" ? "split" : "inline";
+    const identity = await authenticateBody(body, env);
+    const intent = normalizeOrderIntent(body);
+    const payloadHash = await sha256Hex(stableStringify(intent));
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const attemptPath = "order_attempts/" + identity.uid + "/" + intent.attemptId;
+
+    let existing = await rtdbGet(ctx.dbUrl, attemptPath, token);
+    if (existing) {
+      if (existing.payloadHash !== payloadHash) throw httpError(409, "attemptId boshqa payload bilan ishlatilgan");
+      if (existing.state === "committed" && existing.result) {
+        return await committedOrderResponse(execCtx, env, existing.orderKey, existing.result, 200, notifyMode);
+      }
+      if (existing.state === "rejected") throw httpError(409, existing.error || "buyurtma rad etilgan", { shortages: existing.shortages || [] });
+      if (existing.quote) {
+        const canonical = await rtdbGet(ctx.dbUrl, "orders/" + existing.quote.orderKey, token);
+        if (canonical) {
+          const reconciled = await reconcileCommittedOrder(
+            ctx, token, identity, intent, payloadHash, existing.quote, canonical, attemptPath
+          );
+          return await committedOrderResponse(execCtx, env, existing.quote.orderKey, reconciled, 200, notifyMode);
+        }
+      }
+    }
+
+    let quote = existing && existing.quote;
+    if (!quote) quote = await buildOrderQuote(ctx, token, identity.uid, intent, payloadHash);
+    const owner = randomOwnerToken();
+    existing = await claimOrderAttempt(
+      ctx, token, attemptPath, identity.uid, intent.attemptId, payloadHash, quote, owner
+    );
+    if (existing.state === "committed" && existing.result) {
+      return await committedOrderResponse(execCtx, env, existing.orderKey, existing.result, 200, notifyMode);
+    }
+    if (existing.state === "rejected") throw httpError(409, existing.error || "buyurtma rad etilgan", { shortages: existing.shortages || [] });
+    if (existing.busy || existing.owner !== owner) {
+      throw httpError(503, "attempt bajarilmoqda; ayni attemptId bilan qayta urinib ko'ring", { retryable: true });
+    }
+    claimed = true;
+    quote = existing.quote;
+    const attemptClock = leaseClock(existing.leaseUntil, ATTEMPT_LEASE_MS);
+
+    const canonicalBeforeReserve = await rtdbGet(ctx.dbUrl, "orders/" + quote.orderKey, token);
+    if (canonicalBeforeReserve) {
+      const reconciled = await reconcileCommittedOrder(
+        ctx, token, identity, intent, payloadHash, quote, canonicalBeforeReserve, attemptPath
+      );
+      return await committedOrderResponse(execCtx, env, quote.orderKey, reconciled, 200, notifyMode);
+    }
+
+    const stock = await reserveQuoteItems(
+      ctx, token, identity.uid, intent.attemptId, quote, attemptPath, owner, existing.ownerGeneration, attemptClock
+    );
+    if (!stock.ok) {
+      await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
+        if (current && current.payloadHash === payloadHash && current.state === "processing" &&
+            current.owner === owner && Number(current.ownerGeneration) === Number(existing.ownerGeneration)) {
+          const next = {
+            state: "rejected", uid: identity.uid, attemptId: intent.attemptId, payloadHash,
+            error: "stock", shortages: stock.shortages, rejectedAt: Date.now(),
+          };
+          return { value: next, result: next };
+        }
+        return { abort: true, result: current };
+      });
+      throw httpError(409, "stock", { shortages: stock.shortages });
+    }
+
+    // Cashback so'ralmagan bo'lsa (ko'p buyurtmalar) hisobga tegmaymiz: nol
+    // summali "spend" amali hech narsani o'zgartirmas, lekin 4-5 subrequest
+    // yerdi. So'ralgan summa attempt payload'ining qismi (payloadHash) —
+    // ya'ni bu qaror ayni attempt uchun har doim bir xil.
+    let cashbackUsed = 0;
+    if (Number(quote.cashbackRequested) > 0) {
+      await renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, existing.ownerGeneration, attemptClock);
+      const spendKey = "spend_" + (await sha256Hex(quote.orderKey)).slice(0, 40);
+      const spend = await mutateLoyalty(ctx, token, identity.uid, spendKey, (account) => {
+        const amount = Math.min(quote.cashbackRequested, quote.total, loyaltyAvailable(account));
+        account.spent = Math.max(0, Number(account.spent) || 0) + amount;
+        return { type: "spend", amount, orderKey: quote.orderKey };
+      });
+      cashbackUsed = Math.max(0, Number(spend.operation.amount) || 0);
+    }
+    await renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, existing.ownerGeneration, attemptClock);
+    const proposedOrder = await buildCanonicalOrder(identity, intent, quote, payloadHash, cashbackUsed);
+    const canonicalCommit = await rtdbCreateIfNull(
+      ctx.dbUrl,
+      "orders/" + quote.orderKey,
+      proposedOrder,
+      token,
+      (value) => canonicalMatchesAttempt(value, identity.uid, quote, payloadHash)
+    );
+    const canonicalOrder = canonicalCommit.value;
+    const resultBody = await reconcileCommittedOrder(
+      ctx, token, identity, intent, payloadHash, quote, canonicalOrder, attemptPath
+    );
+    const heavy = quote.items.length > INLINE_NOTIFY_MAX_ITEMS;
+    return await committedOrderResponse(
+      execCtx, env, quote.orderKey, resultBody, canonicalCommit.created ? 201 : 200,
+      notifyMode === "inline" && heavy ? "defer" : notifyMode
+    );
+  } catch (err) {
+    const definitiveStockRejection = claimed && err && err.status === 409 &&
+      err.extra && Array.isArray(err.extra.shortages);
+    if (claimed && !definitiveStockRejection) {
+      return errorResponse(httpError(503, "buyurtma qisman bajarildi; ayni attemptId bilan qayta urinib ko'ring", { retryable: true }));
+    }
+    return errorResponse(err);
+  }
+}
+
+

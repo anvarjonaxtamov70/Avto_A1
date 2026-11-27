@@ -1,0 +1,105 @@
+function loyaltyAvailable(account) {
+  return Math.max(0,
+    (Number(account.earned) || 0) +
+    (Number(account.refunded) || 0) -
+    (Number(account.spent) || 0) -
+    (Number(account.reversed) || 0)
+  );
+}
+
+// Yangi cashback hisobi — eski `users/{uid}/phase2` qiymatlaridan (bootstrap).
+// phase2 FAQAT hisob hali yo'q bo'lganda o'qiladi: ilgari HAR chaqiruvda
+// o'qilardi (har amalga +1 ketma-ket so'rov va +1 subrequest).
+async function newLoyaltyAccount(ctx, token, uid) {
+  const phase2 = await rtdbGet(ctx.dbUrl, "users/" + uid + "/phase2", token);
+  const bootstrap = phase2 && typeof phase2 === "object" ? phase2 : {};
+  return {
+    version: 0,
+    earned: Math.max(0, Number(bootstrap.cashbackTotal) || 0),
+    spent: Math.max(0, Number(bootstrap.cashbackSpent) || 0),
+    refunded: Math.max(0, Number(bootstrap.cashbackRefunded) || 0),
+    reversed: 0,
+    ops: {},
+    bootstrappedAt: Date.now(),
+  };
+}
+
+async function ensureLoyaltyAccount(ctx, token, uid) {
+  uid = requireSafeUid(uid, 400);
+  const path = "loyalty_accounts/" + uid;
+  let fresh = null;
+  const result = await rtdbEtagMutate(ctx.dbUrl, path, token, async (current) => {
+    if (current && typeof current === "object") return { abort: true, result: current };
+    if (!fresh) fresh = await newLoyaltyAccount(ctx, token, uid);
+    const value = cloneJson(fresh);
+    return { value, result: value };
+  });
+  return result.result || result.value;
+}
+
+function loyaltyProjection(account) {
+  const earned = Math.max(0, Math.round(Number(account.earned) || 0));
+  const refunded = Math.max(0, Math.round(Number(account.refunded) || 0));
+  const reversed = Math.max(0, Math.round(Number(account.reversed) || 0));
+  // ⚠️ Proyeksiya mijoz (index.html Phase2) balans formulasiga AYNAN mos:
+  //    balans = cashbackTotal + cashbackRefunded - cashbackSpent.
+  //    Shuning uchun cashbackTotal = "umr bo'yi yig'ilgan" (earned) minus
+  //    reversed; refunded ALOHIDA cashbackRefunded'da beriladi (ikki marta
+  //    hisoblanmasligi uchun cashbackTotal'ga QO'SHILMAYDI).
+  return {
+    version: Math.max(0, Math.round(Number(account.version) || 0)),
+    cashbackTotal: Math.max(0, earned - reversed),
+    cashbackSpent: Math.max(0, Math.round(Number(account.spent) || 0)),
+    cashbackRefunded: refunded,
+    balanceFormula: "cashbackTotal+cashbackRefunded-cashbackSpent",
+  };
+}
+
+async function writeLoyaltyProjection(ctx, token, uid, account) {
+  const projection = loyaltyProjection(account);
+  await rtdbEtagMutate(ctx.dbUrl, "users/" + requireSafeUid(uid, 400) + "/phase2", token, (current) => {
+    const phase2 = current && typeof current === "object" ? cloneJson(current) : {};
+    const existing = phase2.loyaltyProjection && typeof phase2.loyaltyProjection === "object"
+      ? phase2.loyaltyProjection
+      : null;
+    if (existing && Number(existing.version) > projection.version) {
+      return { abort: true, result: existing };
+    }
+    phase2.loyaltyProjection = projection;
+    phase2.cashbackTotal = projection.cashbackTotal;
+    phase2.cashbackSpent = projection.cashbackSpent;
+    phase2.cashbackRefunded = projection.cashbackRefunded;
+    return { value: phase2, result: projection };
+  });
+  return projection;
+}
+
+async function mutateLoyalty(ctx, token, uid, operationKey, apply) {
+  uid = requireSafeUid(uid, 400);
+  // Hisob yaratish (bootstrap) va amal — BITTA ETag yozuvida: ilgari avval
+  // ensureLoyaltyAccount (o'qish+yozish), keyin alohida amal edi (2-3 ta
+  // ortiqcha ketma-ket so'rov). Hisob yo'q bo'lsa xuddi o'sha bootstrap
+  // qiymatlari bilan yaratiladi; parallel yaratilsa ETag (412) qayta o'qitadi.
+  let fresh = null;
+  const result = await rtdbEtagMutate(ctx.dbUrl, "loyalty_accounts/" + uid, token, async (current) => {
+    let account = current && typeof current === "object" ? cloneJson(current) : null;
+    if (!account) {
+      if (!fresh) fresh = await newLoyaltyAccount(ctx, token, uid);
+      account = cloneJson(fresh);
+    }
+    // These operation claims intentionally remain on the account: balance mutation and
+    // idempotency must share one ETag write. Removing a claim before an equally atomic,
+    // durable replacement exists could double-credit an old retry.
+    account.ops = account.ops && typeof account.ops === "object" ? account.ops : {};
+    if (account.ops[operationKey]) {
+      return { abort: true, result: { account, operation: account.ops[operationKey], duplicate: true } };
+    }
+    const operation = apply(account);
+    account.version = Math.max(0, Number(account.version) || 0) + 1;
+    account.ops[operationKey] = { ...operation, version: account.version, at: Date.now() };
+    account.updatedAt = Date.now();
+    return { value: account, result: { account, operation: account.ops[operationKey], duplicate: false } };
+  });
+  return result.result;
+}
+
