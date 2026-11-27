@@ -677,6 +677,35 @@ async function main() {
   const replay = await runReserve();
   ok(replay.ok && product.stock === 3 && releases === 1, 'existing reservation remains idempotent after hiding');
 
+  // Rollback must not credit a replacement product or a different variant.
+  const releaseSource = workerSource.slice(workerSource.indexOf('async function releaseQuoteItems('), workerSource.indexOf('async function cleanReservationMarkers('));
+  const rollbackItem = {id:'1', size:'A', sizeKey:'0', productKey:'0', lineKey:'i0', qty:2};
+  const rollbackQuote = {items:[rollbackItem]};
+  let rollbackProduct;
+  let cleanupCalls = 0;
+  const release = new Function('reservationMarkerKey','renewAttemptLeaseIfDue','rtdbEtagMutate','cloneJson','cleanReservationMarkers','httpError','toEntries', releaseSource + ';return releaseQuoteItems;')(
+    async () => 'marker', async () => {}, async (url,key,token,mutate) => {
+      const result = mutate(rollbackProduct);
+      if (!result.abort) rollbackProduct = result.value;
+      return result;
+    }, clone, async () => { cleanupCalls++; }, (status,message,details) => Object.assign(new Error(message), {status,...details}), v => Object.entries(v || {}).filter(([,x]) => x)
+  );
+  const rollback = () => release({dbUrl:'mock'},'token',CUSTOMER,'attempt',rollbackQuote,'path','owner',1,{});
+  for (const [id,sizes,qty] of [['2',[{size:'A',stock:3}],2],['1',[{size:'B',stock:3}],2],['1',[],2],['1',[{size:'A',stock:3}],1]]) {
+    rollbackProduct = {id,stock:3,sizes,_orderReservations:{marker:{items:{i0:{state:'reserved',qty}}}}};
+    const before = clone(rollbackProduct);
+    let conflict = false;
+    try { await rollback(); } catch (e) { conflict = e.status === 409 && e.retryable === true; }
+    ok(conflict, 'rollback conflict is retryable');
+    eq(rollbackProduct,before,'rollback conflict preserves stock and marker');
+  }
+  eq(cleanupCalls,0,'conflicting rollback never cleans markers');
+  rollbackProduct = {id:'1',stock:3,sizes:[{size:'A',stock:3}],_orderReservations:{marker:{items:{i0:{state:'reserved',qty:2}}}}};
+  await rollback();
+  await rollback();
+  eq(rollbackProduct.stock,5,'rollback restores total once');
+  eq(rollbackProduct.sizes[0].stock,5,'rollback restores variant once');
+
   // ===== 10) Eskirgan initData =====
   console.log('▶ 10) eskirgan initData');
   const oldInit = await call('/order-status', { initData: initDataFor(ADMINS[0], 2 * 3600), uid: CUSTOMER, orderId: '1', status: 'qabul' });

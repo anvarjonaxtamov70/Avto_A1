@@ -1766,10 +1766,23 @@ async function releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
       const bucket = product._orderReservations[markerKey];
       const marker = bucket.items && bucket.items[item.lineKey];
       if (!marker || marker.state !== "reserved") return { abort: true, result: { released: false } };
-      if (item.sizeKey !== null && product.sizes && product.sizes[item.sizeKey]) {
+      // Never restore a reservation into a different product or variant.
+      // Keep the marker on conflict so recovery can retry after catalog repair.
+      if (String(product.id) !== String(item.id) ||
+          !Number.isSafeInteger(marker.qty) || marker.qty <= 0 || marker.qty !== item.qty) {
+        throw httpError(409, "rezervatsiya mahsuloti yoki miqdori o'zgargan", { retryable: true, productId: item.id });
+      }
+      if (item.sizeKey !== null) {
+        if (!product.sizes || !product.sizes[item.sizeKey] ||
+            String(product.sizes[item.sizeKey].size) !== item.size) {
+          throw httpError(409, "rezervatsiya razmeri o'zgargan", { retryable: true, productId: item.id, size: item.size });
+        }
         product.sizes[item.sizeKey].stock = Math.max(0, Number(product.sizes[item.sizeKey].stock) || 0) + item.qty;
         if (product.stock != null) product.stock = Math.max(0, Number(product.stock) || 0) + item.qty;
       } else {
+        if (product.product_type === "razmerli" || toEntries(product.sizes).length) {
+          throw httpError(409, "rezervatsiya razmer turi o'zgargan", { retryable: true, productId: item.id });
+        }
         product.stock = Math.max(0, Number(product.stock) || 0) + item.qty;
       }
       marker.state = "released";
