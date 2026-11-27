@@ -1,0 +1,20 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..'),file=path.join(root,'index.html');
+const manifest=JSON.parse(fs.readFileSync(path.join(root,'frontend/scripts/manifest.json'),'utf8'));
+const source=fs.readFileSync(file,'utf8');
+let index=0;
+const output=source.replace(/<!--[\s\S]*?-->|<style\b[^>]*>[\s\S]*?<\/style>|<script\b([^>]*)>([\s\S]*?)<\/script>/gi,(whole,attrs,body)=>{
+  if(attrs===undefined)return whole;
+  const entry=manifest[index++];
+  assert.ok(entry,'Unexpected script block');
+  assert.equal(attrs,entry.attrs,'Script order or attributes changed');
+  if(!entry.file)return whole;
+  const js=fs.readFileSync(path.join(root,entry.file),'utf8');
+  assert.ok(!/<\/script\b/i.test(js),'Unexpected closing script tag');
+  return '<script'+attrs+'>'+js+'</script>';
+});
+assert.equal(index,manifest.length,'Script block count changed');
+if(process.argv.includes('--write'))fs.writeFileSync(file,output);
+else assert.equal(output,source,'Script sources out of sync; run node .github/sync-all-js.js --write');
+console.log('Script order synchronized: '+index);
