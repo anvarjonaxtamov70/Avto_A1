@@ -1,0 +1,499 @@
+# =====================================================================
+#  YOZISH VOSITALARI
+#
+#  ⚠️ HECH BIRI TO'G'RIDAN YOZMAYDI. Har biri faqat REJA tuzadi va
+#     `create_pending()` bilan tasdiq navbatiga qo'yadi. Haqiqiy yozish
+#     xo'jayin tugmani bosgandan keyin, `apply_plan()` da bo'ladi.
+#
+#  NEGA SHUNDAY:
+#     Mijoz chatiga yoki tovar sharhiga «hamma narxni 1 so'm qil» deb
+#     yozilsa, o'sha matn AI kontekstiga tushishi mumkin (prompt
+#     injection). Tugma bo'lsa — AI aldangan taqdirda ham hech narsa
+#     o'zgarmaydi, chunki oxirgi qaror INSONDA qoladi.
+# =====================================================================
+
+def _to_float(v, default=None):
+    try:
+        return float(str(v).strip().replace(",", "."))
+    except (TypeError, ValueError, AttributeError):
+        return default
+
+
+async def _resolve_product(ctx, product_id):
+    """`product_id` bo'yicha tovarni topadi. `(tovar, xato)` qaytaradi."""
+    pid = safe_int(product_id, None)
+    if pid is None:
+        return None, _err("`product_id` butun son bo'lishi kerak "
+                          "(search_products bilan toping)")
+    for p in await ctx.products():
+        if safe_int(p.get("id"), None) == pid:
+            return p, None
+    return None, _err(f"id={pid} bo'lgan tovar topilmadi")
+
+
+_P_ID = {"product_id": {"type": "integer", "description": "Tovar id raqami (search_products bilan toping)"}}
+
+
+@tool(
+    name="set_price",
+    mutating=True,
+    description=(
+        "Tovarning narxini o'zgartiradi. DARHOL bajarilmaydi — xo'jayinga "
+        "tasdiq tugmasi yuboriladi."
+    ),
+    parameters={
+        "type": "object",
+        "properties": dict(_P_ID, **{
+            "new_price": {"type": "integer", "description": "Yangi narx, so'mda (butun son)"},
+        }),
+        "required": ["product_id", "new_price"],
+    },
+)
+async def _t_set_price(ctx, product_id=None, new_price=None):
+    p, err = await _resolve_product(ctx, product_id)
+    if err:
+        return err
+    price = safe_int(new_price, None)
+    if price is None or price <= 0:
+        return _err("narx 0 dan katta butun son bo'lishi kerak")
+    if price > MAX_PRICE:
+        return _err(f"narx juda katta (chegara {fmt_som(MAX_PRICE)} so'm) — "
+                    "raqamni tekshiring")
+    if _flash_active(p):
+        return _err("bu tovarda FLASH chegirma aktiv. Avval `cancel_flash_sale` "
+                    "bilan bekor qiling, keyin narxni o'zgartiring (aks holda "
+                    "chegirma hisobi buziladi)")
+    cur = price_of(p)
+    if cur == price:
+        return _err(f"narx allaqachon {fmt_som(price)} so'm — o'zgartirish shart emas")
+
+    pct = _pct_change(cur, price)
+    warning = ""
+    if pct is not None and abs(pct) >= BIG_CHANGE_PCT:
+        warning = (f"Narx {abs(pct)}% ga {'OSHADI' if pct > 0 else 'TUSHADI'} — "
+                   "bu juda katta o'zgarish. Raqamni tekshirib tasdiqlang!")
+
+    plan = [{
+        "kind": "product", "id": p.get("id"), "label": product_label(p),
+        "set": {"price": price}, "old": _snapshot(p, ["price"]),
+    }]
+    return await create_pending(ctx, "set_price",
+                                {"product_id": p.get("id"), "new_price": price},
+                                plan, warning)
+
+
+@tool(
+    name="set_stock",
+    mutating=True,
+    description=(
+        "Tovarning ombordagi qoldig'ini o'zgartiradi. Razmerli tovarda "
+        "`size` ni ham berish SHART. Tasdiq tugmasi yuboriladi."
+    ),
+    parameters={
+        "type": "object",
+        "properties": dict(_P_ID, **{
+            "new_stock": {"type": "integer", "description": "Yangi qoldiq (0 yoki undan katta)"},
+            "size": {"type": "string", "description": "Razmer nomi (faqat razmerli tovarda)"},
+        }),
+        "required": ["product_id", "new_stock"],
+    },
+)
+async def _t_set_stock(ctx, product_id=None, new_stock=None, size=None):
+    p, err = await _resolve_product(ctx, product_id)
+    if err:
+        return err
+    st = safe_int(new_stock, None)
+    if st is None or st < 0:
+        return _err("qoldiq 0 yoki undan katta butun son bo'lishi kerak")
+    if st > MAX_STOCK:
+        return _err(f"qoldiq juda katta (chegara {MAX_STOCK}) — raqamni tekshiring")
+
+    sizes = sizes_of(p)
+    size_name = str(size or "").strip()
+
+    if sizes and not size_name:
+        return _err("bu RAZMERLI tovar — qaysi razmer ekanini `size` da bering",
+                    mavjud_razmerlar=[{"razmer": s, "qoldiq": q} for s, q in sizes])
+    if size_name and not sizes:
+        return _err("bu tovarda razmer yo'q — `size` bermang")
+
+    if sizes:
+        found = [(s, q) for s, q in sizes if s == size_name]
+        if not found:
+            return _err(f"«{size_name}» razmeri yo'q",
+                        mavjud_razmerlar=[s for s, _ in sizes])
+        _s, old_q = found[0]
+        if old_q == st:
+            return _err(f"«{size_name}» razmerida allaqachon {st} dona")
+        plan = [{
+            "kind": "product_size", "id": p.get("id"), "label": product_label(p),
+            "size": size_name, "set": st, "old": old_q,
+        }]
+    else:
+        old_snap = _snapshot(p, ["stock"])
+        if (safe_int(old_snap.get("stock"), None) or 0) == st and old_snap.get("stock") != DEL:
+            return _err(f"qoldiq allaqachon {st} dona")
+        plan = [{
+            "kind": "product", "id": p.get("id"), "label": product_label(p),
+            "set": {"stock": st}, "old": old_snap,
+        }]
+
+    return await create_pending(ctx, "set_stock",
+                                {"product_id": p.get("id"), "new_stock": st,
+                                 "size": size_name}, plan)
+
+
+@tool(
+    name="bulk_adjust_price",
+    mutating=True,
+    description=(
+        "Bir necha tovarning narxini foizga oshiradi yoki tushiradi "
+        "(masalan +8% yoki -15%). Avval `search_products` bilan id'larni "
+        "toping. Yangi narx 1000 so'mga yaxlitlanadi. Tasdiq yuboriladi."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "product_ids": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": f"Tovar id'lari (eng ko'p {MAX_BULK_ITEMS} ta)",
+            },
+            "percent": {
+                "type": "number",
+                "description": "Foiz: 8 = +8% qimmatlashtirish, -15 = 15% arzonlashtirish",
+            },
+        },
+        "required": ["product_ids", "percent"],
+    },
+)
+async def _t_bulk_adjust_price(ctx, product_ids=None, percent=None):
+    pct = _to_float(percent, None)
+    if pct is None or pct == 0:
+        return _err("`percent` noldan farqli son bo'lishi kerak (mas. 8 yoki -15)")
+    if not (-90 <= pct <= 1000):
+        return _err("foiz -90 dan +1000 gacha bo'lishi kerak")
+
+    ids = [safe_int(x, None) for x in (product_ids or [])]
+    ids = [i for i in ids if i is not None]
+    if not ids:
+        return _err("`product_ids` bo'sh — avval `search_products` bilan toping")
+    if len(ids) > MAX_BULK_ITEMS:
+        return _err(f"bir vaqtda eng ko'p {MAX_BULK_ITEMS} ta tovarga tegish mumkin "
+                    f"(so'ralgan: {len(ids)}). Qismlarga bo'lib bajaring")
+
+    by_id = {safe_int(p.get("id"), None): p for p in await ctx.products()}
+    plan, skipped = [], []
+    for pid in ids:
+        p = by_id.get(pid)
+        if p is None:
+            skipped.append({"id": pid, "sabab": "topilmadi"})
+            continue
+        if _flash_active(p):
+            skipped.append({"id": pid, "nom": product_label(p),
+                            "sabab": "flash chegirma aktiv"})
+            continue
+        cur = price_of(p)
+        if cur <= 0:
+            skipped.append({"id": pid, "nom": product_label(p), "sabab": "narxi yo'q"})
+            continue
+        new = int(round(cur * (1 + pct / 100.0) / 1000.0)) * 1000
+        if new <= 0:
+            skipped.append({"id": pid, "nom": product_label(p),
+                            "sabab": "natija 0 yoki manfiy"})
+            continue
+        if new == cur:
+            skipped.append({"id": pid, "nom": product_label(p),
+                            "sabab": "yaxlitlashdan keyin narx o'zgarmadi"})
+            continue
+        if new > MAX_PRICE:
+            skipped.append({"id": pid, "nom": product_label(p), "sabab": "narx chegaradan oshdi"})
+            continue
+        plan.append({
+            "kind": "product", "id": pid, "label": product_label(p),
+            "set": {"price": new}, "old": _snapshot(p, ["price"]),
+        })
+
+    if not plan:
+        return _err("hech bir tovar narxi o'zgartirilmadi", tashlab_ketilganlar=skipped)
+
+    warning = ""
+    if abs(pct) >= BIG_CHANGE_PCT:
+        warning = f"{len(plan)} ta tovar narxi {abs(pct)}% ga o'zgaradi — katta o'zgarish!"
+    elif len(plan) >= 10:
+        warning = f"{len(plan)} ta tovarga bir yo'la ta'sir qiladi."
+
+    res = await create_pending(ctx, "bulk_adjust_price",
+                               {"product_ids": ids, "percent": pct}, plan, warning)
+    if isinstance(res, dict) and res.get("ok") and skipped:
+        res["tashlab_ketilganlar"] = skipped
+    return res
+
+
+_TEXT_FIELDS = {"name": "nom", "desc": "tavsif", "code": "kod"}
+
+
+@tool(
+    name="update_product_text",
+    mutating=True,
+    description=(
+        "Tovarning NOMI, TAVSIFI yoki KODINI o'zgartiradi. Narx va qoldiq "
+        "uchun `set_price` / `set_stock` ishlatiladi. Tasdiq yuboriladi."
+    ),
+    parameters={
+        "type": "object",
+        "properties": dict(_P_ID, **{
+            "name": {"type": "string", "description": "Yangi nom"},
+            "desc": {"type": "string", "description": "Yangi tavsif"},
+            "code": {"type": "string", "description": "Yangi kod (artikul)"},
+        }),
+        "required": ["product_id"],
+    },
+)
+async def _t_update_product_text(ctx, product_id=None, name=None, desc=None, code=None):
+    p, err = await _resolve_product(ctx, product_id)
+    if err:
+        return err
+
+    incoming = {"name": name, "desc": desc, "code": code}
+    changes = {}
+    for field, val in incoming.items():
+        if val is None:
+            continue
+        val = str(val).strip()
+        if field == "name" and not val:
+            return _err("nomni bo'sh qoldirib bo'lmaydi")
+        if len(val) > 500:
+            return _err(f"{_TEXT_FIELDS[field]} juda uzun (500 belgidan kam bo'lsin)")
+        if str(p.get(field) or "").strip() == val:
+            continue
+        changes[field] = val
+
+    if not changes:
+        return _err("o'zgartirish uchun yangi qiymat berilmadi (yoki bir xil)")
+
+    plan = [{
+        "kind": "product", "id": p.get("id"), "label": product_label(p),
+        "set": changes, "old": _snapshot(p, list(changes)),
+    }]
+    return await create_pending(ctx, "update_product_text",
+                                {"product_id": p.get("id"), **changes}, plan)
+
+
+@tool(
+    name="set_product_visibility",
+    mutating=True,
+    description=(
+        "Tovarni mijozlarga KO'RSATADI (qoralamadan chiqaradi) yoki "
+        "YASHIRADI (qoralamaga oladi). Tasdiq yuboriladi."
+    ),
+    parameters={
+        "type": "object",
+        "properties": dict(_P_ID, **{
+            "visible": {"type": "boolean",
+                        "description": "true = mijozlar ko'radi, false = yashiriladi"},
+        }),
+        "required": ["product_id", "visible"],
+    },
+)
+async def _t_set_product_visibility(ctx, product_id=None, visible=None):
+    p, err = await _resolve_product(ctx, product_id)
+    if err:
+        return err
+    if visible is None:
+        return _err("`visible` true yoki false bo'lishi kerak")
+    want_visible = bool(visible)
+    is_draft = bool(p.get("is_draft"))
+    if want_visible == (not is_draft):
+        return _err("tovar allaqachon shu holatda")
+
+    if want_visible:
+        # ⚠️ Mini App'dagi tekshiruv bilan AYNAN bir xil (`saveEditProduct`):
+        #    nom + narx + kamida 1 rasm. Aks holda katalogda rasmsiz,
+        #    narxsiz "buzuq" kartochka paydo bo'lardi.
+        missing = []
+        if not str(p.get("name") or "").strip():
+            missing.append("nom")
+        if price_of(p) <= 0:
+            missing.append("narx")
+        imgs = [u for _, u in fb_items(p.get("images")) if u] or \
+               ([p.get("img")] if p.get("img") else [])
+        if not imgs:
+            missing.append("kamida 1 rasm")
+        if p.get("product_type") == "razmerli" and not sizes_of(p):
+            missing.append("kamida 1 razmer")
+        if missing:
+            return _err("tovarni mijozlarga chiqarish uchun quyidagilar yetishmaydi: "
+                        + ", ".join(missing)
+                        + ". Rasmni Mini App'dagi «Qoralamalar» bo'limidan yuklang.")
+        changes = {"is_draft": DEL}
+    else:
+        changes = {"is_draft": True}
+
+    plan = [{
+        "kind": "product", "id": p.get("id"), "label": product_label(p),
+        "set": changes, "old": _snapshot(p, ["is_draft"]),
+    }]
+    return await create_pending(ctx, "set_product_visibility",
+                                {"product_id": p.get("id"), "visible": want_visible},
+                                plan)
+
+
+@tool(
+    name="create_flash_sale",
+    mutating=True,
+    description=(
+        "Tovarga vaqtincha FLASH chegirma qo'yadi: narx tushadi, eski narx "
+        "chizilgan holda ko'rinadi va taymer ishlaydi. Tasdiq yuboriladi."
+    ),
+    parameters={
+        "type": "object",
+        "properties": dict(_P_ID, **{
+            "flash_price": {"type": "integer", "description": "Chegirmali narx (joriy narxdan kichik)"},
+            "hours": {"type": "number", "description": "Necha soat davom etadi (0.5 – 720)"},
+        }),
+        "required": ["product_id", "flash_price", "hours"],
+    },
+)
+async def _t_create_flash_sale(ctx, product_id=None, flash_price=None, hours=None):
+    p, err = await _resolve_product(ctx, product_id)
+    if err:
+        return err
+    if _flash_active(p):
+        return _err("bu tovarda flash chegirma allaqachon aktiv — avval "
+                    "`cancel_flash_sale` bilan bekor qiling")
+    fp = safe_int(flash_price, None)
+    cur = price_of(p)
+    if fp is None or fp <= 0:
+        return _err("chegirmali narx 0 dan katta butun son bo'lishi kerak")
+    if cur <= 0:
+        return _err("tovarning joriy narxi yo'q — avval `set_price` bilan qo'ying")
+    if fp >= cur:
+        return _err(f"chegirmali narx joriy narxdan ({fmt_som(cur)} so'm) KICHIK bo'lishi kerak")
+    h = _to_float(hours, None)
+    if h is None or not (0.5 <= h <= 720):
+        return _err("muddat 0.5 dan 720 soatgacha bo'lishi kerak")
+
+    until = int(time.time() * 1000) + int(round(h * 3_600_000))
+    plan = [{
+        "kind": "product", "id": p.get("id"), "label": product_label(p),
+        # Mini App bilan bir xil sxema: price = chegirmali, oldPrice = asl.
+        "set": {"price": fp, "oldPrice": cur, "flashUntil": until},
+        "old": _snapshot(p, ["price", "oldPrice", "flashUntil"]),
+    }]
+    disc = round((1 - fp / cur) * 100)
+    return await create_pending(
+        ctx, "create_flash_sale",
+        {"product_id": p.get("id"), "flash_price": fp, "hours": h}, plan,
+        f"Chegirma {disc}% bo'ladi." if disc >= BIG_CHANGE_PCT else "")
+
+
+@tool(
+    name="cancel_flash_sale",
+    mutating=True,
+    description="Flash chegirmani bekor qiladi va ASL narxni tiklaydi. Tasdiq yuboriladi.",
+    parameters={"type": "object", "properties": dict(_P_ID),
+                "required": ["product_id"]},
+)
+async def _t_cancel_flash_sale(ctx, product_id=None):
+    p, err = await _resolve_product(ctx, product_id)
+    if err:
+        return err
+    real = safe_int(p.get("oldPrice"), 0) or 0
+    if not _flash_active(p) and real <= 0:
+        return _err("bu tovarda flash chegirma yo'q")
+    if real <= 0:
+        return _err("asl narx (oldPrice) saqlanmagan — narxni `set_price` bilan qo'lda qo'ying")
+
+    plan = [{
+        "kind": "product", "id": p.get("id"), "label": product_label(p),
+        "set": {"price": real, "oldPrice": DEL, "flashUntil": DEL},
+        "old": _snapshot(p, ["price", "oldPrice", "flashUntil"]),
+    }]
+    return await create_pending(ctx, "cancel_flash_sale",
+                                {"product_id": p.get("id")}, plan)
+
+
+@tool(
+    name="set_order_status",
+    mutating=True,
+    description=(
+        "Buyurtma holatini o'zgartiradi va MIJOZGA avtomatik xabar yuboradi. "
+        "`order_key` ni `list_orders` dan oling. Tasdiq yuboriladi."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "order_key": {"type": "string",
+                          "description": "list_orders bergan kalit, masalan '111_A-1'"},
+            "status": {"type": "string", "enum": _ORDER_STATUSES,
+                       "description": "Yangi holat"},
+        },
+        "required": ["order_key", "status"],
+    },
+)
+async def _t_set_order_status(ctx, order_key=None, status=None):
+    key = str(order_key or "").strip()
+    if "_" not in key:
+        return _err("`order_key` '<uid>_<kod>' shaklida bo'lishi kerak "
+                    "(list_orders dan oling)")
+    new_status = str(status or "").strip()
+    if new_status not in _ORDER_STATUSES:
+        return _err(f"holat quyidagilardan biri bo'lishi kerak: {', '.join(_ORDER_STATUSES)}")
+
+    uid, ident = key.split("_", 1)
+    raw = await ctx.node(f"users/{uid}/orders")
+    target = None
+    for _k, o in fb_items(raw):
+        if not isinstance(o, dict):
+            continue
+        if str(o.get("code") or "").strip() == ident or str(o.get("id")) == ident:
+            target = o
+            break
+    if target is None:
+        return _err(f"«{key}» buyurtmasi topilmadi")
+
+    old_status = str(target.get("status") or "kutilmoqda")
+    if old_status == new_status:
+        return _err(f"holat allaqachon «{_STATUS_LABEL.get(new_status, new_status)}»")
+    # Holat mashinasi (Worker bilan bir xil): orqaga yoki sakrab o'tib bo'lmaydi.
+    # Ilgari agent istalgan holatga yozardi (masalan yetkazildi -> kutilmoqda) —
+    # cashback va ombor hisobi buzilardi.
+    allowed = _ORDER_TRANSITIONS.get(old_status, [])
+    if new_status not in allowed:
+        ok_list = ", ".join(_STATUS_LABEL.get(s, s) for s in allowed) or "hech qaysi"
+        return _err(f"«{_STATUS_LABEL.get(old_status, old_status)}» holatidan "
+                    f"«{_STATUS_LABEL.get(new_status, new_status)}» ga o'tib bo'lmaydi. "
+                    f"Mumkin: {ok_list}")
+    if ctx.deps.order_status is None:
+        return _err("buyurtma holatini o'zgartirish ulanmagan (Worker). "
+                    "Mini App'dagi «Buyurtmalar» bo'limidan foydalaning.")
+
+    prof = await ctx.node(f"users/{uid}/profile")
+    cname = ""
+    if isinstance(prof, dict):
+        cname = str(prof.get("name") or "").strip()
+
+    warning = ""
+    if new_status == "bekor_qilingan" and old_status == "yetkazildi":
+        warning = ("QAYTARISH: tovarlar omborga qaytadi, berilgan cashback qaytarib "
+                   "olinadi, mijozga xabar boradi. Bu amalni qaytarib bo'lmaydi.")
+    elif new_status == "bekor_qilingan":
+        warning = ("Buyurtma bekor qilinadi: tovarlar omborga qaytadi, ishlatilgan "
+                   "cashback mijozga qaytariladi, mijozga xabar boradi. "
+                   "Bu amalni qaytarib bo'lmaydi.")
+    elif new_status == "yetkazildi":
+        warning = "Yetkazildi belgilansa — mijozga cashback va kafolat beriladi."
+
+    plan = [{
+        "kind": "order_status", "uid": str(uid),
+        "order_id": target.get("id"),
+        "code": str(target.get("code") or target.get("id")),
+        "label": cname or f"ID {uid}",
+        "set": new_status, "old": old_status, "notify": True,
+    }]
+    return await create_pending(ctx, "set_order_status",
+                                {"order_key": key, "status": new_status},
+                                plan, warning)
+
+

@@ -1,0 +1,34 @@
+# =====================================================================
+# HEALTH-CHECK HTTP SERVERI (bepul bulut hosting uchun)
+#   - Render kabi bepul "web service" lar 15 daqiqa harakatsizlikdan keyin
+#     UXLAB qoladi. Bot long-polling ishlatadi (kiruvchi HTTP yo'q), shuning
+#     uchun uni uyg'oq tutish uchun kichik HTTP endpoint qo'shamiz.
+#   - Tashqi "ping" xizmati (UptimeRobot / cron-job.org) shu manzilni har
+#     ~10 daqiqada chaqirsa, server uxlamaydi va bot 24/7 ishlaydi.
+#   - FAQAT `PORT` env o'rnatilgan bo'lsa ishga tushadi (Render uni beradi).
+#     Lokal kompyuterda PORT bo'lmagani uchun bu server yoqilmaydi — bot
+#     avvalgidek ishlaydi.
+# =====================================================================
+async def start_health_server():
+    port = os.getenv("PORT")
+    if not port:
+        return  # lokal ishga tushirish — health server kerak emas
+    try:
+        from aiohttp import web
+    except Exception as e:
+        logging.error(f"Health server uchun aiohttp.web yuklanmadi: {e}")
+        return
+
+    async def _ok(_request):
+        return web.Response(text="Avto_A1 bot ishlayapti ✅")
+
+    app = web.Application()
+    app.router.add_get("/", _ok)
+    app.router.add_get("/health", _ok)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(port))
+    await site.start()
+    logging.info(f"Health server {port}-portda ishga tushdi (keep-alive uchun).")
+
+

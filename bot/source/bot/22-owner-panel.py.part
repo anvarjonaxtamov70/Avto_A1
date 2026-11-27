@@ -1,0 +1,202 @@
+# =====================================================================
+# 👔 XO'JAYIN PANELI — pastdagi doimiy tugmalar
+# ---------------------------------------------------------------------
+# Ilgari xo'jayinga hech qanday tugma ko'rsatilmasdi (faqat mijoz menyusi
+# olib tashlanardi) — u har narsani yozib so'rashi kerak edi. Endi eng
+# ko'p kerak bo'ladigan ishlar bitta bosishda. Tugmalar AI ga ketmaydi:
+# har biri bazadan TO'G'RIDAN-TO'G'RI aniq ma'lumot oladi.
+# =====================================================================
+OWNER_BTN = {
+    "report": "📊 Hisobot",
+    "orders": "📦 Yangi buyurtmalar",
+    "low": "⚠️ Kam qolganlar",
+    "drafts": "📝 Qoralamalar",
+    "import": "📥 Excel yuklash",
+    "story": "🖼 Storis",
+    "undo": "↩️ Oxirgi o'zgarishni qaytarish",
+    "help": "❓ Yordam",
+}
+def _btn_norm(txt):
+    """Emoji variant belgisi (U+FE0F) ni olib tashlaymiz — ba'zi Telegram
+    mijozlari tugma matnini usiz qaytaradi."""
+    return str(txt or "").replace("\ufe0f", "").strip()
+
+
+OWNER_BUTTON_TEXTS = {_btn_norm(v): k for k, v in OWNER_BTN.items()}
+
+
+def owner_menu():
+    """Xo'jayinning doimiy klaviaturasi."""
+    b = OWNER_BTN
+    rows = [
+        [KeyboardButton(text=b["report"]), KeyboardButton(text=b["orders"])],
+        [KeyboardButton(text=b["low"]), KeyboardButton(text=b["drafts"])],
+        [KeyboardButton(text=b["import"]), KeyboardButton(text=b["story"])],
+        [KeyboardButton(text=b["undo"]), KeyboardButton(text=b["help"])],
+    ]
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=True,
+                               input_field_placeholder="Buyruq yozing yoki 🎙 ovoz yuboring…")
+
+
+# Panel har jarayonda xo'jayinga BIR MARTA yuboriladi (Telegram uni
+# o'zi eslab qoladi). Keyingi javoblarda `None` — klaviatura joyida qoladi.
+_owner_kb_cleared = set()
+
+
+def _owner_reply_markup(user_id):
+    """Xo'jayinga: birinchi javobda panelni yuboramiz, keyin — hech narsa."""
+    if user_id in _owner_kb_cleared:
+        return None
+    _owner_kb_cleared.add(user_id)
+    return owner_menu()
+
+
+def _som(v):
+    try:
+        return f"{int(round(float(v))):,}".replace(",", " ") + " so'm"
+    except (TypeError, ValueError):
+        return "—"
+
+
+OWNER_HELP = (
+    "<b>Xo'jayin, men nimalar qila olaman:</b>\n\n"
+    "📊 <b>Hisobot</b> — bugungi/haftalik savdo, ombor holati\n"
+    "📦 <b>Yangi buyurtmalar</b> — kutilayotganlar ro'yxati\n"
+    "⚠️ <b>Kam qolganlar</b> — tugayotgan va tugagan tovarlar\n"
+    "📝 <b>Qoralamalar</b> — hali mijozga ko'rinmayotgan tovarlar\n"
+    "📥 <b>Excel yuklash</b> — narxlar ro'yxatini fayl bilan qo'shish\n"
+    "🖼 <b>Storis</b> — storis kategoriyalari\n"
+    "↩️ <b>Qaytarish</b> — oxirgi AI o'zgarishini bekor qilish\n\n"
+    "<b>Shunchaki yozing yoki 🎙 ovoz yuboring:</b>\n"
+    "• «Cobalt kolodkasi qancha qoldi?»\n"
+    "• «Bugun qancha savdo bo'ldi?»\n"
+    "• «Gentra svechasi narxini 45 000 qil»\n"
+    "• «Amortizatorlarga 10% chegirma qo'y, 3 kunga»\n\n"
+    "O'zgartirishlar faqat siz ✅ tugmasini bosganingizdan keyin bajariladi."
+)
+
+
+async def _owner_quick(message, kind):
+    """Panel tugmalari uchun TO'G'RIDAN-TO'G'RI ma'lumot (AI siz, aniq)."""
+    uid = message.from_user.id
+    try:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    except Exception:
+        pass
+    if kind == "orders":
+        res = await ai_agent.quick_read(uid, "list_orders", {"status": "kutilmoqda", "limit": 15})
+        rows = (res or {}).get("buyurtmalar") or []
+        if not res or not res.get("ok"):
+            return "Xo'jayin, buyurtmalarni hozir olib bo'lmadi — birozdan so'ng qayta bosing."
+        if not rows:
+            return "✅ Xo'jayin, yangi (kutilayotgan) buyurtma yo'q."
+        lines = [f"📦 <b>Kutilayotgan buyurtmalar: {res.get('jami_topildi', len(rows))} ta</b>\n"]
+        for r in rows:
+            lines.append(
+                f"• <b>{html.escape(str(r.get('kod') or ''))}</b> — {html.escape(str(r.get('mijoz') or 'Mijoz'))[:30]}"
+                f"\n   {_som(r.get('summa_som'))} · {int(r.get('tovar_soni') or 0)} dona"
+                + (f" · {html.escape(str(r.get('sana')))}" if r.get("sana") else "")
+                + (f" · 📞 {html.escape(str(r.get('telefon')))}" if r.get("telefon") else ""))
+        lines.append("\nHolatni buyurtma kartochkasidagi tugmalar bilan o'zgartirasiz.")
+        return "\n".join(lines)
+    if kind == "low":
+        res = await ai_agent.quick_read(uid, "low_stock", {"threshold": 3, "limit": 20})
+        if not res or not res.get("ok"):
+            return "Xo'jayin, omborni hozir o'qib bo'lmadi — birozdan so'ng qayta bosing."
+        low, out = res.get("kam_qolgan") or [], res.get("tugagan") or []
+        if not low and not out:
+            return "✅ Xo'jayin, kam qolgan tovar yo'q — ombor joyida."
+        lines = [f"⚠️ <b>Kam qolgan: {res.get('kam_qolgan_soni', 0)} ta · tugagan: {res.get('tugagan_soni', 0)} ta</b>"]
+        if low:
+            lines.append("\n<b>Kam qolgan (≤3):</b>")
+            lines += [f"• {html.escape(str(p.get('nom')))[:50]} — <b>{p.get('qoldiq')}</b> dona" for p in low[:15]]
+        if out:
+            lines.append("\n<b>Tugagan:</b>")
+            lines += [f"• {html.escape(str(p.get('nom')))[:50]}" for p in out[:15]]
+            if res.get("tugagan_soni", 0) > 15:
+                lines.append(f"… va yana {res['tugagan_soni'] - 15} ta")
+        return "\n".join(lines)
+    if kind == "drafts":
+        res = await ai_agent.quick_read(uid, "list_drafts", {"limit": 10})
+        if not res or not res.get("ok"):
+            return "Xo'jayin, qoralamalarni hozir o'qib bo'lmadi."
+        n = res.get("jami_qoralama", 0)
+        if not n:
+            return "✅ Xo'jayin, qoralama yo'q — hamma tovar mijozlarga ko'rinadi."
+        lines = [f"📝 <b>Qoralamalar: {n} ta</b> (mijozga ko'rinmaydi)\n"]
+        for b in (res.get("partiyalar") or [])[:6]:
+            lines.append(f"• {html.escape(str(b.get('partiya')))} — {b.get('soni')} ta")
+        lines.append("\nMini App → Admin → <b>Qoralamalar</b> bo'limida rasm qo'shib tasdiqlang.")
+        return "\n".join(lines)
+    return None
+
+
+async def owner_button(message: types.Message, state: FSMContext, key: str):
+    """Xo'jayin paneli tugmasi bosildi."""
+    if key == "report":
+        await owner_report_command(message)
+    elif key in ("orders", "low", "drafts"):
+        txt = await _owner_quick(message, key)
+        await message.answer(txt or "Xo'jayin, ma'lumot topilmadi.", parse_mode="HTML",
+                             reply_markup=_owner_reply_markup(message.from_user.id))
+    elif key == "import":
+        await message.answer(
+            "📥 <b>Excel yuklash</b>\n\nNarxlar ro'yxatini <b>.xlsx</b>, <b>.xls</b> yoki "
+            "<b>.csv</b> fayl qilib shu chatga yuboring (📎 → Fayl). Men ustunlarni o'zim "
+            "topaman, keyin valyuta, kurs va ustamani so'rayman. Tovarlar avval "
+            "<b>qoralama</b> bo'lib qo'shiladi.", parse_mode="HTML")
+        try:
+            await send_import_template(message.chat.id)
+        except Exception as e:
+            logging.warning(f"Namuna fayl yuborilmadi: {e}")
+    elif key == "story":
+        await story_categories_command(message)
+    elif key == "undo":
+        await owner_undo_command(message)
+    else:
+        await message.answer(OWNER_HELP, parse_mode="HTML", reply_markup=owner_menu())
+        _owner_kb_cleared.add(message.from_user.id)
+
+
+@dp.message(
+    StateFilter(None, Register.lang, Register.name, Register.phone, Register.region),
+    F.text,
+    ~F.text.startswith("/"),
+    F.from_user.id == OWNER_TG_ID,
+)
+async def owner_free_chat(message: types.Message, state: FSMContext):
+    """Xo'jayinning ERKIN suhbati — mijoz handlerlaridan OLDIN turadi.
+
+    ⚠ NEGA ALOHIDA HANDLER KERAK:
+    Ilgari xo'jayinning matni mijoz uchun yozilgan handlerlarga tushardi.
+    Eng yomoni: `/start` dan keyin u `Register.lang` holatida qolsa, nima
+    yozsa ham «tilni tanlang» javobini olardi va AI ga MUTLAQO yetib
+    bormasdi. Endi xo'jayin hech qachon mijoz oqimiga tushmaydi — holat
+    qolib ketgan bo'lsa avtomatik tozalanadi.
+
+    `ImportState` (Excel import) ataylab bu filtrga KIRMAYDI: o'sha yerda
+    xo'jayin kurs/ustama raqamini kiritadi va u AI ga ketmasligi kerak.
+    """
+    if await state.get_state() is not None:
+        await state.clear()
+
+    txt = (message.text or "").strip()
+    # 👔 Panel tugmasi — AI ga emas, to'g'ridan-to'g'ri bajaramiz.
+    if _btn_norm(txt) in OWNER_BUTTON_TEXTS:
+        await owner_button(message, state, OWNER_BUTTON_TEXTS[_btn_norm(txt)])
+        return
+    # Eski mijoz menyusining tugmasi bosilgan bo'lsa — AI ga yubormaymiz,
+    # o'rniga xo'jayin panelini qo'yamiz.
+    if txt in SHOP_BUTTONS or txt in CONTACT_BUTTONS \
+            or txt in LANG_BUTTONS or txt in REGISTER_BUTTONS:
+        _owner_kb_cleared.add(message.from_user.id)
+        await message.answer(
+            "Xo'jayin, mijoz menyusi o'rniga sizning panelingiz qo'yildi. "
+            "Tugmani bosing yoki shunchaki yozing — men bajaraman.",
+            reply_markup=owner_menu(),
+        )
+        return
+
+    await handle_ai_chat(message, state)
+
+

@@ -1,0 +1,152 @@
+# =====================================================================
+#  TASDIQNI BAJARISH / BEKOR QILISH / ORQAGA QAYTARISH
+#  (bot.py shu uchtasini chaqiradi — qolgan hammasi ichki tafsilot)
+# =====================================================================
+# Tasdiq tugmasining `callback_data` prefiksi. bot.py handleri aynan
+# shuni kuzatadi — ikki joyda qo'lda yozilmasin.
+CONFIRM_PREFIX = "aia"
+
+
+def confirm_callback_data(token, approve):
+    """`aia:<token>:1|0` — 64 baytlik Telegram chegarasidan ancha kichik."""
+    return f"{CONFIRM_PREFIX}:{token}:{'1' if approve else '0'}"
+
+
+def parse_callback_data(data):
+    """`(token, tasdiqlandimi)` yoki (None, False)."""
+    parts = str(data or "").split(":")
+    if len(parts) != 3 or parts[0] != CONFIRM_PREFIX:
+        return None, False
+    return parts[1], parts[2] == "1"
+
+
+async def apply_confirmed(token, user_id, notifier=None):
+    """✅ tugmasi bosilganda chaqiriladi. `(muvaffaqiyatmi, xabar)` qaytaradi.
+
+    Butun xavfsizlik zanjiri shu yerda tugaydi:
+      1) `claim_pending` — amal shu odamga tegishlimi, muddati o'tmaganmi,
+         va ATOMIK egallash (ikki marta bosish ikki marta bajarmaydi);
+      2) `apply_plan(verify=True)` — tasdiq ko'rsatilgandan keyin qiymat
+         o'zgargan bo'lsa YOZMAYDI;
+      3) audit — oldingi qiymat bilan (orqaga qaytarish uchun).
+    """
+    deps = _deps
+    if deps is None:
+        return False, "AI agenti ishga tushmagan."
+
+    rec, err = await claim_pending(deps, token, user_id)
+    if rec is None:
+        return False, err
+
+    plan = [v for _, v in fb_items(rec.get("plan")) if isinstance(v, dict)]
+    if not plan:
+        await drop_pending(deps, token)
+        return False, "Amal tafsiloti o'qilmadi — qaytadan so'rang."
+
+    done, errors, _results = await apply_plan(deps, plan, notifier=notifier, verify=True,
+                                              actor=user_id)
+
+    # 📝 Audit — oldingi qiymatlar bilan. `/orqaga` aynan shundan o'qiydi.
+    if done:
+        await audit(deps, user_id, "mutation", {
+            "tool": rec.get("tool"),
+            "args": rec.get("args"),
+            "plan": plan,
+            "done": done,
+            "errors": errors[:5],
+            "is_undo": bool(rec.get("is_undo")),
+        })
+        # Qaytarish bajarilgan bo'lsa — asl yozuvni «qaytarilgan» deb belgilaymiz,
+        # aks holda `/orqaga` o'sha o'zgarishni qayta-qayta taklif qilardi.
+        undo_of = rec.get("undo_of")
+        if undo_of:
+            await deps.firebase_patch(f"audit_log/{undo_of}", {"reverted": True})
+
+    await drop_pending(deps, token)
+
+    total = len(plan)
+    if done == total and not errors:
+        return True, f"✅ Bajarildi ({done} ta o'zgarish)."
+    if done:
+        return True, ("⚠️ Qisman bajarildi: "
+                      f"{done}/{total}.\n\nBajarilmadi:\n• " + "\n• ".join(errors[:5]))
+    return False, "❌ Bajarilmadi:\n• " + "\n• ".join(errors[:5] or ["noma'lum xato"])
+
+
+async def cancel_confirmed(token, user_id):
+    """❌ tugmasi. `(ok, xabar)`."""
+    deps = _deps
+    if deps is None:
+        return False, "AI agenti ishga tushmagan."
+    etag, rec = await deps.firebase_get_etag(f"pending_actions/{token}")
+    if not isinstance(rec, dict):
+        return False, "Bu amal topilmadi — muddati o'tgan bo'lishi mumkin."
+    if (safe_int(rec.get("uid"), 0) or 0) != (safe_int(user_id, 0) or 0):
+        return False, "Bu amal sizga tegishli emas."
+    if rec.get("status") != "pending":
+        return False, "Bu amal allaqachon bajarilgan."
+    await drop_pending(deps, token)
+    return True, "❌ Bekor qilindi — hech narsa o'zgarmadi."
+
+
+async def undo_last(user_id):
+    """`/orqaga` buyrug'i: oxirgi o'zgarishni qaytarish uchun TASDIQ tayyorlaydi.
+
+    Qaytarishning o'zi ham tasdiqdan o'tadi — bu ataylab: xato bilan
+    yozilgan `/orqaga` mijozga ketgan buyurtma holatini jimgina
+    o'zgartirib qo'ymasligi kerak.
+    Qaytaradi: (token, preview_html, xato_matni)
+    """
+    deps = _deps
+    if deps is None:
+        return None, "", "AI agenti ishga tushmagan."
+    if not WRITE_ENABLED or not deps.can_write():
+        return None, "", "Yozish o'chirilgan — qaytarish ham mumkin emas."
+
+    key, rec = await last_undoable_mutation(deps, user_id)
+    if rec is None:
+        return None, "", ("Qaytarish uchun o'zgarish topilmadi.\n\n"
+                          "<i>Faqat AI orqali qilingan oxirgi o'zgarishlar "
+                          "qaytariladi. Mini App'dagi tahrirlar bu yerga "
+                          "kirmaydi.</i>")
+
+    plan = [v for _, v in fb_items(rec.get("plan")) if isinstance(v, dict)]
+    undo = build_undo_plan(plan)
+    if not undo:
+        if any(str(p.get("kind")) == "order_status" for p in plan):
+            return None, "", ("Buyurtma holatini orqaga qaytarib bo'lmaydi — mijozga xabar "
+                              "allaqachon ketgan va holat faqat oldinga yuradi.\n\n"
+                              "<i>Xato bo'lsa buyurtmani bekor qiling (u ham tasdiq "
+                              "bilan bajariladi).</i>")
+        return None, "", "Bu o'zgarishni avtomatik qaytarib bo'lmaydi."
+
+    token, prec = await store_pending(
+        deps, user_id, "undo", {"audit_key": key}, undo,
+        warning="Bu — ORQAGA QAYTARISH. Qiymatlar avvalgi holatiga tiklanadi.",
+        extra={"is_undo": True, "undo_of": key},
+    )
+    if token is None:
+        return None, "", "Qaytarish yozuvi saqlanmadi — qayta urinib ko'ring."
+
+    header = (f"↩️ <b>Orqaga qaytarish</b>\n"
+              f"<i>Amal: {_esc(rec.get('tool'))}</i>\n\n")
+    return token, header + render_plan_preview(undo, prec.get("warning")), ""
+
+
+async def quick_read(user_id, name, args=None):
+    """Panel tugmalari uchun: bitta O'QISH vositasini AI siz bajaradi.
+
+    Yozish vositalari bu yo'l bilan HECH QACHON chaqirilmaydi.
+    Xato bo'lsa None qaytadi.
+    """
+    spec = TOOLS.get(name)
+    if _deps is None or spec is None or spec.mutating:
+        return None
+    try:
+        ctx = TurnContext(_deps, user_id)
+        return await execute_tool(ctx, name, json.dumps(args or {}))
+    except Exception as e:
+        logging.error("quick_read(%s) xato: %s", name, e)
+        return None
+
+

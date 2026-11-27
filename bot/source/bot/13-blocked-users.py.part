@@ -1,0 +1,248 @@
+# =====================================================================
+# ⛔ BLOKLANGAN FOYDALANUVCHILAR
+#   Admin mini app'da mijozni bloklasa `blocked_users/{uid}` yoziladi.
+#   Bot bunday foydalanuvchining HECH QANDAY xabari/tugmasiga javob bermaydi
+#   (bir marta qisqa ogohlantirish yuboriladi). Adminlar hech qachon bloklanmaydi.
+#   Baza vaqtincha javob bermasa — "fail-open" (hamma to'xtab qolmasin).
+# =====================================================================
+BLOCKED_TEXT = ("⛔ Hisobingiz administrator tomonidan bloklangan.\n"
+                "Bot va ilovadan foydalanib bo'lmaydi.")
+_BLOCKED_CACHE = {}
+_BLOCKED_TTL = 60
+_BLOCKED_NOTIFIED = {}
+
+
+async def is_user_blocked(uid) -> bool:
+    try:
+        uid_i = int(str(uid))
+    except (TypeError, ValueError):
+        return False
+    if uid_i in ADMIN_IDS:
+        return False
+    now = time.time()
+    hit = _BLOCKED_CACHE.get(uid_i)
+    if hit and hit[1] > now:
+        return hit[0]
+    val = await firebase_get(f"blocked_users/{uid_i}")
+    blocked = bool(val)
+    if len(_BLOCKED_CACHE) > 5000:
+        _BLOCKED_CACHE.clear()
+    _BLOCKED_CACHE[uid_i] = (blocked, now + _BLOCKED_TTL)
+    return blocked
+
+
+class BlockedUserMiddleware(BaseMiddleware):
+    """Har bir update'dan oldin: foydalanuvchi bloklangan bo'lsa — to'xtatamiz."""
+
+    async def __call__(self, handler, event, data):
+        user = data.get("event_from_user")
+        if user is not None and await is_user_blocked(user.id):
+            try:
+                cq = getattr(event, "callback_query", None)
+                if cq is not None:
+                    await cq.answer(BLOCKED_TEXT, show_alert=True)
+                elif getattr(event, "message", None) is not None:
+                    now = time.time()
+                    if now - _BLOCKED_NOTIFIED.get(user.id, 0) > 600:
+                        _BLOCKED_NOTIFIED[user.id] = now
+                        if len(_BLOCKED_NOTIFIED) > 5000:
+                            _BLOCKED_NOTIFIED.clear()
+                        await bot.send_message(user.id, BLOCKED_TEXT)
+            except Exception as e:
+                logging.warning(f"Bloklangan foydalanuvchiga javob yuborilmadi ({user.id}): {e}")
+            return None
+        return await handler(event, data)
+
+
+async def process_mini_app_ai():
+    # 🟢 Yurak urishi: oxirgi yozilgan vaqt. Har tsiklda emas, ~30 sekundda
+    #    bir yozamiz — aks holda 2 sekundlik tsikl bazani bekorga urardi.
+    last_beat = 0.0
+
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                # 🟢 BOT TIRIKMI — Mini App'dagi onlayn indikatori shuni o'qiydi.
+                #    Ilgari bunday signal UMUMAN yo'q edi: mijoz bot javob
+                #    bermasa, sababini bilmay kutib turardi.
+                now_ts = time.time()
+                if now_ts - last_beat >= 30:
+                    last_beat = now_ts
+                    try:
+                        await session.patch(fb_url("bot_status"), json={
+                            "online": True,
+                            "ts": int(now_ts * 1000),
+                        })
+                    except Exception as e:
+                        logging.warning(f"bot_status yozilmadi: {e}")
+
+                async with session.get(fb_url("ai_requests")) as resp:
+                    if resp.status != 200:
+                        await asyncio.sleep(2)
+                        continue
+                    requests = await resp.json()
+
+                if requests:
+                    for uid, data in fb_items(requests):
+                        if not isinstance(data, dict) or data.get("needs_processing") is not True:
+                            continue
+
+                        await session.patch(fb_url(f"ai_requests/{uid}"),
+                                            json={"needs_processing": False})
+                        chat_path, messages = _mini_active_chat(uid, data)
+                        if not messages:
+                            continue
+                        if await is_user_blocked(uid):
+                            continue
+
+                        # 👤 SUHBATDOSHNI ANIQLASH.
+                        # ⚠️ ILGARI: bu yerda uid faqat lug'at KALITI sifatida ishlatilardi —
+                        #    AI kim bilan gaplashayotganini UMUMAN bilmasdi (ism ham, id ham
+                        #    promptga uzatilmasdi). Endi profil ismini o'qib, murojaat
+                        #    shaklini to'g'ri belgilaymiz (xo'jayin / oddiy mijoz).
+                        chat_name = ""
+                        try:
+                            async with session.get(fb_url(f"users/{uid}/profile")) as prof_r:
+                                prof = await prof_r.json()
+                            if isinstance(prof, dict):
+                                chat_name = str(prof.get("name") or prof.get("firstName") or "").strip()
+                        except Exception as e:
+                            logging.warning(f"Mini App AI: profil o'qilmadi ({uid}): {e}")
+
+                        async with session.get(fb_url("products")) as pr:
+                            products = await pr.json()
+
+                        # So'rovga mos mahsulotlarnigina yuboramiz (butun katalogni emas)
+                        last_user_msg = ""
+                        for m in reversed(messages):
+                            if m.get("sender") == "user":
+                                last_user_msg = str(m.get("text", ""))
+                                break
+                        relevant = _select_relevant_products(products, last_user_msg)
+
+                        def _prod_line(p):
+                            # AI ga foydali, ammo ixcham kontekst: nom, narx, mavjudlik
+                            # va (bo'lsa) mashina/izoh — shunda u to'g'ri maslahat beradi.
+                            price = 0
+                            try:
+                                price = int(float(p.get("price", 0)))
+                            except (TypeError, ValueError):
+                                price = 0
+                            parts = [f"ID:{p.get('id')}",
+                                     str(p.get("name", "")).strip(),
+                                     f"{price:,} so'm".replace(",", " ")]
+                            model = str(p.get("model", "")).strip()
+                            if _norm(model) not in _GENERIC_VALUES:
+                                parts.append(f"mashina: {model}")
+                            desc = str(p.get("desc", "")).strip()
+                            if desc and _norm(desc) not in _GENERIC_VALUES and not desc.lower().startswith("mashina:"):
+                                parts.append(desc[:60])
+                            parts.append("omborda mavjud" if _in_stock(p) else "buyurtma asosida (so'rovga ko'ra keltiriladi)")
+                            return " | ".join(parts)
+
+                        # Omborda mavjud tovarlar kontekstda BIRINCHI tursin — AI ularni
+                        # birinchi tavsiya qilsin (ishonchli, "bor" deb ayta oladigan).
+                        relevant_for_ctx = sorted(relevant, key=lambda p: 0 if _in_stock(p) else 1)
+                        prod_context = "\n".join(_prod_line(p) for p in relevant_for_ctx) or "(hozircha mos tovar yo'q)"
+                        relevant_ids = {p.get("id") for p in relevant}
+
+                        groq_msgs = [{
+                            "role": "system",
+                            "content": (
+                                "Sen 'Avto_A1' avto-ehtiyot qismlar do'konining TAJRIBALI "
+                                "sotuvchi-maslahatchisisan. Mijozga tirik, aqlli mutaxassis "
+                                "kabi yordam ber — quruq javob beruvchi bot emas.\n\n"
+                                "USLUB:\n"
+                                "- Mijoz qaysi tilda yozsa (o'zbekcha/ruscha), AYNAN o'sha tilda javob ber.\n"
+                                "- JUDA QISQA va lo'nda: 1-3 ta qisqa gap yoki kichik ro'yxat. Suv yo'q.\n"
+                                "- Samimiy, ishonchli, foydali maslahat ohangi (robotdek emas).\n\n"
+                                "VAZIFALAR:\n"
+                                "1. Mijoz ehtiyot qism so'rasa — quyidagi BAZAdan O'ZING qidirib top va tavsiya et.\n"
+                                "2. Mos tovar(lar) topsang, javob OXIRIGA aniq shu formatda yoz: [IDS: 1, 4]\n"
+                                "   (faqat haqiqiy mos ID'lar; kartochka avtomatik chiqadi — narx/nomni qayta yozma).\n"
+                                "3. So'rov noaniq bo'lsa (qaysi mashina, yili, dvigatel, old/orqa va h.k.) — "
+                                "tavsiya berishdan oldin 1 ta ANIQ savol ber.\n"
+                                "4. Imkon bo'lsa to'ldiruvchi qismni ham taklif qil (mas. kolodka so'rasa — disk/datchik).\n"
+                                "5. OMBOR: 'omborda mavjud' tovarlarni BIRINCHI tavsiya qil. Tovar "
+                                "'buyurtma asosida' bo'lsa — ISHONCH bilan ayt: bor, so'rovga ko'ra keltiramiz. "
+                                "'Bor-yo'qligini bilmayman' yoki 'aniqlashim kerak' kabi IKKILANISH iboralarini ISHLATMA.\n"
+                                "6. Bazada umuman bo'lmasa: qisqa uzr + qaysi mashinaga kerakligini so'ra yoki "
+                                f"{SHOP_PHONE} raqamiga yo'naltir.\n\n"
+                                "CHEKLOV: faqat BAZAdagi tovarlarni tavsiya qil, narxni o'zing to'qima, "
+                                "ochiq havola yozma."
+                                + _owner_identity_block(uid, chat_name)
+                                + f"\n\nDO'KON BAZASI (mavjud tovarlar):\n{prod_context}"
+                            )
+                        }]
+                        # 🖼 RASM QO'SHILGANMI — oxirgi mijoz xabarini tekshiramiz.
+                        #    Ilgari Mini App'dan rasm YUBORISH imkoni yo'q edi.
+                        #    Endi mijoz rasm biriktirsa, u `image` maydonida keladi
+                        #    va vision modelga uzatiladi.
+                        last_img = ''
+                        for m in reversed(messages):
+                            if m.get("sender") == "user":
+                                last_img = str(m.get("image") or "").strip()
+                                break
+
+                        for m in messages:
+                            role = "user" if m.get("sender") == "user" else "assistant"
+                            groq_msgs.append({"role": role, "content": str(m.get("text", ""))})
+
+                        use_model = None
+                        if last_img.startswith("http"):
+                            # Vision modelga tarix MATN ko'rinishida qoladi, faqat
+                            # OXIRGI mijoz navbati ko'p-modal (matn + rasm) bo'ladi —
+                            # `handle_photo_redirect` dagi bilan bir xil shakl.
+                            tail_text = ""
+                            for m in reversed(messages):
+                                if m.get("sender") == "user":
+                                    tail_text = str(m.get("text", "")).strip()
+                                    break
+                            if not tail_text:
+                                tail_text = ("Mijoz zapchast rasmini yubordi. Rasmga qarab bu qanday "
+                                             "zapchast ekanini aniqla va bazadan mosini taklif qil. "
+                                             "O'zingdan razmer yoki raqam TO'QIB CHIQARMA.")
+                            if groq_msgs and groq_msgs[-1].get("role") == "user":
+                                groq_msgs.pop()
+                            groq_msgs.append({
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": tail_text},
+                                    {"type": "image_url", "image_url": {"url": last_img}},
+                                ],
+                            })
+                            use_model = GROQ_VISION_MODEL
+
+                        # `model=None` -> matn modeli (avvalgidek). Rasm bo'lsa vision.
+                        bot_reply = await groq_chat(groq_msgs, model=use_model, temperature=0.4)
+                        if bot_reply is None:
+                            bot_reply = ("Uzr, hozir javob bera olmayapman 🙏 Bir oz vaqtdan so'ng qayta urinib ko'ring.\n"
+                                         "Извините, сейчас не могу ответить — попробуйте чуть позже.")
+
+                        found_ids = []
+                        match = re.search(r"\[IDS:\s*([\d,\s]+)\]", bot_reply)
+                        if match:
+                            found_ids = [int(i.strip()) for i in match.group(1).split(",") if i.strip().isdigit()]
+                            bot_reply = re.sub(r"\[IDS:\s*[\d,\s]+\]", "", bot_reply).strip()
+                            # AI faqat ko'rsatilgan bazadagi tovarlarni ko'rsatsin
+                            # (xato/yo'q ID yoki qoralama kartochka chiqib qolmasin).
+                            found_ids = [i for i in found_ids if i in relevant_ids]
+
+                        messages.append({
+                            "sender": "bot",
+                            "text": bot_reply,
+                            "found_products": found_ids,
+                            "time": int(time.time() * 1000),
+                        })
+                        # Javob AYNAN o'sha suhbatga yoziladi (yangi sxemada
+                        # ai_requests/<uid>/chats/<id>, eskisida ai_requests/<uid>).
+                        await session.patch(fb_url(chat_path),
+                                            json={"messages": messages,
+                                                  "updatedAt": int(time.time() * 1000)})
+
+            except Exception as e:
+                logging.error(f"Mini App AI xatosi: {e}")
+
+            await asyncio.sleep(2)
+
+

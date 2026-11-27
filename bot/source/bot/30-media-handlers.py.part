@@ -1,0 +1,175 @@
+# =====================================================================
+# 🔇 BOT JIM QOLADIGAN BARCHA HOLATLAR YOPILADI
+# ---------------------------------------------------------------------
+# Ilgari botda faqat MATN va RASM uchun handler bor edi. Boshqa hamma narsa
+# — ovozli xabar, video, video-xabar (doiracha), stiker, GIF, lokatsiya,
+# kontakt, audio, so'rovnoma — hech qanday handlerga TUSHMASDI va bot
+# BUTUNLAY JIM qolardi. Mijoz nuqtai nazaridan bu "bot buzuq" degani:
+# u yozgan, bot javob bermagan. Ko'pi qaytib kelmaydi.
+#
+# Eng ko'p uchraydigan holat — OVOZLI XABAR. O'zbekistonda mijozlar
+# ko'pincha yozmasdan ovozli xabar yuboradi; bot ularga bir marta ham
+# javob bermagan.
+#
+# Bu bo'lim ENG OXIRIDA turishi SHART: yuqoridagi maxsus handlerlar
+# (storis, import, rasm tahlili) avval ishlaydi, bu yerga faqat "boshqa
+# hech kim ushlamagan" xabarlar tushadi.
+# =====================================================================
+# 🎙 OVOZLI XABAR -> MATN (Groq Whisper). Ilgari bot ovozni umuman
+#    tinglamasdi — xo'jayin esa asosan ovoz bilan gaplashadi.
+STT_ENABLED = os.getenv("STT_ENABLED", "1") != "0"
+STT_MODEL = os.getenv("GROQ_STT_MODEL", "whisper-large-v3")
+STT_MAX_SEC = int(os.getenv("STT_MAX_SEC", "90"))            # mijoz uchun
+STT_MAX_SEC_OWNER = int(os.getenv("STT_MAX_SEC_OWNER", "300"))
+# Whisper'ga lug'at ishorasi: mashina va zapchast nomlarini to'g'riroq yozadi.
+_STT_HINT = {
+    "uz": ("Avto A1 avtozapchast do'koni. Cobalt, Gentra, Nexia, Damas, Spark, Lacetti, "
+           "Matiz, Malibu, Captiva, Labo, Tico. Kolodka, amortizator, svecha, filtr, moy, "
+           "kalotka, narx, qoldiq, buyurtma, chegirma, so'm, dona."),
+    "ru": ("Магазин автозапчастей Avto A1. Cobalt, Gentra, Nexia, Damas, Spark, Lacetti, "
+           "Matiz. Колодки, амортизатор, свечи, фильтр, масло, цена, остаток, заказ, скидка."),
+}
+
+
+async def transcribe_voice(file_id, lang):
+    """Ovozni matnga aylantiradi. Muvaffaqiyatsizlikda None."""
+    if groq_client is None or not STT_ENABLED:
+        return None
+    try:
+        buf = await bot.download(file_id)
+        data = buf.read() if hasattr(buf, "read") else bytes(buf or b"")
+        if not data:
+            return None
+        kw = {"file": ("voice.ogg", data), "model": STT_MODEL, "temperature": 0.0,
+              "response_format": "json"}
+        if lang in _STT_HINT:
+            kw["language"] = lang
+            kw["prompt"] = _STT_HINT[lang]
+        res = await groq_client.audio.transcriptions.create(**kw)
+        text = (getattr(res, "text", None) or (res.get("text") if isinstance(res, dict) else "") or "").strip()
+        return text or None
+    except Exception as e:
+        logging.error(f"Ovozni matnga aylantirishda xato: {e}")
+        return None
+
+
+@dp.message(StateFilter(None), F.voice | F.video_note | F.audio)
+async def handle_voice_like(message: types.Message, state: FSMContext):
+    """Ovozli xabar / doiracha — matnga aylantirib, AI ga yuboramiz.
+
+    Musiqa/audio fayl (F.audio) matnga aylantirilmaydi — u gap emas.
+    Aylantirib bo'lmasa — avvalgidek tushunarli javob.
+    """
+    uid = message.from_user.id
+    lang = await get_user_lang(uid)
+    media = message.voice or message.video_note
+    if media is not None and groq_client is not None and STT_ENABLED:
+        dur = int(getattr(media, "duration", 0) or 0)
+        limit = STT_MAX_SEC_OWNER if _is_owner(uid) else STT_MAX_SEC
+        if dur > limit:
+            await message.reply(
+                (f"Xo'jayin, ovoz juda uzun ({dur} s). {limit // 60} daqiqagacha bo'laklab yuboring."
+                 if _is_owner(uid) else
+                 (f"Голосовое слишком длинное. Отправьте до {limit} сек." if lang == "ru"
+                  else f"Ovozli xabar juda uzun. {limit} soniyagacha yuboring.")))
+            return
+        if not _rate_limited(uid, "stt"):
+            try:
+                await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+            except Exception:
+                pass
+            text = await transcribe_voice(media.file_id, lang)
+            if text:
+                await message.reply(f"🎙 <i>{html.escape(text[:700])}</i>", parse_mode="HTML")
+                await handle_ai_chat(message, state, text_override=text)
+                return
+    kb = shop_kb_for(uid, lang)   # xo'jayinga tugma yo'q
+    await message.reply(t(lang, "voice_reply"), parse_mode="HTML", reply_markup=kb)
+
+
+@dp.message(StateFilter(None), F.sticker | F.animation | F.dice)
+async def handle_sticker_like(message: types.Message):
+    """Stiker / GIF / o'yin suyagi — do'stona javob va do'kon tugmasi."""
+    lang = await get_user_lang(message.from_user.id)
+    kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
+    await message.reply(t(lang, "sticker_reply"), reply_markup=kb)
+
+
+@dp.message(StateFilter(None), F.location | F.venue)
+async def handle_location(message: types.Message):
+    """Lokatsiya — mijoz ko'pincha "qayerdasiz?" ma'nosida yuboradi.
+    Javobda DO'KON manzili, ish vaqti va xaritada ochish tugmasi beriladi."""
+    lang = await get_user_lang(message.from_user.id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=t(lang, "contact_map_btn"), url=shop_map_url())]])
+    await message.reply(
+        t(lang, "location_reply", address=esc(shop_address(lang)), hours=esc(shop_hours(lang))),
+        parse_mode="HTML", reply_markup=kb,
+    )
+
+
+@dp.message(StateFilter(None), F.contact)
+async def handle_contact_share(message: types.Message):
+    """Kontakt — ro'yxatdan o'tish oqimidan TASHQARIDA yuborilgan raqam.
+    Ilgari bu ham jim qolardi va raqam YO'QOLARDI. Endi profilga yoziladi,
+    ya'ni mijoz keyingi buyurtmada raqamini qayta kiritmaydi."""
+    lang = await get_user_lang(message.from_user.id)
+    phone = (message.contact.phone_number or "").strip()
+    if phone and not phone.startswith("+"):
+        phone = "+" + phone
+    own = account_ops.contact_is_own(message.contact.user_id, message.from_user.id)
+    try:
+        if phone:
+            user_id = message.from_user.id
+            await firebase_patch(f"users/{user_id}/profile", {"phone": phone})
+            prof = users_db.get(user_id) or {}
+            prof["phone"] = phone
+            users_db[user_id] = prof
+            # 🪪 O'Z raqami (Mini App «Raqamni tasdiqlash» yoki tugma) — ilova va
+            #    saytda shu raqam bilan Telegram hisobiga kirish ochiladi.
+            if own:
+                await link_verified_phone(user_id, phone)
+    except Exception as e:
+        logging.error(f"Kontakt raqamini saqlash xatosi: {e}")
+    kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
+    reply = t(lang, "contact_reply", phone=esc(phone or "—"))
+    if own:
+        reply += ("\n\n🔐 Raqam tasdiqlandi — endi ilova va saytda shu raqam bilan "
+                  "Telegram hisobingizga kirasiz.")
+    await message.reply(reply, parse_mode="HTML", reply_markup=kb)
+
+
+@dp.message(StateFilter(None), F.video)
+async def handle_video_other(message: types.Message):
+    """Hashtegsiz video (storis emas) — javobsiz qoldirmaymiz."""
+    lang = await get_user_lang(message.from_user.id)
+    kb = shop_kb_for(message.from_user.id, lang)   # xo'jayinga tugma yo'q
+    await message.reply(t(lang, "media_reply"), parse_mode="HTML", reply_markup=kb)
+
+
+@dp.edited_message()
+async def handle_edited_message(message: types.Message):
+    """🔇 QOLGAN JIMLIK TESHIGI TUZATILDI: TAHRIRLANGAN xabar.
+
+    Telegram tahrirlangan xabarni ALOHIDA turdagi yangilanish sifatida
+    yuboradi (`edited_message`). Botda unga handler yo'q edi — ya'ni mijoz
+    xatosini tuzatib xabarini tahrirlasa, bot HECH QANDAY javob bermasdi.
+    Mijoz esa "yozdim, javob yo'q" deb o'ylardi.
+    """
+    lang = await get_user_lang(message.from_user.id)
+    await message.reply(t(lang, "edited_reply"), parse_mode="HTML")
+
+
+@dp.message()
+async def handle_anything_else(message: types.Message, state: FSMContext):
+    """🛟 OXIRGI TO'R. Yuqoridagi hech bir handler ushlamagan HAR QANDAY xabar
+    shu yerga tushadi (so'rovnoma, o'yin, joylashuv-jonli, kelajakdagi yangi
+    Telegram turlari). Shu handler borligi uchun bot BOSHQA HECH QACHON
+    jim qolmaydi."""
+    lang = await get_user_lang(message.from_user.id)
+    if await state.get_state() is not None:
+        await message.answer(t(lang, "state_busy"))
+        return
+    await message.reply(t(lang, "fallback_reply"), parse_mode="HTML")
+
+

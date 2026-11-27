@@ -1,0 +1,137 @@
+# =====================================================================
+# MINI APP AI (mijoz chati)
+# =====================================================================
+# AI ga bir vaqtda yuboriladigan maksimal mahsulot soni (token/limit/tezlik
+# uchun). Butun katalogni yuborish katta katalogda modelni buzadi va qimmat.
+MAX_AI_PRODUCTS = 40
+
+
+# (_GENERIC_VALUES va _norm yuqorida `fb_utils` dan import qilinadi.)
+
+
+def _product_haystack(p):
+    """Mahsulotning qidiriladigan barcha matnli maydonlarini birlashtiradi."""
+    cats = " ".join(_norm(c) for c in (p.get("categories") or []))
+    return {
+        "name": _norm(p.get("name")),
+        "desc": _norm(p.get("desc")),
+        "brand": _norm(p.get("brand")),
+        "model": _norm(p.get("model")),
+        "cats": cats + " " + _norm(p.get("category")),
+    }
+
+
+def _in_stock(p):
+    """Tovar omborda bormi.
+
+    ⚠️ TUZATILDI: ilgari faqat `p["stock"]` maydoniga qarardi. Razmerli
+    tovarda esa `stock` — razmerlar yig'indisining DENORMALLASHGAN nusxasi
+    (mini app yozadi). Razmer qoldig'i «Ombor» bo'limidan alohida
+    o'zgartirilsa, `stock` eskirib qolardi va AI mijozga TUGAGAN tovarni
+    «omborda mavjud» deb aytardi. Endi razmerlar bo'lsa ular bo'yicha
+    qayta hisoblanadi (fb_utils.stock_of).
+    """
+    return stock_of(p) > 0
+
+
+def _select_relevant_products(products, query, limit=MAX_AI_PRODUCTS):
+    """So'rovga mos mahsulotlarni AQLLI tanlaydi (sotuvchi-maslahatchi kabi).
+
+    - Faqat nom emas, balki desc/brand/model/kategoriya bo'yicha ham qidiradi.
+    - Ballash: nom > model > (desc/brand/kategoriya); butun so'rov ichida bo'lsa
+      qo'shimcha ball; omborda bori biroz oldinroq turadi.
+    - Topilgan top mosликlar bilan AYNI mashina modelidagi qismlarni ham qo'shadi
+      (proaktiv kross-sell — AI to'ldiruvchi tovar taklif qila olsin).
+    - Hech narsa mos kelmasa, boshidagi `limit` tasini qaytaradi.
+    Qoralamalar (is_draft) doimo tashlanadi.
+    """
+    # #4: products RTDB'dan dict YOKI list bo'lib kelishi mumkin — normallashtiramiz.
+    products = [v for _, v in fb_items(products) if isinstance(v, dict)]
+    live = [p for p in products if not p.get("is_draft")]
+
+    q = _norm(query)
+    tokens = [t for t in re.split(r"\W+", q) if len(t) >= 2]
+    if not tokens:
+        return live[:limit]
+
+    def score(p):
+        h = _product_haystack(p)
+        s = 0.0
+        for t in tokens:
+            if t in h["name"]:
+                s += 3
+            if t in h["model"]:
+                s += 2
+            if t in h["desc"]:
+                s += 1
+            if t in h["brand"]:
+                s += 1
+            if t in h["cats"]:
+                s += 1
+        if q and q in h["name"]:   # butun so'rov nomda — kuchli signal
+            s += 4
+        if s > 0 and _in_stock(p):
+            s += 0.5
+        return s
+
+    scored = [(score(p), p) for p in live]
+    scored = [(s, p) for s, p in scored if s > 0]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    chosen = [p for _, p in scored[:limit]]
+    if not chosen:
+        return live[:limit]
+
+    # ——— Proaktiv kross-sell: top mosликlar bilan ayni ANIQ mashina modelidagi
+    #     boshqa qismlarni ham qo'shamiz (faqat generic bo'lmagan model bo'yicha).
+    if len(chosen) < limit:
+        seen = {p.get("id") for p in chosen}
+        target_models = {
+            _norm(p.get("model")) for p in chosen[:3]
+            if _norm(p.get("model")) not in _GENERIC_VALUES
+        }
+        if target_models:
+            for p in live:
+                if len(chosen) >= limit:
+                    break
+                if p.get("id") in seen:
+                    continue
+                if _norm(p.get("model")) in target_models:
+                    chosen.append(p)
+                    seen.add(p.get("id"))
+
+    return chosen
+
+
+def _mini_msgs(raw):
+    """Firebase massiv ham, lug'at ham qaytarishi mumkin — bir ko'rinishga keltiramiz."""
+    out = []
+    try:
+        for _k, v in fb_items(raw):
+            if isinstance(v, dict):
+                out.append(v)
+    except Exception:
+        pass
+    return out
+
+
+def _mini_active_chat(uid, data):
+    """Faol suhbatning YO'LI va XABARLARINI qaytaradi.
+
+    Mini App'da endi bir nechta suhbat bo'lishi mumkin («yangi chat»):
+        ai_requests/<uid>/active            -> faol suhbat id'si
+        ai_requests/<uid>/chats/<id>/messages
+
+    ⚠️ ESKI SXEMA BILAN MOSLIK: ilgari bitta cheksiz ro'yxat bor edi
+    (`ai_requests/<uid>/messages`). Eski mijozlar (keshdagi ilova)
+    hamon shunga yozishi mumkin, shuning uchun faol suhbat topilmasa
+    eski yo'lga qaytamiz. Aks holda ular javob olmay qolardi.
+    """
+    active = data.get("active")
+    chats = data.get("chats")
+    if active and isinstance(chats, dict):
+        node = chats.get(str(active))
+        if isinstance(node, dict):
+            return f"ai_requests/{uid}/chats/{active}", _mini_msgs(node.get("messages"))
+    return f"ai_requests/{uid}", _mini_msgs(data.get("messages"))
+
+

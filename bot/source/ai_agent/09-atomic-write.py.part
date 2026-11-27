@@ -1,0 +1,77 @@
+# =====================================================================
+#  ATOMIK YOZISH PRIMITIVI (optimistik qulflash)
+#
+#  NEGA SHUNCHA EHTIYOTKORLIK:
+#    `products` va `users/{uid}/orders` — RTDB'da MASSIV. Indekslar
+#    siljiydi:
+#      • mini app tovar o'chirsa (`_rewriteProductsSafely`) keyingi
+#        barcha tovar indeksi 1 ga kamayadi;
+#      • yangi buyurtma `unshift` bilan qo'shiladi, ya'ni 0-indeksga —
+#        BARCHA eski buyurtmalar suriladi.
+#    Bundan tashqari tasdiq tugmasi bosilishi bilan ko'rish orasida
+#    daqiqalar o'tishi mumkin. Ya'ni "oldin o'qib qo'yilgan indeks" ga
+#    yozish — BOSHQA tovarni buzish demakdir.
+#
+#  YECHIM: yozish paytida indeks `id` bo'yicha QAYTA topiladi, slot
+#  ETag bilan o'qiladi va `if-match` bilan yoziladi. Oradan boshqa
+#  kimsa yozib qo'ysa 412 keladi va biz qaytadan urinamiz. Ya'ni
+#  hech kimning ishi jimgina yo'qolmaydi.
+# =====================================================================
+_ATOMIC_RETRIES = 4
+
+
+def _find_index_by_id(raw, match_id, id_field="id"):
+    """Massiv/lug'atdan `id` bo'yicha RTDB kalitini topadi."""
+    want = str(match_id)
+    for key, item in fb_items(raw):
+        if isinstance(item, dict) and str(item.get(id_field)) == want:
+            return key
+    return None
+
+
+async def atomic_update_by_id(deps, base_path, match_id, mutate,
+                              id_field="id"):
+    """`base_path` massivida `id` bo'yicha yozuvni ATOMIK o'zgartiradi.
+
+    mutate(joriy_dict) -> yangi_dict | None (None = o'zgarish shart emas)
+    Qaytaradi: (muvaffaqiyatmi, xato_matni, oldingi_qiymat)
+    """
+    if not deps.can_write():
+        return False, "yozish yordamchilari sozlanmagan", None
+
+    for attempt in range(_ATOMIC_RETRIES):
+        raw = await deps.firebase_get(base_path)
+        key = _find_index_by_id(raw, match_id, id_field)
+        if key is None:
+            return False, f"yozuv topilmadi ({id_field}={match_id})", None
+
+        path = f"{base_path}/{key}"
+        etag, value = await deps.firebase_get_etag(path)
+        if not isinstance(value, dict):
+            # Slot bo'shab qolgan — indeks siljigan bo'lishi mumkin, qayta o'qiymiz.
+            continue
+        if str(value.get(id_field)) != str(match_id):
+            # Indeks siljidi: bu slotda BOSHQA yozuv turibdi. Yozmaymiz!
+            logging.info("atomic_update: indeks siljidi (%s), qayta izlanadi", path)
+            continue
+
+        try:
+            new_value = mutate(dict(value))
+        except Exception as e:
+            return False, f"o'zgartirish hisoblanmadi: {e}", value
+        if new_value is None:
+            return False, "o'zgarish talab qilinmadi", value
+
+        ok, status = await deps.firebase_put(path, new_value, etag=etag)
+        if ok:
+            return True, "", value
+        if status == 412:
+            # Poyga: oradan boshqasi yozdi. Yangi ma'lumot bilan qayta urinamiz.
+            logging.info("atomic_update: 412 (poyga) — %s, qayta urinish %s",
+                         path, attempt + 1)
+            continue
+        return False, f"bazaga yozilmadi (status={status})", value
+
+    return False, "baza band — bir oz kutib qayta urinib ko'ring", None
+
+

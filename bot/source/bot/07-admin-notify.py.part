@@ -1,0 +1,24 @@
+# =====================================================================
+# BARCHA ADMINLARGA XABAR
+#   Ilgari hamma bildirishnoma FAQAT ADMIN_IDS[0] ga borardi. Ya'ni
+#   ADMIN_IDS ga qo'shilgan boshqa adminlar yangi mijoz, xatolik yoki bot
+#   holati haqida HECH NARSA bilmasdi — do'kon bir odamga bog'lanib qolgan
+#   edi (u telefonini ko'rmasa, buyurtma javobsiz qolardi).
+#   Endi bitta yordamchi barcha adminlarga yuboradi va bittasiga yetmasa
+#   (bloklagan, chat ochilmagan) qolganlari baribir oladi.
+# =====================================================================
+async def notify_admins(text, parse_mode="HTML", exclude=None):
+    """Barcha adminlarga xabar yuboradi. Nechtasiga yetganini qaytaradi."""
+    sent = 0
+    skip = set(exclude or ())
+    for aid in ADMIN_IDS:
+        if aid in skip:
+            continue
+        try:
+            await bot.send_message(chat_id=aid, text=text, parse_mode=parse_mode)
+            sent += 1
+        except Exception as e:
+            logging.warning(f"Adminga ({aid}) xabar yuborib bo'lmadi: {e}")
+    return sent
+
+

@@ -1,0 +1,141 @@
+# =====================================================================
+#  REJA (PLAN) — o'zgarishning mashina o'qiy oladigan tavsifi
+#
+#  Bitta tuzilma TO'RT vazifani bajaradi:
+#    1) tasdiq kartochkasini chizish (xo'jayin nimani tasdiqlayotganini
+#       aynan ko'radi);
+#    2) tasdiq paytida "ma'lumot o'zgarib ketmadimi" tekshiruvi
+#       (`old` qiymatlar bilan solishtirish);
+#    3) bajarish;
+#    4) ORQAGA QAYTARISH — `set` va `old` ni almashtirish kifoya.
+#  Shu sababli reja aniq, cheklangan shakllardan iborat.
+# =====================================================================
+# Maydonni O'CHIRISH belgisi.
+# ⚠️ NEGA `None` EMAS: reja Firebase'ga saqlanadi, RTDB esa `null`
+#    qiymatli kalitni butunlay TASHLAB ketadi. Ya'ni {"oldPrice": None}
+#    saqlangach yo'qolardi va "bu maydonni o'chir" ko'rsatmasi jimgina
+#    yo'qolib, flash chegirma bekor qilinmay qolardi.
+DEL = "__del__"
+
+MAX_PRICE = 500_000_000     # 500 mln so'm — real narxdan ancha yuqori chegara
+MAX_STOCK = 100_000
+
+
+def _esc(s):
+    """Telegram HTML uchun xavfsizlashtirish."""
+    return (str(s if s is not None else "")
+            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _apply_set(obj, changes):
+    """`set` lug'atini obyektga qo'llaydi (DEL bo'lsa maydonni o'chiradi)."""
+    for field, val in (changes or {}).items():
+        if val == DEL:
+            obj.pop(field, None)
+        else:
+            obj[field] = val
+    return obj
+
+
+def _snapshot(obj, fields):
+    """`fields` bo'yicha joriy qiymatlarni oladi (yo'q maydon -> DEL)."""
+    out = {}
+    for f in fields:
+        out[f] = obj[f] if f in obj else DEL
+    return out
+
+
+def _flash_active(p):
+    """Tovarda flash chegirma HOZIR aktivmi (index.html `_flashActive` bilan bir xil)."""
+    until = safe_int((p or {}).get("flashUntil"), 0) or 0
+    old = safe_int((p or {}).get("oldPrice"), 0) or 0
+    return bool(until > int(time.time() * 1000) and old > price_of(p) > 0)
+
+
+def _pct_change(old, new):
+    old = safe_int(old, 0) or 0
+    if old <= 0:
+        return None
+    return round((safe_int(new, 0) or 0) / old * 100 - 100, 1)
+
+
+def render_plan_preview(plan, warning=""):
+    """Tasdiq kartochkasi matni (Telegram HTML)."""
+    lines = ["⚠️ <b>Tasdiqlash kerak</b>", ""]
+    for item in plan or []:
+        kind = item.get("kind")
+        label = _esc(item.get("label") or "")
+        if kind == "product":
+            lines.append(f"📦 <b>{label}</b>")
+            for field, new in (item.get("set") or {}).items():
+                old = (item.get("old") or {}).get(field, DEL)
+                lines.append("   " + _field_line(field, old, new))
+        elif kind == "product_size":
+            lines.append(f"📦 <b>{label}</b>")
+            lines.append(f"   Razmer <b>{_esc(item.get('size'))}</b> qoldiq: "
+                         f"{_esc(item.get('old'))} → <b>{_esc(item.get('set'))}</b> dona")
+        elif kind == "order_status":
+            old_l = _STATUS_LABEL.get(item.get("old"), item.get("old"))
+            new_l = _STATUS_LABEL.get(item.get("set"), item.get("set"))
+            lines.append(f"🧾 <b>Buyurtma #{_esc(item.get('code'))}</b> — {label}")
+            lines.append(f"   Holat: {_esc(old_l)} → <b>{_esc(new_l)}</b>")
+            if item.get("notify"):
+                lines.append("   <i>Mijozga xabar yuboriladi</i>")
+        lines.append("")
+    if warning:
+        lines.append(f"🔴 <b>{_esc(warning)}</b>")
+        lines.append("")
+    lines.append(f"<i>Tugma {PENDING_TTL_SEC // 60} daqiqa amal qiladi.</i>")
+    return "\n".join(lines).strip()
+
+
+def _field_line(field, old, new):
+    """Bitta maydon o'zgarishining o'qiladigan satri."""
+    names = {"price": "Narx", "stock": "Qoldiq", "name": "Nom",
+             "desc": "Tavsif", "code": "Kod", "oldPrice": "Eski narx",
+             "flashUntil": "Flash tugashi", "is_draft": "Qoralama"}
+    nm = names.get(field, field)
+    if field in ("price", "oldPrice"):
+        o = "yo'q" if old == DEL else f"{fmt_som(old)} so'm"
+        n = "o'chiriladi" if new == DEL else f"{fmt_som(new)} so'm"
+        pct = _pct_change(old, new) if (old != DEL and new != DEL) else None
+        tail = f"  ({'+' if pct and pct > 0 else ''}{pct}%)" if pct else ""
+        return f"{nm}: {o} → <b>{n}</b>{tail}"
+    if field == "is_draft":
+        return ("Holat: mijozlarga <b>KO'RINADI</b>" if new == DEL
+                else "Holat: <b>qoralamaga</b> olinadi (mijozlar ko'rmaydi)")
+    if field == "flashUntil":
+        if new == DEL:
+            return "Flash chegirma: <b>bekor qilinadi</b>"
+        left = max(0, (safe_int(new, 0) or 0) - int(time.time() * 1000)) // 60000
+        return f"Flash chegirma: <b>{left // 60} soat {left % 60} daqiqa</b>"
+    o = "bo'sh" if old == DEL else str(old)
+    n = "o'chiriladi" if new == DEL else str(new)
+    if len(o) > 60:
+        o = o[:60] + "…"
+    if len(n) > 60:
+        n = n[:60] + "…"
+    return f"{nm}: {_esc(o)} → <b>{_esc(n)}</b>"
+
+
+def _plan_plain(plan):
+    """AI ga qaytariladigan qisqa, teg'siz tavsif."""
+    out = []
+    for item in plan or []:
+        kind = item.get("kind")
+        label = item.get("label") or ""
+        if kind == "product":
+            bits = []
+            for field, new in (item.get("set") or {}).items():
+                old = (item.get("old") or {}).get(field, DEL)
+                bits.append(f"{field}: {old} -> {new}")
+            out.append(f"{label} ({'; '.join(bits)})")
+        elif kind == "product_size":
+            out.append(f"{label} razmer {item.get('size')}: "
+                       f"{item.get('old')} -> {item.get('set')}")
+        elif kind == "order_status":
+            out.append(f"buyurtma #{item.get('code')}: "
+                       f"{item.get('old')} -> {item.get('set')}")
+    return "; ".join(out)
+
+

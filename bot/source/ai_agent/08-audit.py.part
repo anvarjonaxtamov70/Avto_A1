@@ -1,0 +1,66 @@
+# =====================================================================
+#  AUDIT JURNALI
+#  Har bir agent navbati va (2-qismda) har bir o'zgartirish yoziladi.
+#  Bu ikki narsa uchun hayotiy:
+#    • Nosozlikni izlash: "AI nega shunday javob berdi?" — qaysi vosita
+#      qanday argument bilan chaqirilganini ko'rish mumkin.
+#    • 2-qismdagi ORQAGA QAYTARISH (undo) — oldingi qiymat shu yerda
+#      saqlanadi.
+# =====================================================================
+def _audit_key():
+    """Vaqt bo'yicha tartiblanadigan, to'qnashmaydigan kalit.
+
+    RTDB push-id ishlatmaymiz, chunki u POST talab qiladi; bizda esa
+    faqat PATCH yordamchisi bor. Millisekund + tasodifiy qo'shimcha
+    amalda to'qnashishni imkonsiz qiladi va kalitlar VAQT BO'YICHA
+    o'sib boradi (RTDB'da tartiblash oson).
+    """
+    return f"{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+
+
+async def audit(deps, user_id, kind, payload):
+    """Audit yozuvi. Xato bo'lsa ham asosiy ishni BUZMAYDI.
+
+    Yozilgan kalitni (yoki None) qaytaradi — «orqaga qaytarish» uchun
+    o'sha yozuvni keyin belgilash kerak bo'ladi.
+    """
+    try:
+        key = _audit_key()
+        rec = {"ts": int(time.time() * 1000), "uid": safe_int(user_id, 0) or 0,
+               "kind": str(kind)}
+        rec.update(payload or {})
+        ok = await deps.firebase_patch(f"audit_log/{key}", rec)
+        return key if ok else None
+    except Exception as e:
+        logging.warning("Audit yozilmadi (%s): %s", kind, e)
+        return None
+
+
+async def last_undoable_mutation(deps, user_id, scan=25):
+    """Oxirgi QAYTARISH mumkin bo'lgan o'zgartirishni topadi.
+
+    Butun jurnalni o'qimaymiz — RTDB so'rovi bilan faqat oxirgi `scan`
+    tasini olamiz. Audit kalitlari `<millisekund>_<tasodif>` shaklida,
+    ya'ni leksikografik tartib = vaqt tartibi (13 xonali ms yaqin
+    250 yil davomida bir xil uzunlikda qoladi).
+    """
+    if not deps.firebase_query:
+        return None, None
+    raw = await deps.firebase_query("audit_log",
+                                    {"orderBy": '"$key"', "limitToLast": str(scan)})
+    rows = [(k, v) for k, v in fb_items(raw) if isinstance(v, dict)]
+    rows.sort(key=lambda kv: kv[0], reverse=True)
+    uid = safe_int(user_id, 0) or 0
+    for key, rec in rows:
+        if rec.get("kind") != "mutation":
+            continue
+        if (safe_int(rec.get("uid"), 0) or 0) != uid:
+            continue
+        if rec.get("reverted") or rec.get("is_undo"):
+            continue
+        if not rec.get("plan"):
+            continue
+        return key, rec
+    return None, None
+
+

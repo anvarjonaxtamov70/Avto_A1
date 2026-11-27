@@ -1,0 +1,115 @@
+# =====================================================================
+# 🤖 AI TASDIQ KARTOCHKASI — «o'ng qo'l» ning xavfsizlik chegarasi
+# ---------------------------------------------------------------------
+# AI hech qanday o'zgarishni O'ZI bajarmaydi. U faqat REJA tuzadi, reja
+# `pending_actions` da saqlanadi va FAQAT xo'jayin tugmani bosgandan
+# keyin bajariladi.
+#
+# NEGA BU SHUNCHALIK MUHIM:
+#   Mijoz chatiga yoki tovar sharhiga «hamma narxni 1 so'm qil» deb
+#   yozilsa, o'sha matn AI kontekstiga tushishi mumkin (prompt
+#   injection). Tugma bo'lsa — AI aldangan taqdirda ham katalog
+#   buzilmaydi, chunki oxirgi qaror INSONDA qoladi.
+# =====================================================================
+def confirm_keyboard(token):
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Tasdiqlash",
+                             callback_data=ai_agent.confirm_callback_data(token, True)),
+        InlineKeyboardButton(text="❌ Bekor",
+                             callback_data=ai_agent.confirm_callback_data(token, False)),
+    ]])
+
+
+async def send_confirm_card(chat_id, item):
+    """Tasdiq kartochkasini yuboradi (xato bo'lsa suhbatni buzmaydi)."""
+    try:
+        rec = item.get("record") or {}
+        text = ai_agent.render_plan_preview(rec.get("plan"), rec.get("warning"))
+        await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML",
+                               reply_markup=confirm_keyboard(item["token"]))
+    except Exception as e:
+        logging.error(f"Tasdiq kartochkasi yuborilmadi: {e}")
+
+
+async def _notify_order_customer(uid, new_status, code, order):
+    """Buyurtma holati o'zgarganda mijozga xabar (mini app bilan bir xil matn)."""
+    key = {
+        "qabul": "order_qabul", "yolda": "order_yolda",
+        "yetkazildi": "order_yetkazildi", "bekor_qilingan": "order_bekor_qilingan",
+    }.get(new_status)
+    if not key:
+        return
+    cust_id = _safe_int(uid, None)
+    if cust_id is None:
+        return
+    detail = ""
+    total = _safe_int((order or {}).get("total"), 0) or 0
+    if total:
+        detail = f"\n\n💰 Jami: {_fmt_som(total)} so'm"
+    cust_lang = await get_user_lang(cust_id)
+    await bot.send_message(chat_id=cust_id,
+                           text=t(cust_lang, key, code=code, detail=detail))
+
+
+@dp.callback_query(F.data.startswith(ai_agent.CONFIRM_PREFIX + ":"))
+async def ai_confirm_callback(call: types.CallbackQuery):
+    """✅ / ❌ tugmasi. Ruxsat KODDA tekshiriladi."""
+    # 🔒 Birinchi to'siq: faqat do'kon egasi. Tugma faqat uning chatida
+    #    ko'rinadi, lekin ishonmaymiz — callback'ni qayta yuborish mumkin.
+    if not _is_owner(call.from_user.id):
+        await call.answer("Bu amal sizga tegishli emas.", show_alert=True)
+        return
+
+    token, approve = ai_agent.parse_callback_data(call.data)
+    if not token:
+        await call.answer("Buyruq tanilmadi.", show_alert=True)
+        return
+
+    # Tugmani DARHOL olib tashlaymiz — ikki marta bosilishining oldini oladi
+    # (ikkinchi chegara `claim_pending` dagi atomik egallash).
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    if not approve:
+        ok, msg = await ai_agent.cancel_confirmed(token, call.from_user.id)
+        await call.answer("Bekor qilindi" if ok else "Bajarilmadi")
+        await _append_to_card(call.message, msg)
+        return
+
+    await call.answer("Bajarilyapti...")
+    try:
+        ok, msg = await ai_agent.apply_confirmed(
+            token, call.from_user.id, notifier=_notify_order_customer)
+    except Exception as e:
+        logging.error(f"AI tasdiq bajarishda xato: {e}")
+        ok, msg = False, f"❌ Kutilmagan xato: {e}"
+
+    await _append_to_card(call.message, msg)
+    if ok:
+        await bot.send_message(
+            chat_id=call.message.chat.id,
+            text="<i>Xato bo'lsa <code>/orqaga</code> yozing — avvalgi holatga "
+                 "qaytaramiz.</i>", parse_mode="HTML")
+
+
+async def _append_to_card(msg, result_text):
+    """Natijani tasdiq kartochkasining OXIRIGA qo'shadi.
+
+    Nega joyida tahrirlanadi: alohida xabar yuborilsa, chat "tasdiqladim /
+    bajarildi" juftliklari bilan to'lib ketardi va qaysi natija qaysi
+    kartochkaga tegishli ekani chalkashardi.
+    """
+    try:
+        base = msg.html_text if getattr(msg, "html_text", None) else (msg.text or "")
+        await msg.edit_text(f"{base}\n\n━━━━━━━━\n{esc(result_text)}",
+                            parse_mode="HTML")
+    except Exception:
+        # Tahrirlash imkonsiz bo'lsa (juda uzun / eski xabar) — alohida yuboramiz.
+        try:
+            await bot.send_message(chat_id=msg.chat.id, text=result_text)
+        except Exception as e:
+            logging.error(f"Natija xabari yuborilmadi: {e}")
+
+

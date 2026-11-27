@@ -1,0 +1,70 @@
+# =====================================================================
+#  AVTO A1 — Telegram bot (toza, ortiqchasiz versiya)
+#  - Maxfiy kalitlar .env dan o'qiladi (kodda token yo'q)
+#  - Firebase'ga service-account TOKEN bilan yoziladi (401 yo'q)
+#  - Groq AI: markaziy groq_chat() yordamchisi (retry + xato boshqaruvi)
+#  - Olib tashlangan: Yandex/DuckDuckGo/Google rasm qidiruvi, remove.bg,
+#    ImgBB, PDF import (ishlamaydigan / keraksiz kodlar)
+#
+#  Ishga tushirish:
+#    1) pip install -r requirements.txt
+#    2) .env.example -> .env nusxalang, qiymatlarni to'ldiring
+#    3) Firebase Console > Project Settings > Service accounts >
+#       "Generate new private key" -> serviceAccount.json deb shu papkaga saqlang
+#    4) python bot.py
+# =====================================================================
+
+import asyncio
+import base64
+import binascii
+import json
+import logging
+import html
+import math
+import os
+import re
+import time
+import urllib.parse
+from collections import OrderedDict
+from datetime import datetime, timedelta, timezone
+
+import aiohttp
+from dotenv import load_dotenv
+
+import google.auth.transport.requests
+from google.oauth2 import service_account
+
+from groq import AsyncGroq
+from aiogram import BaseMiddleware, Bot, Dispatcher, types, F
+from aiogram.filters import Command, StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import (InlineKeyboardMarkup, InlineKeyboardButton,
+                           ReplyKeyboardMarkup, KeyboardButton,
+                           ReplyKeyboardRemove, WebAppInfo,
+                           BotCommand, BotCommandScopeAllPrivateChats,
+                           BotCommandScopeChat)
+
+from bulk_import_fixed import process_ai_bulk_requests_v2
+
+# 🧰 Umumiy, SOF yordamchilar — bot.py va ai_agent.py BIRGA ishlatadi.
+#    Ilgari bular faqat shu faylda edi; agent ham aynan shu mantiqqa
+#    muhtoj bo'lgani uchun bitta manbaga (fb_utils) ko'chirildi — aks
+#    holda vaqt o'tib ikki nusxa bir-biridan ajralib, bot bir xil
+#    savolga ikki xil raqam qaytarardi.
+from fb_utils import (GENERIC_VALUES as _GENERIC_VALUES,
+                      fb_items,
+                      fmt_som as _fmt_som,
+                      norm as _norm,
+                      order_items_pairs as _order_items_pairs,
+                      safe_int as _safe_int,
+                      stock_of)
+# 🤖 Xo'jayin AI agenti (tool calling). Sozlamalarini `init()` ichida
+#    o'qiydi, shuning uchun import tartibi muhim emas.
+import ai_agent
+# 🧾 Buyurtma tugmalari va Worker bilan imzolangan aloqa (sof modul).
+import order_ops
+# 🪪 Yagona hisob (raqam bo'yicha kirish, kontakt tasdig'i) va storis javoblari.
+import account_ops
+

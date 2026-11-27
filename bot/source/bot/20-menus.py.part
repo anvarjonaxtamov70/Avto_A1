@@ -1,0 +1,57 @@
+# =====================================================================
+# MENYULAR
+# =====================================================================
+def main_menu(lang=DEFAULT_LANG, registered=True):
+    """Til bo'yicha asosiy menyu (do'kon / aloqa / til almashtirish).
+
+    registered=False bo'lsa (telefon hali yo'q) — ixtiyoriy 'ro'yxatdan o'tish'
+    tugmasi ham qo'shiladi. Ro'yxatdan o'tish MAJBURIY emas: mijoz do'konni
+    bemalol ko'radi, telefon faqat buyurtma berishda so'raladi.
+    """
+    b = BTN.get(lang, BTN[DEFAULT_LANG])
+    rows = [[KeyboardButton(text=b["shop"])]]
+    if not registered:
+        rows.append([KeyboardButton(text=b["register"])])
+    rows.append([KeyboardButton(text=b["contact"])])
+    rows.append([KeyboardButton(text=b["lang"])])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def phone_kb(lang=DEFAULT_LANG):
+    """Til bo'yicha 'raqamni yuborish' tugmasi."""
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=t(lang, "phone_send"), request_contact=True)]],
+        resize_keyboard=True, one_time_keyboard=True,
+    )
+
+
+def lang_inline_kb(current=None):
+    """Til tanlash inline klaviaturasi (har holatda ishlaydi — callback orqali).
+
+    current berilsa, FAOL til yonida ✓ belgisi ko'rsatiladi — mijoz qaysi til
+    yoqilganini darrov ko'radi (professional, nozik ko'rinish). Har til alohida
+    qatorda — ixcham emas, keng va o'qish oson.
+    """
+    def _btn(code, flag, name):
+        mark = "   ✓" if current == code else ""
+        return InlineKeyboardButton(text=f"{flag}  {name}{mark}", callback_data=f"setlang:{code}")
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [_btn("uz", "🇺🇿", "O'zbekcha")],
+        [_btn("ru", "🇷🇺", "Русский")],
+    ])
+
+
+viloyatlar_menyu = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Toshkent shahri"), KeyboardButton(text="Toshkent viloyati")],
+        [KeyboardButton(text="Samarqand viloyati"), KeyboardButton(text="Buxoro viloyati")],
+        [KeyboardButton(text="Andijon viloyati"), KeyboardButton(text="Farg'ona viloyati")],
+        [KeyboardButton(text="Namangan viloyati"), KeyboardButton(text="Sirdaryo viloyati")],
+        [KeyboardButton(text="Jizzax viloyati"), KeyboardButton(text="Qashqadaryo viloyati")],
+        [KeyboardButton(text="Surxondaryo viloyati"), KeyboardButton(text="Navoiy viloyati")],
+        [KeyboardButton(text="Xorazm viloyati"), KeyboardButton(text="Qoraqalpog'iston Resp.")],
+    ],
+    resize_keyboard=True, one_time_keyboard=True,
+)
+
+

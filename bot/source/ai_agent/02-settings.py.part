@@ -1,0 +1,73 @@
+# =====================================================================
+#  SOZLAMALAR
+#
+#  ⚠️ NEGA `init()` ICHIDA O'QILADI (modul yuklanganda EMAS):
+#     `bot.py` da `load_dotenv()` IMPORTLARDAN KEYIN chaqiriladi. Agar bu
+#     qiymatlar modul yuklanish paytida o'qilsa, `.env` fayldagi
+#     AI_AGENT_ENABLED va boshqalar HAR DOIM e'tiborsiz qolardi (jimgina —
+#     eng yomon xato turi). Shuning uchun konfiguratsiya `init()` da,
+#     ya'ni .env yuklangandan keyin o'qiladi.
+# =====================================================================
+# Agentni ishlab turgan serverda DARHOL o'chirish uchun bayroq. Tool
+# calling kutilmagan xato bersa, Render panelida AI_AGENT_ENABLED=0
+# qo'yish kifoya — bot eski (snapshot) yo'liga qaytadi, deploy shart emas.
+AGENT_ENABLED = True
+# Vosita chaqiruvlari halqasi necha marta aylanishi mumkin. Har aylanish =
+# 1 ta Groq so'rovi. 4 — real savollar uchun yetarli (mas. "avval qidir,
+# keyin batafsilini ol"), lekin cheksiz halqaga yo'l qo'ymaydi.
+MAX_TOOL_ROUNDS = 4
+# Bitta aylanishda bajariladigan maksimal vosita soni (model ba'zan
+# 10 ta chaqiruvni birdan so'raydi).
+MAX_CALLS_PER_ROUND = 5
+# Bitta vosita natijasining maksimal uzunligi (belgi) — kontekstni
+# to'ldirib yubormaslik uchun.
+TOOL_RESULT_LIMIT = 6000
+# O'qish vositalarini ham audit jurnaliga yozishmi (odatda shart emas —
+# faqat nosozlikni izlashda yoqiladi).
+AUDIT_READS = False
+
+# ——— YOZISH (2-qism) ———
+# Yozish vositalarini butunlay o'chirish bayrog'i. O'chirilganda agent
+# faqat o'qiydi (1-qismdagi holat). O'qishni saqlab, yozishni tezda
+# to'xtatish kerak bo'lsa — aynan shu.
+WRITE_ENABLED = True
+# Tasdiq tugmasi qancha vaqt amal qiladi (soniya).
+PENDING_TTL_SEC = 300
+# Bitta savolda AI eng ko'p nechta o'zgartirish taklif qila oladi.
+MAX_PENDING_PER_TURN = 3
+# Narx shu foizdan ko'p o'zgarsa — tasdiq kartochkasida KATTA ogohlantirish.
+BIG_CHANGE_PCT = 50
+# Ommaviy amalda eng ko'p nechta tovarga tegish mumkin.
+MAX_BULK_ITEMS = 30
+
+# Ro'yxatlarda qaytariladigan maksimal element (AI kontekstini tejash).
+_MAX_LIST = 25
+
+
+def _flag(name, default=False):
+    """Env bayrog'ini o'qiydi ("1/true/yes/on" -> True)."""
+    raw = os.getenv(name)
+    if raw is None or not str(raw).strip():
+        return default
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _load_config():
+    """.env yuklangandan KEYIN sozlamalarni o'qiydi (init ichidan)."""
+    global AGENT_ENABLED, MAX_TOOL_ROUNDS, MAX_CALLS_PER_ROUND
+    global TOOL_RESULT_LIMIT, AUDIT_READS, WRITE_ENABLED
+    global PENDING_TTL_SEC, MAX_PENDING_PER_TURN, BIG_CHANGE_PCT, MAX_BULK_ITEMS
+    AGENT_ENABLED = _flag("AI_AGENT_ENABLED", True)
+    WRITE_ENABLED = _flag("AI_AGENT_WRITE_ENABLED", True)
+    AUDIT_READS = _flag("AI_AUDIT_READS", False)
+    # Chegaralar: aqldan ozgan qiymat (0 yoki 500) kiritilsa ham bot
+    # ishlashda davom etsin.
+    MAX_TOOL_ROUNDS = max(1, min(safe_int(os.getenv("AI_AGENT_MAX_ROUNDS"), 4) or 4, 8))
+    MAX_CALLS_PER_ROUND = max(1, min(safe_int(os.getenv("AI_AGENT_MAX_CALLS"), 5) or 5, 10))
+    TOOL_RESULT_LIMIT = max(1000, min(safe_int(os.getenv("AI_AGENT_RESULT_LIMIT"), 6000) or 6000, 20000))
+    PENDING_TTL_SEC = max(60, min(safe_int(os.getenv("AI_AGENT_CONFIRM_TTL"), 300) or 300, 3600))
+    MAX_PENDING_PER_TURN = max(1, min(safe_int(os.getenv("AI_AGENT_MAX_PENDING"), 3) or 3, 10))
+    BIG_CHANGE_PCT = max(5, min(safe_int(os.getenv("AI_AGENT_BIG_CHANGE_PCT"), 50) or 50, 500))
+    MAX_BULK_ITEMS = max(1, min(safe_int(os.getenv("AI_AGENT_MAX_BULK"), 30) or 30, 100))
+
+

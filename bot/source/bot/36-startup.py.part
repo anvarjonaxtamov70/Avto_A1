@@ -1,0 +1,125 @@
+# =====================================================================
+# BOTNI ISHGA TUSHIRISH
+# =====================================================================
+async def setup_bot_commands():
+    """Telegram'dagi «Menu» tugmasiga buyruqlar ro'yxatini yozadi.
+
+    Ilgari `set_my_commands` UMUMAN chaqirilmagan edi: foydalanuvchi
+    yozuv maydonining yonidagi «Menu» tugmasini bosganda BO'SH ro'yxat
+    ko'rardi va botning nimalar qila olishini bilmasdi. Buyruqlarni
+    yodda tutish ham kerak emas — Telegram o'zi taklif qiladi.
+
+    Adminlarga QO'SHIMCHA buyruqlar ko'rsatiladi (faqat o'z chatlarida),
+    mijozlar ularni ko'rmaydi.
+    """
+    common = [
+        BotCommand(command="start", description="Boshlash / Начать"),
+        BotCommand(command="help", description="Yordam / Помощь"),
+        BotCommand(command="til", description="Til almashtirish / Сменить язык"),
+        BotCommand(command="bekor", description="Bekor qilish / Отменить"),
+    ]
+    try:
+        await bot.set_my_commands(common, scope=BotCommandScopeAllPrivateChats())
+    except Exception as e:
+        logging.warning(f"Buyruqlar ro'yxatini yozib bo'lmadi: {e}")
+
+    admin_extra = common + [
+        BotCommand(command="storis", description="Storis hashteglari"),
+        BotCommand(command="hisobot", description="Savdo va ombor hisoboti"),
+    ]
+    # `/orqaga` FAQAT do'kon egasiga ko'rsatiladi: boshqa adminlar uni
+    # ishlatolmaydi (handler `_is_owner` ni tekshiradi), ro'yxatda turishi
+    # esa chalkashlik keltirardi.
+    owner_extra = admin_extra + [
+        BotCommand(command="panel", description="Xo'jayin paneli (tugmalar)"),
+        BotCommand(command="orqaga", description="Oxirgi AI o'zgarishini qaytarish"),
+    ]
+    # Egasi ADMIN_IDS da bo'lmasa ham o'z buyruqlarini ko'rsin.
+    for aid in sorted(set(ADMIN_IDS) | {OWNER_TG_ID}):
+        try:
+            await bot.set_my_commands(
+                owner_extra if _is_owner(aid) else admin_extra,
+                scope=BotCommandScopeChat(chat_id=aid))
+        except Exception as e:
+            logging.warning(f"Admin ({aid}) buyruqlarini yozib bo'lmadi: {e}")
+
+
+async def main():
+    logging.info("Bot ishga tushdi!")
+    global products_lock
+    products_lock = asyncio.Lock()  # event loop ishga tushgach yaratamiz
+
+    # Bepul bulut hostingda (Render) web service uxlab qolmasligi uchun
+    # kichik health-check serverini yoqamiz (PORT berilgan bo'lsa).
+    await start_health_server()
+
+    # O'zini-o'zi uyg'oq tutish (self-ping) — Render bepul tarifda uxlab
+    # qolmasligi uchun. Tashqi xizmat (UptimeRobot) shart emas.
+    asyncio.create_task(keep_awake())
+
+    # Birinchi tokenni OLDINDAN olamiz (to_thread — event loop bloklanmaydi),
+    # so'ng fonda muntazam yangilab turuvchi vazifani ishga tushiramiz.
+    await refresh_firebase_token()
+    asyncio.create_task(firebase_token_refresher())
+
+    # 🤖 AI agentiga kerakli funksiyalarni beramiz (dependency injection).
+    #    Aylanma import bo'lmasligi uchun ai_agent bot.py ni IMPORT QILMAYDI —
+    #    kerak bo'lgan hamma narsani shu yerdan oladi.
+    #    `_is_owner` uzatilishi SHART: ruxsat tekshiruvi promptda emas, KODDA.
+    agent_deps = ai_agent.init(
+        firebase_get=firebase_get, firebase_patch=firebase_patch,
+        groq_raw=groq_raw, is_owner=_is_owner,
+        # Yozish uchun (tasdiqlangan o'zgarishlar): ETag bilan atomik yozish.
+        firebase_get_etag=firebase_get_etag, firebase_put=firebase_put,
+        firebase_delete=firebase_delete, firebase_query=firebase_query,
+        # Buyurtma holati FAQAT Worker orqali (stok, cashback, xabarlar u yerda).
+        order_status=agent_order_status,
+    )
+    # Yetkazilmay qolgan buyurtma bildirishnomalarini qayta urish.
+    asyncio.create_task(order_outbox_watchdog())
+    # Muddati o'tgan tasdiqlarni tozalab turuvchi fon vazifasi — aks holda
+    # `pending_actions` tuguni bosilmagan tugmalar bilan to'lib borardi.
+    asyncio.create_task(ai_agent.pending_janitor(agent_deps))
+
+    asyncio.create_task(process_mini_app_ai())
+    # 🔐 admin_ids UZATILISHI SHART — aks holda AI ommaviy so'rovlari qayta
+    #    ishlanmaydi (oddiy mijoz katalogga tovar qo'shishining oldini oladi).
+    asyncio.create_task(process_ai_bulk_requests_v2(bot, fb_url, groq_client, fetch_yandex_image,
+                                                    products_lock, ADMIN_IDS))
+    asyncio.create_task(process_ai_admin_tasks(bot))
+    # (process_new_orders O'CHIRILDI — yuqoridagi izohga qara)
+
+    # #6: avval webhookni va kutilayotgan yangilanishlarni tozalaymiz — bu
+    # "409 Conflict" (webhook + getUpdates yoki eski navbat) sababini yo'qotadi.
+    # Eslatma: botni AYNI vaqtda IKKI nusxada ishga tushirmang — Telegram baribir
+    # 409 beradi (har bir bot uchun faqat bitta getUpdates iste'molchisi bo'ladi).
+    await bot.delete_webhook(drop_pending_updates=True)
+
+    # Telegram «Menu» tugmasidagi buyruqlar ro'yxati (ilgari bo'sh edi).
+    await setup_bot_commands()
+
+    # Adminga "yoqildi" xabari — deploy muvaffaqiyatli bo'lganini bilish uchun.
+    await notify_admin_lifecycle(started=True)
+
+    # "O'chdi" xabari — dispatcher to'xtash hodisasiga ulanadi (Render SIGTERM
+    # yuborganda ham ishlaydi). getattr bilan ehtiyot: aiogram versiyasida bu
+    # observer bo'lmasa ham bot ishga tushishdan to'xtab qolmaydi.
+    shutdown_observer = getattr(dp, "shutdown", None)
+    if shutdown_observer is not None:
+        try:
+            shutdown_observer.register(_on_shutdown)
+        except Exception as e:
+            logging.warning(f"Shutdown hook ro'yxatga olinmadi: {e}")
+
+    # ⛔ Bloklangan foydalanuvchilar filtri — barcha handlerlardan oldin ishlaydi
+    dp.update.outer_middleware(BlockedUserMiddleware())
+
+    await dp.start_polling(bot, drop_pending_updates=True,
+                           allowed_updates=dp.resolve_used_update_types())
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Bot to'xtatildi.")

@@ -1,0 +1,107 @@
+# =====================================================================
+#  AGENT HALQASI
+# =====================================================================
+async def run_agent(messages, user_id, temperature=0.2, force_tool=False):
+    """Tool calling halqasi. `AgentResult` qaytaradi.
+
+    ⚠️ MUHIM: `messages` NUSXA olinadi. Vosita (`tool`) xabarlari asosiy
+       suhbat tarixiga (ai_sessions) TUSHMASLIGI SHART. Sabab: bot tarixni
+       "system + oxirgi 16 xabar" bo'yicha qirqadi. Agar qirqish `assistant`
+       (tool_calls bilan) xabarini kesib, unga tegishli `tool` xabarini
+       qoldirsa — Groq keyingi navbatda 400 xato beradi va AI butunlay
+       ishlamay qoladi. Nusxa bilan bu xavf butunlay yo'qoladi.
+
+    Muvaffaqiyatsizlikda `text=None` qaytadi — chaqiruvchi eski yo'lga
+    qaytishi mumkin.
+    """
+    if _deps is None:
+        return AgentResult()
+
+    ctx = TurnContext(_deps, user_id)
+    work = list(messages)
+    # Yozish vositalari FAQAT egasiga va faqat yozish yoqilganda ko'rsatiladi.
+    # Model ko'rmagan vositani chaqirmaydi — bu birinchi to'siq;
+    # ikkinchisi `execute_tool` dagi kod tekshiruvi.
+    allow_write = bool(WRITE_ENABLED and _deps.can_write() and _deps.is_owner(user_id))
+    specs = groq_tool_specs(include_mutating=allow_write)
+
+    for round_i in range(MAX_TOOL_ROUNDS):
+        # 🎯 Raqam/tovar savolida BIRINCHI aylanishda vosita chaqirish majburiy
+        #    ("required") — model bazaga qaramay "xotiradan" javob bermasin.
+        #    Model/provayder "required" ni qo'llamasa — oddiy "auto" bilan
+        #    qayta urinamiz (javobsiz qolmaslik uchun).
+        choice = "required" if (force_tool and round_i == 0) else "auto"
+        msg = await _deps.groq_raw(work, tools=specs, tool_choice=choice,
+                                   temperature=temperature)
+        if msg is None and choice == "required":
+            logging.warning("Agent: tool_choice=required rad etildi — auto bilan qayta")
+            msg = await _deps.groq_raw(work, tools=specs, tool_choice="auto",
+                                       temperature=temperature)
+        if msg is None:
+            logging.error("Agent: Groq javob bermadi (aylanish %s)", round_i + 1)
+            return AgentResult(None, ctx.calls, ctx.pending)
+
+        tool_calls = list(getattr(msg, "tool_calls", None) or [])
+        if not tool_calls:
+            return AgentResult((msg.content or "").strip(), ctx.calls, ctx.pending)
+
+        # Assistant xabarini API kutgan AYNAN shaklda qaytaramiz.
+        work.append({
+            "role": "assistant",
+            "content": msg.content or "",
+            "tool_calls": [{
+                "id": tc.id,
+                "type": "function",
+                "function": {"name": tc.function.name,
+                             "arguments": tc.function.arguments or "{}"},
+            } for tc in tool_calls],
+        })
+
+        # ⚠️ HAR BIR tool_call_id uchun javob QAYTARISH SHART. Chegaradan
+        #    oshganlarini BAJARMAYMIZ, lekin ularga ham xato javobi
+        #    yozamiz — aks holda API "javobsiz tool_call" deb 400 beradi.
+        for i, tc in enumerate(tool_calls):
+            if i < MAX_CALLS_PER_ROUND:
+                result = await execute_tool(ctx, tc.function.name, tc.function.arguments)
+            else:
+                result = _err(f"bir vaqtda {MAX_CALLS_PER_ROUND} tadan ko'p vosita "
+                              "chaqirib bo'lmaydi — muhimlarini tanlab qayta so'ra")
+            work.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": _tool_result_text(result),
+            })
+
+    # Aylanishlar tugadi — vositasiz YAKUNIY javob so'raymiz, shunda
+    # foydalanuvchi bo'sh javob olmaydi.
+    logging.warning("Agent: %s aylanish tugadi, yakuniy javob so'ralyapti (uid=%s)",
+                    MAX_TOOL_ROUNDS, user_id)
+    work.append({
+        "role": "system",
+        "content": ("Vosita chaqirish chegarasi tugadi. Endi BOSHQA vosita "
+                    "chaqirmasdan, yuqorida olingan ma'lumot asosida qisqa "
+                    "yakuniy javob yoz."),
+    })
+    final = await _deps.groq_raw(work, temperature=temperature)
+    if final is None:
+        return AgentResult(None, ctx.calls, ctx.pending)
+    return AgentResult((final.content or "").strip(), ctx.calls, ctx.pending)
+
+
+async def run_owner_agent(messages, user_id, temperature=0.2, force_tool=False):
+    """Xo'jayin uchun agent navbati + audit yozuvi."""
+    res = await run_agent(messages, user_id, temperature=temperature, force_tool=force_tool)
+    calls = res.calls
+    # Audit: har bir o'qishni yozish shovqin bo'ladi, shuning uchun faqat
+    # (a) xato bo'lganda, (b) o'zgartirish TAKLIF qilinganda, (c) ataylab
+    # yoqilganda (AI_AUDIT_READS=1) yoziladi.
+    should = bool(res.pending) or AUDIT_READS or any(f for _, _, f in calls)
+    if calls and should:
+        await audit(_deps, user_id, "agent_turn", {
+            "tools": [{"name": n, "args": a, "failed": f} for n, a, f in calls][:10],
+            "answered": res.text is not None,
+            "proposed": len(res.pending),
+        })
+    return res
+
+

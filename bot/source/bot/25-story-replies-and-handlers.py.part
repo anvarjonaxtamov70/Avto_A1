@@ -1,0 +1,410 @@
+# =====================================================================
+# 💬 STORIS JAVOBIGA ADMIN JAVOBI
+#   Worker (/story-reply) adminlarga «✍️ Javob yozish» (`sra:<qisqa>`) tugmali
+#   kartochka yuboradi. Admin bosadi -> keyingi matni Worker (/story-answer)
+#   orqali mijozga boradi: ilovada (storis suhbati + 🔔) va Telegram'da.
+#   Mijoz ilova yoki saytdan yozgan bo'lsa ham (Telegram'i yo'q) — yetadi.
+#   ⚠️ Bu handler `handle_ai_chat` (F.text) dan OLDIN ro'yxatdan o'tishi
+#      shart, aks holda u «state_busy» deb javob berardi.
+# =====================================================================
+@dp.callback_query(F.data.startswith("sra:"))
+async def story_answer_start(call: types.CallbackQuery, state: FSMContext):
+    if call.from_user.id not in ADMIN_IDS:
+        await call.answer("Bu tugma faqat adminlar uchun.", show_alert=True)
+        return
+    short = account_ops.parse_story_callback(call.data)
+    if not short:
+        await call.answer("Tugma eskirgan.", show_alert=True)
+        return
+    idx = await firebase_get(f"story_reply_index/{short}")
+    if not isinstance(idx, dict) or not idx.get("uid"):
+        await call.answer("Mijoz javobi topilmadi (o'chirilgan bo'lishi mumkin).", show_alert=True)
+        return
+    name = str(idx.get("n") or "Mijoz")[:60]
+    await state.set_state(StoryAnswer.text)
+    await state.update_data(sra_short=short, sra_name=name)
+    await call.answer()
+    await call.message.answer(
+        f"✍️ <b>{esc(name)}</b> ga javobingizni yozing — u mijozga ilovada va "
+        "Telegram'da boradi.\n\n<i>Bekor qilish: /bekor</i>",
+        parse_mode="HTML")
+
+
+@dp.message(StoryAnswer.text, not_a_command)
+async def story_answer_text(message: types.Message, state: FSMContext):
+    text = (message.text or message.caption or "").strip()
+    if not text:
+        await message.answer("Javobni matn bilan yozing. Bekor qilish: /bekor")
+        return
+    data = await state.get_data()
+    short = data.get("sra_short")
+    name = data.get("sra_name") or "Mijoz"
+    await state.clear()
+    if not short:
+        await message.answer("Javob kimga ekanligi yo'qoldi — kartochkadagi «✍️ Javob yozish» ni qayta bosing.")
+        return
+    ok, code, resp = await account_ops.worker_story_answer(
+        WORKER_URL, API_TOKEN, message.from_user.id, short, text[:1000])
+    if ok:
+        where = "ilovada va Telegram'da" if resp.get("telegram") == "sent" else "ilovada (🔔 bildirishnoma)"
+        await message.answer(f"✅ Javob yuborildi — {esc(name)} {where} ko'radi.", parse_mode="HTML")
+    else:
+        logging.warning("Storis javobi yuborilmadi: %s %s", code, resp)
+        await message.answer("❌ " + account_ops.story_answer_error_text(code, resp))
+
+
+@dp.message(Command("start"))
+async def start_command(message: types.Message, state: FSMContext):
+    await state.clear()
+    user_id = message.from_user.id
+
+    # 📱 Ilovadan kelgan «Telegram orqali kirish» havolasi
+    if await maybe_app_login_start(message):
+        return
+    # 📱 Ilovadagi «Raqamni Telegram'da ulashing» (raqam bilan kirish uchun)
+    if await maybe_phone_link_start(message):
+        return
+    # 🗑 Saytdagi «Hisobni o'chirish» sahifasidan (t.me/<bot>?start=delete)
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) > 1 and parts[1].strip() == "delete":
+        await delete_account_command(message, state)
+        return
+
+    # 👔 XO'JAYIN: mijoz oqimi (til tanlash / ro'yxatdan o'tish / menyu)
+    #    unga umuman kerak emas. Kunda bir marta salom, tugmalarsiz.
+    if _is_owner(user_id):
+        greet = await _owner_needs_greeting(user_id)
+        if greet:
+            await message.answer(
+                "Assalomu alaykum, Xo'jayin. Pastdagi paneldan foydalaning yoki "
+                "shunchaki yozing / 🎙 ovoz yuboring — bajaraman.",
+                reply_markup=owner_menu(),
+            )
+            await _mark_owner_greeted(user_id)
+        else:
+            await message.answer("Tinglayman, Xo'jayin.", reply_markup=owner_menu())
+        _owner_kb_cleared.add(user_id)
+        return
+
+    existing_user = await firebase_get(f"users/{user_id}/profile")
+    if existing_user and existing_user.get("lang"):
+        users_db[user_id] = existing_user
+        # Yangi registration profilga yozilgan, lekin RTDB/Telegram vaqtincha
+        # ishlamagan bo'lsa keyingi /start yetishmagan proyeksiyani tiklaydi.
+        # Eski (rolloutdan oldingi) profillarda registrationCompletedAt yo'q —
+        # ular qayta «yangi mijoz» deb e'lon qilinmaydi.
+        if existing_user.get("registrationCompletedAt"):
+            try:
+                await register_new_customer_once(message.from_user, existing_user)
+            except Exception as e:
+                logging.error(f"Yangi mijoz hodisasi reconcile bo'lmadi ({user_id}): {e}")
+        lang = existing_user.get("lang", DEFAULT_LANG)
+        has_phone = bool(existing_user.get("phone"))
+        if has_phone:
+            name = existing_user.get("name", message.from_user.first_name)
+            await message.answer(
+                t(lang, "welcome_back", name=esc(name), shop=shop_label(lang)),
+                reply_markup=main_menu(lang, registered=True), parse_mode="HTML",
+            )
+        else:
+            # Tili ma'lum, lekin telefon yo'q — qayta til so'ramaymiz, bemalol ko'rsin.
+            await message.answer(
+                t(lang, "welcome_browse", shop=shop_label(lang)),
+                reply_markup=main_menu(lang, registered=False), parse_mode="HTML",
+            )
+    else:
+        # Yangi foydalanuvchi: faqat tilni so'raymiz, keyin do'konni BEMALOL ko'rsin
+        # (majburiy ro'yxatdan o'tish yo'q — telefon buyurtmada so'raladi).
+        await message.answer(t(DEFAULT_LANG, "welcome_new"), reply_markup=ReplyKeyboardRemove())
+        await message.answer(t(DEFAULT_LANG, "choose_lang"), reply_markup=lang_inline_kb(), parse_mode="HTML")
+        await state.set_state(Register.lang)
+
+
+@dp.message(Command("help", "yordam"))
+async def help_command(message: types.Message):
+    """/help — ilgari BOTDA UMUMAN YO'Q edi.
+
+    Yangi mijoz botga kirib nima qilishni bilmasdi: buyruqlar ro'yxati ham,
+    "menga shunchaki yozing" degan tushuntirish ham yo'q edi. Endi bitta
+    joyda: nima qila olishim, buyruqlar va aloqa raqami.
+    """
+    if _is_owner(message.from_user.id):
+        _owner_kb_cleared.add(message.from_user.id)
+        await message.answer(OWNER_HELP, parse_mode="HTML", reply_markup=owner_menu())
+        return
+    lang = await get_user_lang(message.from_user.id)
+    text = t(lang, "help", shop=esc(shop_label(lang)), phone=esc(SHOP_PHONE))
+    if message.from_user.id in ADMIN_IDS:
+        text += t(lang, "help_admin")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=shop_label(lang), web_app=WebAppInfo(url=MINI_APP_URL))]])
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@dp.message(StateFilter("*"), Command("bekor", "cancel"))
+async def cancel_command(message: types.Message, state: FSMContext):
+    """/bekor — boshlangan amalni to'xtatadi.
+
+    Ilgari bekor qilish IMKONI YO'Q edi: ro'yxatdan o'tishni yoki Excel
+    importini boshlagan odam oxirigacha bormasa, bot undan tinmay ma'lumot
+    so'rab turardi va boshqa hech narsaga javob bermasdi.
+    """
+    lang = await get_user_lang(message.from_user.id)
+    had_state = await state.get_state() is not None
+    await state.clear()
+    prof = users_db.get(message.from_user.id) or {}
+    await message.answer(
+        t(lang, "cancel_done" if had_state else "cancel_nothing"),
+        reply_markup=main_menu(lang, registered=bool(prof.get("phone"))),
+    )
+
+
+@dp.message(Command("til", "language"))
+async def change_language_command(message: types.Message):
+    lang = await get_user_lang(message.from_user.id)
+    await message.answer(t(lang, "choose_lang"), reply_markup=lang_inline_kb(current=lang), parse_mode="HTML")
+
+
+@dp.callback_query(F.data.startswith("setlang:"))
+async def set_language(call: types.CallbackQuery, state: FSMContext):
+    lang = call.data.split(":", 1)[1]
+    if lang not in SUPPORTED_LANGS:
+        lang = DEFAULT_LANG
+
+    # 1-holat: yangi foydalanuvchi ro'yxatdan o'tish boshida til tanladi.
+    # Endi MAJBURIY ism/telefon so'ramaymiz — tilni saqlaymiz va do'konni bemalol
+    # ko'rishi uchun asosiy menyuni ochamiz (browse-first). Telefon buyurtmada so'raladi.
+    if await state.get_state() == Register.lang.state:
+        await state.clear()
+        user_id = call.from_user.id
+        prof = users_db.get(user_id) or {}
+        prof["lang"] = lang
+        users_db[user_id] = prof
+        # Tilni darhol profilga yozamiz — keyingi /start da qayta so'ralmaydi.
+        # Bu hali ro'yxatdan o'tish EMAS (`registered=False`): yangi mijoz
+        # hodisasi ism/telefon/viloyat saqlangan haqiqiy registration oxirida yaratiladi.
+        await firebase_patch(f"users/{user_id}/profile", {"lang": lang})
+        try:
+            await call.message.edit_text(t(lang, "lang_set"))
+        except Exception:
+            pass
+        await call.message.answer(
+            t(lang, "welcome_browse", shop=shop_label(lang)),
+            reply_markup=main_menu(lang, registered=False), parse_mode="HTML",
+        )
+        await call.answer()
+        return
+
+    # 2-holat: mavjud foydalanuvchi tilni almashtirdi -> profilga saqlaymiz
+    user_id = call.from_user.id
+    prof = users_db.get(user_id) or (await firebase_get(f"users/{user_id}/profile")) or {}
+    prev_lang = prof.get("lang", DEFAULT_LANG)
+
+    # Allaqachon shu til tanlangan bo'lsa — ortiqcha xabar yubormaymiz, faqat nozik
+    # toast ko'rsatamiz va ✓ belgisini joyida yangilab qo'yamiz.
+    if prev_lang == lang:
+        await call.answer(t(lang, "lang_already"))
+        try:
+            await call.message.edit_reply_markup(reply_markup=lang_inline_kb(current=lang))
+        except Exception:
+            pass
+        return
+
+    prof["lang"] = lang
+    users_db[user_id] = prof
+    await firebase_patch(f"users/{user_id}/profile", {"lang": lang})
+
+    # Tanlangan xabarni JOYIDA yangilaymiz: tasdiq matni + ✓ belgili klaviatura.
+    try:
+        await call.message.edit_text(
+            f"✅ {esc(t(lang, 'lang_set'))}",
+            reply_markup=lang_inline_kb(current=lang), parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await call.answer("✓")
+    # Menyuni yangi tilda yangilaymiz (reply keyboard — buni faqat yangi xabar bilan
+    # almashtirish mumkin, shuning uchun bitta ixcham xabar yuboramiz).
+    await call.message.answer(
+        t(lang, "menu"),
+        reply_markup=main_menu(lang, registered=bool(prof.get("phone"))),
+    )
+
+
+@dp.message(Register.lang, not_a_command)
+async def register_lang_fallback(message: types.Message):
+    """🔇 ENG OG'IR JIMLIK shu yerda edi.
+
+    /start bosgan YANGI foydalanuvchi `Register.lang` holatiga o'tadi va til
+    tugmalarini oladi. Agar u tugmani bosmasdan matn yozsa (ko'pchilik shunday
+    qiladi: "salom", "narxi qancha?"), hech bir handler bu holatni
+    ushlamasdi — AI handleri esa `state is not None` bo'lsa jimgina
+    chiqib ketardi. Natija: mijozning BOTGA BIRINCHI xabari javobsiz qolardi.
+    Endi til tugmalari xushmuomala tarzda qayta ko'rsatiladi.
+    """
+    await message.answer(t(DEFAULT_LANG, "lang_pick_again"),
+                         reply_markup=lang_inline_kb(), parse_mode="HTML")
+
+
+@dp.message(Register.name, not_a_command)
+async def get_name(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", DEFAULT_LANG)
+    # Ilgari matn tekshirilmasdi: mijoz stiker/ovoz yuborsa ism `None` bo'lib
+    # bazaga yozilardi. Endi qayta so'raymiz (bot jim ham qolmaydi).
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer(t(lang, "ask_name"), parse_mode="HTML")
+        return
+    await state.update_data(name=name)
+    await message.answer(t(lang, "ask_phone"), reply_markup=phone_kb(lang), parse_mode="HTML")
+    await state.set_state(Register.phone)
+
+
+@dp.message(Register.phone, not_a_command)
+async def get_phone(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", DEFAULT_LANG)
+    if message.contact:
+        phone = message.contact.phone_number
+        if not phone.startswith("+"):
+            phone = "+" + phone
+        # Telegram tasdiqlagan O'Z raqami — ilova/saytda shu raqam bilan kirish uchun.
+        if account_ops.contact_is_own(message.contact.user_id, message.from_user.id):
+            await link_verified_phone(message.from_user.id, phone)
+    else:
+        phone = normalize_phone(message.text)
+        if not phone:
+            await message.answer(
+                t(lang, "phone_invalid"),
+                reply_markup=phone_kb(lang), parse_mode="HTML",
+            )
+            return  # holatda qolamiz — qayta so'raymiz
+    await state.update_data(phone=phone)
+    await message.answer(t(lang, "ask_region"), reply_markup=viloyatlar_menyu, parse_mode="HTML")
+    await state.set_state(Register.region)
+
+
+@dp.message(Register.region, not_a_command)
+async def get_region(message: types.Message, state: FSMContext):
+    region = (message.text or "").strip()
+    data = await state.get_data()
+    if not region:
+        # Matn emas (stiker/rasm) — viloyat `None` bo'lib yozilib qolmasin.
+        await message.answer(t(data.get("lang", DEFAULT_LANG), "ask_region"),
+                             reply_markup=viloyatlar_menyu, parse_mode="HTML")
+        return
+    name = data.get("name")
+    phone = data.get("phone")
+    lang = data.get("lang", DEFAULT_LANG)
+    user_id = message.from_user.id
+    username = message.from_user.username
+    first_name = message.from_user.first_name
+    last_name = message.from_user.last_name or ""
+
+    users_db[user_id] = {"name": name, "phone": phone, "address": region, "lang": lang}
+    profile_data = {
+        "uid": user_id, "name": name, "phone": phone, "address": region, "lang": lang,
+        "username": f"@{username}" if username else "Yo'q",
+        "firstName": first_name, "lastName": last_name,
+        "registrationCompletedAt": int(time.time() * 1000),
+    }
+    profile_saved = await firebase_patch(f"users/{user_id}/profile", profile_data)
+
+    # Eski oqim barcha adminlarga yana xabar yuborardi. Endi bot / Mini App
+    # bir xil deterministic marker ishlatadi va faqat bitta admin chatiga bir marta yuboradi.
+    if profile_saved:
+        try:
+            await register_new_customer_once(message.from_user, profile_data)
+        except Exception as e:
+            logging.error(f"Yangi mijoz hodisasi yakunlanmadi ({user_id}): {e}")
+    else:
+        logging.error(f"Yangi mijoz profili saqlanmadi, hodisa yuborilmadi ({user_id})")
+
+    await message.answer(
+        t(lang, "register_success", shop=shop_label(lang)),
+        reply_markup=main_menu(lang, registered=True), parse_mode="HTML",
+    )
+    await state.clear()
+
+
+@dp.message(F.text.in_(REGISTER_BUTTONS))
+async def register_button_handler(message: types.Message, state: FSMContext):
+    """Ixtiyoriy ro'yxatdan o'tishni boshlaydi (mijoz o'zi xohlasa).
+
+    Browse-first oqimida ro'yxatdan o'tish MAJBURIY emas; bu tugma faqat
+    keyingi buyurtmalarni tezlashtirishni istagan mijozlar uchun.
+    """
+    lang = await get_user_lang(message.from_user.id)
+    await state.update_data(lang=lang)
+    await message.answer(t(lang, "register_intro"), reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
+    await state.set_state(Register.name)
+
+
+@dp.message(F.text.in_(LANG_BUTTONS))
+async def lang_button_handler(message: types.Message):
+    lang = await get_user_lang(message.from_user.id)
+    await message.answer(t(lang, "choose_lang"), reply_markup=lang_inline_kb(current=lang), parse_mode="HTML")
+
+
+@dp.message(F.text.in_(SHOP_BUTTONS))
+async def interaktiv_menyu_handler(message: types.Message):
+    user_id = message.from_user.id
+    if user_id not in users_db:
+        existing = await firebase_get(f"users/{user_id}/profile")
+        if existing and existing.get("phone"):
+            users_db[user_id] = existing
+
+    lang = users_db.get(user_id, {}).get("lang", DEFAULT_LANG) if users_db.get(user_id) else DEFAULT_LANG
+    if user_id in users_db and users_db[user_id].get("phone"):
+        u = users_db[user_id]
+        safe_name = urllib.parse.quote(str(u.get("name", message.from_user.first_name)))
+        safe_phone = urllib.parse.quote(str(u.get("phone", "")))
+        safe_region = urllib.parse.quote(str(u.get("address", "Noma'lum")))
+        dynamic_url = f"{MINI_APP_URL}?name={safe_name}&phone={safe_phone}&region={safe_region}"
+    else:
+        safe_name = urllib.parse.quote(str(message.from_user.first_name))
+        dynamic_url = f"{MINI_APP_URL}?name={safe_name}"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=t(lang, "shop_btn_inline"), web_app=WebAppInfo(url=dynamic_url))]])
+    await message.answer(t(lang, "shop_prompt"), reply_markup=kb)
+
+
+@dp.message(F.text.in_(CONTACT_BUTTONS))
+async def contact_handler(message: types.Message):
+    lang = await get_user_lang(message.from_user.id)
+    text = t(lang, "contact_info",
+             shop=esc(SHOP_NAME), admin=esc(SHOP_ADMIN), phone=esc(SHOP_PHONE),
+             tg=esc(SHOP_TELEGRAM), address=esc(shop_address(lang)), hours=esc(shop_hours(lang)))
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=t(lang, "contact_map_btn"), url=shop_map_url())]])
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+    # Koordinatalar sozlangan bo'lsa — xaritada jonli lokatsiya nuqtasini ham yuboramiz.
+    if SHOP_LAT and SHOP_LNG:
+        try:
+            await message.answer_location(latitude=float(SHOP_LAT), longitude=float(SHOP_LNG))
+        except Exception as e:
+            logging.error(f"Lokatsiya yuborish xatosi: {e}")
+
+
+@dp.message(Command("storis", "kategoriyalar"))
+async def story_categories_command(message: types.Message):
+    # Admin storis hashteglarini yoddan bilishi shart emas — shu buyruq ro'yxatni ko'rsatadi.
+    if not _is_admin(message.from_user.id):
+        # Mijoz bu yashirin buyruqni tasodifan yozsa — ilgari JIMLIK edi.
+        lang = await get_user_lang(message.from_user.id)
+        await message.answer(t(lang, "unknown_command"), parse_mode="HTML")
+        return
+    await message.answer(story_categories_text(), parse_mode="HTML")
+
+
+# (O'CHIRILDI: `handle_webapp_data` / "edit_status". U HECH QACHON ishlamasdi:
+#  Mini App `Telegram.WebApp.sendData` ni chaqirmaydi, bot esa ilovani inline
+#  tugma orqali ochadi — u yerda `sendData` umuman ishlamaydi. Buyurtma holati
+#  endi Worker /order-status orqali o'zgaradi va xabarlarni Worker yuboradi;
+#  adminlar kartochkadagi tugmalardan foydalanadi — pastdagi
+#  `order_button_callback` ga qarang.)
+
+
