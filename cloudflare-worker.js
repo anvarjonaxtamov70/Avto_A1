@@ -1721,6 +1721,12 @@ async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
         return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available: 0, requested: item.qty } } };
       }
 
+      // A quote can become stale if an admin hides the product before reservation.
+      // Existing reservations above remain idempotent during recovery.
+      if (product.is_draft === true) {
+        return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available: 0, requested: item.qty } } };
+      }
+
       let available;
       if (item.sizeKey !== null) {
         if (!product.sizes || !product.sizes[item.sizeKey] || String(product.sizes[item.sizeKey].size) !== item.size) {
