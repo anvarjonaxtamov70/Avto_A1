@@ -1,0 +1,115 @@
+
+/* ===========================================================================
+   1) ⭐ 5 YULDUZLI REYTING — Yandex Taxi uslubi (nozik, xushbichim)
+   Texnika: ostida xira 5 yulduz, ustida tilla 5 yulduz `width: %` bilan
+   kesilgan -> kasrli baho (4.3 -> 86%) aniq ko'rinadi. Bitta element,
+   animatsiya yo'q (skroll silliqligi buzilmaydi).
+   =========================================================================== */
+.cr-stars {
+    position: relative; display: inline-block; flex: none;
+    font-size: 11px; line-height: 1; letter-spacing: 1.2px;
+    font-family: -apple-system, "Segoe UI Symbol", sans-serif;
+    white-space: nowrap; vertical-align: -1px;
+    -webkit-user-select: none; user-select: none;
+}
+.cr-stars i {                       /* xira asos (5 ta) */
+    font-style: normal; color: rgba(255,255,255,.20);
+}
+.cr-stars b {                       /* tilla to'ldirilgan qism */
+    position: absolute; inset: 0 auto 0 0; overflow: hidden;
+    font-weight: 400; color: var(--luxury-gold, #C9A84C);
+    white-space: nowrap; letter-spacing: inherit;
+}
+.card-rating .cr-val { font-size: 11.5px; font-weight: 800; letter-spacing: 0; }
+.card-rating .cr-cnt { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--text-muted, #8a8a8a); }
+/* Reyting yo'q tovarlarda joy band qilmaydi */
+.card-rating { gap: 4px !important; }
+
+/* Kattaroq variant — tovar oynasidagi o'rtacha baho */
+.cr-stars.cr-big { font-size: 15px; letter-spacing: 2px; vertical-align: -2px; }
+#pm-avg-rating { display: inline-flex; align-items: center; gap: 6px; }
+#pm-avg-rating .cr-val { font-size: 14px; font-weight: 800; }
+#pm-avg-rating .cr-cnt { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+
+html[data-theme="light"] .cr-stars i { color: rgba(0,0,0,.16); }
+html[data-theme="light"] .cr-stars b { color: var(--luxury-gold-dark, #7A5E12); }
+
+/* ===========================================================================
+   2) 👁 SEGMENTLI HALQA — qaysi storis ko'rilmaganini ko'rsatadi
+   =========================================================================== */
+.story-ring.segmented {
+    position: relative; border: none !important; background: transparent;
+    padding: 2.5px !important; box-shadow: none !important;
+    animation: none !important; overflow: visible;
+}
+.story-ring.segmented::before {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; padding: 2.5px;
+    background: var(--ring-grad, conic-gradient(#C9A84C, #C9A84C));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none;
+    filter: drop-shadow(0 0 5px rgba(212,175,55,.35));
+}
+/* Ko'rilmaganlar soni — nozik tilla nishoncha */
+.story-item { position: relative; }
+.story-unseen-badge {
+    position: absolute; top: -2px; right: 0; z-index: 3;
+    min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box;
+    border-radius: 999px; background: var(--gold-gradient, #C9A84C); color: #2a2000;
+    font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
+    border: 2px solid var(--bg-dark, #121212);
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+html[data-theme="light"] .story-unseen-badge { border-color: #FCFBF8; }
+
+/* ===========================================================================
+   3) ✨ STORIS OYNASI — OCHILISH / YOPILISH / YUKLANISH ANIMATSIYALARI
+   ⚠️ Eski `instaZoom` to'g'ridan #story-viewer elementiga bog'langan edi va
+      sahifa yuklanganda (oyna display:none holatida) bir marta o'ynab tugardi —
+      ya'ni ochilish animatsiyasi AMALDA YO'Q edi. Endi klass bilan boshqariladi.
+   =========================================================================== */
+#story-viewer { animation: none !important; }   /* eski o'lik animatsiyani bekor qilamiz */
+
+@keyframes svOpen {
+    0%   { opacity: 0; transform: scale(.88) translateY(18px); }
+    60%  { opacity: 1; }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+#story-viewer.sv-opening { animation: svOpen .42s cubic-bezier(.2,.9,.25,1) both !important; }
+
+/* Kontent silliq paydo bo'ladi (har storis almashganda) */
+@keyframes svContentIn { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+#story-content > img, #story-content > video {
+    animation: svContentIn .35s ease both;
+}
+
+/* 🌫 Yuklanish holati — chiroyli, "tirik" ko'rinish */
+#stVideo.stv-loading, #stImg.stv-loading { filter: blur(14px) saturate(1.1); opacity: .75; transform: scale(1.04); }
+#stVideo, #stImg { transition: filter .45s ease, opacity .45s ease, transform .45s ease; }
+
+.sv-loader { pointer-events: none; }
+/* Spinner atrofida yumshoq tilla nafas — kutish zerikarli bo'lmasin */
+.sv-loader::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 130px; height: 130px;
+    transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(201,168,76,.16), transparent 68%);
+    animation: svGlowPulse 1.8s ease-in-out infinite;
+}
+@keyframes svGlowPulse {
+    0%, 100% { opacity: .35; transform: translate(-50%, -50%) scale(.85); }
+    50%      { opacity: .9;  transform: translate(-50%, -50%) scale(1.1); }
+}
+
+/* Progress chizig'i — silliqroq */
+.story-progress-fill {
+    transition: width .12s linear;
+    box-shadow: 0 0 6px rgba(255,255,255,.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #story-viewer.sv-opening,
+    #story-content > img, #story-content > video { animation: none !important; }
+    .sv-loader::after { animation: none !important; }
+    #stVideo, #stImg { transition: none !important; }
+}
+html.lite .sv-loader::after { animation: none !important; }

@@ -1,0 +1,200 @@
+
+#a1sv { position: fixed; inset: 0; z-index: 99990; display: none; background: #000; color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+    --sv-top: var(--safe-top, 0px); --sv-bot: env(safe-area-inset-bottom, 0px); --sv-foot: 0px; --sv-r: 0px;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: contain; touch-action: none; }
+#a1sv.on { display: block; }
+html.a1sv-lock, html.a1sv-lock body { overflow: hidden !important; }
+/* Uzun ekranli telefonlar (Instagram kabi, JS `.tall` qo'yadi): media pastki panel
+   USTIDA tugaydi — javob paneli kontentni yopmaydi. Qisqa ekranda — ustma-ust. */
+#a1sv.tall { --sv-foot: 62px; --sv-r: 14px; }
+#a1sv .a1sv-deck { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
+#a1sv.tall .a1sv-deck { top: var(--sv-top); bottom: calc(var(--sv-foot) + var(--sv-bot)); }
+#a1sv .a1sv-card { position: absolute; inset: 0; overflow: hidden; border-radius: var(--sv-r); background: #0b0b0c; transform-origin: 50% 50%; will-change: transform, opacity; contain: layout paint; }
+#a1sv .a1sv-card[hidden] { display: none; }
+/* ——— media ——— */
+#a1sv .a1sv-media, #a1sv .a1sv-m { position: absolute; inset: 0; }
+#a1sv .a1sv-m { opacity: 0; }
+#a1sv .a1sv-m.is-on { opacity: 1; }
+#a1sv .a1sv-el { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: transparent; display: block; }
+#a1sv .a1sv-m[data-fit="cover"] .a1sv-el { object-fit: cover; }
+#a1sv .a1sv-bd { position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover; filter: blur(28px) saturate(1.25) brightness(.62); transform: translateZ(0); opacity: .9; }
+#a1sv .a1sv-m[data-fit="cover"] .a1sv-bd { display: none; }
+html[data-perf="low"] #a1sv .a1sv-bd, html.lite #a1sv .a1sv-bd { display: none; }
+#a1sv video.a1sv-el::-webkit-media-controls { display: none !important; }
+/* ——— o'qilishi uchun yumshoq gradientlar (blur emas) ——— */
+#a1sv .a1sv-gt, #a1sv .a1sv-gb { position: absolute; left: 0; right: 0; pointer-events: none; }
+#a1sv .a1sv-gt { top: 0; height: 132px; background: linear-gradient(180deg, rgba(0,0,0,.52), rgba(0,0,0,.18) 55%, transparent); }
+#a1sv .a1sv-gb { bottom: 0; height: 190px; background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,.2) 55%, transparent); opacity: 0; transition: opacity .25s ease; }
+#a1sv .a1sv-card.has-cap .a1sv-gb, #a1sv:not(.tall) .a1sv-card .a1sv-gb { opacity: 1; }
+/* ——— tepa: chiziqlar + sarlavha ——— */
+#a1sv .a1sv-top { position: absolute; left: 0; right: 0; top: 0; padding: calc(8px + var(--sv-top)) 10px 0; z-index: 3; transition: opacity .2s ease; }
+#a1sv.tall .a1sv-top { padding-top: 8px; }
+#a1sv .a1sv-bars { display: flex; gap: 3px; height: 2.5px; }
+#a1sv .a1sv-bars > span { flex: 1; position: relative; overflow: hidden; border-radius: 2px; background: rgba(255,255,255,.34); box-shadow: 0 0 2px rgba(0,0,0,.18); }
+#a1sv .a1sv-bars > span > i { position: absolute; inset: 0; background: #fff; transform-origin: 0 50%; transform: scaleX(0); border-radius: 2px; }
+#a1sv .a1sv-bars > span.done > i { transform: scaleX(1); }
+#a1sv .a1sv-head { display: flex; align-items: center; gap: 10px; margin-top: 10px; min-height: 40px; }
+#a1sv .a1sv-av { width: 34px; height: 34px; border-radius: 50%; flex: none; overflow: hidden; background: #222; box-shadow: 0 0 0 1.5px rgba(226,196,110,.95), 0 2px 8px rgba(0,0,0,.35); }
+#a1sv .a1sv-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#a1sv .a1sv-id { min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.18; text-shadow: 0 1px 6px rgba(0,0,0,.45); }
+#a1sv .a1sv-id b { font-size: 15px; font-weight: 600; letter-spacing: -.24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#a1sv .a1sv-id b i { font-style: normal; font-weight: 400; color: rgba(255,255,255,.72); margin-left: 6px; }
+#a1sv .a1sv-id span { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: rgba(255,255,255,.8); }
+#a1sv .a1sv-id span svg { width: 13px; height: 13px; flex: none; }
+#a1sv .a1sv-acts { display: flex; align-items: center; gap: 6px; flex: none; }
+#a1sv .a1sv-btn { width: 36px; height: 36px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; color: #fff; cursor: pointer;
+    background: rgba(28,28,30,.34); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.2), 0 2px 10px rgba(0,0,0,.18); -webkit-tap-highlight-color: transparent; transition: transform .16s ease, background .16s ease; }
+#a1sv .a1sv-btn:active { transform: scale(.88); background: rgba(255,255,255,.22); }
+#a1sv .a1sv-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+#a1sv .a1sv-btn[hidden] { display: none; }
+/* ——— o'rtadagi holatlar ——— */
+#a1sv .a1sv-spin { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; z-index: 2; opacity: 0; transition: opacity .2s ease; pointer-events: none; }
+#a1sv .a1sv-spin.on { opacity: 1; }
+#a1sv .a1sv-spin i { position: absolute; inset: 0; border-radius: 50%; border: 3px solid rgba(255,255,255,.22); border-top-color: #fff; }
+#a1sv .a1sv-err { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4; display: none; flex-direction: column; align-items: center; gap: 12px; text-align: center; width: 78%; }
+#a1sv .a1sv-err.on { display: flex; }
+#a1sv .a1sv-err b { font-size: 16px; font-weight: 600; }
+#a1sv .a1sv-err span { font-size: 13.5px; color: rgba(255,255,255,.7); }
+#a1sv .a1sv-err button { margin-top: 4px; height: 38px; padding: 0 18px; border-radius: 19px; border: 0; font-weight: 600; font-size: 15px; line-height: 1; font-family: inherit; color: #000; background: #fff; }
+#a1sv .a1sv-hint { position: absolute; left: 50%; top: 50%; z-index: 5; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 22px; font-size: 14.5px; font-weight: 600; white-space: nowrap;
+    background: rgba(20,20,22,.62); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 8px; }
+#a1sv .a1sv-hint svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+/* ——— matn + "Batafsil" ——— */
+#a1sv .a1sv-cap { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 0 18px 18px; display: none; flex-direction: column; align-items: flex-start; gap: 12px; transition: opacity .2s ease; }
+#a1sv .a1sv-card.has-cap .a1sv-cap { display: flex; }
+#a1sv:not(.tall) .a1sv-cap { padding-bottom: calc(76px + var(--sv-bot)); }
+#a1sv .a1sv-cap p { margin: 0; font-size: 17px; font-weight: 500; line-height: 1.32; letter-spacing: -.3px; text-shadow: 0 1px 10px rgba(0,0,0,.6); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+#a1sv .a1sv-cap p:empty { display: none; }
+#a1sv .a1sv-link { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px 0 18px; border-radius: 20px; border: 0; font-weight: 600; font-size: 15.5px; line-height: 1; font-family: inherit; letter-spacing: -.2px;
+    color: #000; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.28); }
+#a1sv .a1sv-link[hidden] { display: none; }
+#a1sv .a1sv-link svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+/* ——— pastki panel ——— */
+#a1sv .a1sv-foot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; padding: 8px 12px calc(8px + var(--sv-bot)); transition: opacity .2s ease, transform .25s ease; }
+#a1sv:not(.tall) .a1sv-foot { background: linear-gradient(0deg, rgba(0,0,0,.45), transparent); }
+#a1sv .a1sv-row { display: flex; align-items: center; gap: 8px; min-height: 46px; }
+#a1sv .a1sv-row[hidden] { display: none; }
+#a1sv .a1sv-reply { flex: 1; min-width: 0; height: 46px; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 18px; border-radius: 23px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.42); background: rgba(0,0,0,.08); margin: 0; }
+#a1sv .a1sv-reply input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: #fff; font-weight: 400; font-size: 16px; line-height: 1.2; font-family: inherit; letter-spacing: -.25px; -webkit-user-select: text; user-select: text; }
+#a1sv .a1sv-reply input::placeholder { color: rgba(255,255,255,.74); }
+#a1sv .a1sv-send { width: 36px; height: 36px; flex: none; border-radius: 50%; border: 0; display: none; place-items: center; color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #d4af37 52%, #a8851f); }
+#a1sv .a1sv-reply.has-text .a1sv-send { display: grid; }
+#a1sv .a1sv-send svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+#a1sv .a1sv-ic { width: 44px; height: 44px; flex: none; border: 0; padding: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: transparent; -webkit-tap-highlight-color: transparent; transition: transform .16s ease; }
+#a1sv .a1sv-ic:active { transform: scale(.86); }
+#a1sv .a1sv-ic svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+#a1sv .a1sv-ic.on svg { fill: #ff3b5c; stroke: #ff3b5c; }
+#a1sv .a1sv-tray { position: absolute; left: 12px; right: 12px; bottom: calc(100% + 2px); display: flex; justify-content: space-between; padding: 6px 8px; border-radius: 28px;
+    background: rgba(30,30,32,.9); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.14), 0 12px 30px -10px rgba(0,0,0,.6); opacity: 0; transform: translateY(8px) scale(.98); pointer-events: none; transition: opacity .2s ease, transform .25s cubic-bezier(.2,.9,.25,1); }
+#a1sv .a1sv-tray.on { opacity: 1; transform: none; pointer-events: auto; }
+#a1sv .a1sv-tray button { width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; font-size: 27px; line-height: 1; padding: 0; transition: transform .16s ease, background .16s ease; }
+#a1sv .a1sv-tray button:active { transform: scale(1.25); }
+#a1sv .a1sv-tray button.on { background: rgba(226,196,110,.22); }
+/* Mijozning O'Z javobi (ilgari ko'rinmasdi) */
+#a1sv .a1sv-mine { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin: 0 2px 8px; }
+#a1sv .a1sv-mine[hidden] { display: none; }
+#a1sv .a1sv-bub { max-width: 82%; padding: 8px 12px 7px; border-radius: 18px 18px 6px 18px; font-size: 14.5px; line-height: 1.3; letter-spacing: -.2px; color: #1a1405;
+    background: linear-gradient(135deg, #f6dc7e, #e2c46e); box-shadow: 0 6px 16px -8px rgba(0,0,0,.6); word-break: break-word; }
+#a1sv .a1sv-bub.is-emo { font-size: 26px; line-height: 1; padding: 6px 10px; background: rgba(255,255,255,.14); }
+#a1sv .a1sv-bub small { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; opacity: .62; text-align: right; }
+/* Admin paneli */
+#a1sv .a1sv-pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 8px; border: 0; border-radius: 20px; color: #fff; font-weight: 600; font-size: 14.5px; line-height: 1; font-family: inherit; letter-spacing: -.2px;
+    background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16); }
+#a1sv .a1sv-pill:active { background: rgba(255,255,255,.2); }
+#a1sv .a1sv-pill svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+#a1sv .a1sv-pill em { font-style: normal; font-weight: 400; color: rgba(255,255,255,.7); }
+#a1sv .a1sv-faces { display: inline-flex; }
+#a1sv .a1sv-faces:empty { display: none; }
+#a1sv .a1sv-faces i { width: 26px; height: 26px; border-radius: 50%; margin-left: -8px; display: grid; place-items: center; font-weight: 700; font-size: 11px; line-height: 1; font-family: inherit; font-style: normal; color: #1a1405; overflow: hidden;
+    background: linear-gradient(135deg, #f6dc7e, #c9a84c); box-shadow: 0 0 0 2px #000; }
+#a1sv .a1sv-faces i:first-child { margin-left: 0; }
+#a1sv .a1sv-faces img { width: 100%; height: 100%; object-fit: cover; }
+#a1sv .a1sv-flex { flex: 1; }
+/* Bosib turilganda — "toza ko'rinish" (Instagram kabi) */
+#a1sv.is-hold .a1sv-card .a1sv-top, #a1sv.is-hold .a1sv-card .a1sv-cap, #a1sv.is-hold .a1sv-foot { opacity: 0; }
+#a1sv.is-typing .a1sv-card .a1sv-cap { opacity: 0; }
+/* Klaviatura ochilganda panel yuqoriga */
+#a1sv.is-typing .a1sv-foot { background: rgba(0,0,0,.55); }
+
+/* ═══ STATISTIKA (iOS 26 sheet) — viewer ustida ham, admin boshqaruvida ham ═══ */
+#a1sv-ins { position: fixed; inset: 0; z-index: 99995; display: none; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+    --in-bg: #1c1c1e; --in-card: #2c2c2e; --in-tx: #fff; --in-tx2: rgba(235,235,245,.6); --in-sep: rgba(84,84,88,.6); --in-fill: rgba(118,118,128,.24); --in-gold: #e2c46e; }
+#a1sv-ins.on { display: block; }
+html[data-theme="light"] #a1sv-ins:not(.is-dark) { --in-bg: #f2f2f7; --in-card: #fff; --in-tx: #000; --in-tx2: rgba(60,60,67,.6); --in-sep: rgba(60,60,67,.18); --in-fill: rgba(118,118,128,.12); --in-gold: #9c7c20; }
+#a1sv-ins .in-dim { position: absolute; inset: 0; background: rgba(0,0,0,.42); opacity: 0; }
+#a1sv-ins .in-sheet { position: absolute; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); max-height: min(78vh, 680px); display: flex; flex-direction: column;
+    border-radius: 30px; background: var(--in-bg); color: var(--in-tx); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.08), 0 24px 60px -12px rgba(0,0,0,.55); overflow: hidden; will-change: transform; }
+#a1sv-ins .in-grab { width: 36px; height: 5px; border-radius: 3px; margin: 7px auto 0; background: var(--in-tx2); opacity: .45; flex: none; }
+#a1sv-ins .in-hd { display: flex; align-items: center; gap: 12px; padding: 10px 14px 6px 18px; flex: none; }
+#a1sv-ins .in-th { width: 44px; height: 44px; border-radius: 11px; overflow: hidden; flex: none; background: var(--in-card); }
+#a1sv-ins .in-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#a1sv-ins .in-tt { flex: 1; min-width: 0; }
+#a1sv-ins .in-tt b { display: block; font-size: 19px; font-weight: 700; letter-spacing: -.45px; }
+#a1sv-ins .in-tt span { display: block; font-size: 13.5px; color: var(--in-tx2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#a1sv-ins .in-x { width: 32px; height: 32px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; color: var(--in-tx2); background: var(--in-fill); flex: none; }
+#a1sv-ins .in-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; }
+#a1sv-ins .in-seg { display: flex; margin: 10px 16px 6px; padding: 2px; border-radius: 10px; background: var(--in-fill); position: relative; flex: none; }
+#a1sv-ins .in-seg button { flex: 1; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--in-tx); font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit; letter-spacing: -.1px; position: relative; z-index: 1; }
+#a1sv-ins .in-seg button em { font-style: normal; font-weight: 500; color: var(--in-tx2); margin-left: 4px; }
+#a1sv-ins .in-seg i { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); border-radius: 8px; background: rgba(99,99,102,.82); box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04); transition: transform .3s cubic-bezier(.2,.9,.25,1); }
+html[data-theme="light"] #a1sv-ins:not(.is-dark) .in-seg i { background: #fff; }
+#a1sv-ins .in-seg.r i { transform: translateX(100%); }
+#a1sv-ins .in-body { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 6px 0 16px; touch-action: pan-y; }
+#a1sv-ins .in-sum { display: flex; gap: 8px; padding: 4px 16px 12px; }
+#a1sv-ins .in-sum div { flex: 1; padding: 11px 12px; border-radius: 14px; background: var(--in-card); }
+#a1sv-ins .in-sum b { display: block; font-size: 22px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+#a1sv-ins .in-sum span { font-size: 12.5px; color: var(--in-tx2); }
+#a1sv-ins .in-list { margin: 0 16px; border-radius: 14px; background: var(--in-card); overflow: hidden; }
+#a1sv-ins .in-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; position: relative; }
+#a1sv-ins .in-row + .in-row::before { content: ''; position: absolute; top: 0; right: 0; left: 66px; height: .5px; background: var(--in-sep); }
+#a1sv-ins .in-av { width: 40px; height: 40px; border-radius: 50%; flex: none; overflow: hidden; display: grid; place-items: center; font-weight: 700; font-size: 15px; line-height: 1; font-family: inherit; color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #c9a84c); }
+#a1sv-ins .in-av img { width: 100%; height: 100%; object-fit: cover; }
+#a1sv-ins .in-mid { flex: 1; min-width: 0; }
+#a1sv-ins .in-mid b { display: block; font-size: 16px; font-weight: 500; letter-spacing: -.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#a1sv-ins .in-mid span { display: block; font-size: 13px; color: var(--in-tx2); margin-top: 2px; }
+#a1sv-ins .in-q { margin-top: 6px; display: inline-block; max-width: 100%; padding: 7px 11px; border-radius: 16px 16px 16px 5px; font-size: 15px; line-height: 1.3; background: var(--in-fill); word-break: break-word; white-space: pre-wrap; }
+#a1sv-ins .in-q.is-emo { font-size: 26px; line-height: 1; padding: 4px 8px; background: transparent; }
+#a1sv-ins .in-act { height: 30px; padding: 0 12px; border-radius: 15px; border: 0; font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit; color: #fff; background: #0a84ff; flex: none; text-decoration: none; display: inline-flex; align-items: center; }
+#a1sv-ins .in-act.is-gray { color: var(--in-tx); background: var(--in-fill); }
+#a1sv-ins .in-empty { padding: 34px 26px 30px; text-align: center; color: var(--in-tx2); font-size: 14.5px; line-height: 1.4; }
+#a1sv-ins .in-empty b { display: block; color: var(--in-tx); font-size: 17px; font-weight: 600; margin: 10px 0 4px; }
+#a1sv-ins .in-empty svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .55; }
+#a1sv-ins .in-note { margin: 12px 16px 0; font-size: 12.5px; line-height: 1.4; color: var(--in-tx2); }
+#a1sv-ins .in-sk { height: 60px; margin: 0 16px 8px; border-radius: 14px; background: var(--in-card); opacity: .6; }
+/* 💬 Do'kon javobi (mijozga ko'rinadi) va admin javob oynasi */
+#a1sv .a1sv-mine .a1sv-bub.is-shop { align-self: flex-start; border-radius: 18px 18px 18px 6px; color: #fff; background: rgba(28,28,30,.86); box-shadow: inset 0 0 0 1px rgba(226,196,110,.55), 0 6px 16px -8px rgba(0,0,0,.6); }
+#a1sv .a1sv-bub.is-shop b { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 700; color: #e2c46e; letter-spacing: 0; }
+#a1sv .a1sv-bub.is-shop small { text-align: left; }
+#a1sv-ins .in-acts { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+#a1sv-ins .in-act.is-gold { color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #c9a84c); }
+#a1sv-ins .in-ct { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+#a1sv-ins .in-ct a, #a1sv-ins .in-ct button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border: 0; border-radius: 13px; font-weight: 600; font-size: 12.5px; line-height: 1; font-family: inherit;
+    color: var(--in-tx); background: var(--in-fill); text-decoration: none; -webkit-tap-highlight-color: transparent; }
+#a1sv-ins .in-ct a:active, #a1sv-ins .in-ct button:active { opacity: .6; }
+#a1sv-ins .in-ct .is-ok { color: #30d158; }
+#a1sv-ins .in-ans { margin-top: 6px; padding: 6px 10px; border-radius: 14px 14px 14px 5px; font-size: 14px; line-height: 1.3; color: var(--in-tx); background: rgba(226,196,110,.16); box-shadow: inset 0 0 0 .5px rgba(226,196,110,.45); word-break: break-word; white-space: pre-wrap; }
+#a1sv-ins .in-ans small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--in-tx2); }
+#a1sv-ins .in-cmp { display: flex; gap: 8px; align-items: flex-end; padding: 2px 14px 12px 66px; }
+#a1sv-ins .in-cmp textarea { flex: 1; min-height: 38px; max-height: 120px; padding: 9px 12px; border: 0; border-radius: 19px; outline: none; resize: none; font-weight: 400; font-size: 15px; line-height: 1.3; font-family: inherit; color: var(--in-tx); background: var(--in-fill); box-sizing: border-box; }
+#a1sv-ins .in-cmp textarea:focus { box-shadow: 0 0 0 1.5px rgba(226,196,110,.8); }
+#a1sv-ins .in-cmp button { width: 38px; height: 38px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center; color: #1a1405; background: linear-gradient(135deg, #f6dc7e, #c9a84c); }
+#a1sv-ins .in-cmp button[disabled] { opacity: .5; }
+#a1sv-ins .in-cmp button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ═══ Admin boshqaruvi: kartadagi statistika tugmasi + ogohlantirish bannerlari ═══ */
+.a1sv-stat { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; height: 26px; padding: 0 10px; border: 0; border-radius: 13px; font: 600 12.5px/1 -apple-system, "SF Pro Text", system-ui, sans-serif;
+    color: var(--s8-tx, #fff); background: rgba(118,118,128,.2); -webkit-tap-highlight-color: transparent; }
+.a1sv-stat svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.a1sv-stat em { font-style: normal; font-weight: 500; opacity: .7; }
+.a1sv-stat.is-load { opacity: .55; }
+html[data-theme="light"] .a1sv-stat { color: #000; background: rgba(118,118,128,.12); }
+.a1sv-warn { margin: 0 0 12px; padding: 13px 14px; border-radius: 16px; display: flex; gap: 12px; align-items: flex-start; font: 400 13.5px/1.38 -apple-system, "SF Pro Text", system-ui, sans-serif;
+    color: #fff; background: rgba(255,69,58,.16); box-shadow: inset 0 0 0 .5px rgba(255,105,97,.35); }
+.a1sv-warn.is-info { background: rgba(10,132,255,.14); box-shadow: inset 0 0 0 .5px rgba(64,156,255,.35); }
+.a1sv-warn b { display: block; font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.a1sv-warn svg { width: 22px; height: 22px; flex: none; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.a1sv-warn button { margin-top: 9px; height: 32px; padding: 0 14px; border: 0; border-radius: 16px; font-weight: 600; font-size: 14px; line-height: 1; font-family: inherit; color: #fff; background: #ff453a; }
+.a1sv-warn.is-info button { background: #0a84ff; }
+.a1sv-warn button[disabled] { opacity: .6; }
+html[data-theme="light"] .a1sv-warn { color: #000; }

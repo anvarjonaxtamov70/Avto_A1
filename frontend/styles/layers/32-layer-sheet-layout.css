@@ -1,0 +1,56 @@
+
+/* ——— 1) Oynaning o'zi skroll QILMAYDI: u faqat flex ustun ——— */
+#storyComposerModal,
+#customerDetailModal,
+#aiBulkModal {
+    /* `!important` SHART: 3878-qatordagi global padding-top qoidasini yengish uchun */
+    padding: 0 !important;
+    padding-top: var(--safe-top, 0px) !important;   /* safe-top FAQAT bir marta */
+    overflow: hidden !important;                    /* skroll ichki blokda */
+    flex-direction: column;
+}
+
+/* ——— 2) Sarlavha: qimirlamaydi, blur YO'Q, fon qattiq ——— */
+.st2-hd,
+#aiBulkModal .modal-header {
+    flex: 0 0 auto !important;
+    position: static !important;            /* sticky OLIB TASHLANDI */
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;       /* jank sababi */
+    background: var(--bg-dark) !important;  /* shaffof gradient o'rniga qattiq rang */
+    margin-bottom: 0 !important;
+}
+html[data-theme="light"] .st2-hd,
+html[data-theme="light"] #aiBulkModal .modal-header { background: #F4EEE2 !important; }
+
+/* ——— 3) Faqat tana skroll qiladi ——— */
+#story-composer-body,
+#customer-detail-body,
+#ai-bulk-content,
+#ai-neural-loader {
+    flex: 1 1 auto;
+    min-height: 0;                          /* flex ichida skroll ishlashi uchun SHART */
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;           /* skroll tashqariga "o'tib ketmaydi" */
+    touch-action: pan-y;                    /* faqat vertikal — diagonal siljish yo'q */
+}
+
+/* ——— 4) Tugma paneli ham qimirlamaydi ——— */
+.st2-foot { flex: 0 0 auto !important; position: static !important; }
+
+/* ——— 5) Sarlavha ustidagi "tortish dastasi" (::before) bu oynalarda kerak emas:
+         u absolute joylashgani uchun sarlavha matni ustiga tushib chalkashtirardi ——— */
+#storyComposerModal::before,
+#customerDetailModal::before,
+#aiBulkModal::before { display: none !important; }
+
+/* ——— 6) Sarlavha o'lchamini jamlash (ilgari juda baland ko'rinardi) ——— */
+.st2-hd h2 { font-size: 19px !important; }
+#aiBulkModal .modal-header h2 { font-size: 19px !important; margin: 0 !important; }
+
+/* ——— 7) Skroll paytida og'ir effektlarni jimlashtirish (qo'shimcha sug'urta) ——— */
+body.is-scrolling #story-composer-body .st2-block,
+body.is-scrolling #ai-bulk-content .aib-block,
+body.is-scrolling #ai-bulk-content .aib-step { box-shadow: none !important; }

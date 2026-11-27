@@ -1,0 +1,317 @@
+
+/* ═══════════════════════════════════════════════════════════════════
+   iOS 26 · Avto A1 — 3-qatlam: bo'sh savat, App Store qidiruv,
+   stories "+" tugmasi, Saqlanganlar sahifasi, tab bar ajralishi
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+    --a3-page: #0a0a0b; --a3-card: #1c1c1e; --a3-card2: #2c2c2e; --a3-tx: #f5f5f7; --a3-tx2: rgba(235,235,245,.62); --a3-tx3: rgba(235,235,245,.32);
+    --a3-fill: rgba(118,118,128,.24); --a3-sep: rgba(84,84,88,.4); --a3-gold: #e2c46e; --a3-gold2: #c9a84c; --a3-goldbg: rgba(201,168,76,.14);
+    --a3-grad: linear-gradient(135deg, #f6dc7e 0%, #d4af37 48%, #a07c1c 100%); --a3-ink: #1a1405;
+    --a3-ease: cubic-bezier(.32,.72,0,1); --a3-spring: cubic-bezier(.34,1.45,.64,1);
+    --a3-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    --a3-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+}
+html[data-theme="light"] {
+    --a3-page: #f4eee2; --a3-card: #ffffff; --a3-card2: #f2f2f7; --a3-tx: #1c1c1e; --a3-tx2: rgba(60,60,67,.64); --a3-tx3: rgba(60,60,67,.3);
+    --a3-fill: rgba(118,118,128,.12); --a3-sep: rgba(60,60,67,.13); --a3-gold: #8a6a14; --a3-gold2: #9c7c20; --a3-goldbg: rgba(156,124,32,.1);
+    --a3-grad: linear-gradient(135deg, #d9b54a 0%, #b68f2e 48%, #7a5c10 100%);
+}
+
+/* ─────────────────────────── 1. SAVAT ─────────────────────────── */
+/* Orqa fon to'liq qattiq — orqadagi sahifa xira ko'rinib turmaydi */
+html body #cartModal, html body #checkoutModal, html body #coPayModal,
+html[data-theme] body #cartModal, html[data-theme] body #checkoutModal, html[data-theme] body #coPayModal {
+    background: var(--a3-page) !important; background-image: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-radius: 0 !important;
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal)::before { display: none !important; }
+
+/* Sarlavha: kulrang chiziq (header foni) olib tashlandi → iOS katta sarlavha */
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header,
+html.lite body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header,
+html[data-theme] body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header {
+    background: transparent !important; background-image: none !important; border: 0 !important; box-shadow: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    position: relative !important; margin: 0 0 8px !important; padding: 6px 0 4px !important; min-height: 44px;
+    display: flex !important; align-items: center !important; justify-content: space-between !important;
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header h2 {
+    margin: 0 !important; display: flex !important; align-items: baseline; gap: 10px;
+    font: 800 34px/1.1 var(--a3-display) !important; letter-spacing: -1px !important; text-shadow: none !important;
+    background: var(--a3-grad) !important; -webkit-background-clip: text !important; background-clip: text !important;
+    -webkit-text-fill-color: transparent !important; color: transparent !important;
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header h2 > svg { display: none !important; }
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header h2 .a3-count {
+    font: 600 15px/1 var(--a3-font); letter-spacing: 0; -webkit-text-fill-color: var(--a3-tx2); color: var(--a3-tx2);
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header > .close-btn,
+html[data-theme] body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header > .close-btn {
+    width: 32px !important; height: 32px !important; min-width: 32px; padding: 0 !important; border-radius: 50% !important;
+    display: grid !important; place-items: center !important; border: 0 !important; box-shadow: none !important;
+    background: var(--a3-fill) !important; color: var(--a3-tx2) !important; font-size: 0 !important; line-height: 0 !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; transition: transform .3s var(--a3-spring), background-color .2s !important;
+}
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header > .close-btn svg { width: 13px; height: 13px; }
+html body :is(#cartModal, #checkoutModal, #coPayModal) > .modal-header > .close-btn:active { transform: scale(.86) !important; }
+
+/* Bo'sh savat: pastki panel (chiziq + blur) yashiriladi */
+html body #cartModal.co-is-empty .co-dock, html body #cartModal.co-is-empty .co-dock-sp { display: none !important; }
+
+/* Bo'sh holat — umumiy (savat + saqlanganlar) */
+.a3-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 26px 4px 8px; font-family: var(--a3-font); color: var(--a3-tx); animation: a3Rise .55s var(--a3-ease) both; }
+.a3-art { position: relative; width: 150px; height: 150px; margin-bottom: 22px; display: grid; place-items: center; }
+.a3-art-glow { position: absolute; inset: 14px; border-radius: 50%; background: radial-gradient(closest-side, rgba(212,175,55,.32), rgba(212,175,55,0)); filter: blur(6px); }
+html[data-theme="light"] .a3-art-glow { background: radial-gradient(closest-side, rgba(182,143,46,.22), rgba(182,143,46,0)); }
+.a3-art-ring { position: absolute; inset: 0; width: 100%; height: 100%; animation: a3Spin 18s linear infinite; }
+.a3-art-ring circle { fill: none; stroke: var(--a3-gold2); stroke-width: 1.2; stroke-dasharray: 2 7; stroke-linecap: round; opacity: .55; }
+.a3-art-ring circle.b { stroke-dasharray: none; stroke-width: .8; opacity: .18; }
+.a3-art-tile {
+    position: relative; width: 92px; height: 92px; border-radius: 28px; display: grid; place-items: center;
+    background: linear-gradient(160deg, #2a2a2d, #141416); color: var(--a3-gold);
+    box-shadow: 0 18px 40px rgba(0,0,0,.55), inset 0 0 0 .5px rgba(226,196,110,.45), inset 0 1px 0 rgba(255,255,255,.08);
+}
+html[data-theme="light"] .a3-art-tile { background: linear-gradient(160deg, #ffffff, #f5ecd9); box-shadow: 0 16px 34px rgba(120,90,20,.18), inset 0 0 0 .5px rgba(156,124,32,.35); }
+.a3-art-tile svg { width: 44px; height: 44px; }
+.a3-art-badge {
+    position: absolute; right: 18px; bottom: 22px; height: 26px; min-width: 26px; padding: 0 7px; border-radius: 13px;
+    display: grid; place-items: center; font: 800 11px/1 var(--a3-display); letter-spacing: .2px; color: var(--a3-ink);
+    background: var(--a3-grad); box-shadow: 0 6px 14px rgba(160,124,28,.45), 0 0 0 3px var(--a3-page);
+}
+.a3-empty h3 { margin: 0 0 6px; font: 700 22px/1.2 var(--a3-display); letter-spacing: -.5px; color: var(--a3-tx); }
+.a3-empty p { margin: 0 auto; max-width: 300px; font: 400 15px/1.45 var(--a3-font); color: var(--a3-tx2); }
+.a3-empty p .a3-heart { display: inline-block; width: 15px; height: 15px; vertical-align: -2px; color: #ff453a; }
+.a3-cta {
+    appearance: none; -webkit-appearance: none; border: 0; cursor: pointer; margin-top: 22px; height: 50px; padding: 0 26px; min-width: 220px;
+    border-radius: 25px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font: 600 17px/1 var(--a3-font); letter-spacing: -.2px; color: var(--a3-ink); background: var(--a3-grad);
+    box-shadow: 0 10px 24px rgba(160,124,28,.32), inset 0 1px 0 rgba(255,255,255,.35); -webkit-tap-highlight-color: transparent;
+    transition: transform .35s var(--a3-spring), filter .2s;
+}
+.a3-cta svg { width: 18px; height: 18px; }
+.a3-cta:active { transform: scale(.95); filter: brightness(.95); }
+.a3-link { appearance: none; border: 0; background: transparent; cursor: pointer; margin-top: 12px; padding: 8px 12px; font: 500 15px/1 var(--a3-font); color: var(--a3-gold); display: inline-flex; align-items: center; gap: 4px; }
+.a3-link svg { width: 14px; height: 14px; }
+.a3-perks { width: 100%; margin-top: 28px; border-radius: 16px; overflow: hidden; background: var(--a3-card); text-align: left; }
+html[data-theme="light"] .a3-perks { box-shadow: 0 1px 0 rgba(0,0,0,.03); }
+.a3-perk { display: flex; align-items: center; gap: 12px; padding: 11px 14px; position: relative; }
+.a3-perk + .a3-perk::before { content: ""; position: absolute; top: 0; left: 54px; right: 0; height: .5px; background: var(--a3-sep); }
+.a3-perk i { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--a3-goldbg); color: var(--a3-gold); }
+.a3-perk i svg { width: 17px; height: 17px; }
+.a3-perk b { display: block; font: 600 15px/1.25 var(--a3-font); color: var(--a3-tx); }
+.a3-perk small { display: block; margin-top: 1px; font: 400 13px/1.3 var(--a3-font); color: var(--a3-tx2); }
+
+/* ───────────────────── 2. QIDIRUV — iOS 26 · Avto A1 ───────────────────── */
+/* 2a. Maydon (bosh sahifada ham, qidiruv rejimida ham) */
+html body .search-input-container, body.search-focused .search-input-container { transform: none !important; }
+html body .search-input-container .search-box,
+html body .search-input-container .search-box:focus,
+html[data-theme] body .search-input-container input.search-box,
+html[data-theme] body .search-input-container input.search-box:focus,
+html.lite[data-theme] body .search-input-container input.search-box {
+    width: 100% !important; height: 40px !important; min-height: 40px !important; padding: 0 38px 0 38px !important; border-radius: 20px !important;
+    background: var(--a3-fill) !important; border: 0 !important; color: var(--a3-tx) !important; caret-color: var(--a3-gold);
+    font: 400 17px/40px var(--a3-font) !important; letter-spacing: -.4px !important; outline: none !important; text-overflow: ellipsis;
+    box-shadow: inset 0 0 0 .5px rgba(255,255,255,.06) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    transition: width .42s var(--a3-ease), box-shadow .25s, background-color .25s !important;
+}
+html[data-theme="light"] body .search-input-container .search-box { box-shadow: inset 0 0 0 .5px rgba(0,0,0,.04) !important; }
+html body .search-input-container .search-box:focus,
+html[data-theme] body .search-input-container input.search-box:focus { box-shadow: inset 0 0 0 1px rgba(201,168,76,.42) !important; }
+html body .search-input-container .search-box::placeholder { color: var(--a3-tx2) !important; opacity: 1; font-weight: 400; }
+html body .search-input-container.a1s-scan .search-box,
+html[data-theme] body .search-input-container.a1s-scan input.search-box { padding-right: 72px !important; }
+html body .search-input-container .search-icon-left {
+    left: 12px !important; top: 20px !important; transform: translateY(-50%) !important; height: 18px; display: grid; place-items: center;
+    color: var(--a3-tx2) !important; transition: color .25s; pointer-events: none; z-index: 2;
+}
+html body .search-input-container .search-icon-left svg { width: 17px !important; height: 17px !important; stroke-width: 2.4 !important; }
+html body .search-input-container:focus-within .search-icon-left { color: var(--a3-gold) !important; }
+html body .search-input-container .clear-search-btn,
+html[data-theme] body .search-input-container .clear-search-btn {
+    right: 10px !important; top: 20px !important; width: 20px !important; height: 20px !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important;
+    display: grid !important; place-items: center !important; box-shadow: none !important; transform: translateY(-50%) scale(.5) !important; z-index: 2;
+    background: rgba(235,235,245,.42) !important; color: #1c1c1e !important; transition: opacity .2s, transform .3s var(--a3-spring), right .42s var(--a3-ease) !important;
+}
+html[data-theme="light"] body .search-input-container .clear-search-btn { background: rgba(60,60,67,.34) !important; color: #fff !important; }
+html body .search-input-container .clear-search-btn.show { transform: translateY(-50%) scale(1) !important; }
+html body .search-input-container .clear-search-btn svg { width: 10px !important; height: 10px !important; stroke-width: 3.6 !important; }
+/* Skaner (admin): maydon ichida, matn ustiga chiqmaydi */
+html body .search-input-container .scan-search-btn,
+html[data-theme] body .search-input-container .scan-search-btn {
+    top: 20px !important; right: 8px !important; width: 28px !important; height: 28px !important; padding: 0 !important; border-radius: 50% !important;
+    display: grid; place-items: center; transform: translateY(-50%) !important; z-index: 2; border: 0 !important; box-shadow: none !important;
+    background: var(--a3-goldbg) !important; color: var(--a3-gold) !important; transition: right .42s var(--a3-ease), transform .3s var(--a3-spring) !important;
+}
+html body .search-input-container .scan-search-btn.hidden { display: none !important; }
+html body .search-input-container .scan-search-btn svg { width: 16px !important; height: 16px !important; }
+html body .search-input-container .scan-search-btn:active { transform: translateY(-50%) scale(.86) !important; }
+html body .search-input-container.a1s-has .scan-search-btn { right: 36px !important; }
+
+/* Yopish (X) — faqat qidiruv rejimida */
+.a1s-close {
+    position: absolute; right: 0; top: 0; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+    display: grid; place-items: center; color: var(--a3-tx); background: var(--a3-fill); -webkit-tap-highlight-color: transparent;
+    box-shadow: inset 0 0 0 .5px rgba(255,255,255,.08);
+    opacity: 0; transform: scale(.4) rotate(-90deg); pointer-events: none; transition: opacity .25s, transform .45s var(--a3-spring);
+}
+html[data-theme="light"] .a1s-close { box-shadow: inset 0 0 0 .5px rgba(0,0,0,.05); }
+.a1s-close svg { width: 14px; height: 14px; }
+.a1s-close:active { transform: scale(.86) !important; background: var(--a3-goldbg); color: var(--a3-gold); }
+
+/* 2b. Qidiruv rejimi — butun ekran, iOS qidiruv sahifasi */
+body.a1-srch :is(.header.hx, #stories-list, .stories-container, #subBrand, .slider-container, #back-btn, #quick-chips, #shogird-launcher, #a1-tab-edge),
+html body.a1-srch .bottom-nav { display: none !important; }
+body.a1-srch #search-results .empty-search { display: none !important; }
+
+.a1s-head { display: none; }
+body.a1-srch .a1s-head {
+    display: block; padding: calc(var(--safe-top, 0px) + 18px) 20px 12px; font-family: var(--a3-font); animation: a3Rise .45s var(--a3-ease) both;
+}
+.a1s-eyebrow { display: flex; align-items: center; gap: 8px; font: 600 12.5px/1 var(--a3-font); letter-spacing: .7px; text-transform: uppercase; color: var(--a3-gold); }
+.a1s-eyebrow .wl-mono { flex: 0 0 auto; }
+.a1s-head h1 {
+    margin: 8px 0 2px !important; padding: 0 !important; font: 800 34px/1.08 var(--a3-display) !important; letter-spacing: -1.1px !important;
+    color: var(--a3-tx) !important; background: none !important; -webkit-text-fill-color: currentColor !important; text-align: left !important; text-shadow: none !important;
+}
+.a1s-head p { margin: 0; font: 400 15px/1.35 var(--a3-font); color: var(--a3-tx2); }
+
+html body.a1-srch .search-input-container {
+    position: sticky !important; top: calc(var(--safe-top, 0px) + 6px) !important; z-index: 60 !important; isolation: isolate;
+    width: calc(100% - 32px) !important; margin: 4px 16px 14px !important;
+}
+html body.a1-srch .search-input-container::before {
+    content: ""; position: absolute; z-index: -1; left: -16px; right: -16px; top: -8px; bottom: -26px; pointer-events: none; opacity: 0; transition: opacity .2s;
+    background: linear-gradient(to bottom, rgb(var(--a3-page-rgb, 10,10,11)) calc(100% - 20px), rgba(var(--a3-page-rgb, 10,10,11), 0));
+}
+html body.a1-srch .search-input-container.a1s-stuck::before { top: calc(-8px - var(--safe-top, 0px)); opacity: 1; }
+html body.a1-srch .search-input-container .search-box,
+html[data-theme] body.a1-srch .search-input-container input.search-box { width: calc(100% - 50px) !important; }
+html body.a1-srch .search-input-container .clear-search-btn { right: 60px !important; }
+html body.a1-srch .search-input-container .scan-search-btn { right: 58px !important; }
+html body.a1-srch .search-input-container.a1s-has .scan-search-btn { right: 86px !important; }
+body.a1-srch .a1s-close { opacity: 1; transform: none; pointer-events: auto; }
+
+/* 2c. Bo'sh so'rov paneli: so'nggi qidiruvlar, bo'limlar, mashinalar */
+#a1s-panel { display: none; padding: 0 16px calc(28px + env(safe-area-inset-bottom, 0px)); font-family: var(--a3-font); color: var(--a3-tx); }
+body.a1-srch.a1s-empty #a1s-panel { display: block; animation: a3Rise .45s var(--a3-ease) both; }
+.a1s-sec { margin: 6px 0 22px; }
+.a1s-sec-h { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 10px; }
+.a1s-sec-h b { font: 700 20px/1.2 var(--a3-display); letter-spacing: -.45px; color: var(--a3-tx); }
+.a1s-sec-h button { appearance: none; border: 0; background: none; padding: 4px 0; cursor: pointer; font: 400 15px/1 var(--a3-font); color: var(--a3-gold); }
+.a1s-list { border-radius: 16px; overflow: hidden; background: var(--a3-card); }
+.a1s-row {
+    appearance: none; width: 100%; border: 0; background: transparent; cursor: pointer; text-align: left; position: relative;
+    display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 14px; font: 400 16px/1.25 var(--a3-font); color: var(--a3-tx);
+    -webkit-tap-highlight-color: transparent; transition: background-color .15s;
+}
+.a1s-row + .a1s-row::before { content: ""; position: absolute; top: 0; left: 46px; right: 0; height: .5px; background: var(--a3-sep); }
+.a1s-row:active { background: var(--a3-fill); }
+.a1s-row > svg:first-child { flex: 0 0 18px; width: 18px; height: 18px; color: var(--a3-tx3); }
+.a1s-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.a1s-row > svg:last-child { flex: 0 0 16px; width: 16px; height: 16px; color: var(--a3-tx3); }
+.a1s-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.a1s-tile {
+    appearance: none; border: 0; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 11px; min-height: 60px; padding: 10px 12px;
+    border-radius: 16px; background: var(--a3-card); color: var(--a3-tx); font: 600 15px/1.2 var(--a3-font); -webkit-tap-highlight-color: transparent;
+    box-shadow: inset 0 0 0 .5px rgba(255,255,255,.05); transition: transform .3s var(--a3-spring), background-color .2s;
+}
+html[data-theme="light"] .a1s-tile { box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.a1s-tile:active { transform: scale(.95); }
+.a1s-tile i {
+    flex: 0 0 38px; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; color: var(--a3-ink);
+    background: var(--a3-grad); box-shadow: 0 4px 10px rgba(160,124,28,.28), inset 0 1px 0 rgba(255,255,255,.4);
+}
+.a1s-tile i svg { width: 20px; height: 20px; }
+.a1s-tile small { display: block; margin-top: 2px; font: 400 12.5px/1.2 var(--a3-font); color: var(--a3-tx2); }
+.a1s-cars { display: flex; flex-wrap: wrap; gap: 8px; }
+.a1s-car {
+    appearance: none; border: 0; cursor: pointer; height: 34px; padding: 0 14px; border-radius: 17px; display: inline-flex; align-items: center; gap: 6px;
+    background: var(--a3-fill); color: var(--a3-tx); font: 500 15px/1 var(--a3-font); letter-spacing: -.2px; -webkit-tap-highlight-color: transparent;
+    transition: transform .3s var(--a3-spring), background-color .2s, color .2s;
+}
+.a1s-car svg { width: 15px; height: 15px; color: var(--a3-gold); }
+.a1s-car:active { transform: scale(.93); background: var(--a3-goldbg); color: var(--a3-gold); }
+.a1s-tip { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 12px 14px; border-radius: 14px; background: var(--a3-goldbg); color: var(--a3-tx2); font: 400 13.5px/1.4 var(--a3-font); }
+.a1s-tip svg { flex: 0 0 18px; width: 18px; height: 18px; color: var(--a3-gold); }
+
+/* 2d. Natijalar — iOS ro'yxat */
+body.a1-srch #search-results { padding: 0 16px calc(28px + env(safe-area-inset-bottom, 0px)) !important; }
+body.a1-srch #search-results .search-item:not([style]) {
+    border-radius: 16px !important; background: var(--a3-card) !important; border: 0 !important; box-shadow: none !important;
+    padding: 10px 12px !important; gap: 12px !important; margin-bottom: 8px !important; transition: transform .3s var(--a3-spring) !important;
+}
+body.a1-srch #search-results .search-item:active { transform: scale(.97) !important; }
+body.a1-srch #search-results .search-item:not([style]) img { width: 60px !important; height: 60px !important; border-radius: 12px !important; object-fit: contain; }
+body.a1-srch #search-results .search-item:not([style]) h4 { font: 600 16px/1.25 var(--a3-font) !important; letter-spacing: -.3px; color: var(--a3-tx) !important; }
+body.a1-srch #search-results .search-item:not([style]) .price { font: 700 15.5px/1.2 var(--a3-font) !important; color: var(--a3-gold) !important; }
+
+@media (prefers-reduced-motion: reduce) { body.a1-srch .a1s-head, body.a1-srch.a1s-empty #a1s-panel { animation: none !important; } }
+
+/* ──────────────────── 3. STORIES "+" (admin) ──────────────────── */
+html body .story-item.st2-add .st2-add-ring,
+html[data-theme] body .story-item.st2-add .st2-add-ring {
+    position: relative; width: 66px !important; height: 66px !important; padding: 3.5px !important; border: 0 !important; border-radius: 50%;
+    background: transparent !important; box-shadow: none !important; isolation: isolate; transition: transform .35s var(--a3-spring);
+}
+.st2-add-orbit {
+    position: absolute; inset: 0; border-radius: 50%; z-index: -1;
+    background: conic-gradient(from 0deg, #fff3c4, #e2c46e 18%, #a07c1c 38%, rgba(212,175,55,.12) 55%, #d4af37 78%, #fff3c4);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+    animation: a3Spin 3.2s linear infinite;
+}
+.st2-add-ring::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; z-index: -2; pointer-events: none;
+    box-shadow: 0 0 0 0 rgba(212,175,55,.45); animation: a3Ripple 2.8s var(--a3-ease) infinite;
+}
+html body .story-item.st2-add .st2-add-avatar,
+html[data-theme] body .story-item.st2-add .st2-add-avatar {
+    width: 100% !important; height: 100% !important; border-radius: 50% !important; display: grid !important; place-items: center !important;
+    background: radial-gradient(circle at 50% 35%, #2a2a2e, #111113) !important; box-shadow: inset 0 0 0 .5px rgba(255,255,255,.08) !important;
+}
+html[data-theme="light"] body .story-item.st2-add .st2-add-avatar { background: radial-gradient(circle at 50% 35%, #ffffff, #f1e7d2) !important; box-shadow: inset 0 0 0 .5px rgba(156,124,32,.25) !important; }
+html body .story-item.st2-add .st2-add-plus {
+    width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 0 !important; line-height: 0;
+    background: var(--a3-grad); color: #1a1405 !important; -webkit-text-fill-color: #1a1405 !important; box-shadow: 0 6px 16px rgba(160,124,28,.5), inset 0 1px 0 rgba(255,255,255,.45);
+}
+html body .story-item.st2-add .st2-add-plus svg { width: 20px; height: 20px; fill: none; stroke: #1a1405 !important; stroke-width: 2.8; stroke-linecap: round; }
+html body .story-item.st2-add:active .st2-add-ring { transform: scale(.9); }
+html body .story-item.st2-add > span, html[data-theme] body .story-item.st2-add > span { color: var(--a3-gold) !important; font-weight: 600 !important; }
+
+/* ─────────────────────── 4. SAQLANGANLAR ─────────────────────── */
+#wishlist-section { padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px)); }
+.wl-head { padding: 4px 20px 16px; font-family: var(--a3-font); animation: a3Rise .5s var(--a3-ease) both; }
+.wl-eyebrow { display: flex; align-items: center; gap: 8px; font: 600 12.5px/1 var(--a3-font); letter-spacing: .7px; text-transform: uppercase; color: var(--a3-gold); }
+.wl-mono { display: inline-grid; place-items: center; height: 20px; padding: 0 6px; border-radius: 6px; background: var(--a3-grad) !important; color: var(--a3-ink) !important; -webkit-text-fill-color: var(--a3-ink) !important; opacity: 1 !important; font: 800 10.5px/1 var(--a3-display); letter-spacing: .2px; box-shadow: 0 3px 8px rgba(160,124,28,.35); }
+.wl-title { margin: 8px 0 4px !important; padding: 0 !important; font: 800 34px/1.08 var(--a3-display) !important; letter-spacing: -1.1px !important; color: var(--a3-tx) !important; background: none !important; -webkit-text-fill-color: currentColor !important; text-align: left !important; }
+.wl-sub { font: 400 15px/1.35 var(--a3-font); color: var(--a3-tx2); font-variant-numeric: tabular-nums; }
+.wl-sub b { font-weight: 600; color: var(--a3-tx); }
+.wl-sub .dot { margin: 0 6px; color: var(--a3-tx3); }
+#wishlist-items-container .a3-empty { grid-column: 1 / -1; padding-top: 18px; }
+#wishlist-items-container .a3-art-tile { color: #ff6b5e; }
+html[data-theme="light"] #wishlist-items-container .a3-art-tile { color: #e0483c; }
+
+/* ───────────── 5. TAB BAR — sahifadan aniq ajraladi ───────────── */
+html body .bottom-nav { box-shadow: 0 14px 36px rgba(0,0,0,.6), 0 2px 10px rgba(0,0,0,.4), inset 0 .5px 0 rgba(255,255,255,.16) !important; }
+html[data-theme="light"] body .bottom-nav { box-shadow: 0 12px 32px rgba(70,50,10,.16), 0 1px 6px rgba(70,50,10,.08), inset 0 .5px 0 rgba(255,255,255,.9) !important; }
+#a1-tab-edge {
+    position: fixed; left: 0; right: 0; bottom: 0; height: calc(104px + env(safe-area-inset-bottom, 0px)); z-index: 1499; pointer-events: none;
+    background: linear-gradient(to bottom, rgba(var(--a3-page-rgb, 10,10,11), 0) 0%, rgba(var(--a3-page-rgb, 10,10,11), .78) 55%, rgba(var(--a3-page-rgb, 10,10,11), .96) 100%);
+    transition: opacity .3s;
+}
+body:has(.bottom-nav.nav-hidden) #a1-tab-edge, body.search-focused #a1-tab-edge { opacity: 0; }
+body[style*="overflow: hidden"] #a1-tab-edge { opacity: 0; }
+/* Eski qora fade (body::after) yorug' rejimda kulrang dog' berardi — o'rniga mavzuga mos #a1-tab-edge */
+html body::after { background: none !important; box-shadow: none !important; }
+
+@keyframes a3Spin { to { transform: rotate(360deg); } }
+@keyframes a3Ripple { 0% { box-shadow: 0 0 0 0 rgba(212,175,55,.45); } 70%, 100% { box-shadow: 0 0 0 10px rgba(212,175,55,0); } }
+@keyframes a3Rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+html.lite .st2-add-orbit { animation-duration: 8s; }
+html.lite .a3-art-ring { animation: none; }
+html.lite .st2-add-ring::after { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+    .st2-add-orbit, .st2-add-ring::after, html body .story-item.st2-add .st2-add-plus, .a3-art-ring, .a3-empty, .wl-head { animation: none !important; }
+}

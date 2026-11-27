@@ -1,0 +1,164 @@
+
+/* ═══════════════════════════════════════════════════════════════════
+   🛒 SAVAT → RASMIYLASHTIRISH → TO'LOV — iOS uslubi (B variant)
+   ═══════════════════════════════════════════════════════════════════ */
+#cartModal, #checkoutModal, #coSheet, #coPayModal {
+    --co-bg2: #1c1c1e; --co-bg3: #2c2c2e; --co-sep: rgba(84,84,88,.38); --co-tx: #f5f5f7; --co-tx2: rgba(235,235,245,.62); --co-tx3: rgba(235,235,245,.3);
+    --co-fill: rgba(118,118,128,.24); --co-fill2: rgba(118,118,128,.14); --co-gold: #e2c46e; --co-gold2: #c9a84c; --co-goldbg: rgba(201,168,76,.13);
+    --co-green: #30d158; --co-red: #ff453a; --co-page: #121212;
+    --co-ease: cubic-bezier(.32,.72,0,1); --co-spring: cubic-bezier(.34,1.4,.64,1);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased;
+}
+html[data-theme="light"] #cartModal, html[data-theme="light"] #checkoutModal, html[data-theme="light"] #coSheet, html[data-theme="light"] #coPayModal {
+    --co-bg2: #ffffff; --co-bg3: #f2f2f7; --co-sep: rgba(60,60,67,.14); --co-tx: #1c1c1e; --co-tx2: rgba(60,60,67,.64); --co-tx3: rgba(60,60,67,.3);
+    --co-fill: rgba(118,118,128,.12); --co-fill2: rgba(118,118,128,.08); --co-gold: #8a6a14; --co-gold2: #9c7c20; --co-goldbg: rgba(156,124,32,.1);
+    --co-green: #248a3d; --co-red: #d70015; --co-page: #f4eee2;
+}
+html[data-theme="light"] body #cartModal { background: #F4EEE2 !important; background-image: none !important; }
+#cartModal, #checkoutModal, #coPayModal { padding-bottom: 0 !important; }
+html body #cartModal .modal-header { border-bottom: 0 !important; }
+#cartModal .modal-header h2, #checkoutModal .modal-header h2, #coPayModal .modal-header h2 { color: var(--co-gold) !important; }
+.co-wrap, .co-wrap * , #coSheet * { box-sizing: border-box; }
+.co-wrap { flex: 1 0 auto; display: flex; flex-direction: column; color: var(--co-tx); }
+
+.co-grp { background: var(--co-bg2); border: .5px solid var(--co-sep); border-radius: 16px; overflow: hidden; }
+html[data-theme="light"] .co-grp { box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.co-sec { margin: 22px 6px 7px; font-size: 12.5px; font-weight: 600; color: var(--co-tx2); text-transform: uppercase; letter-spacing: .5px; }
+.co-sec:first-child { margin-top: 4px; }
+.co-row { appearance: none; -webkit-appearance: none; position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 9px 14px; border: 0; background: transparent; color: var(--co-tx); font-family: inherit; font-size: 16px; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color .2s; }
+button.co-row:active, label.co-row:active { background: var(--co-fill); }
+.co-row + .co-row::before, .co-row + .co-info::before, .co-info + .co-row::before { content: ""; position: absolute; top: 0; left: 56px; right: 0; height: .5px; background: var(--co-sep); }
+.co-row.no-ic + .co-row::before, .co-grp > .co-row.no-ic::before { left: 14px; }
+.co-ic { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--ic); color: #fff; font-size: 15px; font-weight: 700; }
+.co-ic svg { width: 18px; height: 18px; }
+.co-t { flex: 1; min-width: 0; line-height: 1.3; }
+.co-t small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--co-tx2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-t.is-warn { color: var(--co-gold); }
+.co-v { flex: 0 1 auto; min-width: 0; max-width: 55%; font-size: 15px; color: var(--co-tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.co-v.gold { color: var(--co-gold); font-weight: 600; }
+.co-v.green { color: var(--co-green); font-weight: 600; }
+.co-v.strong { color: var(--co-tx); font-weight: 700; font-size: 17px; }
+.co-chev { flex: 0 0 auto; color: var(--co-tx3); font-size: 22px; font-weight: 300; line-height: 1; }
+.co-tick { flex: 0 0 auto; width: 22px; color: var(--co-gold); font-size: 18px; font-weight: 700; text-align: center; }
+.co-sw { flex: 0 0 51px; width: 51px; height: 31px; border-radius: 16px; background: var(--co-fill); position: relative; transition: background-color .25s var(--co-ease); }
+.co-sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.04); transition: transform .3s var(--co-spring); }
+.co-sw.on { background: #34c759; }
+.co-sw.on::after { transform: translateX(20px); }
+.co-note { margin: 9px 6px 0; font-size: 12.5px; color: var(--co-tx2); line-height: 1.45; }
+
+/* — Savat: bepul yetkazish — */
+.co-free { margin-bottom: 14px; padding: 12px 14px; border-radius: 16px; background: var(--co-bg2); border: .5px solid var(--co-sep); }
+#cartModal .co-free-tx { margin: 0 0 8px; padding: 0; text-align: left; font-size: 13.5px; font-weight: 500; letter-spacing: 0; color: var(--co-tx2) !important; }
+.co-free-tx b { color: var(--co-gold); font-weight: 700; }
+.co-free.is-done .co-free-tx { color: var(--co-green) !important; }
+.co-free-track { height: 5px; border-radius: 3px; background: var(--co-fill); overflow: hidden; }
+#cartModal .co-free-bar { height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--co-gold2), var(--co-gold)) !important; box-shadow: none !important; transition: width .6s var(--co-ease); }
+.co-free.is-done .co-free-bar { background: var(--co-green) !important; }
+
+/* — Savat: mahsulotlar — */
+.co-item { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 14px; }
+.co-item + .co-item::before { content: ""; position: absolute; top: 0; left: 80px; right: 0; height: .5px; background: var(--co-sep); }
+.co-img { flex: 0 0 54px; width: 54px; height: 54px; border-radius: 12px; object-fit: cover; background: #fff; box-shadow: inset 0 0 0 .5px var(--co-sep); }
+.co-mid { flex: 1; min-width: 0; }
+.co-nm { font-size: 15px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.co-opt { display: inline-block; margin-top: 4px; padding: 2px 7px; border-radius: 6px; font-size: 11.5px; font-weight: 600; color: var(--co-gold); background: var(--co-goldbg); }
+.co-price { margin-top: 4px; font-size: 13px; color: var(--co-tx2); font-variant-numeric: tabular-nums; }
+.co-price b { color: var(--co-gold); font-weight: 700; font-size: 14.5px; margin-right: 4px; }
+.co-step { flex: 0 0 auto; display: inline-flex; align-items: center; height: 32px; border-radius: 10px; background: var(--co-fill); }
+.co-step button { appearance: none; -webkit-appearance: none; width: 32px; height: 32px; border: 0; background: transparent; color: var(--co-gold); font-size: 20px; font-weight: 500; line-height: 1; cursor: pointer; display: grid; place-items: center; border-radius: 10px; -webkit-tap-highlight-color: transparent; transition: transform .3s var(--co-spring), background-color .2s; }
+.co-step button:active { transform: scale(.85); background: var(--co-fill); }
+.co-step button.del { color: var(--co-red); }
+.co-step button svg { width: 16px; height: 16px; }
+.co-step span { min-width: 22px; text-align: center; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--co-tx); }
+.co-trust { margin-top: 12px; }
+.co-empty { margin: 40px 0 20px; text-align: center; color: var(--co-tx2); font-size: 14.5px; line-height: 1.45; }
+.co-empty-ic { width: 76px; height: 76px; margin: 0 auto 16px; border-radius: 24px; display: grid; place-items: center; color: var(--co-gold); background: var(--co-goldbg); box-shadow: inset 0 0 0 .5px rgba(201,168,76,.4); }
+.co-empty-ic svg { width: 36px; height: 36px; }
+.co-empty b { display: block; margin-bottom: 4px; font-size: 20px; font-weight: 700; color: var(--co-tx); }
+.co-empty .co-btn { margin-top: 20px; }
+
+/* — Pastki panel — */
+.co-dock-sp { flex: 0 0 auto; height: 18px; }
+.co-dock { position: sticky; bottom: 0; z-index: 5; margin: auto -20px 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: rgba(18,18,18,.84); background: color-mix(in srgb, var(--co-page) 82%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px); border-top: .5px solid var(--co-sep); }
+#cartModal .co-dock { margin-top: auto; }
+#cartModal #cart-items-container { margin-bottom: 0; }
+.co-sumline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 4px 10px; font-size: 14px; color: var(--co-tx2); }
+.co-sumline i { font-style: normal; }
+#cartModal .co-sumline b, .co-sumline b { font-size: 22px; font-weight: 700; letter-spacing: -.5px; color: var(--co-tx) !important; float: none !important; font-variant-numeric: tabular-nums; }
+.co-btn { appearance: none; -webkit-appearance: none; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 52px; border: 0; border-radius: 14px; cursor: pointer;
+    font-family: inherit; font-size: 17px; font-weight: 600; letter-spacing: -.2px; color: #1a1405;
+    background: linear-gradient(135deg, #f0d060 0%, #c9a84c 50%, #a8851f 100%); box-shadow: 0 10px 24px -14px rgba(212,175,55,.9);
+    -webkit-tap-highlight-color: transparent; transition: transform .4s var(--co-spring), filter .2s, opacity .2s; }
+.co-btn:active { transform: scale(.97); filter: brightness(.94); transition-duration: .08s; }
+.co-btn.ghost { color: var(--co-tx); background: var(--co-fill); box-shadow: none; }
+.co-btn svg { width: 19px; height: 19px; }
+.co-btns { display: flex; gap: 10px; }
+.co-btns .co-btn { flex: 1; }
+
+/* — Rasmiylashtirish — */
+.co-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 2px; border-radius: 10px; background: var(--co-fill); }
+.co-seg button { appearance: none; -webkit-appearance: none; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--co-tx2); font-family: inherit; font-size: 14.5px; font-weight: 500; cursor: pointer; transition: background-color .25s var(--co-ease), color .2s, box-shadow .25s; -webkit-tap-highlight-color: transparent; }
+.co-seg button.on { background: var(--co-bg3); color: var(--co-tx); font-weight: 600; box-shadow: 0 3px 8px rgba(0,0,0,.18), 0 0 0 .5px var(--co-sep); }
+html[data-theme="light"] .co-seg button.on { background: #fff; }
+.co-seg-hint { margin: 8px 6px 10px; font-size: 13px; color: var(--co-tx2); }
+/* Yetkazish turi: ikki karta (Kuryer / BTS) — ajralib turadi */
+.co-dlv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.co-dlv-o {
+    appearance: none; -webkit-appearance: none; position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    padding: 13px 13px 12px; border-radius: 16px; border: 1.5px solid var(--co-sep); background: var(--co-bg2); color: var(--co-tx);
+    font-family: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: border-color .25s, background-color .25s, transform .35s var(--co-spring), box-shadow .25s;
+}
+.co-dlv-o:active { transform: scale(.97); }
+.co-dlv-o.on { border-color: var(--co-gold2); background: linear-gradient(160deg, var(--co-goldbg), transparent 70%), var(--co-bg2); box-shadow: 0 0 0 3px rgba(201,168,76,.14); }
+.co-dlv-ic { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: var(--co-fill2); color: var(--co-tx2); transition: background .25s, color .25s; }
+.co-dlv-ic svg { width: 22px; height: 22px; }
+.co-dlv-o.on .co-dlv-ic { background: linear-gradient(135deg, #f0d060, #c9a84c 55%, #a8851f); color: #1a1405; }
+.co-dlv-t { display: block; font-size: 16px; font-weight: 700; letter-spacing: -.2px; line-height: 1.2; }
+.co-dlv-t small { display: block; margin-top: 3px; font-size: 12.5px; font-weight: 400; color: var(--co-tx2); }
+.co-dlv-t em { display: inline-block; margin-top: 7px; padding: 2px 8px; border-radius: 999px; background: var(--co-fill2); color: var(--co-tx2); font-style: normal; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.co-dlv-o.on .co-dlv-t em { background: var(--co-goldbg); color: var(--co-gold); }
+.co-dlv-r { position: absolute; top: 12px; right: 12px; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--co-tx3); box-sizing: border-box; transition: all .25s; }
+.co-dlv-o.on .co-dlv-r { border: 0; background: var(--co-gold2); }
+.co-dlv-o.on .co-dlv-r::after { content: ""; position: absolute; left: 7px; top: 3.5px; width: 5px; height: 10px; border: solid #fff; border-width: 0 2.2px 2.2px 0; transform: rotate(45deg); }
+/* Asosiy yozuvlar qalinroq — kichik izohdan ajralib tursin */
+.co-t { font-weight: 600; letter-spacing: -.2px; }
+.co-t small { font-weight: 400; letter-spacing: 0; }
+
+.co-sel { position: relative; }
+.co-sel select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; -webkit-appearance: none; appearance: none; }
+.co-sel.is-off { opacity: .45; pointer-events: none; }
+.co-info { position: relative; padding: 11px 14px 12px 56px; font-size: 13.5px; color: var(--co-tx2); line-height: 1.5; }
+.co-info b { display: block; color: var(--co-tx); font-size: 15px; font-weight: 600; }
+.co-page .co-grp + .co-grp { margin-top: 10px; }
+
+/* — Pastdan chiquvchi oyna — */
+#coSheet { position: fixed; inset: 0; z-index: 4200; display: none; align-items: flex-end; background: rgba(0,0,0,.45); -webkit-tap-highlight-color: transparent; }
+#coSheet .co-sheet { width: 100%; max-height: 82vh; overflow-y: auto; -webkit-overflow-scrolling: touch; border-radius: 22px 22px 0 0; background: var(--co-bg2); color: var(--co-tx); padding: 8px 16px calc(18px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -12px 40px rgba(0,0,0,.45); animation: coUp .42s var(--co-ease) both; }
+html[data-theme="light"] #coSheet .co-sheet { background: #f2f2f7; }
+#coSheet .co-grp { background: var(--co-bg3); }
+html[data-theme="light"] #coSheet .co-grp { background: #fff; }
+#coSheet.m-closing { transition: opacity .2s; opacity: 0; }
+#coSheet.m-closing .co-sheet { transition: transform .22s ease-in; transform: translateY(100%); }
+@keyframes coUp { from { transform: translateY(100%); } to { transform: none; } }
+.co-grab { width: 38px; height: 5px; border-radius: 3px; background: var(--co-tx3); margin: 0 auto 12px; }
+.co-sh-t { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 12px; font-size: 19px; font-weight: 700; }
+.co-sh-t button { appearance: none; border: 0; background: none; color: var(--co-gold); font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; padding: 4px; }
+
+/* — Karta / ilova to'lovi — */
+.co-card { position: relative; margin: 4px 0 14px; height: 186px; border-radius: 20px; padding: 20px; overflow: hidden; color: #f5f5f7;
+    background: radial-gradient(120% 90% at 100% 0%, rgba(201,168,76,.28), transparent 55%), linear-gradient(135deg, #2c2c2e, #0e0e10); border: .5px solid rgba(201,168,76,.45);
+    box-shadow: 0 20px 40px -26px rgba(201,168,76,.7); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .35s var(--co-spring); }
+.co-card:active { transform: scale(.98); }
+.co-card .chip { width: 42px; height: 31px; border-radius: 7px; background: linear-gradient(135deg, #f6dc7e, #a8851f); }
+.co-card .num { margin-top: 40px; font-size: 22px; font-weight: 600; letter-spacing: 2.2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.co-card .ft { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 13px; font-weight: 600; letter-spacing: .8px; color: #e2c46e; }
+.co-card .ft i { font-style: italic; font-weight: 800; letter-spacing: 0; color: rgba(255,255,255,.6); font-size: 16px; }
+.co-copy { position: absolute; right: 16px; top: 16px; display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 9px; font-size: 13px; font-weight: 600; color: #e2c46e; background: rgba(201,168,76,.16); }
+.co-copy svg { width: 14px; height: 14px; }
+.co-num { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #1a1405; background: linear-gradient(135deg, #f0d060, #c9a84c); }
+
+html.lite #coSheet .co-sheet { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { #coSheet .co-sheet { animation: none !important; } .co-btn, .co-sw::after, .co-step button { transition: none !important; } }

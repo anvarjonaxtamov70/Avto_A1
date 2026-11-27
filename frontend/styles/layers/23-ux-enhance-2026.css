@@ -1,0 +1,78 @@
+
+/* ================================================================
+   UX YAXSHILASH (2026) — 4 ta dizayn qatlami, ADDITIVE va XAVFSIZ
+     1) Micro-interactions (tap press)   2) Content-aware skeleton
+     3) Bottom-sheet modal nafisligi     4) Karta parallax (rasm)
+   Hammasi GPU-friendly (faqat transform/opacity). lite + reduced-motion
+   da o'chadi -> telefonni QIZDIRMAYDI. Mavjud qoidalarga tegmaydi
+   (yangi selektorlar / property'lar; eski :active'lar !important bilan ustun).
+   ================================================================ */
+
+/* ——— 1) MICRO-INTERACTIONS: bosilganda nafis "press" (scale 0.95, 120ms) ——— */
+/*    Faqat ALLAQACHON :active transform'i BO'LMAGAN elementlarga qo'shiladi
+      (luxury-card / btn-add-cart / pm-sticky-btn / p2-tile / p2-hdr-btn —
+       o'z press'iga ega, ularga TEGILMAYDI). */
+.ux-tap,
+.close-btn, .pm-close-btn, .pm-edit-icon,
+.inv-btn, .btn-checkout,
+.chip, .cat-chip, .model-chip, .origin-chip, .inv-fchip, .quick-chip,
+.addr-type-btn, .pay-method-card, .dlv-method-card,
+.story-item, .luxury-model-item, .nav-item,
+.field-mic-btn, .field-scan-btn, .scan-action-btn,
+.profile-menu-item, .similar-card, .search-item {
+    transition: transform 120ms var(--ease-bounce, cubic-bezier(0.34,1.56,0.64,1));
+}
+.ux-tap:active,
+.close-btn:active, .pm-close-btn:active, .pm-edit-icon:active,
+.inv-btn:active, .btn-checkout:active,
+.chip:active, .cat-chip:active, .model-chip:active, .origin-chip:active, .inv-fchip:active, .quick-chip:active,
+.addr-type-btn:active, .pay-method-card:active, .dlv-method-card:active,
+.story-item:active, .luxury-model-item:active, .nav-item:active,
+.field-mic-btn:active, .field-scan-btn:active, .scan-action-btn:active,
+.profile-menu-item:active, .similar-card:active, .search-item:active {
+    transform: scale(0.95);
+}
+
+/* ——— 2) CONTENT-AWARE SKELETON ——— */
+/*    Karta SHAKLIDAGI skeleton ALLAQACHON mavjud (.sk-card / .sk-bone, shimmer
+      bilan, lite + light-theme moslangan). Yangi tizim yaratilmaydi (ikki xil
+      skeleton bo'lmasin). Yagona muammo: u dastlabki yuklanishda markaziy "gear"
+      ostida yashirin qolardi. Buni JS hal qiladi (pastga qarang: _showInitialSkeletons)
+      -> mavjud karta-skeletonlar yuklanish paytida KO'RINADI. CSS o'zgarmaydi. */
+
+/* ——— 3) BOTTOM-SHEET nafisligi (mavjud slideUpModal ANIMATSIYASI ustiga) ——— */
+/*    Modallar pastdan chiqadi (allaqachon bor). Endi tepa burchaklar yumaloq +
+      "tortish" tayoqchasi (handle) nafisroq -> zamonaviy sheet ko'rinishi.
+      Tuzilma/balandlik o'zgarmaydi (skroll/navigatsiya buzilmaydi). */
+.modal-standard {
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+}
+.modal-standard::before {
+    width: 44px !important;
+    height: 5px !important;
+    background: rgba(255,255,255,0.22) !important;
+}
+html[data-theme="light"] .modal-standard::before { background: rgba(120,90,30,0.22) !important; }
+
+/* ——— 4) KARTA PARALLAX: rasm skrollda yengil "suzadi" (faqat transform) ——— */
+/*    Boshlang'ich kichik zoom (1.08) parallax siljishiga joy beradi; img-wrap
+      ustidagi radial mask qirralarni yashiradi -> bo'sh joy ko'rinmaydi.
+      Haqiqiy siljishni JS inline transform bilan beradi (rAF, GPU). */
+.luxury-card .img-wrap img.ux-parallax { transform: scale(1.08); }
+
+/* ——— REDUCED-MOTION: "harakatni kamaytirish" yoqilsa — press/parallax/shimmer o'chadi ——— */
+@media (prefers-reduced-motion: reduce) {
+    .ux-tap:active,
+    .close-btn:active, .pm-close-btn:active, .pm-edit-icon:active,
+    .inv-btn:active, .btn-checkout:active,
+    .chip:active, .cat-chip:active, .model-chip:active, .origin-chip:active, .inv-fchip:active, .quick-chip:active,
+    .addr-type-btn:active, .pay-method-card:active, .dlv-method-card:active,
+    .story-item:active, .luxury-model-item:active, .nav-item:active,
+    .field-mic-btn:active, .field-scan-btn:active, .scan-action-btn:active,
+    .profile-menu-item:active, .similar-card:active, .search-item:active { transform: none; }
+    .luxury-card .img-wrap img.ux-parallax { transform: none; }
+}
+
+/* ——— LITE REJIM: zaif telefonlarda parallax butunlay o'chadi ——— */
+html.lite .luxury-card .img-wrap img.ux-parallax { transform: none !important; }

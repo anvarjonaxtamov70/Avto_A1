@@ -1,0 +1,70 @@
+
+/* ================================================================
+   ANIMATSIYA QATLAMI (2026) — 6 ta, ADDITIVE va XAVFSIZ.
+     1) Page transition (lite/reduced refinement)  2) Staggered card entry (JS)
+     3) Cart FAB idle pulse   4) CSS success check (Lottie o'rniga)
+     5) Number count-up (JS)  6) Swipe gestures (JS)
+   GPU-friendly (transform/opacity/box-shadow). lite + reduced-motion
+   da yengillashadi yoki o'chadi -> telefonni QIZDIRMAYDI.
+   ================================================================ */
+
+/* ——— 1) PAGE TRANSITION: mavjud cinematicEnter'ni GPU uchun optimallash ——— */
+/*    cinematicEnter blur() ishlatadi (zaif GPU uchun qimmat). Kuchli telefonda
+      premium blur qoladi; zaifda (lite) blur'siz yengil fade-up'ga o'tamiz. */
+#content-area > div { will-change: transform, opacity; }
+html.lite #content-area > div {
+    animation: anim2026FadeUp 0.30s ease forwards !important;
+    filter: none !important;
+}
+@keyframes anim2026FadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* ——— 3) CART FAB IDLE PULSE: savatda tovar bo'lsa nafis "nafas olish" halqasi ——— */
+/*    box-shadow halqasi pseudo-element'da -> badge'ning o'z scale-pulse'iga TEGMAYDI. */
+.nav-badge.idle::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: fabRing 2.4s ease-out infinite;
+}
+@keyframes fabRing {
+    0%   { box-shadow: 0 0 0 0 rgba(255,69,58,0.45); }
+    70%  { box-shadow: 0 0 0 9px rgba(255,69,58,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,69,58,0); }
+}
+
+/* ——— 4) CSS SUCCESS CHECK (Lottie O'RNIGA — CSS/SVG, kutubxonasiz) ——— */
+.css-check-overlay {
+    position: fixed; inset: 0; z-index: 99997;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none; background: transparent;
+}
+.css-check-circle {
+    width: 96px; height: 96px; border-radius: 50%;
+    background: rgba(48,209,88,0.16);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 12px 34px rgba(48,209,88,0.30);
+    animation: cssCheckPop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+.css-check-circle svg { width: 52px; height: 52px; }
+.css-check-circle svg path {
+    fill: none; stroke: #30d158; stroke-width: 3.5;
+    stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 30; stroke-dashoffset: 30;
+    animation: cssCheckDraw 0.4s 0.18s ease forwards;
+}
+@keyframes cssCheckPop { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes cssCheckDraw { to { stroke-dashoffset: 0; } }
+
+/* ——— 6) SWIPE: kartani surganda silliq qaytishi uchun ——— */
+
+/* ——— REDUCED-MOTION: pulslar/animatsiyalar o'chadi ——— */
+@media (prefers-reduced-motion: reduce) {
+    .nav-badge.idle::after { animation: none; }
+    .css-check-circle, .css-check-circle svg path { animation: none; }
+    .css-check-circle svg path { stroke-dashoffset: 0; }
+    #content-area > div { animation: none !important; }
+}
+/* ——— LITE: doimiy FAB pulse o'chadi (zaif telefonni charchatmasin) ——— */
+html.lite .nav-badge.idle::after { animation: none !important; }

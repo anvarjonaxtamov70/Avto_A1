@@ -1,0 +1,23 @@
+
+/* ═══════════════════════════════════════════════════════════════════
+   ⚡ iOS (Telegram WKWebView) QOTISHLARIGA QARSHI — ko'rinish O'ZGARMAYDI.
+   O'lchov (CPU x4, bekor turgan holat, 5 s): Task 1098 ms, Style 288 ms.
+   Sabablar:
+   1) Har mahsulot kartasidagi "taqqoslash" ikonkasi (SVG) cheksiz tebranardi —
+      SVG transform WebKit'da GPU'da emas, har kadrda qayta chiziladi; ustiga
+      tugmada backdrop-filter bor -> har kadrda xiralashtirish qayta hisoblanardi.
+      Tugma foni 90–95% to'q — blur ko'zga ko'rinmasdi, faqat yuk edi.
+   2) Eski #order-loading-overlay (yangisi bilan almashtirilgan) ko'rinmas holda
+      (opacity:0) butun ekranga blur(10px) va ikkita cheksiz animatsiya bilan turardi.
+   ═══════════════════════════════════════════════════════════════════ */
+.btn-compare-card { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.btn-compare-card .cmp-card-ic { animation: none !important; }
+.cmp-rock { display: inline-flex; transform-origin: 50% 17%; animation: cmpRock 2.6s ease-in-out infinite; }
+.btn-compare-card:active .cmp-rock,
+.reveal-item:not(.active) .cmp-rock { animation-play-state: paused; }
+html.lite .cmp-rock, .pf-weak .cmp-rock { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .cmp-rock { animation: none !important; } }
+
+.order-loading-overlay:not(.active) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.order-loading-overlay:not(.active) .hourglass:after,
+.order-loading-overlay:not(.active) .order-loading-text { animation-play-state: paused !important; }
