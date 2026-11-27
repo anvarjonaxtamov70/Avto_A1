@@ -1,0 +1,108 @@
+async function buildOrderQuote(ctx, token, uid, intent, payloadHash) {
+  const [productsRaw, ordersRaw, profileRaw] = await Promise.all([
+    rtdbGet(ctx.dbUrl, "products", token),
+    rtdbGet(ctx.dbUrl, "users/" + uid + "/orders", token),
+    rtdbGet(ctx.dbUrl, "users/" + uid + "/profile", token),
+  ]);
+  // `profile/vip/manual` — `profile` ning ichida: alohida so'rov (subrequest) shart emas.
+  const manualVip = profileRaw && typeof profileRaw === "object" && profileRaw.vip && typeof profileRaw.vip === "object"
+    ? profileRaw.vip.manual
+    : null;
+  const products = toEntries(productsRaw);
+  if (!products.length) throw httpError(503, "mahsulotlar mavjud emas");
+  const quotedItems = [];
+  let total = 0;
+
+  for (let index = 0; index < intent.items.length; index++) {
+    const requested = intent.items[index];
+    const hit = products.find((entry) => String(entry.val.id) === requested.id);
+    if (!hit || hit.val.is_draft === true) {
+      throw httpError(409, "mahsulot mavjud emas", {
+        shortages: [{ id: requested.id, name: requested.id, size: requested.size || undefined, available: 0, requested: requested.qty }],
+      });
+    }
+    const product = hit.val;
+    const price = Number(product.price);
+    if (!Number.isSafeInteger(price) || price < 0 || price > 1000000000) {
+      throw httpError(409, "mahsulot narxi noto'g'ri", { productId: requested.id });
+    }
+    const sizeEntries = toEntries(product.sizes);
+    const isSized = product.product_type === "razmerli" || sizeEntries.length > 0;
+    let size = "Universal";
+    let sizeKey = null;
+    let carModel = "";
+    let available = Number(product.stock) || 0;
+    if (isSized) {
+      if (!requested.size || requested.size === "Universal") {
+        throw httpError(400, "razmer tanlanmagan", { productId: requested.id });
+      }
+      const sizeHit = sizeEntries.find((entry) => String(entry.val.size) === requested.size);
+      if (!sizeHit) throw httpError(400, "razmer topilmadi", { productId: requested.id, size: requested.size });
+      size = requested.size;
+      sizeKey = sizeHit.key;
+      available = Math.max(0, Number(sizeHit.val.stock) || 0);
+    } else if (requested.size && requested.size !== "Universal") {
+      // ⚠️ ILGARI: bu yerda 400 "bu mahsulotda razmer yo'q" qaytarilardi va
+      //    BUTUN buyurtma rad etilardi. Lekin Mini App razmersiz tovar uchun
+      //    "Qaysi mashina uchun?" tanlovini aynan shu maydonda yuboradi
+      //    (`id||Gazel Biznes`). Natijada mashina tanlovi bor har qanday oddiy
+      //    tovarni sotib olib bo'lmasdi — mijoz faqat "Xatolik!" ko'rardi.
+      //    Endi bu MASHINA MODELI sifatida saqlanadi (adminga ko'rinadi), stok
+      //    esa tovarning umumiy qoldig'idan olinadi.
+      carModel = cleanText(requested.size, 40, false);
+    }
+    const lineTotal = price * requested.qty;
+    if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(total + lineTotal)) {
+      throw httpError(400, "buyurtma summasi juda katta");
+    }
+    total += lineTotal;
+    quotedItems.push({
+      lineKey: "i" + index,
+      id: requested.id,
+      name: cleanText(product.name || requested.id, 160, true),
+      size,
+      carModel: carModel || undefined,
+      qty: requested.qty,
+      unitPrice: price,
+      lineTotal,
+      productKey: hit.key,
+      sizeKey,
+      available,
+    });
+  }
+
+  const deliveredSpend = toEntries(ordersRaw)
+    .map((entry) => entry.val)
+    .filter((order) => order && order.status === "yetkazildi")
+    .reduce((sum, order) => sum + Math.max(0, Number(order.total) || 0), 0);
+  const cbRate = deliveredSpend >= 3000000 || manualVip === "vip" ? 0.01 : 0.008;
+  const now = Date.now();
+  const profile = profileRaw && typeof profileRaw === "object" ? profileRaw : {};
+  const customer = {
+    name: intent.customer.name || cleanText(profile.name || profile.firstName, 100, false),
+    phone: intent.customer.phone || cleanText(profile.phone, 40, false),
+    address: intent.customer.address || cleanText(profile.address, 300, false),
+    username: intent.customer.username || cleanText(profile.username, 64, false).replace(/^@+/, ""),
+  };
+  // Ism SHART. Telefon esa ixtiyoriy: eski oqimda ham telefonsiz buyurtma
+  // o'tardi ("Raqam yozilmagan"). Telefonni majburiy qilish checkoutni butunlay
+  // bloklab qo'yardi — shuning uchun faqat ismni talab qilamiz.
+  if (!customer.name) throw httpError(400, "customer.name kerak");
+  const orderId = String(now) + "-" + payloadHash.slice(0, 12);
+  return {
+    payloadHash,
+    orderId,
+    orderKey: uid + "_" + orderId,
+    code: "A1-" + payloadHash.slice(0, 8).toUpperCase(),
+    createdAt: now,
+    items: quotedItems,
+    total,
+    cbRate,
+    deliveredSpend,
+    customer,
+    delivery: intent.delivery,
+    payment: intent.payment,
+    cashbackRequested: intent.cashbackRequested,
+  };
+}
+

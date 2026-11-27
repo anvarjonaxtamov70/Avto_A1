@@ -1,0 +1,124 @@
+async function renewAttemptLease(ctx, token, attemptPath, owner, ownerGeneration) {
+  const result = await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
+    if (!current || current.state !== "processing" || current.owner !== owner ||
+        Number(current.ownerGeneration) !== Number(ownerGeneration)) {
+      throw httpError(409, "attempt lease egasi o'zgargan", { retryable: true });
+    }
+    const next = { ...current, leaseUntil: Date.now() + ATTEMPT_LEASE_MS, updatedAt: Date.now() };
+    return { value: next, result: next };
+  });
+  return result.result || result.value;
+}
+
+// Lease qachon berilgani (yoki oxirgi marta yangilangani). `leaseUntil` dan
+// hisoblanadi — u PUT'dan OLDIN olingan vaqt, ya'ni ehtiyotkor baho.
+function leaseClock(leaseUntil, leaseMs) {
+  const at = Number(leaseUntil) - leaseMs;
+  return { at: Number.isFinite(at) && at > 0 ? Math.min(at, Date.now()) : 0 };
+}
+
+function leaseDue(clock) {
+  return !clock || Date.now() - clock.at >= LEASE_RENEW_AFTER_MS;
+}
+
+async function renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, ownerGeneration, clock) {
+  if (!leaseDue(clock)) return;
+  const next = await renewAttemptLease(ctx, token, attemptPath, owner, ownerGeneration);
+  if (clock) clock.at = leaseClock(next && next.leaseUntil, ATTEMPT_LEASE_MS).at || Date.now();
+}
+
+async function reservationMarkerKey(quote) {
+  return "r_" + (await sha256Hex("reservation|" + quote.orderKey + "|" + quote.payloadHash)).slice(0, 40);
+}
+
+async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration, clock) {
+  const markerKey = await reservationMarkerKey(quote);
+  const reserved = [];
+  for (const item of quote.items) {
+    await renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, ownerGeneration, clock);
+    const result = await rtdbEtagMutate(ctx.dbUrl, "products/" + item.productKey, token, (current) => {
+      if (!current || String(current.id) !== item.id) {
+        return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available: 0, requested: item.qty } } };
+      }
+      const product = cloneJson(current);
+      product._orderReservations = product._orderReservations && typeof product._orderReservations === "object"
+        ? product._orderReservations
+        : {};
+      const bucket = product._orderReservations[markerKey] && typeof product._orderReservations[markerKey] === "object"
+        ? product._orderReservations[markerKey]
+        : { items: {} };
+      bucket.items = bucket.items && typeof bucket.items === "object" ? bucket.items : {};
+      const existing = bucket.items[item.lineKey];
+      if (existing && existing.state === "reserved") return { abort: true, result: { reserved: true, duplicate: true } };
+      if (existing && existing.state === "released") {
+        return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available: 0, requested: item.qty } } };
+      }
+
+      let available;
+      if (item.sizeKey !== null) {
+        if (!product.sizes || !product.sizes[item.sizeKey] || String(product.sizes[item.sizeKey].size) !== item.size) {
+          return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available: 0, requested: item.qty } } };
+        }
+        available = Math.max(0, Number(product.sizes[item.sizeKey].stock) || 0);
+        if (available < item.qty) return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available, requested: item.qty } } };
+        product.sizes[item.sizeKey].stock = available - item.qty;
+        if (product.stock != null) product.stock = Math.max(0, (Number(product.stock) || 0) - item.qty);
+      } else {
+        available = Math.max(0, Number(product.stock) || 0);
+        if (available < item.qty) return { abort: true, result: { shortage: { id: item.id, name: item.name, available, requested: item.qty } } };
+        product.stock = available - item.qty;
+      }
+      bucket.items[item.lineKey] = { state: "reserved", qty: item.qty };
+      product._orderReservations[markerKey] = bucket;
+      return { value: product, result: { reserved: true } };
+    });
+    if (result.result && result.result.shortage) {
+      await releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration, clock);
+      return { ok: false, shortages: [result.result.shortage] };
+    }
+    reserved.push(item.lineKey);
+  }
+  return { ok: true, markerKey, reserved };
+}
+
+async function releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration, clock) {
+  const markerKey = await reservationMarkerKey(quote);
+  for (const item of quote.items) {
+    if (attemptPath) await renewAttemptLeaseIfDue(ctx, token, attemptPath, owner, ownerGeneration, clock);
+    await rtdbEtagMutate(ctx.dbUrl, "products/" + item.productKey, token, (current) => {
+      if (!current || !current._orderReservations || !current._orderReservations[markerKey]) {
+        return { abort: true, result: { released: false } };
+      }
+      const product = cloneJson(current);
+      const bucket = product._orderReservations[markerKey];
+      const marker = bucket.items && bucket.items[item.lineKey];
+      if (!marker || marker.state !== "reserved") return { abort: true, result: { released: false } };
+      if (item.sizeKey !== null && product.sizes && product.sizes[item.sizeKey]) {
+        product.sizes[item.sizeKey].stock = Math.max(0, Number(product.sizes[item.sizeKey].stock) || 0) + item.qty;
+        if (product.stock != null) product.stock = Math.max(0, Number(product.stock) || 0) + item.qty;
+      } else {
+        product.stock = Math.max(0, Number(product.stock) || 0) + item.qty;
+      }
+      marker.state = "released";
+      return { value: product, result: { released: true } };
+    });
+  }
+  await cleanReservationMarkers(ctx, token, quote);
+}
+
+async function cleanReservationMarkers(ctx, token, quote) {
+  const markerKey = await reservationMarkerKey(quote);
+  for (const item of quote.items) {
+    if (!item || item.productKey == null || item.productKey === "") continue;
+    await rtdbEtagMutate(ctx.dbUrl, "products/" + item.productKey, token, (current) => {
+      if (!current || !current._orderReservations || !current._orderReservations[markerKey]) {
+        return { abort: true, result: { cleaned: true } };
+      }
+      const product = cloneJson(current);
+      delete product._orderReservations[markerKey];
+      if (!Object.keys(product._orderReservations).length) delete product._orderReservations;
+      return { value: product, result: { cleaned: true } };
+    });
+  }
+}
+

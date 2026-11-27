@@ -1,0 +1,170 @@
+// =====================================================================
+//  💬 STORIS JAVOBLARI — admin HAR BIR mijoz bilan bog'lana oladi
+// ---------------------------------------------------------------------
+//  Ilgari mijoz (ayniqsa ilova/saytdan) storisga yozsa adminga faqat ism
+//  borardi: Telegram'i yo'q mijozga javob berishning iloji yo'q edi.
+//  Endi javob SERVERDA yoziladi (ism, tasdiqlangan raqam, username bilan) va
+//  adminlarga «✍️ Javob yozish» tugmali kartochka boradi. Admin javobi
+//  (bot yoki ilova orqali) mijozga ilovada (storis + 🔔) va Telegram'da
+//  yetadi — qayerdan yozganidan qat'i nazar.
+// =====================================================================
+const STORY_SID_RE = /^[^.#$\[\]\/\u0000-\u001F\u007F]{1,140}$/;
+
+function miniAppUrl(env) {
+  const url = String((env && env.MINI_APP_URL) || "https://anvarjonaxtamov70.github.io/Avto_A1/");
+  return /^https:\/\//.test(url) ? url : "https://anvarjonaxtamov70.github.io/Avto_A1/";
+}
+
+function storyReplyCardText(r) {
+  const NL = String.fromCharCode(10);
+  const name = escapeTelegramHtml(r.name || "Mijoz");
+  const who = isTgUid(r.uid) ? '<a href="tg://user?id=' + r.uid + '">' + name + "</a>" : "<b>" + name + "</b>";
+  const lines = [
+    (r.x ? "💬 <b>Storisga javob</b>" : "✨ <b>Storisga reaksiya</b>"),
+    "",
+    "👤 " + who + (r.username ? " · @" + escapeTelegramHtml(r.username) : ""),
+  ];
+  if (r.phone) lines.push("📞 <code>" + escapeTelegramHtml(r.phone) + "</code>" + (r.phoneVerified ? " ✅" : ""));
+  lines.push("📱 " + escapeTelegramHtml(r.via));
+  if (r.cap) lines.push("🎬 " + escapeTelegramHtml(r.cap));
+  lines.push("");
+  if (r.x) lines.push("✍️ <i>«" + escapeTelegramHtml(r.x) + "»</i>");
+  else lines.push("✨ Reaksiya: " + escapeTelegramHtml(r.e) + (r.e === "❓" ? " <i>(narx / ma'lumot so'rayapti)</i>" : ""));
+  lines.push("");
+  lines.push("<i>«✍️ Javob yozish» — javobingiz mijozga ilovada va Telegram'da boradi.</i>");
+  return lines.join(NL);
+}
+
+async function handleStoryReply(request, env, execCtx) {
+  try {
+    const body = await readJsonBody(request);
+    const identity = await authenticateBody(body, env);
+    const sid = cleanText(body.sid, 140, true);
+    if (!STORY_SID_RE.test(sid)) throw httpError(400, "sid noto'g'ri");
+    const x = cleanText(body.x, 500, false);
+    const e = x ? "" : cleanText(body.e, 16, false);
+    if (!x && !e) throw httpError(400, "javob bo'sh");
+    const isAdmin = getAdminIds(env).includes(identity.uid);
+    consumeMessageRate("story|" + identity.uid, isAdmin);
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const [profileRaw, verifyRaw] = await Promise.all([
+      rtdbGet(ctx.dbUrl, "users/" + identity.uid + "/profile", token),
+      rtdbGet(ctx.dbUrl, "users/" + identity.uid + "/verify", token),
+    ]);
+    const profile = plainObj(profileRaw);
+    const verify = plainObj(verifyRaw);
+    const claims = identity.source === "telegram" ? plainObj(identity.claims) : {};
+    const tgName = [claims.first_name, claims.last_name].filter(Boolean).join(" ");
+    const profName = profile.name && profile.name !== "Mijoz" ? profile.name : "";
+    const name = cleanText(String(profName || tgName || body.n || "Mijoz").slice(0, 80), 80, false) || "Mijoz";
+    let username = String(claims.username || profile.username || "").replace(/^@+/, "");
+    if (!/^[A-Za-z0-9_]{3,64}$/.test(username)) username = "";
+    const vPhone = typeof verify.phone === "string" ? verify.phone : "";
+    const phone = cleanText(String(vPhone || profile.phone || "").slice(0, 40), 40, false);
+    const avatarRaw = String(profile.avatar || body.a || "");
+    const avatar = /^https:\/\//.test(avatarRaw) && avatarRaw.length <= 500 ? avatarRaw : "";
+    const viaHint = String(body.via || "");
+    const via = identity.source === "telegram" ? "Telegram mini app"
+      : (viaHint === "app" ? "Ilova" : "Sayt") + (isTgUid(identity.uid) ? " (Telegram hisobi)" : "");
+    const cap = cleanText(String(body.cap || "").slice(0, 120), 120, false);
+
+    const rid = pushId();
+    const rec = { t: Date.now(), n: name };
+    if (x) rec.x = x; else rec.e = e;
+    if (username) rec.u = username;
+    if (avatar) rec.a = avatar;
+    if (phone) rec.ph = phone;
+    if (vPhone) rec.pv = 1;
+    const short = (await sha256Hex("sr|" + sid + "|" + identity.uid + "|" + rid)).slice(0, 20);
+    const updates = {};
+    updates["story_replies/" + sid + "/" + identity.uid + "/" + rid] = rec;
+    updates["story_reply_index/" + short] = { sid, uid: identity.uid, rid, at: rec.t, n: name };
+    await rtdbPatch(ctx.dbUrl, "", updates, token);
+
+    const admins = getAdminIds(env).filter(isTelegramChatId).filter((id) => id !== identity.uid);
+    const text = storyReplyCardText({ uid: identity.uid, name, username, phone, phoneVerified: !!vPhone, via, cap, x, e });
+    // Tugmalar har xil (callback_data yoki url) — JSDoc: muharrir tekshiruvi uchun
+    /** @type {Array<Record<string, string>>} */
+    const row = [{ text: "✍️ Javob yozish", callback_data: "sra:" + short }];
+    if (username) row.push({ text: "💬 Telegram", url: "https://t.me/" + username });
+    const keyboard = { inline_keyboard: [row] };
+    const results = env.BOT_TOKEN
+      ? await Promise.all(admins.map((chatId) => telegramCall(env, "sendMessage", {
+        chat_id: chatId, text, parse_mode: "HTML", reply_markup: keyboard, disable_web_page_preview: true,
+      })))
+      : [];
+    return json({ ok: true, rid, notified: results.filter((r) => r.ok).length });
+  } catch (err) {
+    const response = errorResponse(err);
+    if (response.status === 429) response.headers.set("Retry-After", String(err.extra && err.extra.retryAfter || 60));
+    return response;
+  }
+}
+
+async function handleStoryAnswer(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const short = body.short == null ? "" : cleanText(body.short, 40, false);
+    const rawText = typeof body.text === "string" ? body.text : "";
+    // Imzo bot yuborgan AYNAN matn bo'yicha tekshiriladi, keyin tozalanadi.
+    const identity = body.botAuth != null
+      ? await verifyBotAuth(body, env, "story-answer",
+        [short || String(body.sid || "") + "|" + String(body.uid || ""), rawText])
+      : await authenticateBody(body, env);
+    const text = cleanText(rawText, 1000, true);
+    if (!getAdminIds(env).includes(identity.uid)) throw httpError(403, "faqat admin");
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    let sid;
+    let uid;
+    if (short) {
+      if (!/^[0-9a-f]{20}$/.test(short)) throw httpError(400, "short noto'g'ri");
+      const idx = await rtdbGet(ctx.dbUrl, "story_reply_index/" + short, token);
+      if (!idx || typeof idx !== "object") throw httpError(404, "javob topilmadi");
+      sid = String(idx.sid || "");
+      uid = String(idx.uid || "");
+    } else {
+      sid = cleanText(body.sid, 140, true);
+      uid = cleanText(body.uid, 128, true);
+    }
+    if (!STORY_SID_RE.test(sid)) throw httpError(400, "sid noto'g'ri");
+    uid = requireSafeUid(uid, 400);
+    // Mijoz eski hisobini Telegram hisobiga birlashtirgan bo'lsa — javob yangisiga
+    let target = uid;
+    if (!isTgUid(uid)) {
+      const r = await rtdbGet(ctx.dbUrl, "uid_redirect/" + uid, token);
+      if (r && typeof r === "object" && isTgUid(r.to)) target = String(r.to);
+    }
+    const aid = pushId();
+    const now = Date.now();
+    const updates = {};
+    updates["story_replies/" + sid + "/" + target + "/" + aid] = { t: now, x: text, s: 1, n: "Avto A1", by: identity.uid };
+    updates["users/" + target + "/phase2/notifications/sa_" + aid] = {
+      id: "sa_" + aid, icon: "💬", title: "Avto A1 javob berdi", text: text.slice(0, 300),
+      date: now, read: false, kind: "story_answer", sid,
+    };
+    if (short) updates["story_reply_index/" + short + "/answeredAt"] = now;
+    await rtdbPatch(ctx.dbUrl, "", updates, token);
+    let telegram = "skip";
+    if (isTgUid(target) && env.BOT_TOKEN) {
+      const NL = String.fromCharCode(10);
+      const payload = {
+        chat_id: target,
+        parse_mode: "HTML",
+        text: "💬 <b>Avto A1</b> storisdagi xabaringizga javob berdi:" + NL + NL + "<i>" + escapeTelegramHtml(text) + "</i>",
+        reply_markup: { inline_keyboard: [[{ text: "🛍 Do'konni ochish", web_app: { url: miniAppUrl(env) } }]] },
+      };
+      let res = await telegramCall(env, "sendMessage", payload);
+      if (!res.ok && res.permanent && /button|web_app|BUTTON/i.test(res.error)) {
+        delete payload.reply_markup;
+        res = await telegramCall(env, "sendMessage", payload);
+      }
+      telegram = res.ok ? "sent" : "err";
+    }
+    return json({ ok: true, uid: target, sid, id: aid, telegram });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+

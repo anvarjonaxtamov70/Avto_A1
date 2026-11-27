@@ -1,0 +1,140 @@
+// =============================================================
+//  AVTO A1 — Cloudflare Worker  (paste-safe versiya)
+//  1) "/"         — Telegram xabar yuboruvchi PROXY (sendMessage)
+//                   ⛔ ENDI OCHIQ EMAS: initData HMAC bilan tekshiriladi,
+//                      chat_id cheklanadi (oddiy mijoz faqat o'ziga yoki
+//                      adminga; admin esa har kimga yubora oladi).
+//  2) "/auth"     — Telegram initData HMAC bilan tekshiriladi,
+//                   Firebase CUSTOM TOKEN qaytaradi (uid = Telegram id)
+//  5) "/order-commit" — buyurtmani yozadi; "/order-status" — holatni
+//                   o'zgartiradi (admin, bot yoki mijozning o'zi bekor qilishi).
+//                   Ikkalasi ham Telegram xabarlarini SERVERDA yuboradi:
+//                   BARCHA adminlarga tugmali kartochka (holat o'zgarsa
+//                   tahrirlanadi), mijozga o'z tilida xabar.
+//  6) "/order-notify" — bot watchdog: yetkazilmay qolgan bildirishnomani
+//                   qayta yuborish (faqat bot HMAC imzosi bilan).
+//  7) "/order-deliver" — yangi ilova buyurtma/holat javobini olgach xabarni
+//                   ALOHIDA so'rovda turtadi (notifyMode:"split"): bepul
+//                   rejadagi 50 subrequest limiti xabarlarga yetishi uchun.
+//  8) 🪪 YAGONA HISOB (fayl oxirida batafsil):
+//       "/login-phone"  — ilova/sayt: raqam -> Telegram'ga 3 ta raqamli tugma;
+//       "/tg-login-poll" — tasdiqlansa Telegram ID uchun custom token;
+//       "/phone-verify" — Mini App requestContact (Telegram imzosi) -> raqam indeksi;
+//       "/merge-legacy" — eski (anonim/parolli) hisobni Telegram hisobiga ko'chirish;
+//       "/session"      — birlashtirilgan eski sessiya -> Telegram hisobi tokeni.
+// 10) "/account-delete" — mijoz o'z hisobini o'chiradi (shaxsiy ma'lumotlar
+//                   o'chadi, buyurtmalar anonim holda saqlanadi).
+// 11) "/admin-reset" — admin «Botni tozalash» (alohida parol bilan): buyurtma,
+//                   keshbek, statistika va xabarlar o'chadi; tovar/narx va
+//                   ismi+raqami bor mijozlar qoladi (fayl oxirida batafsil).
+//  9) "/story-reply" — mijozning storis javobi (server yozadi, adminlarga
+//                   «✍️ Javob yozish» tugmali kartochka); "/story-answer" —
+//                   admin javobi mijozga (ilovada + Telegram'da).
+//  4) "/stock-commit" — Ombor zaxirasini SERVERDA kamaytiradi: mahsulot
+//                   `id` bo'yicha topiladi (indeks bo'yicha emas), `stock >= qty`
+//                   tekshiriladi va atomik `increment` bilan yoziladi.
+//                   Bu oversell (yo'q tovarni sotish) va "noto'g'ri tovar
+//                   stoki kamaydi" muammolarini yopadi.
+//
+//  Secret'lar (Worker > Settings > Variables):
+//     BOT_TOKEN, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
+//  Ixtiyoriy:
+//     ADMIN_IDS        (vergul bilan, mas: "5105291033,483425630")
+//     ADMIN_ALERT_CHAT_ID (yangi mijoz xabari boradigan bitta Telegram chat)
+//     CUSTOMER_REGISTRATION_RATE_LIMIT (anonymous IP uchun soatlik limit, standart 20)
+//     FIREBASE_DB_URL  (mas: "https://avtoa1shop-default-rtdb.firebaseio.com")
+//     SHOP_PHONE       (mijozga "bekor qilindi" xabaridagi telefon, standart "+998 88 289 30 30")
+//     ADMIN_RESET_PASSWORD («Botni tozalash» parolini almashtirish; bo'lmasa standart parol)
+//
+//  ESLATMA: bu faylda atayin backslash-n belgisi ishlatilmagan
+//  (ba'zi nusxalash vositalari uni buzadi). Newline kerak joyda
+//  String.fromCharCode(10) ishlatilgan.
+// =============================================================
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  // X-Init-Data — /upload stream rejimida auth shu header orqali keladi
+  // (body'ga tegmasdan tekshirish uchun). Preflight ruxsati SHART.
+  // Authorization — ilova/sayt (Telegram'siz) admini: Firebase idToken.
+  "Access-Control-Allow-Headers": "Content-Type, Range, X-Init-Data, Authorization",
+  "Access-Control-Max-Age": "86400",
+};
+
+// ⚠️ Mini app'dagi ADMIN_IDS bilan BIR XIL bo'lishi shart (index.html).
+//    Ilgari 5302078 yo'q edi — o'sha admin video yuklaganda 403 olardi.
+const DEFAULT_ADMIN_IDS = ["5105291033", "483425630", "5302078"];
+const DEFAULT_DB_URL = "https://avtoa1shop-default-rtdb.firebaseio.com";
+const DEFAULT_FIREBASE_PROJECT_ID = "avtoa1shop";
+const TELEGRAM_INIT_MAX_AGE = 60 * 60;
+const CLOCK_SKEW_SECONDS = 300;
+const MAX_JSON_BYTES = 64 * 1024;
+const ORDER_STATUSES = ["kutilmoqda", "qabul", "yolda", "yetkazildi", "bekor_qilingan"];
+// yetkazildi -> bekor_qilingan = QAYTARISH (mijoz tovarni qaytardi). Stok
+// tiklanadi, berilgan cashback qaytarib olinadi, ishlatilgani qaytariladi
+// (applyStatusLoyalty / restockOrderOnce buni allaqachon to'g'ri qiladi).
+// Mijozning o'zi faqat "kutilmoqda" buyurtmani bekor qila oladi (pastda).
+const ORDER_TRANSITIONS = {
+  kutilmoqda: ["qabul", "bekor_qilingan"],
+  qabul: ["yolda", "bekor_qilingan"],
+  yolda: ["yetkazildi", "bekor_qilingan"],
+  yetkazildi: ["bekor_qilingan"],
+  bekor_qilingan: [],
+};
+// Bot (Python) Worker'ga BOT_TOKEN dan hosil qilingan HMAC imzo bilan
+// murojaat qiladi — alohida maxfiy kalit sozlash shart emas.
+const BOT_AUTH_MAX_SKEW_SECONDS = 300;
+const ORDER_NOTIFY_LEASE_MS = 60 * 1000;
+// Yetkazilmagan bildirishnoma: birinchi qayta urinish 90 s dan keyin, keyin
+// eksponensial (2, 4, 8 ... daqiqa, ko'pi bilan 30 daq). 8 urinishdan keyin
+// to'xtaydi (`retryAt` o'chiriladi — watchdog indeksidan chiqadi).
+const ORDER_RETRY_FIRST_MS = 90 * 1000;
+const ORDER_RETRY_MAX_ATTEMPTS = 8;
+const ATTEMPT_LEASE_MS = 45 * 1000;
+const STATUS_LEASE_MS = 45 * 1000;
+// ⏱ CLOUDFLARE SUBREQUEST BYUDJETI. Bepul rejada BITTA so'rov (fon vazifasi
+//    — waitUntil — bilan birga) atigi 50 ta tashqi fetch qila oladi. Har bir
+//    ETag yozuvi = 2 ta (GET + PUT). Ilgari lease HAR qadamda yangilanardi:
+//    1 tovarli buyurtma ~54, 4 tovarli ~62 subrequest ishlatardi. Natija:
+//      • xabarlar limitga urilib yuborilmasdi — admin va mijoz ularni faqat
+//        bot watchdog'idan (1.5-2.5 daqiqa) keyin olardi;
+//      • chegarada mijoz xabari ketib, yakuniy yozuv ketmasdi — watchdog
+//        uni QAYTA yuborardi ("qabul qilindi" ikki marta);
+//      • 4+ tovarli buyurtma "qisman bajarildi" (503) bilan yiqilardi.
+//    Endi lease faqat oxirgi yangilanishdan 15 s o'tgandagina yangilanadi.
+//    Lease 45 s — demak bu oraliqda boshqa egasi uni ola olmaydi va egalik
+//    (fencing) kafolati avvalgidek saqlanadi.
+const LEASE_RENEW_AFTER_MS = 15 * 1000;
+// Eski mijoz/bot (notifyMode yo'q) uchun xabar shu so'rovning o'zida
+// yuboriladi. Tovar soni ko'p bo'lsa byudjet yetmasligi mumkin — unda
+// xabar bot watchdog'iga qoldiriladi (kechikadi, lekin yo'qolmaydi).
+const INLINE_NOTIFY_MAX_ITEMS = 4;
+const JWKS_REFRESH_COOLDOWN_MS = 5 * 1000;
+const JWKS_NEGATIVE_TTL_MS = 60 * 1000;
+const firebaseCertCache = {
+  keys: null,
+  expiresAt: 0,
+  refreshPromise: null,
+  nextForcedRefreshAt: 0,
+  negativeKids: new Map(),
+};
+const googleTokenCache = { token: "", expiresAt: 0 };
+const messageRateLimits = new Map();
+
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
+function getAdminIds(env) {
+  if (env && env.ADMIN_IDS) {
+    return String(env.ADMIN_IDS)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return DEFAULT_ADMIN_IDS;
+}
+

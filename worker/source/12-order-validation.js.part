@@ -1,0 +1,108 @@
+// ===================== Secure JSON API helpers =====================
+function getDbContext(env) {
+  return {
+    dbUrl: String(env.FIREBASE_DB_URL || DEFAULT_DB_URL).replace(/\/$/, ""),
+    env,
+  };
+}
+
+function cloneJson(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function cleanText(value, maxLength, required) {
+  let text = value == null ? "" : String(value);
+  text = text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim();
+  if (required && !text) throw httpError(400, "majburiy matn maydoni bo'sh");
+  if (text.length > maxLength) throw httpError(400, "matn maydoni juda uzun");
+  return text;
+}
+
+function safeInteger(value, name, min, max) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < min || number > max) {
+    throw httpError(400, name + " noto'g'ri");
+  }
+  return number;
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(stableStringify).join(",") + "]";
+  return "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + stableStringify(value[key])).join(",") + "}";
+}
+
+async function sha256Hex(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)));
+  return toHex(digest);
+}
+
+function normalizeOrderIntent(body) {
+  const attemptId = cleanText(body.attemptId, 128, true);
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(attemptId)) {
+    throw httpError(400, "attemptId 8-128 ta harf, raqam, _ yoki - bo'lishi kerak");
+  }
+  if (!Array.isArray(body.items) || !body.items.length || body.items.length > 60) {
+    throw httpError(400, "items 1-60 qator bo'lishi kerak");
+  }
+
+  const aggregated = new Map();
+  for (const raw of body.items) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw httpError(400, "item noto'g'ri");
+    const id = cleanText(raw.id, 80, true);
+    if (/[.#$\[\]/]/.test(id)) throw httpError(400, "mahsulot id noto'g'ri");
+    const size = cleanText(raw.size == null ? "" : raw.size, 40, false);
+    const qty = safeInteger(raw.qty, "qty", 1, 100);
+    const key = id + "\u0000" + size;
+    const previous = aggregated.get(key);
+    const totalQty = (previous ? previous.qty : 0) + qty;
+    if (totalQty > 100) throw httpError(400, "bir mahsulot miqdori juda ko'p");
+    aggregated.set(key, { id, size, qty: totalQty });
+  }
+  const items = Array.from(aggregated.values()).sort((a, b) =>
+    (a.id + "\u0000" + a.size).localeCompare(b.id + "\u0000" + b.size)
+  );
+
+  const customerRaw = body.customer && typeof body.customer === "object" ? body.customer : {};
+  const deliveryRaw = body.delivery && typeof body.delivery === "object" ? body.delivery : {};
+  const paymentRaw = body.payment && typeof body.payment === "object" ? body.payment : {};
+  const customer = {
+    name: cleanText(customerRaw.name, 100, false),
+    phone: cleanText(customerRaw.phone, 40, false),
+    address: cleanText(customerRaw.address, 300, false),
+    username: cleanText(customerRaw.username, 64, false).replace(/^@+/, ""),
+  };
+  if (customer.phone && !/^[+0-9()\-\s]{5,40}$/.test(customer.phone)) {
+    throw httpError(400, "telefon formati noto'g'ri");
+  }
+  const delivery = {
+    method: cleanText(deliveryRaw.method || body.deliveryMethod || "delivery", 40, true),
+    address: cleanText(deliveryRaw.address || customer.address, 300, false),
+    mapLink: cleanText(deliveryRaw.mapLink || body.deliveryMapLink, 500, false),
+    note: cleanText(deliveryRaw.note, 500, false),
+  };
+  if (delivery.mapLink) {
+    let parsed;
+    try { parsed = new URL(delivery.mapLink); } catch (_) { throw httpError(400, "mapLink noto'g'ri"); }
+    if (parsed.protocol !== "https:") throw httpError(400, "mapLink faqat https bo'lishi kerak");
+  }
+  const payment = {
+    method: cleanText(paymentRaw.method || body.paymentMethod || "cash", 32, true),
+    note: cleanText(paymentRaw.note, 200, false),
+  };
+  // payment.method — inson o'qiydigan yorliq bo'lishi mumkin (masalan
+  //  "Karta orqali o'tkazma", "Payme/Click ilova", "Naqd pul (yetkazilganda)").
+  //  U faqat SAQLANADI/KO'RSATILADI, RTDB yo'lida ISHLATILMAYDI. cleanText
+  //  boshqaruv belgilarini olib tashlagan va uzunlikni cheklagan (<=32);
+  //  qo'shimcha qat'iy regex buyurtmani BLOKLAB qo'yardi — shuning uchun
+  //  faqat bo'sh emasligini talab qilamiz.
+  if (!payment.method) throw httpError(400, "payment.method bo'sh");
+  // delivery.method — mashina kodi (delivery/courier/bts). Yo'lda ishlatilmaydi.
+  if (!/^[A-Za-z0-9_ .-]{1,40}$/.test(delivery.method)) throw httpError(400, "delivery.method noto'g'ri");
+
+  const cashbackRequested = body.cashbackRequested == null
+    ? 0
+    : safeInteger(body.cashbackRequested, "cashbackRequested", 0, 1000000000);
+  return { attemptId, items, cashbackRequested, customer, delivery, payment };
+}
+

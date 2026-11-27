@@ -1,0 +1,89 @@
+function consumeMessageRate(identity, isAdmin) {
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const limit = isAdmin ? 600 : 10; // admin: ommaviy xabar uchun (Telegram ~30/s ruxsat beradi)
+  const current = messageRateLimits.get(identity);
+  const bucket = !current || now - current.startedAt >= windowMs
+    ? { startedAt: now, count: 0 }
+    : current;
+  bucket.count += 1;
+  messageRateLimits.set(identity, bucket);
+  if (messageRateLimits.size > 1000) {
+    for (const [key, value] of messageRateLimits) {
+      if (now - value.startedAt >= windowMs) messageRateLimits.delete(key);
+      if (messageRateLimits.size <= 800) break;
+    }
+  }
+  if (bucket.count > limit) {
+    throw httpError(429, "juda ko'p xabar", { retryAfter: Math.max(1, Math.ceil((bucket.startedAt + windowMs - now) / 1000)) });
+  }
+}
+
+async function handleDeprecatedStockCommit(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    await authenticateBody(body, env);
+    return json({
+      ok: false,
+      stockCommit: true,
+      error: "stock-commit bekor qilingan; /order-commit dan foydalaning",
+    }, 410);
+  } catch (err) {
+    const response = errorResponse(err);
+    const original = await response.json();
+    return json({ ...original, stockCommit: true }, response.status);
+  }
+}
+
+async function handleSendMessageSecure(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const identity = await authenticateBody(body, env);
+    const allowedFields = new Set([
+      "initData", "idToken", "chat_id", "text", "parse_mode",
+      "disable_web_page_preview", "disable_notification",
+    ]);
+    for (const key of Object.keys(body)) {
+      if (!allowedFields.has(key)) throw httpError(400, "ruxsat etilmagan maydon: " + key);
+    }
+    const chatId = cleanText(body.chat_id, 24, true);
+    if (!/^-?[1-9]\d{0,19}$/.test(chatId)) throw httpError(400, "chat_id noto'g'ri");
+    const text = body.text == null ? "" : String(body.text);
+    if (!text.trim() || text.length > 4096 || /[\u0000\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text)) {
+      throw httpError(400, "text noto'g'ri");
+    }
+    const adminIds = getAdminIds(env);
+    const isAdmin = adminIds.includes(identity.uid);
+    if (!isAdmin && chatId !== identity.uid && !adminIds.includes(chatId)) {
+      throw httpError(403, "chat_id ga ruxsat yoq");
+    }
+    consumeMessageRate(identity.uid, isAdmin);
+    const payload = { chat_id: chatId, text };
+    if (body.parse_mode != null) {
+      if (body.parse_mode !== "HTML" && body.parse_mode !== "MarkdownV2") throw httpError(400, "parse_mode noto'g'ri");
+      payload.parse_mode = body.parse_mode;
+    }
+    if (typeof body.disable_web_page_preview === "boolean") payload.disable_web_page_preview = body.disable_web_page_preview;
+    if (typeof body.disable_notification === "boolean") payload.disable_notification = body.disable_notification;
+    if (!env.BOT_TOKEN) throw httpError(500, "BOT_TOKEN sozlanmagan");
+    const telegram = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    let data;
+    try { data = await telegram.json(); } catch (_) { data = null; }
+    if (!telegram.ok || !data || data.ok !== true) {
+      throw httpError(502, "Telegram xabarni qabul qilmadi", {
+        telegramStatus: telegram.status,
+        telegramError: data && data.description ? String(data.description).slice(0, 300) : undefined,
+      });
+    }
+    return json(data);
+  } catch (err) {
+    const response = errorResponse(err);
+    if (response.status === 429) response.headers.set("Retry-After", String(err.extra && err.extra.retryAfter || 60));
+    return response;
+  }
+}
+

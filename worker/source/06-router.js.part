@@ -1,0 +1,160 @@
+export default {
+  // execCtx — Cloudflare ExecutionContext (waitUntil). Telegram xabarlari
+  // javobdan KEYIN ham yuborilishi uchun kerak (mijoz ilovani yopsa ham).
+  async fetch(request, env, execCtx) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: cors });
+    }
+
+    const path = new URL(request.url).pathname;
+
+    // ---------- /media : Telegram fayl PROXY (DOIMIY, token yashirin) ----------
+    // Storis rasm/videolari shu yerdan o'qiladi. file_id har safar yangidan
+    // file_path'ga aylantirilgani uchun link HECH QACHON eskirmaydi (eski
+    // "1 soatdan keyin video o'chib ketardi" muammosi shu bilan hal bo'ladi).
+    if (path === "/media" || path === "/file") {
+      return handleMedia(request, env);
+    }
+
+    // ---------- /img : ImgBB rasmini TEKSHIRIB beruvchi proxy ----------
+    // ImgBB xato bo'lsa o'z "service unavailable" rasmini qaytaradi; bu yerdan
+    // faqat haqiqiy rasm o'tadi, aks holda xato (ilova brend placeholder qo'yadi).
+    if (path === "/img") {
+      return handleImageProxy(request, execCtx);
+    }
+
+    if (request.method !== "POST") {
+      return new Response("Faqat POST", { status: 405, headers: cors });
+    }
+
+    // ---------- /auth : initData -> Firebase custom token ----------
+    if (path === "/auth") {
+      try {
+        const body = await readJsonBody(request);
+        const initData = body.initData;
+        if (!initData || typeof initData !== "string") {
+          return json({ ok: false, error: "initData yoq" }, 400);
+        }
+        const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
+        if (!verified.ok) {
+          return json({ ok: false, error: verified.error }, 401);
+        }
+        const uid = requireSafeUid(verified.user.id, 401);
+        const token = await createFirebaseCustomToken(uid, env);
+        return json({ ok: true, token, uid });
+      } catch (e) {
+        return errorResponse(e);
+      }
+    }
+
+    // ---------- /upload : galereyadan VIDEO/RASM yuklash (faqat admin) ----------
+    // NEGA BU KERAK: ilgari mini app'dan storisga video QO'SHIB BO'LMASDI —
+    // admin faqat tashqi havola yozishi mumkin edi (ImgBB video qabul qilmaydi,
+    // bot tokeni esa mijozda yo'q, ataylab). Endi fayl shu endpoint orqali
+    // Telegram'ga yuklanadi va MUDDATSIZ `file_id` qaytadi; /media proxy uni
+    // Range (qism-qism) bilan uzatadi -> video darhol o'ynay boshlaydi.
+    //
+    // ⚠️ TELEGRAM CHEGARASI: bot `getFile` bilan faqat 20 MB gacha faylni
+    //    o'qiy oladi. Ya'ni 20 MB dan katta video YUKLANSA HAM keyin
+    //    ko'rsatib bo'lmaydi. Shuning uchun chegara aynan shu yerda qo'yiladi
+    //    (mijoz keyin "video ishlamaydi" muammosiga tushmasligi uchun).
+    if (path === "/upload") {
+      // 🚀 ASOSIY YO'L: auth header'da bo'lsa — body'ni Telegram'ga stream qilamiz
+      //    (CPU cheklovi muammosi shu bilan hal bo'ladi, yuqoridagi izohga qara).
+      const hdrInit = request.headers.get("X-Init-Data");
+      if (hdrInit) return handleUploadStream(request, env, hdrInit, null);
+      // 📱 Ilova/sayt admini (Telegram'siz): "Authorization: Bearer <idToken>"
+      const authz = String(request.headers.get("Authorization") || "");
+      const bearer = authz.match(/^Bearer\s+(\S{20,4096})$/);
+      if (bearer) return handleUploadStream(request, env, "", bearer[1]);
+
+      // 🛟 ZAXIRA YO'L (legacy): eski mijoz initData'ni body ichida yuboradi.
+      //    Bu yo'l 20 MB ni xotirada parse qiladi va CPU cheklovига urilishi
+      //    mumkin — shuning uchun faqat moslik uchun saqlanadi.
+      try {
+        const form = await request.formData();
+        const initData = String(form.get("initData") || "");
+        const file = form.get("file");
+
+        if (!initData) return json({ ok: false, error: "initData yoq" }, 400);
+        const verified = await verifyTelegramInitData(initData, env.BOT_TOKEN);
+        if (!verified.ok) return json({ ok: false, error: verified.error }, 401);
+
+        // Faqat admin yuklashi mumkin
+        const uid = requireSafeUid(verified.user.id, 401);
+        const admins = (env.ADMIN_IDS ? String(env.ADMIN_IDS).split(",") : DEFAULT_ADMIN_IDS)
+          .map((x) => String(x).trim());
+        if (admins.indexOf(uid) === -1) {
+          return json({ ok: false, error: "ruxsat yoq" }, 403);
+        }
+
+        if (!file || typeof file === "string") return json({ ok: false, error: "fayl yoq" }, 400);
+
+        const MAX = 20 * 1024 * 1024; // Telegram getFile chegarasi
+        if (file.size > MAX) {
+          return json({
+            ok: false,
+            error: "juda katta",
+            size: file.size,
+            max: MAX,
+          }, 413);
+        }
+
+        const mime = String(file.type || "");
+        const isVideo = mime.indexOf("video") === 0;
+        const method = isVideo ? "sendVideo" : "sendPhoto";
+        const field = isVideo ? "video" : "photo";
+
+        // Fayl saqlanadigan chat: alohida MEDIA_CHAT_ID bo'lmasa — yuklovchining o'zi
+        const chatId = env.MEDIA_CHAT_ID || uid;
+
+        const tgForm = new FormData();
+        tgForm.append("chat_id", String(chatId));
+        tgForm.append("disable_notification", "true");
+        tgForm.append("caption", isVideo ? "🎬 Mini app: storis videosi" : "🖼 Mini app: storis rasmi");
+        tgForm.append(field, file, file.name || (isVideo ? "story.mp4" : "story.jpg"));
+        if (isVideo) tgForm.append("supports_streaming", "true");
+
+        const tgRes = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/${method}`, {
+          method: "POST",
+          body: tgForm,
+        });
+        const tg = await tgRes.json();
+        if (!tg || !tg.ok || !tg.result) {
+          return json({ ok: false, error: (tg && tg.description) || "Telegram rad etdi" }, 502);
+        }
+
+        const out = buildUploadResult(tg, isVideo, new URL(request.url).origin, file.size);
+        if (!out) return json({ ok: false, error: "file_id qaytmadi" }, 502);
+        return json(out);
+      } catch (_) {
+        return json({ ok: false, error: "upload xatosi" }, 500);
+      }
+    }
+
+    // All protected JSON APIs use the same verified identity. Named routes are
+    // dispatched explicitly so an unknown path can never fall through to Telegram.
+    if (path === "/order-commit") return handleOrderCommit(request, env, execCtx);
+    if (path === "/order-status") return handleOrderStatus(request, env, execCtx);
+    if (path === "/order-notify") return handleOrderNotify(request, env);
+    if (path === "/order-deliver") return handleOrderDeliver(request, env, execCtx);
+    if (path === "/customer-register") return handleCustomerRegister(request, env);
+    if (path === "/tg-login-poll") return handleTgLoginPoll(request, env);
+    // 🪪 Yagona hisob (Telegram ID = asosiy hisob) va storis javoblari
+    if (path === "/session") return handleSession(request, env);
+    if (path === "/login-phone") return handleLoginPhone(request, env);
+    if (path === "/phone-verify") return handlePhoneVerify(request, env);
+    if (path === "/merge-legacy") return handleMergeLegacy(request, env);
+    if (path === "/story-reply") return handleStoryReply(request, env, execCtx);
+    if (path === "/story-answer") return handleStoryAnswer(request, env);
+    // 🗑 Hisobni o'chirish (Google Play talabi): ilova, sayt yoki Telegram /delete
+    if (path === "/account-delete") return handleAccountDelete(request, env);
+    // 🧹 Botni tozalash (faqat admin + alohida parol)
+    if (path === "/admin-reset") return handleAdminReset(request, env);
+    if (path === "/stock-commit") return handleDeprecatedStockCommit(request, env);
+    if (path === "/") return handleSendMessageSecure(request, env);
+    return json({ ok: false, error: "topilmadi" }, 404);
+
+  },
+};
+

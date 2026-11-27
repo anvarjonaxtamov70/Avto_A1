@@ -1,0 +1,564 @@
+// =====================================================================
+//  📨 BUYURTMA BILDIRISHNOMALARI — SERVERDA (ishonchli)
+//  Ilgari adminga xabarni MIJOZNING brauzeri yuborardi: natija
+//  tekshirilmasdi, ilova 6 soniyada yopilardi va internet sekin bo'lsa
+//  buyurtma bazada bor-u, admin bexabar qolardi. Faqat ADMIN_IDS[0]
+//  olardi, tugmalar yo'q edi.
+//
+//  Endi: Worker buyurtmani yozgach `notification_outbox/<kalit>` ni
+//  shu yerda yetkazadi —
+//    • BARCHA adminlarga tugmali kartochka (✅ Qabul / 🚚 / 🏁 / ❌);
+//    • mijozga o'z tilida tasdiq;
+//    • holat o'zgarsa — har bir adminning kartochkasi YANGILANADI
+//      (holat + keyingi tugmalar), mijozga xabar boradi;
+//    • har bir qabul qiluvchi alohida belgilanadi (`done`), shuning uchun
+//      qayta urinish faqat yetmaganlarga yuboradi (dublikat yo'q);
+//    • yetkazilmagan hodisani bot (`order_outbox_watchdog`) /order-notify
+//      orqali qayta uradi.
+// =====================================================================
+const ORDER_STATUS_LABELS = {
+  kutilmoqda: "⏳ Kutilmoqda",
+  qabul: "✅ Qabul qilindi",
+  yolda: "🚚 Yo'lda",
+  yetkazildi: "🏁 Yetkazildi",
+  bekor_qilingan: "❌ Bekor qilingan",
+};
+// callback_data 64 baytdan oshmasligi uchun holat 1 harf bilan kodlanadi.
+const ORDER_STATUS_CODES = { qabul: "q", yolda: "y", yetkazildi: "d", bekor_qilingan: "x" };
+
+function fmtSomW(value) {
+  const n = Math.round(Number(value) || 0);
+  const neg = n < 0;
+  const digits = String(Math.abs(n));
+  let out = "";
+  for (let i = 0; i < digits.length; i++) {
+    if (i && (digits.length - i) % 3 === 0) out += " ";
+    out += digits[i];
+  }
+  return (neg ? "-" : "") + out;
+}
+
+function isTelegramChatId(value) {
+  return /^-?[1-9]\d{0,19}$/.test(String(value == null ? "" : value));
+}
+
+async function orderShortKey(orderKey) {
+  return (await sha256Hex("order-tg|" + orderKey)).slice(0, 20);
+}
+
+// Admin kartochkasidagi tugmalar — holatga qarab FAQAT ruxsat etilgan o'tishlar.
+// ⚠️ bot/bot.py dagi `order_admin_keyboard` bilan AYNAN bir xil bo'lishi shart
+//    (sinovlar ikkalasini ham bitta kutilgan natija bilan tekshiradi).
+function orderAdminKeyboard(status, short) {
+  const rows = [];
+  if (status === "kutilmoqda") rows.push([{ text: "✅ Qabul qilish", callback_data: "ord:q:" + short }]);
+  if (status === "qabul") rows.push([{ text: "🚚 Yo'lga chiqdi", callback_data: "ord:y:" + short }]);
+  if (status === "yolda") rows.push([{ text: "🏁 Yetkazildi", callback_data: "ord:d:" + short }]);
+  if (status === "kutilmoqda" || status === "qabul" || status === "yolda") {
+    rows.push([{ text: "❌ Bekor qilish", callback_data: "ordc:x:" + short }]);
+  }
+  if (status === "yetkazildi") rows.push([{ text: "↩️ Qaytarildi (bekor)", callback_data: "ordc:x:" + short }]);
+  return { inline_keyboard: rows };
+}
+
+function orderDeliveryLabel(method) {
+  const m = String(method || "").toLowerCase();
+  if (m === "courier") return "Kuryer";
+  if (m === "bts") return "BTS pochta";
+  if (m === "pickup") return "Olib ketish";
+  return "Yetkazib berish";
+}
+
+function orderItemLines(order) {
+  const NL = String.fromCharCode(10);
+  const items = Array.isArray(order.itemDetails) ? order.itemDetails : [];
+  const lines = [];
+  for (const it of items) {
+    if (!it || typeof it !== "object") continue;
+    const opt = it.size && it.size !== "Universal" ? it.size : (it.carModel || "");
+    const size = opt ? " (" + escapeTelegramHtml(opt) + ")" : "";
+    const qty = Number(it.qty) || 0;
+    const unit = Number(it.unitPrice) || 0;
+    const line = it.lineTotal != null ? Number(it.lineTotal) || 0 : unit * qty;
+    lines.push("▪️ " + escapeTelegramHtml(it.name || it.id || "Mahsulot") + size + " — " + qty + " x " +
+      fmtSomW(unit) + " = " + fmtSomW(line) + " so'm");
+  }
+  if (!lines.length && order.items && typeof order.items === "object") {
+    // Eski buyurtma: faqat {"id||razmer": soni} xaritasi bor.
+    for (const key of Object.keys(order.items)) {
+      if (key.indexOf("l_") === 0) continue;
+      const sep = key.indexOf("||");
+      const id = sep > 0 ? key.slice(0, sep) : key;
+      const size = sep > 0 ? key.slice(sep + 2).split("_dot_").join(".") : "";
+      const sizeTxt = size && size !== "Universal" && size !== "undefined" ? " (" + escapeTelegramHtml(size) + ")" : "";
+      lines.push("▪️ ID " + escapeTelegramHtml(id) + sizeTxt + " — " + (Number(order.items[key]) || 0) + " ta");
+    }
+  }
+  return lines.join(NL);
+}
+
+function orderAdminCardText(order, event) {
+  const NL = String.fromCharCode(10);
+  const status = String(order.status || "kutilmoqda");
+  const code = escapeTelegramHtml(order.code || order.id || "");
+  const head = status === "kutilmoqda"
+    ? "🆕 <b>YANGI BUYURTMA: #" + code + "</b>"
+    : "🧾 <b>BUYURTMA: #" + code + "</b>";
+  const delivery = order.delivery && typeof order.delivery === "object" ? order.delivery : {};
+  const lines = [head, "📌 <b>Holat:</b> " + (ORDER_STATUS_LABELS[status] || escapeTelegramHtml(status)), ""];
+  lines.push("👤 <b>Ism:</b> " + escapeTelegramHtml(order.customerName || "Ismsiz mijoz"));
+  lines.push("📞 <b>Telefon:</b> " + (order.customerPhone
+    ? "<code>" + escapeTelegramHtml(order.customerPhone) + "</code>"
+    : "<i>kiritilmagan</i>"));
+  if (order.customerUsername) lines.push("💬 <b>Telegram:</b> @" + escapeTelegramHtml(order.customerUsername));
+  lines.push("📍 <b>Manzil:</b> " + escapeTelegramHtml(order.customerAddress || delivery.address || "kiritilmagan"));
+  if (order.deliveryMapLink || delivery.mapLink) {
+    const link = String(order.deliveryMapLink || delivery.mapLink);
+    if (/^https:\/\//.test(link)) {
+      lines.push("🗺 <a href=\"" + escapeTelegramHtml(link).split("\"").join("&quot;") + "\">Xaritada ochish</a>");
+    }
+  }
+  lines.push("🚚 <b>Yetkazish:</b> " + orderDeliveryLabel(order.deliveryMethod || delivery.method));
+  if (delivery.note) lines.push("📝 <b>Izoh:</b> " + escapeTelegramHtml(delivery.note));
+  const pay = order.payment && typeof order.payment === "object" ? order.payment.method : order.paymentMethod;
+  if (pay) lines.push("💳 <b>To'lov:</b> " + escapeTelegramHtml(pay));
+  lines.push("🆔 <b>Mijoz ID:</b> <code>" + escapeTelegramHtml(order.uid || "") + "</code>");
+  if (order.date || order.time) lines.push("🕒 " + escapeTelegramHtml([order.date, order.time].filter(Boolean).join(" ")));
+  lines.push("");
+  lines.push("🛒 <b>Mahsulotlar:</b>");
+  let items = orderItemLines(order);
+  if (items.length > 2600) {
+    items = items.slice(0, 2600);
+    items = items.slice(0, items.lastIndexOf(NL) > 0 ? items.lastIndexOf(NL) : items.length) + NL + "… (ro'yxat qisqartirildi)";
+  }
+  lines.push(items || "<i>tafsilot yo'q</i>");
+  lines.push("");
+  lines.push("💰 <b>Jami:</b> " + fmtSomW(order.total) + " so'm");
+  const cb = Number(order.cashbackUsed) || 0;
+  if (cb > 0) {
+    lines.push("🎁 <b>Cashback:</b> −" + fmtSomW(cb) + " so'm");
+    lines.push("💵 <b>TO'LANADI:</b> " + fmtSomW(order.payable != null ? order.payable : (Number(order.total) || 0) - cb) + " so'm");
+  }
+  if (event && event.type === "order_status") {
+    const who = event.by === "customer"
+      ? "mijozning o'zi"
+      : "admin" + (event.byName ? " (" + escapeTelegramHtml(event.byName) + ")" : "");
+    const verb = event.from === "yetkazildi" && event.status === "bekor_qilingan" ? "qaytarildi" : "o'zgartirildi";
+    lines.push("");
+    lines.push("🔄 <i>Oxirgi o'zgarish: " + escapeTelegramHtml(ORDER_STATUS_LABELS[event.status] || event.status) +
+      " — " + verb + ", " + who + "</i>");
+  }
+  // ⚠️ Bu yerda kesilmaydi: HTML ni o'rtasidan kesish teg/entity'ni buzadi va
+  //    Telegram butun xabarni rad etadi. Uzun bo'lsa `adminCardSend` oddiy
+  //    matnga o'tadi.
+  return lines.join(NL);
+}
+
+function htmlToPlain(text) {
+  return String(text || "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&amp;/g, "&");
+}
+
+// Kartochkani yuboradi/tahrirlaydi. HTML rad etilsa (parse xatosi, juda uzun)
+// — OLDDIY MATN bilan qayta uradi. Yangi buyurtma xabari hech qachon shu
+// sabab bilan yo'qolmasligi kerak.
+async function adminCardSend(env, method, base, card, keyboard) {
+  const tooLong = card.length > 4096;
+  if (!tooLong) {
+    const res = await telegramCall(env, method, {
+      ...base, text: card, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: keyboard,
+    });
+    if (res.ok || !res.permanent || !/parse|entit|too long|tag/i.test(res.error)) return res;
+  }
+  let plain = htmlToPlain(card);
+  if (plain.length > 4000) plain = plain.slice(0, 3990) + "…";
+  return await telegramCall(env, method, {
+    ...base, text: plain, disable_web_page_preview: true, reply_markup: keyboard,
+  });
+}
+
+const CUSTOMER_ORDER_TEXTS = {
+  uz: {
+    // ⚠️ "created" ATAYLAB "qabul qilindi" demaydi: do'kon hali qabul qilmagan.
+    //    Ilgari ikkala xabar ham "✅ ... qabul qilindi" bilan boshlanardi va
+    //    admin «Qabul» bosganda mijozga go'yo AYNAN SHU xabar ikkinchi marta
+    //    kelgandek tuyulardi.
+    created: "🧾 Buyurtmangiz do'konga yuborildi!{NL}🆔 Kod: #{code}{detail}{NL}{NL}⏳ Do'kon tez orada ko'rib chiqib tasdiqlaydi — holat o'zgarganda shu yerda xabar beramiz.",
+    qabul: "✅ #{code} raqamli buyurtmangiz qabul qilindi va tayyorlanmoqda!{detail}{NL}{NL}🙏 Tez orada keyingi bosqich haqida xabar beramiz.",
+    yolda: "🚚 #{code} raqamli buyurtmangiz yo'lga chiqdi!{detail}{NL}{NL}📦 Tez orada manzilingizga yetkazib beramiz, telefoningiz yoningizda bo'lsin.",
+    yetkazildi: "🏁 #{code} raqamli buyurtmangiz yetkazib berildi.{detail}{NL}{NL}🙏 Xaridingiz uchun rahmat! Yana kutamiz.",
+    bekor_qilingan: "❌ #{code} raqamli buyurtmangiz bekor qilindi.{NL}{NL}Savollaringiz bo'lsa biz bilan bog'laning: {phone}",
+    returned: "↩️ #{code} raqamli buyurtmangiz qaytarildi deb belgilandi.{NL}{NL}Savollaringiz bo'lsa biz bilan bog'laning: {phone}",
+    self_cancel: "❌ #{code} raqamli buyurtmangizni bekor qildingiz.{NL}{NL}Fikringiz o'zgarsa — do'konda qaytadan buyurtma bering.",
+    total: "💰 Jami: {sum} so'm",
+    payable: "💵 To'lanadi: {sum} so'm",
+    cashback: "🎁 Cashback: −{sum} so'm",
+  },
+  ru: {
+    created: "🧾 Ваш заказ отправлен в магазин!{NL}🆔 Код: #{code}{detail}{NL}{NL}⏳ Магазин скоро проверит и подтвердит — сообщим здесь, когда статус изменится.",
+    qabul: "✅ Ваш заказ #{code} принят и готовится!{detail}{NL}{NL}🙏 Скоро сообщим о следующем этапе.",
+    yolda: "🚚 Ваш заказ #{code} в пути!{detail}{NL}{NL}📦 Скоро доставим по адресу, держите телефон под рукой.",
+    yetkazildi: "🏁 Ваш заказ #{code} доставлен.{detail}{NL}{NL}🙏 Спасибо за покупку! Ждём вас снова.",
+    bekor_qilingan: "❌ Ваш заказ #{code} отменён.{NL}{NL}По вопросам свяжитесь с нами: {phone}",
+    returned: "↩️ Ваш заказ #{code} отмечен как возвращённый.{NL}{NL}По вопросам свяжитесь с нами: {phone}",
+    self_cancel: "❌ Вы отменили заказ #{code}.{NL}{NL}Передумаете — оформите заказ в магазине заново.",
+    total: "💰 Итого: {sum} сум",
+    payable: "💵 К оплате: {sum} сум",
+    cashback: "🎁 Кэшбэк: −{sum} сум",
+  },
+};
+
+function customerOrderText(lang, key, order, env, withItems) {
+  const NL = String.fromCharCode(10);
+  const t = CUSTOMER_ORDER_TEXTS[lang === "ru" ? "ru" : "uz"];
+  const fill = (tpl, vars) => String(tpl).replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? String(vars[k]) : m));
+  let detail = "";
+  if (withItems) {
+    const items = orderItemLines(order).replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&amp;/g, "&");
+    if (items) detail += NL + NL + "🛒" + NL + items.slice(0, 2500);
+  }
+  if (Number(order.total) > 0) {
+    detail += NL + NL + fill(t.total, { sum: fmtSomW(order.total) });
+    const cb = Number(order.cashbackUsed) || 0;
+    if (cb > 0) {
+      detail += NL + fill(t.cashback, { sum: fmtSomW(cb) });
+      detail += NL + fill(t.payable, { sum: fmtSomW(order.payable != null ? order.payable : Number(order.total) - cb) });
+    }
+  }
+  return fill(t[key], {
+    NL,
+    code: String(order.code || order.id || ""),
+    detail,
+    phone: String((env && env.SHOP_PHONE) || "+998 88 289 30 30"),
+  });
+}
+
+async function telegramCall(env, method, payload) {
+  try {
+    const response = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/" + method, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    let data = null;
+    try { data = await response.json(); } catch (_) {}
+    if (response.ok && data && data.ok === true) return { ok: true, result: data.result };
+    const error = data && data.description ? String(data.description).slice(0, 200) : "HTTP " + response.status;
+    // 400/403 — qayta urinish yordam bermaydi (chat yo'q, bot bloklangan, xabar
+    // o'chirilgan). 429/5xx — vaqtinchalik, keyinroq qayta uriladi.
+    return { ok: false, permanent: response.status === 400 || response.status === 403, error };
+  } catch (err) {
+    const error = String((err && err.message) || "tarmoq xatosi").slice(0, 200);
+    // fetch o'zi xato tashladi: so'rov Telegram'ga yetib bordimi — NOMA'LUM
+    // (`uncertain`). Istisno — subrequest limiti: u so'rovni umuman jo'natmaydi.
+    return { ok: false, permanent: false, uncertain: !/too many subrequests/i.test(error), error };
+  }
+}
+
+async function customerLang(ctx, token, uid) {
+  try {
+    const lang = await rtdbGet(ctx.dbUrl, "users/" + uid + "/profile/lang", token);
+    return lang === "ru" ? "ru" : "uz";
+  } catch (_) {
+    return "uz";
+  }
+}
+
+async function deliverOrderOutbox(ctx, token, env, outboxKey) {
+  if (!env.BOT_TOKEN) return { state: "unconfigured" };
+  if (!/^[A-Za-z0-9_-]{1,260}$/.test(String(outboxKey || ""))) throw httpError(400, "outboxKey noto'g'ri");
+  const path = "notification_outbox/" + outboxKey;
+  const lease = randomOwnerToken();
+  const now = Date.now();
+  const claim = await rtdbEtagMutate(ctx.dbUrl, path, token, (cur) => {
+    if (!cur || (cur.type !== "order_created" && cur.type !== "order_status")) return { abort: true, result: { state: "missing" } };
+    if (cur.delivered === true) {
+      if (cur.retryAt != null) {
+        const fixed = cloneJson(cur);
+        delete fixed.retryAt;
+        return { value: fixed, result: { state: "delivered" } };
+      }
+      return { abort: true, result: { state: "delivered" } };
+    }
+    if (Number(cur.leaseUntil) > now) return { abort: true, result: { state: "busy" } };
+    // Voz kechish qarori FAQAT shu yerda (bot o'zi filtrlamaydi): urinishlar
+    // tugagan yoki hodisa juda eski bo'lsa — retryAt o'chiriladi va hodisa
+    // watchdog indeksidan butunlay chiqadi (oynani abadiy band qilmaydi).
+    if ((Number(cur.attempts) || 0) >= ORDER_RETRY_MAX_ATTEMPTS ||
+        (Number(cur.createdAt) > 0 && now - Number(cur.createdAt) > 7 * 24 * 3600 * 1000)) {
+      const dead = cloneJson(cur);
+      dead.state = "gave_up";
+      delete dead.retryAt;
+      dead.leaseUntil = 0;
+      return { value: dead, result: { state: "gave_up" } };
+    }
+    const next = cloneJson(cur);
+    next.lease = lease;
+    next.leaseUntil = now + ORDER_NOTIFY_LEASE_MS;
+    next.attempts = (Number(cur.attempts) || 0) + 1;
+    next.state = "sending";
+    return { value: next, result: { state: "claimed", event: next } };
+  });
+  if (!claim.result || claim.result.state !== "claimed") return claim.result || { state: "unknown" };
+  const event = claim.result.event;
+  const done = event.done && typeof event.done === "object" ? cloneJson(event.done) : {};
+  const errors = [];
+  let retry = false;
+  const record = (key, res) => {
+    if (res.ok) done[key] = true;
+    else if (res.permanent) done[key] = "err: " + res.error;
+    else { retry = true; errors.push(key + ": " + res.error); }
+  };
+  // 🔒 MIJOZ XABARI — KO'PI BILAN BIR MARTA. Ilgari "yuborildi" belgisi faqat
+  //    oxirgi (yakuniy) yozuvda saqlanardi. Yakuniy yozuv yo'qolsa (subrequest
+  //    limiti, fon vazifasining vaqt chegarasi, tarmoq) watchdog 1.5-2.5
+  //    daqiqadan keyin xabarni QAYTA yuborardi — mijozga bir xil xabar ikki
+  //    marta kelardi. Endi yuborishdan OLDIN bazaga "sending" yoziladi va
+  //    keyingi urinishlar uni ko'rib qayta yubormaydi. Belgi yozilmasa — bu
+  //    safar yubormaymiz (keyingi urinish yuboradi).
+  const sendCustomerOnce = async (payload) => {
+    try {
+      await rtdbPatch(ctx.dbUrl, path + "/done", { customer: "sending" }, token);
+    } catch (_) {
+      retry = true;
+      errors.push("customer: belgi yozilmadi");
+      return;
+    }
+    done.customer = "sending";
+    const res = await telegramCall(env, "sendMessage", payload);
+    if (res.ok) done.customer = true;
+    else if (res.permanent) done.customer = "err: " + res.error;
+    else if (res.uncertain) done.customer = "uncertain: " + res.error; // dublikatdan ko'ra — yo'qotish
+    else {
+      // Telegram javob berdi (429/5xx) — xabar yetmagan: belgini olib tashlaymiz,
+      // yakuniy yozuv uni o'chiradi va keyingi urinish qayta yuboradi.
+      delete done.customer;
+      retry = true;
+      errors.push("customer: " + res.error);
+    }
+  };
+  let cleanupOrder = null;
+
+  try {
+    const order = await rtdbGet(ctx.dbUrl, "orders/" + event.orderKey, token);
+    if (order && typeof order === "object") cleanupOrder = order;
+    if (!order || typeof order !== "object") {
+      done.order = "err: buyurtma topilmadi";
+    } else {
+      const short = await orderShortKey(event.orderKey);
+      await rtdbCreateIfNull(
+        ctx.dbUrl, "order_tg_index/" + short,
+        { orderKey: event.orderKey, uid: String(order.uid), orderId: String(order.id) },
+        token,
+        (v) => v && v.orderKey === event.orderKey
+      );
+      const tgState = (await rtdbGet(ctx.dbUrl, "order_tg/" + event.orderKey, token)) || {};
+      const msgs = tgState.msgs && typeof tgState.msgs === "object" ? { ...tgState.msgs } : {};
+      const status = String(order.status || "kutilmoqda");
+      const card = orderAdminCardText(order, event);
+      const keyboard = orderAdminKeyboard(status, short);
+      const admins = getAdminIds(env).filter(isTelegramChatId);
+      const uid = String(order.uid || event.uid || "");
+
+      if (event.type === "order_created") {
+        for (const adminId of admins) {
+          const key = "admin_" + adminId;
+          if (done[key]) continue;
+          if (msgs[adminId]) { done[key] = true; continue; }
+          const res = await adminCardSend(env, "sendMessage", { chat_id: adminId }, card, keyboard);
+          if (res.ok && res.result && res.result.message_id != null) {
+            msgs[adminId] = res.result.message_id;
+            await rtdbPatch(ctx.dbUrl, "order_tg/" + event.orderKey + "/msgs", { [adminId]: res.result.message_id }, token);
+          }
+          record(key, res);
+        }
+        if (!done.customer) {
+          if (!isTelegramChatId(uid)) done.customer = "skip";
+          else {
+            const lang = await customerLang(ctx, token, uid);
+            await sendCustomerOnce({ chat_id: uid, text: customerOrderText(lang, "created", order, env, true) });
+          }
+        }
+      } else {
+        // Holat o'zgardi: har bir admin kartochkasini yangilaymiz (joriy holat +
+        // keyingi tugmalar). Tahrir ovozsiz — admin chatida tartib saqlanadi.
+        for (const adminId of admins) {
+          const key = "card_" + adminId;
+          if (done[key]) continue;
+          let res;
+          if (msgs[adminId]) {
+            res = await adminCardSend(env, "editMessageText",
+              { chat_id: adminId, message_id: msgs[adminId] }, card, keyboard);
+            if (!res.ok && /not modified/i.test(res.error)) res = { ok: true };
+          } else {
+            // Kartochkasi yo'q (eski buyurtma) — tahrirlanadigan narsa yo'q.
+            res = { ok: true };
+          }
+          record(key, res);
+        }
+        if (event.by === "customer") {
+          // Mijoz o'zi bekor qildi — kartochka tahriri ovozsiz, shuning uchun
+          // har bir adminga alohida (ovozli) xabar.
+          const NL = String.fromCharCode(10);
+          const alert = "⚠️ <b>Mijoz buyurtmani bekor qildi</b>" + NL + NL +
+            "🧾 #" + escapeTelegramHtml(order.code || order.id) + NL +
+            "👤 " + escapeTelegramHtml(order.customerName || "Mijoz") +
+            (order.customerPhone ? NL + "📞 <code>" + escapeTelegramHtml(order.customerPhone) + "</code>" : "") + NL +
+            "💰 " + fmtSomW(order.total) + " so'm" + NL + NL + "<i>Tovarlar omborga qaytarildi.</i>";
+          for (const adminId of admins) {
+            const key = "alert_" + adminId;
+            if (done[key]) continue;
+            const payload = { chat_id: adminId, text: alert, parse_mode: "HTML" };
+            if (msgs[adminId]) payload.reply_parameters = { message_id: msgs[adminId], allow_sending_without_reply: true };
+            record(key, await telegramCall(env, "sendMessage", payload));
+          }
+        }
+        if (!done.customer) {
+          const target = String(event.status || "");
+          let key = target;
+          if (target === "bekor_qilingan" && event.by === "customer") key = "self_cancel";
+          else if (target === "bekor_qilingan" && event.from === "yetkazildi") key = "returned";
+          if (!isTelegramChatId(uid) || !CUSTOMER_ORDER_TEXTS.uz[key] || target === "kutilmoqda") done.customer = "skip";
+          else {
+            const lang = await customerLang(ctx, token, uid);
+            await sendCustomerOnce({ chat_id: uid, text: customerOrderText(lang, key, order, env, target === "qabul") });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    retry = true;
+    errors.push(String((err && err.message) || "xato").slice(0, 200));
+  }
+
+  const finishedAt = Date.now();
+  await rtdbEtagMutate(ctx.dbUrl, path, token, (cur) => {
+    if (!cur || cur.lease !== lease) return { abort: true, result: null };
+    const next = cloneJson(cur);
+    next.done = done;
+    next.delivered = !retry;
+    next.leaseUntil = 0;
+    const attempts = Number(next.attempts) || 0;
+    if (!retry) {
+      next.state = "sent";
+      delete next.retryAt;
+    } else if (attempts >= ORDER_RETRY_MAX_ATTEMPTS) {
+      next.state = "gave_up";
+      delete next.retryAt;
+    } else {
+      next.state = "retry";
+      next.retryAt = finishedAt + Math.min(30 * 60 * 1000, 60 * 1000 * Math.pow(2, attempts));
+    }
+    next.lastError = errors.length ? errors.join("; ").slice(0, 500) : null;
+    next.finishedAt = finishedAt;
+    return { value: next, result: null };
+  });
+  // 🧹 Xabarlardan KEYIN (eng past ustuvorlik): buyurtma/bekor qilish paytida
+  //    mahsulotlarga qo'yilgan vaqtinchalik belgilarni tozalaymiz. Ular endi
+  //    kerak emas (o'tish yakunlangan), lekin o'chirilmasa `products` tugunida
+  //    yig'ilib, har bir mijozga yuklanardi. Byudjet tugasa — keyingi urinish
+  //    yoki takroriy so'rov tozalaydi; xabarlarga ta'sir qilmaydi.
+  try {
+    await cleanupAfterDelivery(ctx, token, event, cleanupOrder);
+  } catch (err) {
+    console.error("outbox cleanup", outboxKey, String((err && err.message) || err).slice(0, 200));
+  }
+  return { state: retry ? "retry" : "sent", errors };
+}
+
+async function cleanupAfterDelivery(ctx, token, event, order) {
+  if (!event || !order) return;
+  if (event.type === "order_created") {
+    if (!order.payloadHash || !Array.isArray(order.itemDetails) || !order.itemDetails.length) return;
+    await cleanReservationMarkers(ctx, token, {
+      orderKey: String(event.orderKey),
+      payloadHash: String(order.payloadHash),
+      items: order.itemDetails,
+    });
+  } else if (event.type === "order_status" && event.status === "bekor_qilingan") {
+    await cleanRestockMarkers(ctx, token, String(event.orderKey), []);
+  }
+}
+
+// Javobni kutdirmaslik uchun xabarlar `waitUntil` bilan fonda yuboriladi
+// (mijoz ilovani darhol yopsa ham Worker ishni oxiriga yetkazadi).
+// execCtx bo'lmasa (sinov muhiti) — promise qaytariladi va chaqiruvchi kutadi.
+function scheduleOrderOutbox(execCtx, env, outboxKey) {
+  if (!outboxKey) return null;
+  const task = (async () => {
+    try {
+      const ctx = getDbContext(env);
+      const token = await getAccessToken(env);
+      await deliverOrderOutbox(ctx, token, env, outboxKey);
+    } catch (err) {
+      // Bot watchdog yetkazilmagan hodisani keyinroq qayta uradi. Jim yutmaymiz:
+      // Cloudflare loglarida sababi ko'rinsin.
+      console.error("order outbox", outboxKey, String((err && err.message) || err).slice(0, 200));
+    }
+  })();
+  if (execCtx && typeof execCtx.waitUntil === "function") {
+    execCtx.waitUntil(task);
+    return null;
+  }
+  return task;
+}
+
+// notify: "inline" — xabar shu so'rovda (fonda) yuboriladi (eski ilova);
+//         "split"  — javobda `deliver` kaliti qaytadi, ilova /order-deliver
+//                    ni alohida chaqiradi (yangi ilova);
+//         "defer"  — byudjet yetmasligi mumkin: bot watchdog yuboradi.
+async function committedOrderResponse(execCtx, env, orderKey, resultBody, status, notify) {
+  const order = resultBody && resultBody.order;
+  const key = orderKey || (order && order.uid != null && order.id != null ? String(order.uid) + "_" + String(order.id) : "");
+  const mode = notify === "split" || notify === "defer" ? notify : "inline";
+  if (mode === "inline") {
+    const task = scheduleOrderOutbox(execCtx, env, key);
+    if (task) await task;
+  }
+  // notify:"server" — Mini App'ga "adminga xabarni MEN yubordim" signali
+  // (eski Worker bilan moslik: bu maydon bo'lmasa ilova o'zi yuboradi).
+  return json({ ...resultBody, notify: "server", deliver: mode === "split" && key ? key : undefined }, status);
+}
+
+// 📨 /order-deliver — bildirishnomani ALOHIDA so'rovda yuborish.
+//    Nega: Cloudflare bepul rejasida bitta so'rovga 50 ta tashqi subrequest.
+//    Buyurtma yozish (stok, cashback, proyeksiyalar) shu limitning katta
+//    qismini oladi; xabarlar uchun joy qolmasa ular watchdog'gacha
+//    kechikardi yoki chegarada ikki marta ketardi. Yangi ilova javobni olgach
+//    shu yerni chaqiradi — yetkazish o'zining TO'LIQ byudjeti bilan ishlaydi.
+//    Xavfsiz: yetkazish idempotent (yetganini qayta yubormaydi). Mijoz faqat
+//    O'Z buyurtmasining hodisasini turta oladi, admin — istalganini.
+async function handleOrderDeliver(request, env, execCtx) {
+  try {
+    const body = await readJsonBody(request);
+    const outboxKey = cleanText(body.outboxKey, 260, true);
+    if (!/^[A-Za-z0-9_-]{1,260}$/.test(outboxKey)) throw httpError(400, "outboxKey noto'g'ri");
+    const identity = await authenticateBody(body, env);
+    const isAdmin = getAdminIds(env).includes(identity.uid);
+    if (!isAdmin && outboxKey.indexOf(identity.uid + "_") !== 0) throw httpError(403, "ruxsat yo'q");
+    const task = scheduleOrderOutbox(execCtx, env, outboxKey);
+    if (task) await task;
+    return json({ ok: true, queued: true });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+// Bot watchdog: yetkazilmay qolgan buyurtma hodisasini qayta yuborish.
+async function handleOrderNotify(request, env) {
+  try {
+    const body = await readJsonBody(request);
+    const outboxKey = cleanText(body.outboxKey, 260, true);
+    if (!/^[A-Za-z0-9_-]{1,260}$/.test(outboxKey)) throw httpError(400, "outboxKey noto'g'ri");
+    await verifyBotAuth(body, env, "order-notify", [outboxKey]);
+    const ctx = getDbContext(env);
+    const token = await getAccessToken(env);
+    const result = await deliverOrderOutbox(ctx, token, env, outboxKey);
+    return json({ ok: true, ...result });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+

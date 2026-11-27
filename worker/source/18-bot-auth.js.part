@@ -1,0 +1,49 @@
+// =====================================================================
+//  🔐 BOT -> WORKER IMZOSI (HMAC)
+//  Bot (bot/bot.py) admin tugmalarini va AI agentini shu yo'l bilan
+//  bajaradi. Kalit BOT_TOKEN dan hosil qilinadi (ikkalasida ham bor),
+//  ya'ni yangi maxfiy sozlama kerak emas. Imzo: marshrut, vaqt, admin
+//  (actor) va BARCHA muhim maydonlarni qamraydi — birini o'zgartirsa
+//  imzo buziladi. Vaqt oynasi 5 daqiqa; oyna ichidagi takror ham xavfsiz,
+//  chunki holat o'zgarishi va xabar yuborish idempotent.
+// =====================================================================
+async function botAuthKey(env) {
+  if (!env.BOT_TOKEN) throw httpError(500, "BOT_TOKEN sozlanmagan");
+  return new Uint8Array(await crypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode("avto-a1-bot-auth|" + env.BOT_TOKEN)
+  ));
+}
+
+function botAuthMessage(route, ts, actor, fields) {
+  return ["a1bot", route, String(ts), String(actor)].concat((fields || []).map((f) => String(f == null ? "" : f))).join("|");
+}
+
+async function signBotAuth(env, route, ts, actor, fields) {
+  const key = await botAuthKey(env);
+  return toHex(await hmacSha256(key, new TextEncoder().encode(botAuthMessage(route, ts, actor, fields))));
+}
+
+// Imzoni tekshiradi va `actor` (Telegram ID) ni qaytaradi. Faqat bot imzolay oladi
+// (kalit BOT_TOKEN dan). Admin tekshiruvi — verifyBotAuth da.
+async function checkBotSignature(body, env, route, fields) {
+  const auth = body.botAuth;
+  if (!auth || typeof auth !== "object" || Array.isArray(auth)) throw httpError(401, "botAuth noto'g'ri");
+  const ts = Number(auth.ts);
+  const actor = String(auth.actor == null ? "" : auth.actor);
+  const sig = String(auth.sig || "");
+  if (!Number.isSafeInteger(ts) || !/^[1-9]\d{0,19}$/.test(actor) || !/^[0-9a-f]{64}$/.test(sig)) {
+    throw httpError(401, "botAuth noto'g'ri");
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - ts) > BOT_AUTH_MAX_SKEW_SECONDS) throw httpError(401, "botAuth eskirgan");
+  const expected = await signBotAuth(env, route, ts, actor, fields);
+  if (!constantTimeEqual(expected, sig)) throw httpError(401, "botAuth imzosi mos kelmadi");
+  return actor;
+}
+
+async function verifyBotAuth(body, env, route, fields) {
+  const actor = await checkBotSignature(body, env, route, fields);
+  if (!getAdminIds(env).includes(actor)) throw httpError(403, "faqat admin");
+  return { uid: actor, source: "bot", claims: null };
+}
+

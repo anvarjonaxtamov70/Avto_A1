@@ -1,0 +1,338 @@
+// ===================== Telegram initData tekshiruvi =====================
+async function verifyTelegramInitData(initData, botToken) {
+  if (!botToken) return { ok: false, error: "BOT_TOKEN sozlanmagan" };
+
+  const params = new URLSearchParams(initData);
+  const hash = params.get("hash");
+  if (!hash) return { ok: false, error: "hash yoq" };
+  params.delete("hash");
+
+  const NL = String.fromCharCode(10);
+  const pairs = [];
+  for (const [k, v] of params) pairs.push(`${k}=${v}`);
+  pairs.sort();
+  const dataCheckString = pairs.join(NL);
+
+  const enc = new TextEncoder();
+  const secretKey = await hmacSha256(enc.encode("WebAppData"), enc.encode(botToken));
+  const computed = await hmacSha256(secretKey, enc.encode(dataCheckString));
+  const computedHex = toHex(computed);
+
+  // ⏱ Constant-time taqqoslash (timing-attack'ni kamaytirish uchun)
+  if (!constantTimeEqual(computedHex, hash)) {
+    return { ok: false, error: "imzo mos kelmadi" };
+  }
+
+  const authDate = parseInt(params.get("auth_date") || "0", 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (!authDate) return { ok: false, error: "auth_date yoq" };
+  if (authDate > now + CLOCK_SKEW_SECONDS) {
+    return { ok: false, error: "initData kelajakdan" };
+  }
+  if (now - authDate > TELEGRAM_INIT_MAX_AGE) {
+    return { ok: false, error: "initData eskirgan" };
+  }
+
+  let user;
+  try {
+    user = JSON.parse(params.get("user") || "null");
+  } catch {
+    user = null;
+  }
+  if (!user || !user.id) return { ok: false, error: "user yoq" };
+
+  return { ok: true, user };
+}
+
+function constantTimeEqual(a, b) {
+  a = String(a);
+  b = String(b);
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function httpError(status, message, extra) {
+  // Object.assign: natija o'sha-o'sha (Error + status/extra), lekin Cloudflare
+  // muharriridagi TypeScript tekshiruvi "status Error'da yo'q" deb qizil chizmaydi.
+  return Object.assign(new Error(message), { status, extra: extra || null });
+}
+
+function errorResponse(err) {
+  const status = err && Number.isInteger(err.status) ? err.status : 500;
+  const body = { ok: false, error: status === 500 ? "server xatosi" : String(err.message || "xato") };
+  if (err && err.extra && typeof err.extra === "object") Object.assign(body, err.extra);
+  return json(body, status);
+}
+
+async function readJsonBody(request) {
+  const rawType = request.headers.get("Content-Type") || "";
+  const mediaType = rawType.split(";", 1)[0].trim().toLowerCase();
+  if (mediaType !== "application/json") throw httpError(415, "application/json kerak");
+
+  const rawLength = request.headers.get("Content-Length");
+  if (rawLength != null) {
+    if (!/^\d+$/.test(rawLength.trim())) throw httpError(400, "Content-Length noto'g'ri");
+    const declared = Number(rawLength);
+    if (!Number.isSafeInteger(declared) || declared > MAX_JSON_BYTES) {
+      throw httpError(413, "so'rov juda katta");
+    }
+  }
+
+  const reader = request.body && request.body.getReader ? request.body.getReader() : null;
+  const chunks = [];
+  let total = 0;
+  if (reader) {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      total += part.value.byteLength;
+      if (total > MAX_JSON_BYTES) {
+        try { await reader.cancel(); } catch (_) {}
+        throw httpError(413, "so'rov juda katta");
+      }
+      chunks.push(part.value);
+    }
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  let body;
+  try {
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
+  } catch (_) {
+    throw httpError(400, "JSON noto'g'ri");
+  }
+  if (!body || Array.isArray(body) || typeof body !== "object") throw httpError(400, "JSON obyekt kerak");
+  return body;
+}
+
+function requireSafeUid(value, status) {
+  const uid = String(value == null ? "" : value);
+  if (!uid || uid.length > 128 || /[.#$\[\]/\u0000-\u001F\u007F]/.test(uid)) {
+    throw httpError(status || 400, "uid noto'g'ri");
+  }
+  return uid;
+}
+
+function randomOwnerToken() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return base64url(bytes);
+}
+
+async function authenticateBody(body, env) {
+  let identity;
+  if (typeof body.initData === "string" && body.initData) {
+    const verified = await verifyTelegramInitData(body.initData, env.BOT_TOKEN);
+    if (!verified.ok) throw httpError(401, verified.error);
+    identity = { uid: requireSafeUid(verified.user.id, 401), source: "telegram", claims: verified.user };
+  } else if (typeof body.idToken === "string" && body.idToken) {
+    const claims = await verifyFirebaseIdToken(body.idToken, env);
+    identity = { uid: requireSafeUid(claims.sub, 401), source: "firebase", claims };
+  } else {
+    throw httpError(401, "initData yoki idToken kerak");
+  }
+  await assertNotBlocked(identity.uid, env);
+  // Eski (Telegram'siz) hisob Telegram hisobiga birlashtirilgan bo'lsa — uning
+  // nomidan yangi buyurtma/yozuv bo'lmasin (yetim qoladi). Ilova 409 + redirect
+  // ni ko'rib /session orqali Telegram hisobiga o'tadi.
+  if (identity.source === "firebase" && !isTgUid(identity.uid)) await assertNotRedirected(identity.uid, env);
+  return identity;
+}
+
+// ===================== ⛔ Bloklangan foydalanuvchilar =====================
+// Admin mini app'da mijozni bloklasa `blocked_users/{uid}` yoziladi. Shu yerda
+// har bir himoyalangan so'rov (buyurtma, xabar, ro'yxatdan o'tish...) rad etiladi.
+// 30 soniyalik kesh — har so'rovda bazaga bormaslik uchun. Baza vaqtincha
+// javob bermasa "fail-open": hamma mijozni to'xtatib qo'ymaymiz.
+const blockedCache = new Map();
+async function assertNotBlocked(uid, env) {
+  const key = String(uid || "");
+  if (!/^\d+$/.test(key) || getAdminIds(env).includes(key)) return;
+  const now = Date.now();
+  const hit = blockedCache.get(key);
+  let blocked;
+  if (hit && hit.exp > now) {
+    blocked = hit.v;
+  } else {
+    try {
+      const ctx = getDbContext(env);
+      const token = await getAccessToken(env);
+      blocked = !!(await rtdbGet(ctx.dbUrl, "blocked_users/" + key, token));
+    } catch (_) {
+      return;
+    }
+    if (blockedCache.size > 5000) blockedCache.clear();
+    blockedCache.set(key, { v: blocked, exp: now + 30 * 1000 });
+  }
+  if (blocked) throw httpError(403, "foydalanuvchi bloklangan", { blocked: true });
+}
+
+function decodeJwtPart(part) {
+  try {
+    return JSON.parse(new TextDecoder().decode(base64UrlToBytes(part)));
+  } catch (_) {
+    throw httpError(401, "ID token formati noto'g'ri");
+  }
+}
+
+function parseMaxAge(value) {
+  const match = String(value || "").match(/(?:^|,)\s*max-age=(\d+)/i);
+  return match ? Math.max(60, parseInt(match[1], 10) || 300) : 300;
+}
+
+async function getFirebasePublicKeys(force) {
+  const now = Date.now();
+  if (!force && firebaseCertCache.keys && now < firebaseCertCache.expiresAt) {
+    return firebaseCertCache.keys;
+  }
+  if (force && firebaseCertCache.keys && now < firebaseCertCache.nextForcedRefreshAt) {
+    return firebaseCertCache.keys;
+  }
+  if (firebaseCertCache.refreshPromise) return await firebaseCertCache.refreshPromise;
+
+  firebaseCertCache.refreshPromise = (async () => {
+    const response = await fetch(
+      "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com",
+      { headers: { Accept: "application/json" } }
+    );
+    if (!response.ok) throw httpError(503, "Firebase sertifikatlari olinmadi");
+    let jwks;
+    try { jwks = await response.json(); } catch (_) { throw httpError(503, "Firebase sertifikatlari noto'g'ri"); }
+    const imported = new Map();
+    for (const jwk of (jwks && Array.isArray(jwks.keys) ? jwks.keys : [])) {
+      if (!jwk || !jwk.kid || jwk.kty !== "RSA" || (jwk.alg && jwk.alg !== "RS256")) continue;
+      const key = await crypto.subtle.importKey(
+        "jwk",
+        jwk,
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["verify"]
+      );
+      imported.set(String(jwk.kid), key);
+    }
+    if (!imported.size) throw httpError(503, "Firebase sertifikatlari bo'sh");
+    firebaseCertCache.keys = imported;
+    firebaseCertCache.expiresAt = Date.now() + parseMaxAge(response.headers.get("Cache-Control")) * 1000;
+    firebaseCertCache.nextForcedRefreshAt = Date.now() + JWKS_REFRESH_COOLDOWN_MS;
+    for (const kid of imported.keys()) firebaseCertCache.negativeKids.delete(kid);
+    return imported;
+  })();
+  try {
+    return await firebaseCertCache.refreshPromise;
+  } finally {
+    firebaseCertCache.refreshPromise = null;
+  }
+}
+
+async function verifyFirebaseIdToken(token, env) {
+  const parts = String(token).split(".");
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+    throw httpError(401, "ID token formati noto'g'ri");
+  }
+  const header = decodeJwtPart(parts[0]);
+  const claims = decodeJwtPart(parts[1]);
+  if (header.alg !== "RS256" || typeof header.kid !== "string" || !header.kid || header.kid.length > 200) {
+    throw httpError(401, "ID token algoritmi noto'g'ri");
+  }
+
+  const negativeNow = Date.now();
+  for (const [kid, expiresAt] of firebaseCertCache.negativeKids) {
+    if (expiresAt <= negativeNow) firebaseCertCache.negativeKids.delete(kid);
+  }
+  let keys = await getFirebasePublicKeys(false);
+  let key = keys.get(header.kid);
+  if (!key) {
+    const negativeUntil = firebaseCertCache.negativeKids.get(header.kid) || 0;
+    if (negativeUntil > Date.now()) throw httpError(401, "ID token kaliti topilmadi");
+    const cooldownUntil = firebaseCertCache.nextForcedRefreshAt;
+    const refreshWasCoolingDown = !!firebaseCertCache.keys && Date.now() < cooldownUntil;
+    keys = await getFirebasePublicKeys(true);
+    key = keys.get(header.kid);
+    if (!key) {
+      if (firebaseCertCache.negativeKids.size >= 64) {
+        const oldest = firebaseCertCache.negativeKids.keys().next();
+        if (!oldest.done) firebaseCertCache.negativeKids.delete(oldest.value);
+      }
+      const expiresAt = refreshWasCoolingDown
+        ? Math.max(Date.now() + 1000, cooldownUntil)
+        : Date.now() + JWKS_NEGATIVE_TTL_MS;
+      firebaseCertCache.negativeKids.set(header.kid, expiresAt);
+    }
+  }
+  if (!key) throw httpError(401, "ID token kaliti topilmadi");
+
+  const signed = new TextEncoder().encode(parts[0] + "." + parts[1]);
+  const signature = base64UrlToBytes(parts[2]);
+  const valid = await crypto.subtle.verify(
+    { name: "RSASSA-PKCS1-v1_5" },
+    key,
+    signature,
+    signed
+  );
+  if (!valid) throw httpError(401, "ID token imzosi noto'g'ri");
+
+  const projectId = String(env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID);
+  const now = Math.floor(Date.now() / 1000);
+  const iat = Number(claims.iat);
+  const exp = Number(claims.exp);
+  if (claims.aud !== projectId || claims.iss !== "https://securetoken.google.com/" + projectId) {
+    throw httpError(401, "ID token loyiha ma'lumoti noto'g'ri");
+  }
+  if (typeof claims.sub !== "string" || !claims.sub || claims.sub.length > 128) {
+    throw httpError(401, "ID token sub noto'g'ri");
+  }
+  if (!Number.isFinite(iat) || !Number.isFinite(exp) || exp <= iat) {
+    throw httpError(401, "ID token vaqti noto'g'ri");
+  }
+  if (iat > now + CLOCK_SKEW_SECONDS || exp < now - CLOCK_SKEW_SECONDS) {
+    throw httpError(401, "ID token eskirgan yoki kelajakdan");
+  }
+  if (claims.nbf != null && Number(claims.nbf) > now + CLOCK_SKEW_SECONDS) {
+    throw httpError(401, "ID token hali amal qilmaydi");
+  }
+  if (claims.auth_time != null) {
+    const authTime = Number(claims.auth_time);
+    if (!Number.isFinite(authTime) || authTime > now + CLOCK_SKEW_SECONDS) {
+      throw httpError(401, "ID token auth_time noto'g'ri");
+    }
+  }
+  requireSafeUid(claims.sub, 401);
+  return claims;
+}
+
+function base64UrlToBytes(value) {
+  let b64 = String(value).replace(/-/g, "+").replace(/_/g, "/");
+  while (b64.length % 4) b64 += "=";
+  let bin;
+  try {
+    bin = atob(b64);
+  } catch (_) {
+    throw httpError(401, "base64url noto'g'ri");
+  }
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function hmacSha256(keyBytes, messageBytes) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return crypto.subtle.sign("HMAC", key, messageBytes);
+}
+
+function toHex(buf) {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
