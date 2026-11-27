@@ -668,6 +668,11 @@ async function main() {
     }, clone, async () => { releases++; }
   );
   const runReserve = () => reserve({dbUrl:'mock'}, 'token', CUSTOMER, 'attempt', quote, 'attemptPath', 'owner', 1, {});
+  product = {id:'1',stock:5,product_type:'razmerli',sizes:[{size:'A',stock:5}]};
+  const changedType = await runReserve();
+  ok(!changedType.ok && product.stock === 5, 'newly sized product rejects stale universal quote');
+  releases = 0;
+  product = {id:'1',stock:5,is_draft:true};
   const hidden = await runReserve();
   ok(!hidden.ok && product.stock === 5 && releases === 1, 'draft after quote: no new reservation');
   product.is_draft = false;
@@ -705,6 +710,11 @@ async function main() {
   await rollback();
   eq(rollbackProduct.stock,5,'rollback restores total once');
   eq(rollbackProduct.sizes[0].stock,5,'rollback restores variant once');
+  eq(cleanupCalls,0,'rollback retains markers until durable rejection');
+  eq(rollbackProduct._orderReservations.marker.items.i0.state,'released','released marker survives rollback retry');
+  product = {id:'1',stock:5,_orderReservations:{marker:{items:{i0:{state:'released',qty:2}}}}};
+  const afterRollback = await runReserve();
+  ok(!afterRollback.ok && product.stock === 5,'retry after rollback cannot reserve again');
 
   // ===== 10) Eskirgan initData =====
   console.log('▶ 10) eskirgan initData');

@@ -230,7 +230,7 @@ async function handleOrderCommit(request, env, execCtx) {
       ctx, token, identity.uid, intent.attemptId, quote, attemptPath, owner, existing.ownerGeneration, attemptClock
     );
     if (!stock.ok) {
-      await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
+      const rejection = await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
         if (current && current.payloadHash === payloadHash && current.state === "processing" &&
             current.owner === owner && Number(current.ownerGeneration) === Number(existing.ownerGeneration)) {
           const next = {
@@ -241,6 +241,11 @@ async function handleOrderCommit(request, env, execCtx) {
         }
         return { abort: true, result: current };
       });
+      if (!rejection.result || rejection.result.state !== "rejected" || rejection.result.payloadHash !== payloadHash) {
+        throw httpError(503, "attempt rad etilishi tasdiqlanmadi", { retryable: true });
+      }
+      try { await cleanReservationMarkers(ctx, token, quote); }
+      catch (error) { console.warn("Rejected reservation cleanup failed", quote.orderKey, String(error && error.message || error)); }
       throw httpError(409, "stock", { shortages: stock.shortages });
     }
 
