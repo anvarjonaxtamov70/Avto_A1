@@ -1716,7 +1716,10 @@ async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
         : { items: {} };
       bucket.items = bucket.items && typeof bucket.items === "object" ? bucket.items : {};
       const existing = bucket.items[item.lineKey];
-      if (existing && existing.state === "reserved") return { abort: true, result: { reserved: true, duplicate: true } };
+      if (existing && existing.state === "reserved") {
+        if (existing.qty !== item.qty) throw httpError(409, "rezervatsiya miqdori mos emas", { retryable: true, productId: item.id });
+        return { abort: true, result: { reserved: true, duplicate: true } };
+      }
       if (existing && existing.state === "released") {
         return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available: 0, requested: item.qty } } };
       }
@@ -1737,6 +1740,9 @@ async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
         product.sizes[item.sizeKey].stock = available - item.qty;
         if (product.stock != null) product.stock = Math.max(0, (Number(product.stock) || 0) - item.qty);
       } else {
+        if (product.product_type === "razmerli" || (product.sizes && Object.values(product.sizes).some(Boolean))) {
+          return { abort: true, result: { shortage: { id: item.id, name: item.name, size: item.size, available: 0, requested: item.qty } } };
+        }
         available = Math.max(0, Number(product.stock) || 0);
         if (available < item.qty) return { abort: true, result: { shortage: { id: item.id, name: item.name, available, requested: item.qty } } };
         product.stock = available - item.qty;
@@ -1748,6 +1754,9 @@ async function reserveQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
     if (result.result && result.result.shortage) {
       await releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath, owner, ownerGeneration, clock);
       return { ok: false, shortages: [result.result.shortage] };
+    }
+    if (!result.result || result.result.reserved !== true) {
+      throw httpError(503, "rezervatsiya tasdiqlanmadi", { retryable: true });
     }
     reserved.push(item.lineKey);
   }
@@ -1789,7 +1798,7 @@ async function releaseQuoteItems(ctx, token, uid, attemptId, quote, attemptPath,
       return { value: product, result: { released: true } };
     });
   }
-  await cleanReservationMarkers(ctx, token, quote);
+  // Keep released markers until rejection is durable.
 }
 
 async function cleanReservationMarkers(ctx, token, quote) {
@@ -2040,7 +2049,7 @@ async function handleOrderCommit(request, env, execCtx) {
       ctx, token, identity.uid, intent.attemptId, quote, attemptPath, owner, existing.ownerGeneration, attemptClock
     );
     if (!stock.ok) {
-      await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
+      const rejection = await rtdbEtagMutate(ctx.dbUrl, attemptPath, token, (current) => {
         if (current && current.payloadHash === payloadHash && current.state === "processing" &&
             current.owner === owner && Number(current.ownerGeneration) === Number(existing.ownerGeneration)) {
           const next = {
@@ -2051,6 +2060,11 @@ async function handleOrderCommit(request, env, execCtx) {
         }
         return { abort: true, result: current };
       });
+      if (!rejection.result || rejection.result.state !== "rejected" || rejection.result.payloadHash !== payloadHash) {
+        throw httpError(503, "attempt rad etilishi tasdiqlanmadi", { retryable: true });
+      }
+      try { await cleanReservationMarkers(ctx, token, quote); }
+      catch (error) { console.warn("Rejected reservation cleanup failed", quote.orderKey, String(error && error.message || error)); }
       throw httpError(409, "stock", { shortages: stock.shortages });
     }
 
