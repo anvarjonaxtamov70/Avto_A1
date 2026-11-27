@@ -208,6 +208,8 @@
         ".read": "(auth != null && auth.uid === $uid) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
         "$orderId": {
           "$msgId": {
+            // Child validators alone do not reject missing fields. Require a complete chat message.
+            ".validate": "newData.hasChildren(['sender', 'text', 'time'])",
             ".write": "(auth != null && auth.uid === $uid && !data.exists()) || (auth != null && (root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078'))",
             "sender": {
               ".validate": "newData.isString() && ((auth.uid === $uid && newData.val() === 'mijoz') || root.child('admins').child(auth.uid).val() === true || auth.uid === '5105291033' || auth.uid === '483425630' || auth.uid === '5302078')"
